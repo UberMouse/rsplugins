@@ -182,27 +182,48 @@ end
 -- Snapshot parts are queued as they're built and sent one at a time by
 -- pumpUploads(). That keeps them in order, so the receiver starts a new file
 -- on part 1.
-local snapshotQueue = {}
+local snapshotQueue = {} -- { body = json, count = vars in it }
 local uploading = false   -- a part is being sent right now
 local building = false    -- the snapshot is still making parts
 local uploadFailed = false
 local reportedDone = false
 
-local function queueSnapshotPart(body)
+-- Progress, for the console. Logic ticks run at a fixed 50 a second, so
+-- counting them gives the elapsed time.
+local totalVars = 0       -- set once listing is done
+local varsUploaded = 0
+local lastTenthReported = 0
+local logicTicks = 0
+
+local function queueSnapshotPart(body, count)
     if not uploadFailed then
-        snapshotQueue[#snapshotQueue + 1] = body
+        snapshotQueue[#snapshotQueue + 1] = { body = body, count = count }
+    end
+end
+
+-- Log upload progress each time it passes another 10%.
+local function reportUploadProgress()
+    if totalVars == 0 then return end
+    local tenth = varsUploaded * 10 // totalVars
+    if tenth > lastTenthReported and tenth < 10 then
+        lastTenthReported = tenth
+        say(formatStr("uploaded {}/{} vars ({}%)", varsUploaded, totalVars,
+            varsUploaded * 100 // totalVars))
     end
 end
 
 -- Called every Logic tick: if no part is being sent, send the next one.
 local function pumpUploads()
     if uploading or uploadFailed then return end
-    local body = table.remove(snapshotQueue, 1)
-    if body then
+    reportUploadProgress()
+    local part = table.remove(snapshotQueue, 1)
+    if part then
         uploading = true
-        post("/snapshot", body, function(success)
+        post("/snapshot", part.body, function(success)
             uploading = false
-            if not success then
+            if success then
+                varsUploaded = varsUploaded + part.count
+            else
                 -- Give up on the rest; `prl var-dump` to retry.
                 uploadFailed = true
                 snapshotQueue = {}
@@ -210,7 +231,8 @@ local function pumpUploads()
         end)
     elseif not building and not reportedDone then
         reportedDone = true
-        say("snapshot upload complete")
+        say(formatStr("snapshot upload complete: {} vars in {} s",
+            varsUploaded, string.format("%.1f", logicTicks / 50)))
     end
 end
 
@@ -227,6 +249,7 @@ local snap = nil
 -- Begin listing the current domain, by name if possible.
 local function beginDomain()
     local domain = DOMAINS[snap.domainIndex]
+    say("listing", domain, "vars...")
     snap.found = newFoundList()
     local ok, lister = pcall(nameLister, domain, snap.found)
     if ok then
@@ -258,6 +281,7 @@ local function finishDomain()
         beginDomain()
     else
         snap.stage = "describe"
+        totalVars = #snap.all
         snap.totalParts = math.max(1, math.ceil(#snap.all / VARS_PER_POST))
         say("sending", #snap.all, "vars in", snap.totalParts, "parts")
     end
@@ -292,7 +316,7 @@ local function flushPart()
         totalParts = snap.totalParts,
         totalVars = #snap.all,
         vars = snap.entries,
-    }))
+    }), #snap.entries)
     local cost = #snap.entries
     snap.entries = {}
     return cost
@@ -326,6 +350,7 @@ end
 -- Each Logic tick, send the next part if the last one is done, then do up to
 -- WORK_PER_TICK units of snapshot work.
 local function onLogic()
+    if not reportedDone then logicTicks = logicTicks + 1 end
     pumpUploads()
     local work = 0
     while snap and work < WORK_PER_TICK do

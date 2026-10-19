@@ -11,3 +11,5 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
 - `scripts/link-dev-plugins.sh`: symlinks the beta client's `dev_plugins/` to `plugins/`. After
   that, the in-client loop is `prf`, `plist`, `pon <name>`, `prl <name>` (see
   [docs/dev-environment.md](docs/dev-environment.md)).
+- `scripts/var-dump-receiver.py`: local HTTP receiver for the `var-dump` dev plugin (see
+  [plugins/var-dump/README.md](plugins/var-dump/README.md)).

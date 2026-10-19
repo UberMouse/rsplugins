@@ -117,3 +117,22 @@ The official reference annotates Lua with pseudo-types:
 
 `ExecuteConsoleCommand("!tele 0,50,50,9,56")` runs any console or cheat command. Cheats only
 work in the dev environment, so use this for dev tooling only. A shipped plugin can't rely on it.
+
+## Runtime limits we've hit
+
+Found in the beta client (2026-10-20), not in the official docs:
+
+- **Each Lua call can run for at most 1000 ms.** The client then aborts it with
+  `Maximum function execution time of 1000 ms exceeded`. Spread big jobs across `Logic` ticks
+  (see `plugins/var-dump`).
+- **Starting a POST from inside another request's completion callback crashed the client**
+  (freeze, then SIGABRT) twice, once from a coroutine and once without one. After the first
+  response, the next request either arrived with an empty body or never arrived. The cause isn't
+  confirmed. Until it is: start requests only from event callbacks (e.g. `Logic`), keep each
+  body string referenced until its request finishes, and avoid coroutines around API calls.
+- `pairs(id.VarPlayer)` works, but the integer ID isn't in the value slot (passing the values to
+  `FromID` fails with "expected number, received string"). Scanning IDs -70000..20000 found
+  ~62k VarPlayer vars (VarBits included) and ~7.8k VarClient vars.
+- Reading `.value` on a var whose ValueType isn't in the documented list (seen: 49, 61, 71, 126)
+  logs `Failed to convert a config value to a plugin value: invalid ValueType (n)` but doesn't
+  raise an error.

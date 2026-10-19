@@ -1,0 +1,7 @@
+{
+    "name": "Var Dump",
+    "version": "0.0.1",
+    "contactEmailAddress": "you@example.com",
+    "optionalPermissions": [ "httpAccess" ],
+    "urls": { "sink": "http://127.0.0.1:8765" }
+}

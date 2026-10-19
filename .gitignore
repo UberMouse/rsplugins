@@ -1,3 +1,4 @@
 .claude/worktrees/
+dumps/
 # Nix dev environment: direnv cache
 .direnv/

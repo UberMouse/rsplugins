@@ -29,7 +29,7 @@ You can test without a manifest, but submission needs one. The smallest valid ma
 | `contactEmailAddress` | string | **Legally required.** Shown publicly, so use a dedicated address, not your Mod.io/RS login |
 | `requiredDependencies` | `[name]` or `{ luaVar: pluginName }` | Plugins that must be present (see below) |
 | `optionalDependencies` | same | Used if present/enabled |
-| `requiredPermissions` | `[perm]` | Plugin won't work without these |
+| `requiredPermissions` | `[perm]` | Plugin won't work without these. **Currently broken in the client** (as of 2026-10-20 the plugin doesn't run). Use `optionalPermissions` and check at runtime |
 | `optionalPermissions` | `[perm]` | Unlock extra features. **Prefer optional** and check at runtime |
 | `urls` | `{ name: url }` | Base HTTP/HTTPS URLs the plugin may call. Exposed as `Plugin.urls.<name>` |
 

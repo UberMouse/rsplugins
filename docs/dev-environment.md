@@ -63,7 +63,7 @@ There's no in-game plugin management UI yet, so you manage plugins from the cons
 |---|---|---|
 | `plugins_setpath <disk path>` | | Change where plugin folders are looked for |
 | `plugins_refresh` | `prf` | Rescan for plugins. Needed after adding/removing a plugin or editing a manifest |
-| `plugins_list` | `plist` | List found plugins (`[ENABLED]` marks running ones) |
+| `plugins_list` | `plist` | List found plugins (`[ENABLED]` marks running ones). Shows the **last scan**, so new plugins are missing and deleted ones linger until you `prf` |
 | `plugins_setenabled <name> [true/false]` | | Enable/disable (defaults to enable) |
 | `plugins_enable <name>` | `pon <name>` | Enable |
 | `plugins_disable <name>` | `poff <name>` | Disable |

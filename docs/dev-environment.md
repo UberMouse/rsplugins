@@ -29,7 +29,7 @@ location.
 |---|---|
 | Windows | `C:\ProgramData\Jagex\RuneScape-BETA` |
 | macOS | `/Users/<user>/Jagex/RuneScape-BETA` |
-| Linux (Bolt) | `~/.local/share/bolt-launcher/jagex/RuneScape-BETA` |
+| Linux (Bolt) | `~/.local/share/bolt-launcher/Jagex/RuneScape-BETA` (the official docs say lowercase `jagex/`; on our machine it's `Jagex/`) |
 | Linux (Jagex Launcher via flatpak wine) | `~/.var/app/com.jagex.Launcher/data/wine/drive_c/users/<user>/AppData/Local/Jagex/RuneScape-BETA` |
 
 Other installs: <https://runescape.wiki/w/Jagex_cache#Installation_paths>.
@@ -40,8 +40,10 @@ Inside the root:
 - `dev_plugins/`: **create this yourself.** Each subfolder is one plugin under development. The
   folder name is the plugin's name for console commands, so use no spaces.
 
-To develop from this repo, symlink each plugin folder into `dev_plugins/`, or use
-`plugins_setpath` (below) to point the client somewhere else.
+**In this repo:** `dev_plugins/` is a symlink to the repo's `plugins/` directory, so every plugin
+folder in `plugins/` is visible to the client. Set it up with `scripts/link-dev-plugins.sh`, run
+from the main checkout. It defaults to Bolt's beta root, or takes another root as an argument.
+(`plugins_setpath`, below, is an alternative.)
 
 ## The client console
 

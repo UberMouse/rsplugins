@@ -1,0 +1,60 @@
+{
+  description = "rsplugins dev environment: Lua 5.4 tooling for RS3 client plugins, plus Python for the helper scripts";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+  };
+
+  outputs =
+    { self, nixpkgs }:
+    let
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+        "x86_64-darwin"
+      ];
+      forAllSystems =
+        f:
+        nixpkgs.lib.genAttrs systems (
+          system:
+          f {
+            inherit system;
+            pkgs = nixpkgs.legacyPackages.${system};
+          }
+        );
+    in
+    {
+      devShells = forAllSystems (
+        { pkgs, ... }:
+        {
+          default = pkgs.mkShell {
+            name = "rsplugins";
+
+            packages = [
+              # The client runs Lua 5.4.8; nixpkgs has 5.4.7, close enough for
+              # `luac -p` syntax checks and running plugin code against mocks.
+              pkgs.lua5_4
+              pkgs.lua-language-server
+              pkgs.stylua
+              pkgs.selene
+              # scripts/var-dump-receiver.py (stdlib only).
+              pkgs.python3
+              pkgs.git
+            ];
+
+            shellHook = ''
+              echo "rsplugins dev shell"
+              echo "  lua / luac                    Lua $(lua -v 2>&1 | cut -d' ' -f2) (client runs 5.4.8)"
+              echo "  lua-language-server           LSP for editors"
+              echo "  stylua / selene               Lua formatter / linter"
+              echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
+              echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
+            '';
+          };
+        }
+      );
+
+      formatter = forAllSystems ({ pkgs, ... }: pkgs.nixfmt-tree);
+    };
+}

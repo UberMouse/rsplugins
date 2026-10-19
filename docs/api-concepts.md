@@ -136,3 +136,11 @@ Found in the beta client (2026-10-20), not in the official docs:
 - Reading `.value` on a var whose ValueType isn't in the documented list (seen: 49, 61, 71, 126)
   logs `Failed to convert a config value to a plugin value: invalid ValueType (n)` but doesn't
   raise an error.
+- **VarTransmit may name only one VarBit per update (unconfirmed).** Several `DNDTRACKER_*`
+  VarBits changed between two snapshots while the change log was running, but no event named
+  them. Each of their base vars only ever showed up under one VarBit's name. The best fit is
+  one event per base-var update, labelled with a single VarBit. So when a VarBit's event fires,
+  re-read the other VarBits of its base var (find them in `docs/vars/vars.csv` by `base_var`).
+- **BOOLEAN vars read mostly `true` (unconfirmed).** 133 of 148 were `true`, including
+  implausible ones like `HOUSE_CURRENTLY_PEEKING`, so unset may come back as `true`. Check
+  against a BOOLEAN you can toggle before trusting one.

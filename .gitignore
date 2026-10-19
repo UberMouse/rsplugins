@@ -2,3 +2,4 @@
 dumps/
 # Nix dev environment: direnv cache
 .direnv/
+__pycache__/

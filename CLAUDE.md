@@ -5,6 +5,10 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
 - Before writing or changing plugin code, read `docs/README.md` and the relevant docs. The API
   reference will live in `docs/api/` once the dump script exists. Until then, check signatures at
   https://developer.runescape.com/rs/.
+- To find which game vars a plugin can read, look them up in `docs/vars/` (grep `vars.csv`). It
+  lists what exists, not values. To see a logged-in account's actual state, dump it with
+  `plugins/var-dump` + `scripts/var-dump-receiver.py`, then run `scripts/var-dump-analyze.py`;
+  dumps and their analysis stay in the gitignored `dumps/`.
 - Plugins must pass Jagex moderation (`docs/guidelines.md`). Never build features that automate
   actions, send inputs to the server, reveal hidden or future state, or export other players'
   info. If a feature is borderline, flag it.

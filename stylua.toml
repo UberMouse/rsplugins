@@ -1,0 +1,8 @@
+# Closest fit to the hand-written style the first plugins used. ConditionalOnly keeps
+# `if x then return y end` on one line, which those plugins lean on for guard clauses.
+column_width = 100
+indent_type = "Spaces"
+indent_width = 4
+quote_style = "AutoPreferDouble"
+call_parentheses = "Always"
+collapse_simple_statement = "ConditionalOnly"

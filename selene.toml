@@ -1,0 +1,7 @@
+# rs.yml must come last: selene takes `lua_versions` (the parser grammar) from the last std in
+# the list, and lua53 alone would reject Lua 5.4 `<const>`/`<close>` attributes.
+std = "lua53+rs"
+
+# stylua (collapse_simple_statement = "ConditionalOnly") owns layout and writes one-line ifs.
+[config]
+multiple_statements = { one_line_if = "allow" }

@@ -43,6 +43,7 @@ local tick = 0
 -- Value types the API can convert, from the ValueType table in the docs
 -- (game/config/vartype). Reading a var of any other type logs an [ERROR], so
 -- those are skipped.
+-- stylua: ignore
 local VALUE_TYPE_NAMES = {
     [131] = "ACHIEVEMENT", [16] = "AREA", [44] = "BASEANIMSET", [1] = "BOOLEAN",
     [41] = "CATEGORY", [42] = "CHAR", [29] = "CHATCAT", [24] = "CHATPHRASE",
@@ -60,12 +61,14 @@ local VALUE_TYPE_NAMES = {
 -- ObjType, ...) become { config = name, id = n }. Other game types such as
 -- CoordGrid become their tostring() text.
 local function plainValue(value)
-    if type(value) ~= "userdata" then
-        return value
-    end
-    local ok, name = pcall(function() return value.configName end)
+    if type(value) ~= "userdata" then return value end
+    local ok, name = pcall(function()
+        return value.configName
+    end)
     if ok and name then
-        local _, configId = pcall(function() return value.id end)
+        local _, configId = pcall(function()
+            return value.id
+        end)
         return { config = name, id = configId }
     end
     return tostring(value)
@@ -90,7 +93,9 @@ local function describeVar(v)
         return entry
     end
     -- Reading the value can fail in other ways too, so report the error instead.
-    local ok, value = pcall(function() return v.value end)
+    local ok, value = pcall(function()
+        return v.value
+    end)
     if ok then
         entry.value = plainValue(value)
     else
@@ -122,8 +127,7 @@ local function nameLister(domain, found)
         local value
         key, value = iterate(state, key)
         if key == nil then return false end
-        local varId = math.type(value) == "integer" and value
-            or math.type(key) == "integer" and key
+        local varId = math.type(value) == "integer" and value or math.type(key) == "integer" and key
         local v = varId and var[domain].FromID(varId)
         if v then addFound(found, varId, v) end
         return true
@@ -157,8 +161,15 @@ local function reportFailure(request)
     if request.timedOut then
         say("request to", request.url, "timed out")
     else
-        say("request to", request.url, "failed:", request.errorCode, request.errorInfo,
-            "response", request.responseCode)
+        say(
+            "request to",
+            request.url,
+            "failed:",
+            request.errorCode,
+            request.errorInfo,
+            "response",
+            request.responseCode
+        )
     end
     say("is scripts/var-dump-receiver.py running?")
 end
@@ -183,22 +194,20 @@ end
 -- pumpUploads(). That keeps them in order, so the receiver starts a new file
 -- on part 1.
 local snapshotQueue = {} -- { body = json, count = vars in it }
-local uploading = false   -- a part is being sent right now
-local building = false    -- the snapshot is still making parts
+local uploading = false -- a part is being sent right now
+local building = false -- the snapshot is still making parts
 local uploadFailed = false
 local reportedDone = false
 
 -- Progress, for the console. Logic ticks run at a fixed 50 a second, so
 -- counting them gives the elapsed time.
-local totalVars = 0       -- set once listing is done
+local totalVars = 0 -- set once listing is done
 local varsUploaded = 0
 local lastTenthReported = 0
 local logicTicks = 0
 
 local function queueSnapshotPart(body, count)
-    if not uploadFailed then
-        snapshotQueue[#snapshotQueue + 1] = { body = body, count = count }
-    end
+    if not uploadFailed then snapshotQueue[#snapshotQueue + 1] = { body = body, count = count } end
 end
 
 -- Log upload progress each time it passes another 10%.
@@ -207,8 +216,14 @@ local function reportUploadProgress()
     local tenth = varsUploaded * 10 // totalVars
     if tenth > lastTenthReported and tenth < 10 then
         lastTenthReported = tenth
-        say(formatStr("uploaded {}/{} vars ({}%)", varsUploaded, totalVars,
-            varsUploaded * 100 // totalVars))
+        say(
+            formatStr(
+                "uploaded {}/{} vars ({}%)",
+                varsUploaded,
+                totalVars,
+                varsUploaded * 100 // totalVars
+            )
+        )
     end
 end
 
@@ -231,8 +246,13 @@ local function pumpUploads()
         end)
     elseif not building and not reportedDone then
         reportedDone = true
-        say(formatStr("snapshot upload complete: {} vars in {} s",
-            varsUploaded, string.format("%.1f", logicTicks / 50)))
+        say(
+            formatStr(
+                "snapshot upload complete: {} vars in {} s",
+                varsUploaded,
+                string.format("%.1f", logicTicks / 50)
+            )
+        )
     end
 end
 
@@ -311,12 +331,15 @@ end
 -- Returns its cost in work units (about one per var).
 local function flushPart()
     snap.part = snap.part + 1
-    queueSnapshotPart(json.encode({
-        part = snap.part,
-        totalParts = snap.totalParts,
-        totalVars = #snap.all,
-        vars = snap.entries,
-    }), #snap.entries)
+    queueSnapshotPart(
+        json.encode({
+            part = snap.part,
+            totalParts = snap.totalParts,
+            totalVars = #snap.all,
+            vars = snap.entries,
+        }),
+        #snap.entries
+    )
     local cost = #snap.entries
     snap.entries = {}
     return cost
@@ -415,9 +438,7 @@ end
 -- httpAccess is optional, so it can be granted while the plugin is running.
 -- Start as soon as it is, without needing a reload.
 Event.OptionalPermissionChanged.Subscribe("varDumpPermission", function(ev)
-    if ev.enabled and Plugin.HasPermission(PluginPermissions.httpAccess) then
-        start()
-    end
+    if ev.enabled and Plugin.HasPermission(PluginPermissions.httpAccess) then start() end
 end)
 
 if Plugin.HasPermission(PluginPermissions.httpAccess) then

@@ -69,6 +69,7 @@ local KEY_TOGGLE = GameKey.H
 ---------------------------------------------------------------------------
 
 -- LocShapeType values, from the docs (game/config/loctype).
+-- stylua: ignore
 local SHAPE_NAMES = {
     [0] = "WALL_STRAIGHT", [1] = "WALL_DIAGONALCORNER", [2] = "WALL_L",
     [3] = "WALL_SQUARECORNER", [4] = "WALLDECOR_STRAIGHT_NOOFFSET",
@@ -86,7 +87,9 @@ local WALL_STRAIGHT, WALL_L, WALL_L_ALT, GROUNDDECOR = 0, 2, 23, 22
 -- Shapes that block every tile they cover, as in the old engine: diagonal
 -- walls, centrepieces (trees, tables, rocks) and roofs.
 local FULL_TILE_SHAPES = { [9] = true, [10] = true, [11] = true }
-for shape = 12, 21 do FULL_TILE_SHAPES[shape] = true end
+for shape = 12, 21 do
+    FULL_TILE_SHAPES[shape] = true
+end
 if GROUNDDECOR_BLOCKS then FULL_TILE_SHAPES[GROUNDDECOR] = true end
 
 -- The other shapes don't affect where you can get to. Wall decoration never
@@ -202,9 +205,18 @@ local function sampleAnchor(loc, label)
     if area.anchorSamples >= ANCHOR_SAMPLES then return end
     area.anchorSamples = area.anchorSamples + 1
     local c, pos = loc.coordGrid, loc.position
-    say(formatStr("anchor check: {} size {}x{} coordGrid {},{} position/512 {},{}",
-        label, loc.width, loc.length, c.x, c.z,
-        string.format("%.2f", pos.x / 512), string.format("%.2f", pos.z / 512)))
+    say(
+        formatStr(
+            "anchor check: {} size {}x{} coordGrid {},{} position/512 {},{}",
+            label,
+            loc.width,
+            loc.length,
+            c.x,
+            c.z,
+            string.format("%.2f", pos.x / 512),
+            string.format("%.2f", pos.z / 512)
+        )
+    )
 end
 
 -- Count each loc's shape, and apply it to the grid if it blocks walking.
@@ -219,8 +231,13 @@ local function applyLoc(loc)
     if not cfg.blockWalk then return end
     counts.blocking = counts.blocking + 1
 
-    local label = formatStr("{} [{}] {} rot {}", cfg.configName, cfg.id,
-        SHAPE_NAMES[shape] or shape, rotation)
+    local label = formatStr(
+        "{} [{}] {} rot {}",
+        cfg.configName,
+        cfg.id,
+        SHAPE_NAMES[shape] or shape,
+        rotation
+    )
     local c = loc.coordGrid
     local lx, lz = toLocal(c.x, c.z)
 
@@ -309,8 +326,11 @@ end
 -- World position of a tile corner, `lift` fine units above the ground.
 local function cornerPos(cx, cz, lift)
     local h = cornerHeight(cx, cz) or 0
-    return Vector3.new((area.originX - RADIUS + cx) * 512, h + lift,
-        (area.originZ - RADIUS + cz) * 512)
+    return Vector3.new(
+        (area.originX - RADIUS + cx) * 512,
+        h + lift,
+        (area.originZ - RADIUS + cz) * 512
+    )
 end
 
 -- Shape data being filled, flushed to a ShapeInstance every ITEMS_PER_SHAPE items.
@@ -337,7 +357,10 @@ end
 
 -- Corner offsets at each end of a tile side.
 local SIDE_CORNERS = {
-    [N] = { 0, 1, 1, 1 }, [E] = { 1, 0, 1, 1 }, [S] = { 0, 0, 1, 0 }, [W] = { 0, 0, 0, 1 },
+    [N] = { 0, 1, 1, 1 },
+    [E] = { 1, 0, 1, 1 },
+    [S] = { 0, 0, 1, 0 },
+    [W] = { 0, 0, 0, 1 },
 }
 
 local function addWallLine(b, lx, lz, side)
@@ -372,18 +395,37 @@ end
 
 -- Report what the run found. Ticks are 50 a second.
 local function reportDone()
-    say(formatStr("done in {} s: {} tiles reached, {} blocked tiles, {} wall edges, {} shapes",
-        string.format("%.1f", area.ticks / 50), #area.queue, #area.blockedList,
-        #area.edges, #instances))
+    say(
+        formatStr(
+            "done in {} s: {} tiles reached, {} blocked tiles, {} wall edges, {} shapes",
+            string.format("%.1f", area.ticks / 50),
+            #area.queue,
+            #area.blockedList,
+            #area.edges,
+            #instances
+        )
+    )
     if area.hitEdge then
-        say(formatStr("the fill reached the {}-tile radius limit, so the area is open "
-            .. "(or something blocking wasn't detected)", RADIUS))
+        say(
+            formatStr(
+                "the fill reached the {}-tile radius limit, so the area is open "
+                    .. "(or something blocking wasn't detected)",
+                RADIUS
+            )
+        )
     end
     for shape = 0, 24 do
         local counts = area.shapeCounts[shape]
         if counts then
-            say(formatStr("  shape {} {}: {} locs, {} with blockWalk", shape,
-                SHAPE_NAMES[shape], counts.all, counts.blocking))
+            say(
+                formatStr(
+                    "  shape {} {}: {} locs, {} with blockWalk",
+                    shape,
+                    SHAPE_NAMES[shape],
+                    counts.all,
+                    counts.blocking
+                )
+            )
         end
     end
 end
@@ -431,12 +473,25 @@ local function recompute()
     local c = player.coordGrid
     clearShapes()
     area = {
-        stage = "locs", ticks = 0,
-        originX = c.x, originZ = c.z, level = c.level,
-        blocked = {}, blockedList = {}, walls = {}, edges = {}, notes = {},
-        heights = {}, shapeCounts = {}, anchorSamples = 0,
-        reached = {}, queue = {}, head = 1, hitEdge = false,
-        builder = newBuilder(), nextDraw = 1,
+        stage = "locs",
+        ticks = 0,
+        originX = c.x,
+        originZ = c.z,
+        level = c.level,
+        blocked = {},
+        blockedList = {},
+        walls = {},
+        edges = {},
+        notes = {},
+        heights = {},
+        shapeCounts = {},
+        anchorSamples = 0,
+        reached = {},
+        queue = {},
+        head = 1,
+        hitEdge = false,
+        builder = newBuilder(),
+        nextDraw = 1,
     }
     -- Search a little past the square's corners (which are RADIUS * 1.41
     -- away), in case the distance is measured as a straight line, and to
@@ -447,8 +502,14 @@ local function recompute()
     local start = tileKey(RADIUS, RADIUS)
     area.reached[start] = true
     area.queue[1] = start
-    say(formatStr("computing around {}: {} locs within {} tiles", tostring(c),
-        #area.locs, searchRange))
+    say(
+        formatStr(
+            "computing around {}: {} locs within {} tiles",
+            tostring(c),
+            #area.locs,
+            searchRange
+        )
+    )
 end
 
 -- Each Logic tick, do up to WORK_PER_TICK units of the current run. Errors
@@ -486,9 +547,14 @@ local function inspect()
         local lx, lz = toLocal(c.x, c.z)
         if inBounds(lx, lz) then
             local k = tileKey(lx, lz)
-            say(formatStr("  {}, blocked: {}, wall sides: {}",
-                area.reached[k] and "reached" or "not reached",
-                area.blocked[k] and "yes" or "no", sidesText(area.walls[k] or 0)))
+            say(
+                formatStr(
+                    "  {}, blocked: {}, wall sides: {}",
+                    area.reached[k] and "reached" or "not reached",
+                    area.blocked[k] and "yes" or "no",
+                    sidesText(area.walls[k] or 0)
+                )
+            )
             for _, text in ipairs(area.notes[k] or {}) do
                 say("    " .. text)
             end
@@ -498,10 +564,20 @@ local function inspect()
     end
     for _, loc in ipairs(LocList.ByDistance(c, 0, true)) do
         if loc.isValid and loc.config then
-            say(formatStr("  loc {} [{}] '{}' {} rot {} size {}x{} blockWalk {} hidden {}",
-                loc.config.configName, loc.config.id, loc.displayName,
-                SHAPE_NAMES[loc.shapeType] or loc.shapeType, loc.rotationType,
-                loc.width, loc.length, tostring(loc.config.blockWalk), tostring(loc.isHidden)))
+            say(
+                formatStr(
+                    "  loc {} [{}] '{}' {} rot {} size {}x{} blockWalk {} hidden {}",
+                    loc.config.configName,
+                    loc.config.id,
+                    loc.displayName,
+                    SHAPE_NAMES[loc.shapeType] or loc.shapeType,
+                    loc.rotationType,
+                    loc.width,
+                    loc.length,
+                    tostring(loc.config.blockWalk),
+                    tostring(loc.isHidden)
+                )
+            )
         end
     end
     local fine = c:ToCoordFine(true).position

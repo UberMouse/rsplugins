@@ -41,6 +41,9 @@
               # scripts/var-dump-receiver.py (stdlib only).
               pkgs.python3
               pkgs.git
+              # Tests for the .claude/workflows/ review workflow; jq for the durable-state hook.
+              pkgs.nodejs
+              pkgs.jq
             ];
 
             shellHook = ''
@@ -48,6 +51,7 @@
               echo "  lua / luac                    Lua $(lua -v 2>&1 | cut -d' ' -f2) (client runs 5.4.8)"
               echo "  lua-language-server           LSP for editors"
               echo "  stylua / selene               Lua formatter / linter"
+              echo "  scripts/check-lua.sh          the gate: luac -p, manifests, selene, stylua --check"
               echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
               echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
             '';

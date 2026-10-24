@@ -1,5 +1,19 @@
 {
   "worktree": {
     "bgIsolation": "none"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/durable-state-resume.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

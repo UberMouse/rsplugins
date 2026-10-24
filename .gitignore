@@ -3,3 +3,5 @@ dumps/
 # Nix dev environment: direnv cache
 .direnv/
 __pycache__/
+# Run state for sdd-loop / durable-state, and code-review reports
+.durable-state/

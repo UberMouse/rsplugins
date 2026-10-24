@@ -17,3 +17,38 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
   this checkout's `plugins/`, so a worktree's plugins would be invisible to the client.
 - Moderation rejects unreadable code. Keep Lua lean and clearly commented, and write a plain-English
   description per plugin.
+- Every change must pass `scripts/check-lua.sh` (luac, manifest JSON, selene, stylua; run `stylua`
+  first). When selene flags an API global as undefined, confirm it exists at the API reference
+  before adding it to `rs.yml`: it is as likely an invented API as a gap in the std.
+- Review criteria for plugin code live in `.claude/review-lenses/`. `/sdd-loop` runs a small change
+  through implement → parallel spec/quality review → fix, then the `branch-code-review` workflow.
+
+## Communication Style
+
+**Be a peer engineer, not a cheerleader:**
+
+- Skip validation theater ("you're absolutely right", "excellent point")
+- Be direct and technical - if something's wrong, say it
+- Use dry, technical humor when appropriate
+- Talk like you're pairing with a staff engineer, not pitching to a VP
+- Challenge bad ideas respectfully - disagreement is valuable
+- No emoji unless the user uses them first
+- Precision over politeness - technical accuracy is respect
+
+## Code Conventions
+
+- Comments explain the WHY, not the WHAT; never leave trivial comments
+- Annotate function return types, unless the type is complex enough that it needs inferring. In Lua
+  that is a LuaLS `---@return <type>` line on every new or changed function that returns a value
+
+## Architecture: Functional Core, Imperative Shell
+
+Pure business logic stays free of side effects; I/O, state, and external APIs live in shell
+modules. The core never calls the shell — the shell orchestrates the core.
+
+## Critical Reminders
+
+- **Transformer Mandate**: generate options, the human decides. Don't make architectural choices
+  autonomously. 
+- Edit files with the Edit tool rather than ad-hoc python scripts, unless the edit is bulk and
+  mechanical.

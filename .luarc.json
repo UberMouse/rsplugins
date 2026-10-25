@@ -11,6 +11,8 @@
     ".direnv",
     ".claude",
     "dumps",
+    "plugins/debug-plugin",
+    "plugins/dev-kit",
     "docs",
     "tests",
     "types"

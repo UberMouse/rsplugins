@@ -9,3 +9,6 @@ __pycache__/
 docs/api
 # Var catalog, generated per checkout from a var dump (plugins/var-dump/README.md)
 docs/vars/
+# Symlinks to the pinned third-party dev plugins, made by the flake shellHook
+plugins/debug-plugin
+plugins/dev-kit

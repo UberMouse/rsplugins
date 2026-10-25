@@ -95,3 +95,21 @@ You can enable, disable and reload plugins without restarting the client.
 
 Top-level code in `main.lua` runs once each time the plugin is enabled. Anything ongoing needs
 event subscriptions (see [api-concepts.md](api-concepts.md#events)).
+
+## Third-party dev plugins
+
+Two community dev tools are pinned in `flake.nix` (as `flake = false` inputs, not vendored) and
+linked into `plugins/` by the dev shell's `shellHook`, so the client's `dev_plugins` symlink picks
+them up. The links are gitignored, and `.luarc.json`, `scripts/check-lua.sh`, selene, stylua and
+the tests do not touch them. Neither is ours: they are never submitted, and they are not held to
+this repo's code rules.
+
+| Folder | Source | What it is |
+|---|---|---|
+| `plugins/debug-plugin` | [FriendlyDevelopment/debug-plugin](https://github.com/FriendlyDevelopment/debug-plugin) (no licence) | Debugging UI with a ribbon icon and settings. Needs **PrettyUI** installed in the client. Self-grants permissions with `ppr debug-plugin`. |
+| `plugins/dev-kit` | the `dev-kit/` subfolder of [wildrabbet/dev-kit](https://github.com/wildrabbet/dev-kit) (MIT) | Dev window. It runs cheat commands, so use it on dev worlds only. |
+
+The folder names matter: they are the plugins' names for console commands. The hook replaces only
+an existing symlink or nothing, never a real directory. Bump both with
+`nix flake update debug-plugin dev-kit`, then re-enter the shell. After `prf`, `plist` should list
+both; enable with `pon debug-plugin` / `pon dev-kit`.

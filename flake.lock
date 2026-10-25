@@ -16,6 +16,38 @@
         "type": "github"
       }
     },
+    "debug-plugin": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792862443,
+        "narHash": "sha256-bFuQeZooeHURB6n38WlOPT1PGSdcZCV4EbHrnvC5AGE=",
+        "owner": "FriendlyDevelopment",
+        "repo": "debug-plugin",
+        "rev": "9efc84784ce6e91f86496bbe1eeb65bd34be5c82",
+        "type": "github"
+      },
+      "original": {
+        "owner": "FriendlyDevelopment",
+        "repo": "debug-plugin",
+        "type": "github"
+      }
+    },
+    "dev-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792769319,
+        "narHash": "sha256-jbbaG51z8bj1IM133VrDIfDMOwjf3KVlJD6LYhFaf5s=",
+        "owner": "wildrabbet",
+        "repo": "dev-kit",
+        "rev": "09a4456a3f0a684dffd1676d373ea28d85fbe467",
+        "type": "github"
+      },
+      "original": {
+        "owner": "wildrabbet",
+        "repo": "dev-kit",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1792422028,
@@ -35,6 +67,8 @@
     "root": {
       "inputs": {
         "api-stubs": "api-stubs",
+        "debug-plugin": "debug-plugin",
+        "dev-kit": "dev-kit",
         "nixpkgs": "nixpkgs"
       }
     }

@@ -10,6 +10,17 @@
       url = "github:FriendlyDevelopment/runescape-api-stubs";
       flake = false;
     };
+    # Third-party dev plugins for the beta client, linked into plugins/ by the shellHook. Pinned
+    # rather than vendored: debug-plugin has no licence, and neither is ours to submit.
+    # Bump with `nix flake update debug-plugin dev-kit`.
+    debug-plugin = {
+      url = "github:FriendlyDevelopment/debug-plugin";
+      flake = false;
+    };
+    dev-kit = {
+      url = "github:wildrabbet/dev-kit";
+      flake = false;
+    };
   };
 
   outputs =
@@ -17,6 +28,8 @@
       self,
       nixpkgs,
       api-stubs,
+      debug-plugin,
+      dev-kit,
     }:
     let
       systems = [
@@ -72,6 +85,16 @@
                 ln -sfn ${api-stubs} "$root/docs/api"
               fi
 
+              # Same rule for the third-party dev plugins: plugins/<name> is what the client's
+              # dev_plugins symlink exposes, and the folder name is the plugin's console name.
+              # dev-kit keeps its plugin in a dev-kit/ subfolder of the repo.
+              if [ -n "$root" ] && { [ -L "$root/plugins/debug-plugin" ] || [ ! -e "$root/plugins/debug-plugin" ]; }; then
+                ln -sfn ${debug-plugin} "$root/plugins/debug-plugin"
+              fi
+              if [ -n "$root" ] && { [ -L "$root/plugins/dev-kit" ] || [ ! -e "$root/plugins/dev-kit" ]; }; then
+                ln -sfn ${dev-kit}/dev-kit "$root/plugins/dev-kit"
+              fi
+
               echo "rsplugins dev shell"
               echo "  lua / luac                    Lua $(lua -v 2>&1 | cut -d' ' -f2) (client runs 5.4.8)"
               echo "  lua-language-server           LSP for editors; docs/api/ holds the API stubs"
@@ -79,6 +102,7 @@
               echo "  scripts/check-lua.sh          the gate: luac -p, manifests, selene, stylua, LuaLS, tests"
               echo "  scripts/test-lua.sh           run the plugin tests (busted, tests/**/*_spec.lua)"
               echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
+              echo "  plugins/debug-plugin, plugins/dev-kit  third-party dev plugins (flake inputs, gitignored links)"
               echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
             '';
           };

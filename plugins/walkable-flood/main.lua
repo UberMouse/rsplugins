@@ -125,8 +125,9 @@ end
 
 -- Everything about the current run, or nil before the first one. Tiles are
 -- addressed by local x/z (0 to SIZE-1, the player at RADIUS,RADIUS), packed
--- into one integer key.
-local area = nil
+-- into one integer key. Functions that read it assert it first, which also
+-- tells the type checker it is set from there on.
+local area = nil ---@type table?
 
 local function inBounds(lx, lz)
     return lx >= 0 and lx < SIZE and lz >= 0 and lz < SIZE
@@ -138,11 +139,13 @@ end
 
 -- World tile -> local tile.
 local function toLocal(x, z)
+    assert(area, "no run started")
     return x - area.originX + RADIUS, z - area.originZ + RADIUS
 end
 
 -- Remember why a tile is blocked, for the inspect key.
 local function note(lx, lz, text)
+    assert(area, "no run started")
     local k = tileKey(lx, lz)
     area.notes[k] = area.notes[k] or {}
     table.insert(area.notes[k], text)
@@ -151,6 +154,7 @@ end
 -- Ground height at a tile corner (local corner coords 0..SIZE), cached.
 -- Returns nil where the map isn't loaded.
 local function cornerHeight(cx, cz)
+    assert(area, "no run started")
     local k = cz * (SIZE + 1) + cx
     local h = area.heights[k]
     if h == nil then
@@ -174,6 +178,7 @@ end
 ---------------------------------------------------------------------------
 
 local function blockTile(lx, lz, label)
+    assert(area, "no run started")
     if not inBounds(lx, lz) then return end
     local k = tileKey(lx, lz)
     if not area.blocked[k] then
@@ -186,6 +191,7 @@ end
 -- Mark one side of a tile as a wall, and the matching side of the tile next
 -- to it, so the wall stops movement in both directions.
 local function addWallSide(lx, lz, side, label)
+    assert(area, "no run started")
     local nx, nz = lx + STEP[side][1], lz + STEP[side][2]
     if inBounds(lx, lz) then
         local k = tileKey(lx, lz)
@@ -202,6 +208,7 @@ end
 
 -- Log where a multi-tile loc says it is, to check our south-west assumption.
 local function sampleAnchor(loc, label)
+    assert(area, "no run started")
     if area.anchorSamples >= ANCHOR_SAMPLES then return end
     area.anchorSamples = area.anchorSamples + 1
     local c, pos = loc.coordGrid, loc.position
@@ -221,6 +228,7 @@ end
 
 -- Count each loc's shape, and apply it to the grid if it blocks walking.
 local function applyLoc(loc)
+    assert(area, "no run started")
     if not loc.isValid then return end
     local cfg = loc.config
     if cfg == nil then return end
@@ -260,6 +268,7 @@ end
 
 -- One unit of work: apply the next loc. Moves on to flooding when done.
 local function locStep()
+    assert(area, "no run started")
     local loc = area.locs[area.nextLoc]
     area.nextLoc = area.nextLoc + 1
     if loc then
@@ -277,6 +286,7 @@ end
 
 -- Whether you can step from tile k to its neighbour nk across `side`.
 local function canStep(k, nk, side, nx, nz)
+    assert(area, "no run started")
     return not area.blocked[nk]
         and (area.walls[k] or 0) & side == 0
         and (area.walls[nk] or 0) & OPPOSITE[side] == 0
@@ -286,6 +296,7 @@ end
 -- One unit of work: take the next reached tile off the queue and reach its
 -- neighbours. The queue doubles as the list of reached tiles, in order.
 local function floodStep()
+    assert(area, "no run started")
     local k = area.queue[area.head]
     if k == nil then
         area.stage = "draw"
@@ -325,6 +336,7 @@ end
 
 -- World position of a tile corner, `lift` fine units above the ground.
 local function cornerPos(cx, cz, lift)
+    assert(area, "no run started")
     local h = cornerHeight(cx, cz) or 0
     return Vector3.new(
         (area.originX - RADIUS + cx) * 512,
@@ -373,6 +385,7 @@ end
 
 -- Turn the builder into a ShapeInstance and start a new one.
 local function flushBuilder()
+    assert(area, "no run started")
     local b = area.builder
     area.builder = newBuilder()
     if b.items == 0 then return end
@@ -395,6 +408,7 @@ end
 
 -- Report what the run found. Ticks are 50 a second.
 local function reportDone()
+    assert(area, "no run started")
     say(
         formatStr(
             "done in {} s: {} tiles reached, {} blocked tiles, {} wall edges, {} shapes",
@@ -433,6 +447,7 @@ end
 -- One unit of work: draw the next item, in order: reached tiles, blocked
 -- tiles, wall edges.
 local function drawStep()
+    assert(area, "no run started")
     local n = area.nextDraw
     area.nextDraw = n + 1
     local reachedCount, blockedCount = #area.queue, #area.blockedList

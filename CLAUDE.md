@@ -3,8 +3,10 @@
 RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
 
 - Before writing or changing plugin code, read `docs/README.md` and the relevant docs. The API
-  reference will live in `docs/api/` once the dump script exists. Until then, check signatures at
-  https://developer.runescape.com/rs/.
+  reference is `docs/api/`: LuaLS stubs (signatures, types, doc text) that the dev shell symlinks
+  from a pinned community repo. Grep it, e.g. `grep -rn 'function Player\.' docs/api/generated/`.
+  The stubs are generated from https://developer.runescape.com/rs/; check there when details
+  matter or a stub looks wrong.
 - To find which game vars a plugin can read, look them up in `docs/vars/` (grep `vars.csv`). It
   lists what exists, not values. To see a logged-in account's actual state, dump it with
   `plugins/var-dump` + `scripts/var-dump-receiver.py`, then run `scripts/var-dump-analyze.py`;
@@ -17,9 +19,11 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
   this checkout's `plugins/`, so a worktree's plugins would be invisible to the client.
 - Moderation rejects unreadable code. Keep Lua lean and clearly commented, and write a plain-English
   description per plugin.
-- Every change must pass `scripts/check-lua.sh` (luac, manifest JSON, selene, stylua; run `stylua`
-  first). When selene flags an API global as undefined, confirm it exists at the API reference
-  before adding it to `rs.yml`: it is as likely an invented API as a gap in the std.
+- Every change must pass `scripts/check-lua.sh` (luac, manifest JSON, selene, stylua, and LuaLS
+  against `docs/api/`; run `stylua` first). When LuaLS flags an API name, member or argument, it is
+  most likely an invented API: fix the code. Only if the official page proves the stub wrong,
+  suppress that one line with `---@diagnostic disable-next-line: <code>` and a comment citing the
+  page.
 - Review criteria for plugin code live in `.claude/review-lenses/`. `/sdd-loop` runs a small change
   through implement → parallel spec/quality review → fix, then the `branch-code-review` workflow.
 
@@ -40,6 +44,9 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
 - Comments explain the WHY, not the WHAT; never leave trivial comments
 - Annotate function return types, unless the type is complex enough that it needs inferring. In Lua
   that is a LuaLS `---@return <type>` line on every new or changed function that returns a value
+- Module state that starts nil is declared `local snap = nil ---@type table?`, and every function
+  that reads it starts with `assert(snap, "<why it must be set>")`. That narrows it for LuaLS's
+  nil check and names the broken invariant if it ever fires
 
 ## Architecture: Functional Core, Imperative Shell
 

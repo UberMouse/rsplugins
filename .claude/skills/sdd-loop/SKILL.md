@@ -63,7 +63,8 @@ If mid-loop the work turns out to need genuine design work, do **not** silently 
   `dev_plugins` symlink points at this checkout's `plugins/`, so a worktree's changes would be
   invisible to the user's in-client testing. Every task commits to `main`.
 - **The dev shell** (direnv or `nix develop`): `scripts/check-lua.sh` needs `luac`, `selene`,
-  `stylua` and `python3`, and the workflow tests need `node`.
+  `stylua`, `lua-language-server`, `python3` and the `docs/api/` stubs symlink the shell makes,
+  and the workflow tests need `node`.
 - Human input comes only through `AskUserQuestion`, so this loop works in a background job.
 
 ## State you carry

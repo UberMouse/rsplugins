@@ -10,10 +10,12 @@ stops doing its job, the overlay that never draws or never clears, the setting t
 client freeze or crash. Say whether it bites on a path the change can reach. Never report the form
 of a line in isolation; trace it to the behaviour it causes.
 
-There is no typechecker and no test suite here. `scripts/check-lua.sh` runs `luac -p`, selene (with
-`rs.yml` declaring the API's top-level globals) and stylua, and nothing else. So a nil index, a
-wrong `.`/`:` call, a misspelt API member or a wrong argument order is found **only** by review or
-by a user in the client. Do not dismiss those as "a typechecker would catch it": none runs.
+There is no test suite here. `scripts/check-lua.sh` runs `luac -p`, selene, stylua and LuaLS
+against the API stubs in `docs/api/`, and nothing else. LuaLS only sees what is typed: through an
+`any` (a `pcall` result, an untyped table) it cannot catch a nil index, a wrong `.`/`:` call, a
+misspelt API member or a wrong argument order, and it trusts the stubs even where they are wrong.
+Those are found by review or by a user in the client. Do not dismiss them as "the type check
+would catch it" unless the value really is typed at that point.
 
 Some lenses review artefacts whose consequence falls on a person rather than the client: a
 comment that misleads the next reader, a feature a Jagex moderator rejects. For those, that
@@ -41,8 +43,9 @@ own finding. A pattern fixed in one plugin but left in a sibling is a common mis
 ## Do not report
 
 - What `scripts/check-lua.sh` already rejects: Lua syntax errors, invalid `plugin.json` JSON,
-  formatting (stylua), and what selene flags (undefined top-level globals, unused variables,
-  accidental globals, shadowing). Assume the gate ran and passed.
+  formatting (stylua), what selene flags (unused variables, accidental globals, shadowing), and
+  what LuaLS flags on typed values (undefined globals and members, argument type mismatches,
+  unchecked nil). Assume the gate ran and passed.
 - Pure formatting or style preference.
 - Code the change did not touch, unless the change introduces a new consequence on it.
 - Anything explicitly justified in a comment or sanctioned by `CLAUDE.md`, unless the lens says

@@ -66,9 +66,10 @@ Agent(implementer, model=implModel):
     1. Implement exactly what's specified, following the plugin's existing patterns. Every API
        call you write must match the reference: check each global, member, call form (`T:M`
        method vs `T.f` static), argument list, nil-able (`T?`) return and event payload field in
-       `docs/` or https://developer.runescape.com/rs/ (the search index
-       https://developer.runescape.com/rs/search.json has one entry per member: curl it to a temp
-       file and query it with jq). Keep pure logic free of API calls (functional core /
+       the stubs in `docs/api/` (grep `docs/api/generated/`), confirming against
+       https://developer.runescape.com/rs/ when a stub looks wrong or the detail matters (its
+       search.json index has one entry per member: curl it to a temp file and query it with jq).
+       Keep pure logic free of API calls (functional core /
        imperative shell). Work that scales with the world goes in bounded slices per `Logic` tick
        (the client kills any Lua call over 1000 ms). Debug logging goes through the plugin's
        tagged `say()`. Every function you add or change that returns a value gets a LuaLS
@@ -169,8 +170,9 @@ Agent(general-purpose, model=reviewModel|haiku):
     a separate spec-compliance reviewer runs in parallel on the same commit and owns that.
     Read the diff (`git diff <TASK_PARENT>..HEAD`) and the touched files in full. Report ONLY
     clear, high-impact issues; skip nitpicks and anything `scripts/check-lua.sh` rejects (syntax,
-    manifest JSON, formatting, selene's undefined globals / unused / accidental globals). There is
-    no typechecker: API member names, call forms and nil flow are YOURS to check.
+    manifest JSON, formatting, selene's unused / accidental globals, LuaLS's undefined names and
+    type mismatches on typed values). LuaLS is blind through `any` (pcall results, untyped
+    tables) and trusts the stubs, so API member names, call forms and nil flow there are YOURS.
 
     The criteria are the review lenses in `.claude/review-lenses/` — read
     `review-conventions.md` and the ones this task touches:
@@ -181,9 +183,10 @@ Agent(general-purpose, model=reviewModel|haiku):
       HTTP started from a completion callback; subscription-name collisions; lifecycle hooks
       declared `local`; `*Added` without a startup scan; UI components that never draw; manifest
       permissions and URLs; PersistentDB written every tick.
-    - `review-api-grounding.md`: every API use checked against https://developer.runescape.com/rs/
-      (curl its search.json index to a temp file and query it with jq) — a member that does not
-      exist, `.` where the reference has `:`, wrong arguments.
+    - `review-api-grounding.md`: every API use checked against the stubs in `docs/api/` and, where
+      it matters, https://developer.runescape.com/rs/ (curl its search.json index to a temp file
+      and query it with jq) — a member that does not exist, `.` where the reference has `:`,
+      wrong arguments.
     - `review-architecture.md`, `review-cleanup.md`, `review-comments.md`: functional core /
       imperative shell, a second way of doing what the plugin already does, stale header/README.
     - `review-moderation.md`: anything `docs/guidelines.md` prohibits or puts under extra review.

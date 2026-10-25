@@ -20,8 +20,8 @@ the change also adds a dependency it could have used.
   separate state, since `require` caches). A module that reaches into another's internals, or
   that relies on being required in a particular order, is fragile.
 - **Global namespace.** Everything is `local` except the lifecycle hooks the client looks up by
-  name. A plugin-wide mutable global (even one selene allowed through `rs.yml`) shared between
-  modules is a finding.
+  name. A plugin-wide mutable global shared between modules is a finding, even one with a lint
+  suppression.
 - **Fit with the surrounding plugin.** Read the rest of the plugin: its `say()` logging helper,
   its constants block, its sliced-work pattern, its key handling. A change that invents a second
   way of doing one of those is a finding.

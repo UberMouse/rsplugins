@@ -1,11 +1,8 @@
 ---
-# selene standard library for RS3 client plugins: Lua 5.4 grammar plus the Client Plugin API
-# globals, so `undefined_variable` flags names the client does not provide.
-#
-# The API namespaces are `any: true` (every field allowed): until docs/api/ exists there is no
-# machine-readable member list, so selene only checks that the top-level name is real. Before
-# adding a global here because selene flagged it, confirm it exists at
-# https://developer.runescape.com/rs/ — a flagged name is as likely an invented API as a gap here.
+# selene standard library for RS3 client plugins: the Lua 5.4 grammar and the stdlib members
+# selene's lua53 std lacks. The Client Plugin API is not declared here: LuaLS checks API
+# names, members and argument types against the stubs in docs/api/ (scripts/check-lua.sh step 5),
+# so selene's undefined_variable is off (selene.toml) and this file stays small.
 name: rs
 lua_versions:
   - lua51
@@ -31,130 +28,9 @@ globals:
     args:
       - type: any
 
-  # Core globals (docs/api-concepts.md, API map).
-  log:
-    args:
-      - type: "..."
-  formatStr:
-    args:
-      - type: "..."
-  ExecuteConsoleCommand:
-    args:
-      - type: string
-
   # Lifecycle hooks the client calls when a plugin defines them as globals
   # (docs/plugin-anatomy.md). Plugins assign these, so they must be writable.
   PluginShutdown:
     property: full-write
   PluginDependencyUpdate:
     property: full-write
-
-  # Core modules.
-  Event:
-    any: true
-  Plugin:
-    any: true
-  PluginPermissions:
-    any: true
-  PersistentDB:
-    any: true
-  HTTPRequest:
-    any: true
-  ClientOptions:
-    any: true
-  Keyboard:
-    any: true
-  Mouse:
-    any: true
-  GameKey:
-    any: true
-  ModifierKey:
-    any: true
-
-  # Game.
-  Player:
-    any: true
-  World:
-    any: true
-  Camera:
-    any: true
-  Chat:
-    any: true
-  Inventory:
-    any: true
-  GrandExchange:
-    any: true
-  MiniMenu:
-    any: true
-  ScreenConvert:
-    any: true
-  Shapes:
-    any: true
-  ShapeList:
-    any: true
-  ShapeData:
-    any: true
-  ShapeInstance:
-    any: true
-  CoordGrid:
-    any: true
-  CoordFine:
-    any: true
-  SkillType:
-    any: true
-  config:
-    any: true
-  var:
-    any: true
-  NPCEntity:
-    any: true
-  PlayerEntity:
-    any: true
-  LocEntity:
-    any: true
-  ObjStackEntity:
-    any: true
-  NPCList:
-    any: true
-  PlayerList:
-    any: true
-  LocList:
-    any: true
-  ObjStackList:
-    any: true
-
-  # Math.
-  Vector2:
-    any: true
-  Vector3:
-    any: true
-  Vector4:
-    any: true
-  Quaternion:
-    any: true
-  Matrix33:
-    any: true
-  Rect:
-    any: true
-  AABB:
-    any: true
-  lerp:
-    args:
-      - type: "..."
-  slerp:
-    args:
-      - type: "..."
-  clamp:
-    args:
-      - type: "..."
-  random:
-    args:
-      - type: "..."
-
-  # UI, audio, built-in ids.
-  ui:
-    any: true
-  audio:
-    any: true
-  id:
-    any: true

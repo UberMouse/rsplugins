@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "api-stubs": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792832331,
+        "narHash": "sha256-hebtA+D8xZid6YcvCumw2opC3s2od35rq2E8HmZpLVk=",
+        "owner": "FriendlyDevelopment",
+        "repo": "runescape-api-stubs",
+        "rev": "8733037f8b0ae59b0da063ab1fecc60849b0cc98",
+        "type": "github"
+      },
+      "original": {
+        "owner": "FriendlyDevelopment",
+        "repo": "runescape-api-stubs",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1792422028,
@@ -18,6 +34,7 @@
     },
     "root": {
       "inputs": {
+        "api-stubs": "api-stubs",
         "nixpkgs": "nixpkgs"
       }
     }

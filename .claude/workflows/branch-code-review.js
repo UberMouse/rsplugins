@@ -654,9 +654,10 @@ const REFUTE_ONLY_IF =
   "Set refuted=true ONLY when the finding is FACTUALLY WRONG — i.e. one of:\n" +
   "  - the code it describes does not exist, or the finding misreads what the code actually does;\n" +
   "  - the concern is already handled elsewhere (a guard, a pcall, a nil check the finding overlooked);\n" +
-  "  - it is purely something scripts/check-lua.sh rejects (Lua syntax, plugin.json JSON, stylua formatting, or what " +
-  "selene flags: undefined top-level globals, unused variables, accidental globals) — assume the gate ran and passed. " +
-  "Nothing checks API member names, call forms (. vs :), argument order or nil flow, so never refute those on this ground;\n" +
+  "  - it is purely something scripts/check-lua.sh rejects (Lua syntax, plugin.json JSON, stylua formatting, what " +
+  "selene flags: unused variables, accidental globals; or what LuaLS flags against the docs/api/ stubs: an undefined " +
+  "global) — assume the gate ran and passed. LuaLS only checks API members, call forms (. vs :), argument order and " +
+  "nil flow where the value is typed, and trusts the stubs, so never refute those on this ground;\n" +
   "  - it targets code this change did NOT touch AND the change introduces no new consequence on that code (truly pre-existing and unrelated);\n" +
   "  - it is explicitly justified in code or sanctioned by CLAUDE.md — unless the lens file says that kind of " +
   "justification does not excuse it.\n" +

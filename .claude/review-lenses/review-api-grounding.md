@@ -1,13 +1,21 @@
 # Review lens: API grounding
 
 Cross-check every Client Plugin API use the diff adds or changes against the **real** API
-reference. This is the one lens whose ground truth is outside the repo. There is no typechecker
-and `rs.yml` only declares top-level globals, so a misspelt member, a method called with `.`
-instead of `:`, a wrong argument order, a nil-able return read as always present, or an event
-payload field that does not exist is invisible until a user hits it in the client. Read the
-reference; do not judge from memory or from what an API "would" look like.
+reference. This is the one lens whose ground truth is outside the repo. `scripts/check-lua.sh`
+runs LuaLS against the community stubs in `docs/api/`, so where a value's type is known it already
+catches an undefined member or global, a wrong argument type and an unchecked `T?`. It is blind
+wherever the type is `any` (a `pcall` result, an untyped table, a value passed through our own
+code), to a stub that is wrong or stale, and to everything the types do not say: units, ranges,
+when an event fires. So a misspelt member, a `.` where the reference has `:`, a wrong argument
+order or a missing payload field can still reach the client. Read the reference; do not judge
+from memory or from what an API "would" look like.
 
 ## Where the truth lives, most authoritative first
+
+The fastest lookup is the stubs: `grep -rn 'function Player\.' docs/api/generated/`, or open
+`docs/api/generated/<section>/<page>.lua`. They are generated from the official pages and carry
+their signatures and doc text, but they are third-party. When a stub decides a verdict, or looks
+odd, confirm it against 1 or 2 below. Where they disagree, the official reference wins.
 
 1. **The API search index**: one entry per API member, with its signature and examples in `text`
    (HTML). The prompt gives a local copy's path (`API INDEX`) when the gather step fetched it.

@@ -5,3 +5,5 @@ dumps/
 __pycache__/
 # Run state for sdd-loop / durable-state, and code-review reports
 .durable-state/
+# Symlink to the pinned API stubs, made by the flake shellHook
+docs/api

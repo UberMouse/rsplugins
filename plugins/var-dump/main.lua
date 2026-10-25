@@ -263,11 +263,13 @@ end
 -- The running snapshot's progress, or nil when none is running. This is plain
 -- state advanced from the Logic event rather than a coroutine, to keep every
 -- API call on the normal callback path (an earlier coroutine version crashed
--- the client; see docs/api-concepts.md).
-local snap = nil
+-- the client; see docs/api-concepts.md). Functions that read it assert it
+-- first, which also tells the type checker it is set from there on.
+local snap = nil ---@type table?
 
 -- Begin listing the current domain, by name if possible.
 local function beginDomain()
+    assert(snap, "no snapshot running")
     local domain = DOMAINS[snap.domainIndex]
     say("listing", domain, "vars...")
     snap.found = newFoundList()
@@ -283,6 +285,7 @@ end
 
 -- Switch the current domain to the ID scan (name listing failed or found nothing).
 local function fallBackToScan(reason)
+    assert(snap, "no snapshot running")
     local domain = DOMAINS[snap.domainIndex]
     say(domain, "name iteration failed or was empty:", reason)
     snap.found = newFoundList()
@@ -293,6 +296,7 @@ end
 -- The current domain is fully listed: report it and move to the next domain,
 -- or to describing once every domain is done.
 local function finishDomain()
+    assert(snap, "no snapshot running")
     local domain, found = DOMAINS[snap.domainIndex], snap.found
     say(domain, ":", #found.vars, "vars via", snap.method, "| IDs", found.lo, "to", found.hi)
     table.move(found.vars, 1, #found.vars, #snap.all + 1, snap.all)
@@ -309,6 +313,7 @@ end
 
 -- One unit of listing work: check one candidate in the current domain.
 local function listStep()
+    assert(snap, "no snapshot running")
     local ok, more = pcall(snap.lister)
     local scanning = snap.method:find("scan")
     if not ok then
@@ -330,6 +335,7 @@ end
 -- Encode the vars described so far as one part and queue it for upload.
 -- Returns its cost in work units (about one per var).
 local function flushPart()
+    assert(snap, "no snapshot running")
     snap.part = snap.part + 1
     queueSnapshotPart(
         json.encode({
@@ -348,6 +354,7 @@ end
 -- One unit of describing work: describe the next var, sending a part when full.
 -- Returns the extra cost of encoding, if a part was sent.
 local function describeStep()
+    assert(snap, "no snapshot running")
     local v = snap.all[snap.next]
     snap.next = snap.next + 1
     if v then

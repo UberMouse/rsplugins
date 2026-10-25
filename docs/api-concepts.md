@@ -1,7 +1,8 @@
 # API concepts
 
-A conceptual guide to the API. The full per-type reference will be generated into `docs/api/` by
-the API dump script. Treat names here as orientation, and check signatures against the reference.
+A conceptual guide to the API. The full per-type reference is the LuaLS stubs in `docs/api/` (see
+[README.md](README.md#the-api-reference-api)). Treat names here as orientation, and check
+signatures against the stubs.
 
 ## Reading the type notation
 

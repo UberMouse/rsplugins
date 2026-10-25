@@ -11,9 +11,11 @@ plugins in Lua 5.4.8 against Jagex's Client Plugin API. Complete the task you ar
 Before writing plugin code, read `docs/README.md` and the docs your task touches
 (`docs/api-concepts.md` for events, UI and the runtime limits we've hit; `docs/plugin-anatomy.md`
 for manifests, `require`, lifecycle hooks and PersistentDB; `docs/guidelines.md` for what
-moderation accepts). There is no typechecker: an API name or signature you have not seen in
-`docs/` or at https://developer.runescape.com/rs/ is a guess, so check it there before you use it,
-and say in your report which API calls you could not confirm.
+moderation accepts). Look up every API name and signature in the stubs in `docs/api/` (grep
+`docs/api/generated/`) before you use it. Don't call one from memory. `scripts/check-lua.sh` type-checks
+against the stubs, but only where a value is typed, and the stubs can be wrong. Check
+https://developer.runescape.com/rs/ when it matters, and say in your report which API calls you
+could not confirm.
 
 Your context compacts automatically at 350k tokens. Long tasks survive that, but a summary loses
 detail, so keep durable facts somewhere that outlives it: commit finished steps as you go, and

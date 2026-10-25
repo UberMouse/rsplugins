@@ -38,8 +38,9 @@ protocol.ENV_NAMES = {
 ---------------------------------------------------------------------------
 
 -- ChatType values (core/events.lua), by name; a spec checks them against the stub. These
--- carry no player speech and pass whatever their sender (SPAM, below, is not one of them). Examines were seen arriving as
--- GENERAL (0) in the client; the *_EXAMINE types stay in case they are used.
+-- carry no player speech and pass whatever their sender (SPAM, below, is not one of them).
+-- Examines were seen arriving as GENERAL (0) in the client; the *_EXAMINE types stay in case
+-- they are used.
 protocol.SYSTEM_CHAT = {
     GENERAL = 0,
     ENGINE = 4,
@@ -53,15 +54,14 @@ protocol.SYSTEM_CHAT = {
     CONSOLE = 99,
 }
 
--- SPAM is undocumented (neither the stub nor developer.runescape.com describes it). Game
--- messages such as "You pick the target's pocket." arrive as SPAM with no sender, but it may
--- also carry other players' chat that the game filtered as spam, so it is forwarded only with
--- an empty sender or the local player's own name.
+-- SPAM is undocumented: neither the stub nor developer.runescape.com describes it. It might
+-- carry game messages (which have no sender) or other players' chat the game filtered as spam,
+-- so it is forwarded only with an empty sender or the local player's own name.
 protocol.SPAM = 109
 
 -- Player speech: forwarded only when the local player is the sender. Anything in neither
--- table (SPAM aside) is dropped, which is deliberate: BROADCAST_WORLD (138) carries News lines naming
--- other players with an empty sender, so a missing sender doesn't make text safe.
+-- table (SPAM aside) is dropped, which is deliberate: BROADCAST_WORLD (138) carries News
+-- lines naming other players with an empty sender, so a missing sender doesn't make text safe.
 protocol.SPEECH_CHAT = {
     MOD = 1,
     PUBLIC = 2,
@@ -116,7 +116,8 @@ function protocol.isOwnName(name, ownName)
 end
 
 -- Whether a chat message may be forwarded: system types always, speech types only from the
--- local player, SPAM only when senderless or the local player's, everything else never. `ownName` is nil when the player's name can't be read.
+-- local player, SPAM only when senderless or the local player's, everything else never.
+-- `ownName` is nil when the player's name can't be read.
 ---@param chatType any
 ---@param senderSimple any the payload's senderNameSimple
 ---@param ownName any

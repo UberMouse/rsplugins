@@ -26,6 +26,15 @@ end
 local function loadVars()
     local loaded = { byName = {}, byId = {} }
     local file = paths.repo("docs/vars/vars.csv")
+    -- Not committed, so a fresh checkout lacks it until the catalog is built.
+    local probe = io.open(file)
+    if not probe then
+        error(
+            file
+                .. " is missing: build the var catalog from a var dump (plugins/var-dump/README.md)"
+        )
+    end
+    probe:close()
     local first = true
     for rawLine in io.lines(file) do
         local line = rawLine:gsub("\r$", "") -- the CSV has CRLF line endings

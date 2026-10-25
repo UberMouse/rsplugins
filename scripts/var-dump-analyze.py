@@ -12,7 +12,8 @@ Usage: python3 -I scripts/var-dump-analyze.py [snapshot.jsonl] [options]
   --out DIR          where to write (default: dumps/var-dump/analysis)
   --catalog [DIR]    also write the account-independent var catalog (names,
                      types, families, VarBit layout; no values) to DIR
-                     (default: docs/vars). That folder is committed.
+                     (default: docs/vars). That folder is gitignored; the
+                     plugin tests need it.
 
 Writes to the output dir:
   REPORT.md            readable summary with interpretations (guesses marked)

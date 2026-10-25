@@ -16,6 +16,10 @@ if [[ ! -e docs/api/types.lua ]]; then
     echo "docs/api/ is missing: enter the dev shell (direnv, or nix develop) to link the API stubs" >&2
     exit 2
 fi
+if [[ ! -e docs/vars/vars.csv ]]; then
+    echo "docs/vars/vars.csv is missing: build the var catalog from a var dump (plugins/var-dump/README.md)" >&2
+    exit 2
+fi
 
 # .busted (repo root) sets the spec root, the _spec.lua pattern and the module path.
 exec busted "$@"

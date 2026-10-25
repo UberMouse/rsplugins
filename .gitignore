@@ -7,3 +7,5 @@ __pycache__/
 .durable-state/
 # Symlink to the pinned API stubs, made by the flake shellHook
 docs/api
+# Var catalog, generated per checkout from a var dump (plugins/var-dump/README.md)
+docs/vars/

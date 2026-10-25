@@ -12,3 +12,6 @@ docs/vars/
 # Copies of the pinned third-party dev plugins, made by the flake shellHook
 plugins/debug-plugin
 plugins/dev-kit
+# Lock, temp and swapped-aside folders of that sync (plugins/.<name>.lock, .XXXXXX, .old.<pid>)
+plugins/.debug-plugin.*
+plugins/.dev-kit.*

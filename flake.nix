@@ -92,27 +92,68 @@
               # .flake-source in each copy records the store path it came from: a copy is refreshed
               # only when that differs from the pinned input, and a folder without the marker is
               # someone's own work and is never touched.
+              # Two shells entering at once (an editor's direnv and a terminal) must not both swap
+              # the same folder: the loser's rename would nest its copy inside the winner's. A
+              # mkdir lock serialises them; a shell that finds it held skips the plugin rather than
+              # wait. It is released explicitly (no trap: this hook is sourced into the user's
+              # shell). A lock older than 10 minutes is a killed shell's leftover and is taken over.
               sync_plugin() { # <name> <store path holding main.lua>
+                lock="$root/plugins/.$1.lock"
+                if ! mkdir "$lock" 2>/dev/null; then
+                  if [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+                    rmdir "$lock" 2>/dev/null
+                    mkdir "$lock" 2>/dev/null || { echo "another shell is refreshing $1; skipped" >&2; return 0; }
+                  else
+                    echo "another shell is refreshing $1; skipped" >&2
+                    return 0
+                  fi
+                fi
+                sync_plugin_locked "$@" || :
+                rmdir "$lock" 2>/dev/null
+                return 0
+              }
+              sync_plugin_locked() { # <name> <store path holding main.lua>; caller holds the lock
                 dest="$root/plugins/$1"
                 src=$2
                 [ -f "$src/main.lua" ] || echo "warning: $1 input has no main.lua (upstream moved it?)" >&2
                 if [ -d "$dest" ] && [ ! -L "$dest" ]; then
                   if [ ! -f "$dest/.flake-source" ]; then
                     echo "warning: plugins/$1 is a real directory without .flake-source; leaving it alone" >&2
-                    return
+                    return 0
                   fi
-                  [ "$(cat "$dest/.flake-source")" = "$src" ] && return
+                  [ "$(cat "$dest/.flake-source")" = "$src" ] && return 0
+                elif [ -e "$dest" ] && [ ! -L "$dest" ]; then
+                  echo "warning: plugins/$1 is a file, not a directory; leaving it alone" >&2
+                  return 0
                 fi
-                # Copy aside first so a failed copy never leaves a half-written plugin folder.
+                # Copy aside first so a failed copy never leaves a half-written plugin folder. The
+                # marker goes in before the copy so a temp dir left by a killed shell is already
+                # skipped by check-lua.sh; it is rewritten after in case upstream ships that name.
                 # Store files are read-only, so make the copy user-writable (portable to darwin cp).
                 tmp=$(mktemp -d "$root/plugins/.$1.XXXXXX") &&
                   chmod 755 "$tmp" &&
+                  echo "$src" > "$tmp/.flake-source" &&
                   cp -R "$src/." "$tmp" &&
                   chmod -R u+w "$tmp" &&
-                  echo "$src" > "$tmp/.flake-source" &&
-                  rm -rf "$dest" &&
-                  mv "$tmp" "$dest" ||
-                  { rm -rf "$tmp"; echo "warning: could not copy $1 into plugins/" >&2; }
+                  echo "$src" > "$tmp/.flake-source" ||
+                  { rm -rf "$tmp"; echo "warning: could not copy $1 into plugins/" >&2; return 0; }
+                # Rename the old folder aside rather than delete it first, so the window with no
+                # folder is two renames wide; it is deleted only once the new one is in place.
+                old="$root/plugins/.$1.old.$$"
+                rm -rf "$old"
+                if [ -L "$dest" ]; then
+                  rm -f "$dest"
+                elif [ -d "$dest" ]; then
+                  mv "$dest" "$old"
+                fi
+                if mv "$tmp" "$dest"; then
+                  rm -rf "$old"
+                else
+                  [ -d "$old" ] && mv "$old" "$dest"
+                  rm -rf "$tmp"
+                  echo "warning: could not copy $1 into plugins/" >&2
+                fi
+                return 0
               }
               if [ -n "$root" ]; then
                 sync_plugin debug-plugin ${debug-plugin}

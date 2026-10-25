@@ -281,8 +281,8 @@ an `InvSlot` is `{"obj": <config>, "count"}`, and any other API object is its `t
 text without the memory address (`sol.jag::InventoryProxy`, not
 `sol.jag::InventoryProxy: 0x591cbdbce258`): `Inventory.Find()` and `Player.GetEntity()` hand out
 a fresh object per call, so with the address every call would be recorded. A table met again
-inside itself becomes `"<cycle>"`, a string over the cap ends `<+N bytes>`, and values past the
-cap become `"<truncated>"`. A table keyed 1..n is a JSON array and any other a JSON object with
+inside itself becomes `"<cycle>"`, a string over the cap ends `<+N bytes>`, and the first value
+past the cap becomes `"<truncated>"`, with the rest left out. A table keyed 1..n is a JSON array and any other a JSON object with
 string keys, so a table with holes comes back as `{"1": ..., "5": ...}`. (`GetSlots()` is dense
 in the client, so inventories come back as arrays, with empty slots as obj -1.)
 

@@ -47,10 +47,10 @@ function recording.objectData(v)
 end
 
 -- A copy of `value` that JSON can hold. Plain tables are copied (a table met again inside
--- itself becomes "<cycle>"); strings are capped at MAX_STRING bytes; past MAX_NODES values,
--- the rest become "<truncated>". Anything else (an API object, a table with a metatable, a
--- function) is passed to `objectForm`, which the shell supplies because only it knows which
--- class an API object is.
+-- itself becomes "<cycle>"); strings are capped at MAX_STRING bytes; the first value past
+-- MAX_NODES becomes "<truncated>" and the rest are left out. Anything else (an API object, a
+-- table with a metatable, a function) is passed to `objectForm`, which the shell supplies
+-- because only it knows which class an API object is.
 ---@param value any
 ---@param objectForm fun(v: any): any
 ---@return any
@@ -69,6 +69,7 @@ function recording.serialise(value, objectForm)
         for k, x in pairs(v) do
             local key = (type(k) == "string" or math.type(k) == "integer") and k or tostring(k)
             out[key] = walk(x)
+            if nodes > recording.MAX_NODES then break end
         end
         open[v] = nil
         return out

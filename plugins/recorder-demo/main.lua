@@ -99,8 +99,10 @@ local function onInventoryUpdated(ev)
     -- isValid, per game/inventory.html#properties (the stub says `valid`).
     ---@diagnostic disable-next-line: undefined-field
     if not (backpack and backpack.isValid) then return end
+    local slots = backpack:GetSlots() -- "Returns nil on failure"
+    if not slots then return end
     local items = 0
-    for _, slot in pairs(backpack:GetSlots()) do
+    for _, slot in pairs(slots) do
         items = items + slot.count
     end
     state.backpackItems = items

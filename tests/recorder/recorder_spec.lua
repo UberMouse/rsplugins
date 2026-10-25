@@ -230,6 +230,63 @@ describe("dev recorder", function()
         )
     end)
 
+    it("records a stored false as the value false", function()
+        local h = harness.new(
+            support.plugin(support.INSTALL .. 'PersistentDB:SetBool("on", false)'),
+            { grant = { "httpAccess" } }
+        )
+        h:load()
+        h:step()
+        assert.are.same(
+            { { k = "db", op = "SetBool", key = "on", value = false, v = true, t = 0 } },
+            support.where(support.entries(h), { k = "db" })
+        )
+    end)
+
+    it("still sends what it recorded before an internal error, and nothing after", function()
+        -- An Inventory whose objects raise from tostring(), so recording a Find fails.
+        local faultyInventory = [[
+            Inventory = { Find = function()
+                return setmetatable({}, { __tostring = function() error("boom") end })
+            end }
+        ]]
+        local h = harness.new(
+            support.plugin(faultyInventory .. support.INSTALL .. [[
+            local qp = var.VarPlayer.QP.value
+            local inv = Inventory.Find(1)
+            Event.Logic.Subscribe("poll", function() local run = var.VarPlayer.OPTION_RUN.value end)
+        ]]),
+            { grant = { "httpAccess" } }
+        )
+        h.world:setVar("VarPlayer", "QP", 10)
+        h.world:setVar("VarPlayer", "OPTION_RUN", 0)
+        h:load()
+        h:advance(2000)
+        local entries = support.entries(h)
+        assert.are.equal(1, #support.where(entries, { path = "var.VarPlayer.QP.value" }))
+        assert.are.equal(0, #support.where(entries, { path = "var.VarPlayer.OPTION_RUN.value" }))
+        assert.are.equal(1, support.lines(h, "[RECORDER] recording stopped after an error"))
+    end)
+
+    it("stops sending, once, when sending a batch fails", function()
+        local h = harness.new(
+            support.plugin(
+                'HTTPRequest = { new = function() error("no requests") end }\n'
+                    .. support.INSTALL
+                    .. "local qp = var.VarPlayer.QP.value"
+            ),
+            { grant = { "httpAccess" } }
+        )
+        h.world:setVar("VarPlayer", "QP", 10)
+        h:load()
+        h:advance(2000)
+        assert.are.equal(0, #h.requests)
+        assert.are.equal(
+            1,
+            support.lines(h, "[RECORDER] recording and sending stopped after an error")
+        )
+    end)
+
     it("records the plugin's own HTTP requests, but not its batches", function()
         local h = harness.new(
             support.plugin(support.INSTALL .. [[

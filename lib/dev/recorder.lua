@@ -56,6 +56,7 @@ end
 
 local installed = false
 local stopped = false -- set after an internal error; the stand-ins keep forwarding
+local sendFailed = false -- set if sending a batch raised; nothing more is sent
 local url = nil ---@type string?
 local pluginName, session = "", ""
 local tick = 0 -- Logic ticks since install
@@ -75,14 +76,15 @@ local httpCount = 0 -- the plugin's own requests, numbered for their start/done 
 local lastRecorded, recordedAt = {}, {}
 local lostThrough = 0
 
--- Recorder failures must not break the plugin: the first is logged and recording stops.
+-- Recorder failures must not break the plugin: the first is logged and recording stops
+-- (onLogic still sends what was buffered).
 ---@param fn function
 local function guard(fn, ...)
     if stopped then return end
     local ok, err = pcall(fn, ...)
     if not ok then
         stopped = true
-        say("recording stopped after an error:", err)
+        say("recording stopped after an error (what was recorded before it is still sent):", err)
     end
 end
 
@@ -250,9 +252,9 @@ local function slotList(slots, path)
     return out
 end
 
--- A function member, wrapped so its result is recorded under the call's path. Called with
--- ':' (the stand-in as `self`) it calls the real object's method; otherwise it calls it as
--- a static function. Either way a wrong call form reaches the API, which reports it.
+-- A function member, wrapped so its result is recorded under the call's path. Called with ':'
+-- (the stand-in as self) it calls the real method, otherwise the real static function; a
+-- wrong call form reaches the API, which reports it.
 ---@param proxy table
 ---@param info table
 ---@param key any
@@ -466,13 +468,16 @@ local function wrapPersistentDB(db)
                     end
                     local result = fn(db, table.unpack(args, 1, args.n))
                     local key, value = args[1], args[2]
-                    guard(push, {
-                        k = "db",
-                        op = method,
-                        key = type(key) == "string" and key or nil,
-                        value = type(value) ~= "function" and serialise(value) or nil,
-                        v = serialise(result),
-                    })
+                    guard(function()
+                        local entry = {
+                            k = "db",
+                            op = method,
+                            key = type(key) == "string" and key or nil,
+                            v = serialise(result),
+                        }
+                        if type(value) ~= "function" then entry.value = serialise(value) end
+                        push(entry)
+                    end)
                     return result
                 end
             end,
@@ -564,15 +569,18 @@ local function requestStandIn(request)
                 end
                 local result = value(request, table.unpack(args, 1, args.n))
                 if isRequest then
-                    guard(push, {
-                        k = "http",
-                        id = id,
-                        phase = "start",
-                        method = string.upper(key),
-                        url = request.url,
-                        headers = headers,
-                        body = key == "Post" and serialise(args[1]) or nil,
-                    })
+                    guard(function()
+                        local entry = {
+                            k = "http",
+                            id = id,
+                            phase = "start",
+                            method = string.upper(key),
+                            url = request.url,
+                            headers = headers,
+                        }
+                        if key == "Post" then entry.body = serialise(args[1]) end
+                        push(entry)
+                    end)
                 end
                 return result
             end
@@ -646,9 +654,16 @@ local function flush()
     request:Post(body, onPosted)
 end
 
+-- Not guard(flush): the entries just before a recording error are what explain it, so the
+-- buffer keeps draining after recording stops. Only a failure to send stops sending.
 local function onLogic()
     tick = tick + 1
-    guard(flush)
+    if sendFailed then return end
+    local ok, err = pcall(flush)
+    if not ok then
+        sendFailed, stopped = true, true
+        say("recording and sending stopped after an error:", err)
+    end
 end
 
 ---------------------------------------------------------------------------

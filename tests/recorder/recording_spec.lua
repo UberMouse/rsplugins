@@ -43,7 +43,21 @@ describe("recording.serialise", function()
         -- The table itself is one node, so MAX_NODES - 1 elements fit.
         assert.are.equal(recording.MAX_NODES - 1, out[recording.MAX_NODES - 1])
         assert.are.equal("<truncated>", out[recording.MAX_NODES])
-        assert.are.equal("<truncated>", out[#big])
+        assert.is_nil(out[recording.MAX_NODES + 1])
+        assert.are.equal(recording.MAX_NODES, #out)
+    end)
+
+    it("stops walking every enclosing table at the cap", function()
+        local inner = {}
+        for i = 1, recording.MAX_NODES do
+            inner[i] = i
+        end
+        local out = recording.serialise({ inner, "after" }, object)
+        -- Outer and inner tables are two nodes, so the inner one's last fitting value is
+        -- MAX_NODES - 2, and the outer table's second value is never reached.
+        assert.are.equal("<truncated>", out[1][recording.MAX_NODES - 1])
+        assert.are.equal(recording.MAX_NODES - 1, #out[1])
+        assert.are.equal(1, #out)
     end)
 end)
 

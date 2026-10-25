@@ -1,0 +1,6 @@
+{
+    "name": "Chore Tracker",
+    "version": "0.1.0",
+    "contactEmailAddress": "you@example.com",
+    "requiredDependencies": { "prettyui": 6398181 }
+}

@@ -5,7 +5,8 @@ local state = require("core/state")
 
 local M = {}
 
-local TITLES = { daily = "Daily", weekly = "Weekly", monthly = "Monthly" }
+-- Each period's heading.
+M.TITLES = { daily = "Daily", weekly = "Weekly", monthly = "Monthly" }
 
 ---@class ChoreRow
 ---@field id string
@@ -32,7 +33,7 @@ local TITLES = { daily = "Daily", weekly = "Weekly", monthly = "Monthly" }
 function M.view(s, chores, now)
     local sections = {}
     for _, p in ipairs(period.PERIODS) do
-        local section = { period = p, title = TITLES[p], rows = {}, done = 0, total = 0 }
+        local section = { period = p, title = M.TITLES[p], rows = {}, done = 0, total = 0 }
         for _, chore in ipairs(chores) do
             if chore.period == p and state.isSelected(s, chore.id) then
                 local done = state.isDone(s, chore, now)

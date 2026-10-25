@@ -73,10 +73,13 @@ function Window:AddTitle(text) end
 ---@field value any? Defaults to the text
 ---@field selected boolean?
 ---@field disabled boolean?
+---@field tooltip prettyui.Tooltip? Shown while hovering this choice's row
 
 ---@class prettyui.CheckboxOptions
 ---@field onChange fun(group: prettyui.CheckboxButton, values: any[], value: any, selected: boolean)? After a change by the user, or by SetSelected unless notify is false
 ---@field selectedValues any[]|table<any, boolean>?
+---@field y number? Place it at this content y instead of the next flow row; the flow doesn't move
+---@field colour integer? The choices' text colour, 0xRRGGBBAA. Fixed once created
 ---@field tooltip prettyui.Tooltip?
 
 ---@param choices (string|prettyui.CheckboxChoice)[] Not empty
@@ -87,6 +90,13 @@ function Window:AddCheckboxButton(choices, options) end
 ---@param options { tooltip: prettyui.Tooltip? }?
 ---@return prettyui.Divider
 function Window:AddDivider(options) end
+
+---Add a SpriteButton as the next content row (or at options.y, outside the flow).
+---@param spriteName string
+---@param action fun(button: prettyui.SpriteButton, enabled: boolean)?
+---@param options prettyui.SpriteButtonOptions?
+---@return prettyui.SpriteButton
+function Window:AddSpriteButton(spriteName, action, options) end
 
 ---@class prettyui.CheckboxButton
 ---@field root ui.Layer
@@ -124,6 +134,7 @@ function Divider:Destroy() end
 ---@field width number? Default 300
 ---@field height number? Default 160
 ---@field backgroundAlpha number? 0..1. The frame still draws at 0
+---@field scrollable boolean? false: never scroll or show a scrollbar. Default true
 ---@field tooltip prettyui.Tooltip?
 
 ---@class prettyui.PanelModule

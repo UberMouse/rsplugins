@@ -128,12 +128,13 @@ event subscribers.
 
 | Call | Does |
 |---|---|
-| `find(kind, filter?)` | The live objects of `kind` (`"Window"`, `"Panel"`, `"SpriteButton"`, `"Text"`, `"Title"`, `"CheckboxButton"`, `"Divider"`), in creation order. `filter`: `{ sprite = "MENU" }` (any case) and/or `{ text = "substring" }`, matched against a Window's title, a Text's current content or a checkbox choice |
+| `find(kind, filter?)` | The live objects of `kind` (`"Window"`, `"Panel"`, `"SpriteButton"`, `"Text"`, `"Title"`, `"CheckboxButton"`, `"Divider"`), in creation order. `filter`: `{ sprite = "MENU" }` (any case), `{ text = "substring" }`, matched against a Window's title, a Text's current content or a checkbox choice, and `{ visible = true }` (neither it nor an ancestor hidden), in any combination |
 | `get(kind, filter?)` | The one object `find` returns; errors on none or several |
 | `click(target, value?)` | A SpriteButton: `action(button, true)`. A Window's `closeButton`: `Close()`. A CheckboxButton: toggles the choice whose value is `value`, firing `onChange`. Returns true, or false and why when the click wouldn't reach it: hidden (itself or an ancestor), under a window's title-bar drag layer, Alt held over a Panel, a disabled choice |
 | `dragTitle(win, dx, dy)` | Drag a titled Window's title bar, clamped inside its parent |
 | `resize(win, dw, dh)` | Drag a resizable Window's bottom-right corner; clamped to its min/max and the parent's edge |
 | `holdAlt(held)` / `altDrag(panel, dx, dy)` | Hold Alt (with the console closed), then Alt-drag a Panel, clamped inside its parent. `altDrag` returns false and leaves the panel alone unless Alt is held |
+| `choices(checkbox)` | A CheckboxButton's choices as `{ text, value, selected, disabled, tooltip }` in order, and its `colour` option as a second result |
 | `layout(target)` | `{ x, y, width, height, hidden, globalX, globalY, visible }` of a component or an object's root. Specs can also read `x`, `y`, `width`, `height`, `hidden` and `xyGlobal` off the components directly |
 
 ## Strictness
@@ -188,8 +189,8 @@ When `plugin.json` lists PrettyUI by its numeric mod.io ID in the object form
 (`["prettyui"]`, `["6398181"]`, `{ "prettyui": "6398181" }`) fails the load, since only that
 form is proven in the client; so does any other dependency, naming it. The fake models the
 part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`, with `root`, `closeButton`, `SetSize`, `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
-`AddCheckboxButton` and `AddDivider`; `Panel.new`, with `root`, `width`, `height`, `SetSize`,
-`AddSpriteButton` and `Destroy`; and `SpriteButton.new`. Any other member, method or option
+`AddCheckboxButton`, `AddDivider` and `AddSpriteButton`; `Panel.new`, with `root`, `width`,
+`height`, `SetSize`, `AddSpriteButton` and `Destroy`; and `SpriteButton.new`. Any other member, method or option
 faults as unmocked: extend `api/prettyui.lua` and `types/prettyui.lua` together, with a ledger
 row, when a plugin needs more. LuaLS (`types/prettyui.lua`) doesn't flag an unknown option key
 such as `titel`; the fake faults on it at test time.
@@ -498,6 +499,9 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Alt-drag moves a standalone Panel, clamped inside its parent, only while Alt is held, and while it is held the panel's drag layer takes clicks on it | probe 2026-10-25 (alt read true only with the console closed); 1.2.0 source for the click |
 | SpriteButton: unknown sprite names raise `Unknown SpriteButton sprite: <name>` (a plain error a plugin can catch); names are case-insensitive; `action(button, enabled)`, with enabled true for a non-toggle button; default size 24 | 1.2.0 source (`src/sprite_button.lua`, `src/core/sprites.lua`) |
 | CheckboxButton: `GetSelectedValues` in choice order, `IsSelected`, `SetSelected(value, selected, notify?)` false for an unknown value; `onChange(group, values, value, selected)` only on a change; rows 22 px; a disabled choice ignores clicks | 1.2.0 source (`src/selection_button.lua`), https://prettyui.j3.gg |
+| CheckboxButton options `colour` (the choices' text colour, fixed once made) and `y` (placed at that content y, outside the flow: later rows don't move), and a per-choice `tooltip` | 1.2.0 source (`src/selection_button.lua`; `y` makes the placement absolute in `src/core/layout.lua`) |
+| `Window:AddSpriteButton(sprite, action, options)`: the next content row, 24 px by default, or at `options.y` outside the flow | 1.2.0 source (`src/core/content_methods.lua`, the `AddSpriteButton` entry, installed on Window) |
+| Panel option `scrollable` (false: no scrolling, no scrollbar) is accepted; the fake doesn't scroll either way | 1.2.0 source (`src/core/scroll.lua`, `src/panel.lua`) |
 
 ### Harness choices: unknown client behaviour, or stricter than the client on purpose
 

@@ -6,9 +6,9 @@
 -- probe on 2026-10-25; docs/testing.md's fidelity ledger says which is which.
 --
 -- Modelled: Window (titled, resizable, close button, AddText/AddTitle/AddCheckboxButton/
--- AddDivider), standalone Panel (AddSpriteButton, Alt-drag) and SpriteButton. Any other
--- library member, method or option faults as unmocked; extend the fake, with a ledger row,
--- when a plugin needs more.
+-- AddDivider/AddSpriteButton), standalone Panel (AddSpriteButton, Alt-drag) and SpriteButton.
+-- Any other library member, method or option faults as unmocked; extend the fake, with a
+-- ledger row, when a plugin needs more.
 
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
@@ -75,10 +75,12 @@ local OPTIONS = {
         "onClose",
         "tooltip",
     }),
-    Panel = set({ "x", "y", "width", "height", "backgroundAlpha", "tooltip" }),
+    Panel = set({ "x", "y", "width", "height", "backgroundAlpha", "scrollable", "tooltip" }),
     SpriteButton = set({ "x", "y", "xAnchor", "yAnchor", "size", "width", "height", "tooltip" }),
     Text = set({ "text", "tooltip" }),
-    CheckboxButton = set({ "onChange", "selectedValues", "tooltip" }),
+    CheckboxButton = set({ "onChange", "selectedValues", "y", "colour", "tooltip" }),
+    -- The fields a CheckboxButton choice table may have.
+    Choice = set({ "text", "label", "value", "selected", "disabled", "tooltip" }),
     Divider = set({ "tooltip" }),
 }
 
@@ -306,6 +308,26 @@ local Checkbox = strict.class("prettyui.CheckboxButton instance", {
     },
 })
 
+-- AddSpriteButton on a Window or Panel: a button in the content flow. Given a y, the button
+-- is placed there and the flow doesn't move.
+---@param s table the owner state
+---@param spriteName any
+---@param action any
+---@param options any
+---@return table
+local function addSpriteButton(s, spriteName, action, options)
+    live(s)
+    options = checkOptions("SpriteButton", options)
+    local placed = {}
+    for k, v in pairs(options) do
+        placed[k] = v
+    end
+    local height = options.height or options.size or SPRITE_BUTTON_SIZE
+    placed.x = options.x or PADDING
+    if options.y == nil then placed.y = flowRow(s.flow, height, ROW_GAP, 0) end
+    return newSpriteButton(s.lib, s.contentState, spriteName, action, placed)
+end
+
 -- AddText / AddTitle: a ui.Text row the plugin can set .content on. The fake can't measure
 -- fonts, so text doesn't wrap: a body row is one line per <br>-separated part.
 ---@param lib table
@@ -349,15 +371,22 @@ local function addCheckbox(lib, s, choices, options)
             preset[k] = v == true
         end
     end
-    local cs = { kind = "CheckboxButton", items = {}, onChange = options.onChange }
+    local cs = {
+        kind = "CheckboxButton",
+        items = {},
+        onChange = options.onChange,
+        colour = options.colour,
+    }
     local height = #choices * CHECKBOX_ROW
-    local y = flowRow(s.flow, height, ROW_GAP, 0)
+    -- Given a y, 1.2.0 places it there (absolute) and the flow doesn't move.
+    local y = options.y or flowRow(s.flow, height, ROW_GAP, 0)
     cs.root, cs.rootState = ui.create("Layer", s.contentState)
     cs.root:SetPos(PADDING, y)
     cs.root:SetSize(-PADDING * 2, height, 1.0)
     for i, choice in ipairs(choices) do
         local item
         if type(choice) == "table" then
+            checkOptions("Choice", choice)
             local text = choice.text or choice.label
             if text == nil then text = choice.value end
             item = {
@@ -365,6 +394,7 @@ local function addCheckbox(lib, s, choices, options)
                 value = choice.value,
                 selected = choice.selected == true,
                 disabled = choice.disabled == true,
+                tooltip = choice.tooltip,
             }
             if item.value == nil then item.value = item.text end
         else
@@ -463,6 +493,9 @@ local Window = strict.class("prettyui.Window instance", {
         AddDivider = function(s, options)
             return addDivider(s.lib, s, options)
         end,
+        AddSpriteButton = function(s, spriteName, action, options)
+            return addSpriteButton(s, spriteName, action, options)
+        end,
     },
 })
 
@@ -493,18 +526,8 @@ local Panel = strict.class("prettyui.Panel instance", {
             clampIntoParent(s)
         end,
         -- Rows flow from (14, 12) inside the 4 px frame, so the first sits at +18,+16 (probe).
-        -- Given a y, the button is placed there and the flow doesn't move.
         AddSpriteButton = function(s, spriteName, action, options)
-            live(s)
-            options = checkOptions("SpriteButton", options)
-            local placed = {}
-            for k, v in pairs(options) do
-                placed[k] = v
-            end
-            local height = options.height or options.size or SPRITE_BUTTON_SIZE
-            placed.x = options.x or PADDING
-            if options.y == nil then placed.y = flowRow(s.flow, height, ROW_GAP, 0) end
-            return newSpriteButton(s.lib, s.contentState, spriteName, action, placed)
+            return addSpriteButton(s, spriteName, action, options)
         end,
         Destroy = function(s)
             if s.destroyed then return end
@@ -700,7 +723,8 @@ end
 
 -- Live objects of `kind` ("Window", "Panel", "SpriteButton", "Text", "Title",
 -- "CheckboxButton", "Divider"), in creation order. `filter`: { sprite = "MENU" } and/or
--- { text = "substring" } (a Window's title, a Text's content, a checkbox choice).
+-- { text = "substring" } (a Window's title, a Text's content, a checkbox choice) and/or
+-- { visible = true } (neither it nor an ancestor is hidden).
 ---@param kind string
 ---@param filter table?
 ---@return table[]
@@ -710,6 +734,7 @@ function Driver:find(kind, filter)
     for _, r in ipairs(self:lib().records) do
         local ok = r.kind == kind and not gone(r)
         if ok and filter.sprite then ok = r.s.spriteName == filter.sprite:upper() end
+        if ok and filter.visible then ok = ui.visible(r.s.rootState or r.s) end
         if ok and filter.text then
             ok = false
             for _, t in ipairs(texts(r)) do
@@ -729,6 +754,26 @@ function Driver:get(kind, filter)
     local found = self:find(kind, filter)
     assert(#found == 1, string.format("expected one %s, found %d", kind, #found))
     return found[1]
+end
+
+-- A CheckboxButton's choices as plain data, in order: { text, value, selected, disabled,
+-- tooltip }, and the group's text colour (nil for PrettyUI's default).
+---@param checkbox table
+---@return table[] choices
+---@return integer? colour
+function Driver:choices(checkbox)
+    local r = self:record(checkbox, "CheckboxButton")
+    local out = {}
+    for i, item in ipairs(r.s.items) do
+        out[i] = {
+            text = item.text,
+            value = item.value,
+            selected = item.selected,
+            disabled = item.disabled,
+            tooltip = item.tooltip,
+        }
+    end
+    return out, r.s.colour
 end
 
 -- Whether a click on component `cs` reaches it, and why not. A destroyed one faults: a

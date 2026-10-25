@@ -1,0 +1,38 @@
+---
+# selene standard library for tests/: the luassert assertions the specs call. selene checks
+# every `assert.<member>` against this list, so add a member here when a spec needs a new
+# one. busted's own globals (describe, it...) need no entry: undefined_variable is off.
+name: tests
+globals:
+  assert.are.equal:
+    args: [{ type: any }, { type: any }, { required: false, type: any }]
+  assert.are.same:
+    args: [{ type: any }, { type: any }, { required: false, type: any }]
+  assert.are_not.equal:
+    args: [{ type: any }, { type: any }, { required: false, type: any }]
+  assert.are_not.same:
+    args: [{ type: any }, { type: any }, { required: false, type: any }]
+  assert.is_true:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.is_false:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.is_nil:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.is_not_nil:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.is_number:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.is_string:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.is_table:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.truthy:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.falsy:
+    args: [{ type: any }, { required: false, type: any }]
+  assert.matches:
+    args: [{ type: string }, { type: any }, { required: false, type: any }]
+  assert.has_error:
+    args: [{ type: function }, { required: false, type: any }, { required: false, type: any }]
+  assert.has_no.errors:
+    args: [{ type: function }, { required: false, type: any }]

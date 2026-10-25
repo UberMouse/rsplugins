@@ -1,0 +1,9 @@
+-- busted configuration: scripts/test-lua.sh runs every tests/**/*_spec.lua from the repo root,
+-- so specs `require("tests.harness")`.
+return {
+    default = {
+        ROOT = { "tests" },
+        pattern = "_spec%.lua$",
+        lpath = "./?.lua;./?/init.lua",
+    },
+}

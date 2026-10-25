@@ -45,7 +45,13 @@
             packages = [
               # The client runs Lua 5.4.8; nixpkgs has 5.4.7, close enough for
               # `luac -p` syntax checks and running plugin code against mocks.
-              pkgs.lua5_4
+              # busted runs tests/ (scripts/test-lua.sh); the harness itself reads
+              # plugin.json with dkjson and times callbacks with luasystem.
+              (pkgs.lua5_4.withPackages (ps: [
+                ps.busted
+                ps.dkjson
+                ps.luasystem
+              ]))
               pkgs.lua-language-server
               pkgs.stylua
               pkgs.selene
@@ -70,7 +76,8 @@
               echo "  lua / luac                    Lua $(lua -v 2>&1 | cut -d' ' -f2) (client runs 5.4.8)"
               echo "  lua-language-server           LSP for editors; docs/api/ holds the API stubs"
               echo "  stylua / selene               Lua formatter / linter"
-              echo "  scripts/check-lua.sh          the gate: luac -p, manifests, selene, stylua, LuaLS"
+              echo "  scripts/check-lua.sh          the gate: luac -p, manifests, selene, stylua, LuaLS, tests"
+              echo "  scripts/test-lua.sh           run the plugin tests (busted, tests/**/*_spec.lua)"
               echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
               echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
             '';

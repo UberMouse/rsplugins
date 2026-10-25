@@ -3,5 +3,5 @@
   "runtime.version": "Lua 5.4",
   "workspace.library": ["docs/api/types.lua", "docs/api/generated/"],
   "workspace.checkThirdParty": false,
-  "workspace.ignoreDir": [".direnv", ".claude", "dumps", "docs"]
+  "workspace.ignoreDir": [".direnv", ".claude", "dumps", "docs", "tests"]
 }

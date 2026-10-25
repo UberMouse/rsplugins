@@ -1,0 +1,13 @@
+# selene config for tests/ (scripts/check-lua.sh passes it with --config): the root config
+# plus tests.yml, the luassert assertions the specs use. rs.yml must stay last: selene takes
+# the Lua grammar from the last std.
+std = "lua53+tests/tests+rs"
+
+[rules]
+undefined_variable = "allow"
+# The sandbox copies the stdlib out of _G on purpose.
+global_usage = "allow"
+
+# stylua (collapse_simple_statement = "ConditionalOnly") owns layout and writes one-line ifs.
+[config]
+multiple_statements = { one_line_if = "allow" }

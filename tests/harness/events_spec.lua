@@ -1,0 +1,134 @@
+-- Self-tests: Event subscriptions, the simulated clock, fire(), and the client limits the
+-- runtime enforces (callback errors, the time budget).
+
+local harness = require("tests.harness")
+
+local function plugin(main)
+    return { ["main.lua"] = main }
+end
+
+describe("Event subscriptions", function()
+    it("calls subscribers in subscription order", function()
+        local h = harness.load(plugin([[
+            Event.WindowFocusChanged.Subscribe("a", function() print("a") end)
+            Event.WindowFocusChanged.Subscribe("b", function() print("b") end)
+        ]]))
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        assert.are.equal("a\nb", h:output())
+    end)
+
+    it("replaces a subscription that reuses a name, for that event only", function()
+        local h = harness.load(plugin([[
+            Event.WindowFocusChanged.Subscribe("x", function() print("old") end)
+            Event.KeyTyped.Subscribe("x", function() print("other event") end)
+            Event.WindowFocusChanged.Subscribe("x", function() print("new") end)
+        ]]))
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
+        assert.are.equal("new\nother event", h:output())
+    end)
+
+    it("stops calling an unsubscribed callback", function()
+        local h = harness.load(plugin([[
+            Event.WindowFocusChanged.Subscribe("x", function() print("x") end)
+            Event.WindowFocusChanged.Unsubscribe("x")
+        ]]))
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        assert.are.equal("", h:output())
+    end)
+
+    it("passes the payload's stub fields, and faults on one the stub lacks", function()
+        local h = harness.load(plugin([[
+            Event.WindowFocusChanged.Subscribe("x", function(ev) print(ev.hasFocus) end)
+            Event.KeyTyped.Subscribe("y", function(ev) return ev.key end)
+        ]]))
+        h:fire("WindowFocusChanged", { hasFocus = false })
+        assert.are.equal("false", h:output())
+        assert.matches(
+            "unmocked API: KeyTypedEventPayload.key",
+            harness.errorOf(function()
+                h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
+            end)
+        )
+        assert.has_error(function()
+            h:fire("WindowFocusChanged", { focus = true })
+        end)
+    end)
+
+    it("faults on an event the stubs don't have", function()
+        assert.matches(
+            "unmocked API: Event.Teleported",
+            harness.errorOf(function()
+                harness.load(plugin("Event.Teleported.Subscribe('x', print)"))
+            end)
+        )
+    end)
+end)
+
+describe("the clock", function()
+    it("fires Logic at 50 Hz with logicTick, and ServerLogic every 600 ms", function()
+        local h = harness.load(plugin([[
+            logic, server, lastTick = 0, 0, nil
+            Event.Logic.Subscribe("l", function(ev) logic = logic + 1 lastTick = ev.logicTick end)
+            Event.ServerLogic.Subscribe("s", function(ev) server = server + 1 noPayload = ev == nil end)
+        ]]))
+        h:advance(1200)
+        assert.are.equal(60, h.env.logic)
+        assert.are.equal(60, h.env.lastTick)
+        assert.are.equal(2, h.env.server)
+        assert.is_true(h.env.noPayload)
+    end)
+
+    it("carries part of a tick over to the next advance", function()
+        local h = harness.load(plugin("n = 0 Event.Logic.Subscribe('l', function() n = n + 1 end)"))
+        h:advance(30)
+        assert.are.equal(1, h.env.n)
+        h:advance(10)
+        assert.are.equal(2, h.env.n)
+    end)
+end)
+
+describe("client limits", function()
+    it("fails the test when a subscriber errors, naming the event and subscriber", function()
+        local h = harness.load(plugin([[
+            Event.Logic.Subscribe("boom", function() error("kaboom") end)
+        ]]))
+        assert.matches(
+            "^Event.Logic subscriber 'boom': inline/main.lua:1: kaboom",
+            harness.errorOf(function()
+                h:advance(20)
+            end)
+        )
+    end)
+
+    it("aborts a callback that runs past the time budget", function()
+        local h = harness.load(
+            plugin([[
+            Event.Logic.Subscribe("spin", function()
+                -- A pcall can't rescue the call once the budget is spent.
+                pcall(function() while true do end end)
+                while true do end
+            end)
+        ]]),
+            { budgetMs = 50 }
+        )
+        assert.matches(
+            "Event.Logic subscriber 'spin': Maximum function execution time of 50 ms exceeded",
+            harness.errorOf(function()
+                h:advance(20)
+            end)
+        )
+    end)
+
+    it("applies the budget to main.lua too, defaulting to the client's 1000 ms", function()
+        local h = harness.new(plugin("while true do end"))
+        assert.are.equal(1000, h.budgetMs)
+        h.budgetMs = 30
+        assert.matches(
+            "main.lua: Maximum function execution time of 30 ms exceeded",
+            harness.errorOf(function()
+                h:load()
+            end)
+        )
+    end)
+end)

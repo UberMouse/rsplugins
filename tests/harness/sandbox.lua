@@ -60,9 +60,13 @@ local API_MODULES = {
     "tests.harness.api.ui",
 }
 
--- The plugin dependencies the harness has a fake for, by what a manifest names: a mod.io ID
--- (`{ "prettyui": 6398181 }`) or a plugin folder name (`["prettyui"]`).
-local DEPENDENCY_FAKES = { [prettyui.MOD_ID] = prettyui, prettyui = prettyui }
+-- The plugin dependencies the harness has a fake for, by mod.io ID. Only the object form with
+-- the numeric ID (`{ "prettyui": 6398181 }`, any key as the global) was probed in the client.
+local DEPENDENCY_FAKES = { [prettyui.MOD_ID] = prettyui }
+-- Other ways a manifest might name a faked dependency (a folder name, or the ID as a string).
+-- They fail the load: whether the client resolves them is unconfirmed (docs/testing.md).
+local UNCONFIRMED_NAMES =
+    { prettyui = prettyui.MOD_ID, [tostring(prettyui.MOD_ID)] = prettyui.MOD_ID }
 
 -- The global an array-form dependency gets: its name, with characters that aren't valid in a
 -- Lua identifier made `_` and a leading digit prefixed with `_` (docs/plugin-anatomy.md).
@@ -74,8 +78,16 @@ local function luaName(name)
     return out
 end
 
--- Expose each dependency the manifest lists as its global; one without a fake fails the load.
--- The fakes are always present and enabled, so optional ones are never nil.
+-- A manifest value as JSON would show it, for fault messages.
+---@param v any
+---@return string
+local function jsonValue(v)
+    return type(v) == "string" and string.format("%q", v) or tostring(v)
+end
+
+-- Expose each dependency the manifest lists as its global; one without a fake, or a faked one
+-- named in a form the client isn't known to accept, fails the load. The fakes are always
+-- present and enabled, so optional ones are never nil.
 ---@param h table
 ---@param env table
 local function installDependencies(h, env)
@@ -84,10 +96,30 @@ local function installDependencies(h, env)
         if deps ~= nil and type(deps) ~= "table" then
             error("plugin.json " .. field .. " must be an array or an object", 0)
         end
-        for key, target in pairs(deps or {}) do
+        deps = deps or {}
+        for _, key in ipairs(strict.sortedKeys(deps)) do
+            local target = deps[key]
             local global = type(key) == "number" and luaName(target) or key
-            local fake = DEPENDENCY_FAKES[target]
+            local fake = type(key) == "string"
+                and type(target) == "number"
+                and DEPENDENCY_FAKES[target]
             if not fake then
+                local id = UNCONFIRMED_NAMES[tostring(target):lower()]
+                if id then
+                    error(
+                        string.format(
+                            "plugin.json %s: %s names a faked dependency in a form unconfirmed "
+                                .. "in the client; use the object form with the numeric mod.io "
+                                .. 'ID, e.g. { "%s": %d }',
+                            field,
+                            type(key) == "number" and "[" .. jsonValue(target) .. "]"
+                                or string.format("%q: %s", key, jsonValue(target)),
+                            global,
+                            id
+                        ),
+                        0
+                    )
+                end
                 error(
                     string.format(
                         "plugin.json %s: the harness has no fake for dependency %s (global %s)",

@@ -100,7 +100,7 @@ local function checkOptions(what, options)
     if type(options) ~= "table" then
         strict.fault("prettyui " .. what .. ": options must be a table")
     end
-    for key in pairs(options) do
+    for _, key in ipairs(strict.sortedKeys(options)) do
         if not OPTIONS[what][key] then
             strict.fault(
                 "unmocked API: prettyui "
@@ -731,11 +731,13 @@ function Driver:get(kind, filter)
     return found[1]
 end
 
--- Whether a click on component `cs` reaches it, and why not.
+-- Whether a click on component `cs` reaches it, and why not. A destroyed one faults: a
+-- plugin that leaves a handle to it reachable has lost track of its UI.
 ---@param cs table component state
 ---@return boolean
 ---@return string?
 function Driver:lands(cs)
+    if cs.destroyed then strict.fault("prettyui: clicked a component used after Destroy()") end
     if not ui.visible(cs) then return false, "hidden" end
     local cx, cy = ui.globalPos(cs)
     cx, cy = cx + ui.width(cs) / 2, cy + ui.height(cs) / 2
@@ -758,7 +760,8 @@ end
 
 -- Click a SpriteButton (its action gets (button, true)), a Window's closeButton (Close), or
 -- one choice of a CheckboxButton (toggles it; onChange fires). Returns false and the reason
--- when the click wouldn't reach it (hidden, under a drag layer, a disabled choice).
+-- when the click wouldn't reach it (hidden, under a drag layer, a disabled choice); faults if
+-- the target was destroyed.
 ---@param target any
 ---@param value any the choice's value, for a CheckboxButton
 ---@return boolean

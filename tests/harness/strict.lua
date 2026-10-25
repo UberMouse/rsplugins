@@ -41,6 +41,23 @@ function M.fault(message, catchable)
     error(message, level)
 end
 
+-- A table's keys in a fixed order (grouped by type name, so numbers before strings), so a
+-- fault over several bad entries always names the same one.
+---@param t table
+---@return any[]
+function M.sortedKeys(t)
+    local keys = {}
+    for k in pairs(t) do
+        keys[#keys + 1] = k
+    end
+    table.sort(keys, function(a, b)
+        if type(a) ~= type(b) then return type(a) < type(b) end
+        if type(a) == "number" or type(a) == "string" then return a < b end
+        return tostring(a) < tostring(b)
+    end)
+    return keys
+end
+
 -- Registry of declared API members: declared[owner][member] = kind, where kind is "global",
 -- "field", "method", "static" or "enum". `owner` is the stub class name ("Inv",
 -- "VarTransmitEventPayload", "_global.var"...) or "_G" for globals.

@@ -158,6 +158,8 @@ function Harness:unload()
     local shutdown = rawget(instance.env, "PluginShutdown")
     -- Dead from here on, so nothing PluginShutdown triggers reaches the plugin's subscribers.
     instance.alive = false
+    -- The client doesn't keep a key held on the plugin's behalf across a reload.
+    self.ui:holdAlt(false)
     if type(shutdown) == "function" then runtime.call(self.budgetMs, "PluginShutdown", shutdown) end
 end
 

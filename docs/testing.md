@@ -182,14 +182,17 @@ plain Lua and busted, not in the plugin sandbox:
 
 ## Testing a PrettyUI plugin
 
-When `plugin.json` lists PrettyUI (`"requiredDependencies": { "prettyui": 6398181 }`, or
-`["prettyui"]`), `h:load()` exposes the fake under that global. Any other dependency fails the
-load, naming it. The fake models the part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`,
-with `root`, `closeButton`, `SetSize`, `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
+When `plugin.json` lists PrettyUI by its numeric mod.io ID in the object form
+(`"requiredDependencies": { "prettyui": 6398181 }`, or under `optionalDependencies`),
+`h:load()` exposes the fake under that key's global. Naming PrettyUI any other way
+(`["prettyui"]`, `["6398181"]`, `{ "prettyui": "6398181" }`) fails the load, since only that
+form is proven in the client; so does any other dependency, naming it. The fake models the
+part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`, with `root`, `closeButton`, `SetSize`, `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
 `AddCheckboxButton` and `AddDivider`; `Panel.new`, with `root`, `width`, `height`, `SetSize`,
 `AddSpriteButton` and `Destroy`; and `SpriteButton.new`. Any other member, method or option
 faults as unmocked: extend `api/prettyui.lua` and `types/prettyui.lua` together, with a ledger
-row, when a plugin needs more.
+row, when a plugin needs more. LuaLS (`types/prettyui.lua`) doesn't flag an unknown option key
+such as `titel`; the fake faults on it at test time.
 
 ```lua
 local h = harness.load({ ["main.lua"] = main, ["plugin.json"] = manifest })
@@ -529,8 +532,12 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Component positions | Rounded to whole pixels. `SetPos`'s self-percentage arguments fault |
 | A destroyed component, or a PrettyUI object after `Destroy()` | Any member faults (the client's behaviour is undocumented; 1.2.0 ignores some calls on a destroyed object). A destroyed Window's or Panel's `root` reads nil, as in 1.2.0 |
 | Dependency fakes | Always present and enabled, so an optional one is never nil and `PluginDependencyUpdate` never fires |
+| How a manifest names PrettyUI | Only the probed form resolves: the object form with the numeric mod.io ID (`{ "<global>": 6398181 }`). The array form (`["prettyui"]`, `["6398181"]`) and string values (`{ "prettyui": "6398181" }`, `{ "prettyui": "prettyui" }`) fail the load, saying the form is unconfirmed. Stricter on purpose: plugin-anatomy.md has those name a folder, and the installed folder is `6398181`, so the client may give no global. Relax it once an in-client probe confirms another form |
+| `h.ui:click` on a destroyed component or PrettyUI object | Faults (`used after Destroy()`) rather than reporting it unclickable, so a plugin that leaves a destroyed button's handle reachable is caught |
+| `h.ui:holdAlt` across `h:reload()` | Unloading releases Alt |
 | PrettyUI text | Doesn't wrap: the fake can't measure fonts, so a body row is 24 px, or 18 px per `<br>`-separated line plus 6 |
 | PrettyUI clicks | `h.ui:click` hits a component's centre. Only a target's own window's title-bar drag layer can cover it; other windows' z-order isn't modelled |
+| A Window's title-bar drag layer position | Tracks the root's live position. In 1.2.0 it is a sibling of the root (`src/window.lua`, `titleDrag`), moved only at the end of a title drag, by the DragBounds callback and by `SetSize`, so between a bare `root:SetPos` and its snap-back the real layer can sit over the old spot and block clicks there instead (not modelled) |
 | PrettyUI scrolling, tooltips and hover states | Not modelled: content that overflows doesn't scroll (the client's Panel does), and tooltips are accepted but never shown |
 
 ### Not modelled

@@ -12,6 +12,13 @@ local PRELUDE = [[
 parent = ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)
 ]]
 
+-- `text` as a Lua pattern that matches it literally.
+---@param text string
+---@return string
+local function literal(text)
+    return (text:gsub("%p", "%%%0"))
+end
+
 ---@param main string
 ---@param manifest string?
 ---@return table h
@@ -39,11 +46,38 @@ describe("prettyui dependency global", function()
         assert.are.equal("1.2.0", h.env.v)
     end)
 
-    it("is the fake for the array form and for optionalDependencies", function()
-        local array = [[{ "requiredDependencies": ["prettyui"] }]]
-        assert.are.equal("1.2.0", load("v = prettyui.version", array).env.v)
+    it("is the fake under any key, and for optionalDependencies", function()
+        local alias = [[{ "requiredDependencies": { "P": 6398181 } }]]
+        assert.are.equal("1.2.0", load("v = P.version", alias).env.v)
         local optional = [[{ "optionalDependencies": { "pui": 6398181 } }]]
         assert.are.equal("1.2.0", load("v = pui.version", optional).env.v)
+    end)
+
+    -- Only the object form with the numeric ID was probed; the rest may give no global in
+    -- the client, so the harness refuses them (docs/testing.md, harness choices).
+    it("fails the load for the forms unconfirmed in the client", function()
+        for _, manifest in ipairs({
+            [[{ "requiredDependencies": ["prettyui"] }]],
+            [[{ "optionalDependencies": ["6398181"] }]],
+            [[{ "requiredDependencies": { "prettyui": "6398181" } }]],
+            [[{ "requiredDependencies": { "prettyui": "prettyui" } }]],
+        }) do
+            local err = harness.errorOf(load, "", manifest)
+            assert.matches("form unconfirmed in the client", err)
+            assert.matches(literal("use the object form with the numeric mod.io ID"), err)
+        end
+        assert.matches(
+            literal('"prettyui": "6398181" names a faked dependency'),
+            harness.errorOf(load, "", [[{ "requiredDependencies": { "prettyui": "6398181" } }]])
+        )
+        -- The suggestion keeps the global the plugin uses now.
+        assert.matches(
+            literal(
+                '["prettyui"] names a faked dependency in a form unconfirmed in the client; use '
+                    .. 'the object form with the numeric mod.io ID, e.g. { "prettyui": 6398181 }'
+            ),
+            harness.errorOf(load, "", [[{ "requiredDependencies": ["prettyui"] }]])
+        )
     end)
 
     it("is absent for a plugin that lists no dependency", function()
@@ -62,6 +96,11 @@ describe("prettyui dependency global", function()
             "no fake for dependency 2!GraphLib %(global _2_GraphLib%)",
             harness.errorOf(load, "", [[{ "optionalDependencies": ["2!GraphLib"] }]])
         )
+        -- Several bad ones: always the first in key order.
+        assert.matches(
+            "dependency 1 %(global a%)",
+            harness.errorOf(load, "", [[{ "requiredDependencies": { "b": 2, "c": 3, "a": 1 } }]])
+        )
     end)
 
     it("faults on members, methods and options outside the modelled subset", function()
@@ -72,6 +111,10 @@ describe("prettyui dependency global", function()
         assert.matches(
             "option 'xAnchor'",
             harness.errorOf(load, "prettyui.Window.new(parent, { xAnchor = 1 })")
+        )
+        assert.matches(
+            "option 'titel'",
+            harness.errorOf(load, "prettyui.Window.new(parent, { zz = 1, titel = 't', yy = 2 })")
         )
         assert.matches(
             "unmocked API: prettyui.Window instance.AddSlider",
@@ -225,6 +268,18 @@ describe("prettyui Window", function()
             end)
         )
     end)
+
+    it("faults when the driver clicks a destroyed button or close X", function()
+        local h = load(WINDOW .. "x = win.closeButton; win:Destroy()")
+        for _, target in ipairs({ h.env.menu, h.env.x }) do
+            assert.matches(
+                "used after Destroy",
+                harness.errorOf(function()
+                    h.ui:click(target)
+                end)
+            )
+        end
+    end)
 end)
 
 describe("prettyui CheckboxButton", function()
@@ -341,6 +396,14 @@ describe("prettyui Panel", function()
         h.ui:holdAlt(false)
         assert.is_true(h.ui:click(h.env.btn))
         assert.are.equal(1, h.env.clicks)
+    end)
+
+    it("doesn't keep Alt held across a reload", function()
+        local h = load(MAIN)
+        h.ui:holdAlt(true)
+        h:reload()
+        assert.is_false(h.ui:altDrag(h.env.holder, 100, 100))
+        assert.is_true(h.ui:click(h.env.btn))
     end)
 end)
 

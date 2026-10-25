@@ -23,7 +23,8 @@ Each chore becomes { id, name, period, shop, url, desc, links }:
   and keys in file order; shop is true for the two *shops tables;
 - desc: each <a href="...">text</a> becomes its text, and its href is added to links; every
   <br> (any case, or <br/>, <br />) becomes <br>, which ui.Text renders; other tags are
-  stripped; &amp; &lt; &gt; &quot; &#39; &nbsp; are decoded, and any other entity is an error;
+  stripped; &amp; &lt; &gt; &quot; &#39; become & < > " ', &nbsp; becomes a plain space (the
+  game font may not draw U+00A0), and any other entity is an error;
 - http:// in a url or link becomes https:// (all four such links at the pinned commit serve
   https), and any url that then doesn't start with https:// is an error;
 - every other field (inputs, outputs, short...) is dropped.
@@ -148,14 +149,29 @@ class Parser:
                 if e in SIMPLE_ESCAPES:
                     out.append(SIMPLE_ESCAPES[e])
                     self.pos += 2
-                elif e == "u" and re.fullmatch(r"[0-9a-fA-F]{4}", text[self.pos + 2 : self.pos + 6]):
-                    out.append(chr(int(text[self.pos + 2 : self.pos + 6], 16)))
+                elif e == "u" and (cp := self.hex4(self.pos + 2)) is not None:
                     self.pos += 6
+                    # JS strings are UTF-16, so a character outside the BMP is written as a
+                    # high+low surrogate pair; join it. A lone surrogate has no UTF-8 encoding.
+                    if 0xD800 <= cp <= 0xDBFF:
+                        low = self.hex4(self.pos + 2) if text.startswith("\\u", self.pos) else None
+                        if low is None or not 0xDC00 <= low <= 0xDFFF:
+                            self.fail(f"lone surrogate escape \\u{cp:04x}")
+                        cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00)
+                        self.pos += 6
+                    elif 0xDC00 <= cp <= 0xDFFF:
+                        self.fail(f"lone surrogate escape \\u{cp:04x}")
+                    out.append(chr(cp))
                 else:
                     self.fail(f"unsupported string escape \\{e}")
             else:
                 out.append(c)
                 self.pos += 1
+
+    def hex4(self, at):
+        """The code unit of the four hex digits at `at`, or None if they aren't there."""
+        digits = self.text[at : at + 4]
+        return int(digits, 16) if re.fullmatch(r"[0-9a-fA-F]{4}", digits) else None
 
     def value(self):
         c = self.peek()
@@ -241,7 +257,7 @@ BR = re.compile(r"<br\s*/?\s*>", re.IGNORECASE)
 TAG = re.compile(r"</?[A-Za-z][^>]*>")
 TAG_START = re.compile(r"<[A-Za-z/!]")
 ENTITY = re.compile(r"&(#?\w+);")
-ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "#39": "'", "nbsp": " "}
+ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "#39": "'", "nbsp": " "}
 BR_MARK = "\0"  # stands in for <br> while other tags are stripped and entities decoded
 
 
@@ -384,8 +400,10 @@ def main(argv):
     except Refused as e:
         print(f"chores-from-dailyscape: {e}", file=sys.stderr)
         return 1
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        f.write(lua)
+    # Encode before opening, so a failure can't leave a truncated output file behind.
+    data = lua.encode("utf-8")
+    with open(out, "wb") as f:
+        f.write(data)
     return 0
 
 

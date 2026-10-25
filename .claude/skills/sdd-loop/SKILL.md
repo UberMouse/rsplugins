@@ -468,8 +468,8 @@ Slice var-dump's describe step and nil-check request results
 
 ## 6. Hand back
 
-This skill ends in **reviewed commits on `main`** and a report, not a push or a PR (the repo has
-no remote, and `CLAUDE.md` keeps work on `main`). Never push, amend, rebase or squash the run's
+This skill ends in **reviewed commits on `main`** and a report, not a push or a PR (`CLAUDE.md`
+keeps work on `main`, and pushing to the remote is the user's call). Never push, amend, rebase or squash the run's
 commits.
 
 After the final §4 passes, write `phase: "done"` to state.json, then give the **final report**:

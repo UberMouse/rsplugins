@@ -21,9 +21,15 @@ end
 
 local Plugin = strict.class("Plugin", {
     statics = {
+        -- Replaying, a permission neither the recording nor the test has decided faults rather
+        -- than answering the not-granted default: the client may well have had it granted.
         HasPermission = function(s, perm)
             M.checkPermission(perm)
-            return s.h.world.state.permissions.granted[perm] == true
+            local perms = s.h.world.state.permissions
+            if s.h.replay and not perms.known[perm] then
+                strict.fault("unrecorded: Plugin.HasPermission(" .. tostring(perm) .. ")")
+            end
+            return perms.granted[perm] == true
         end,
     },
     fields = {

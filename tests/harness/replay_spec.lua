@@ -209,6 +209,110 @@ describe("replaying a recording", function()
         assert.are.equal("2 3 LOGS 7 -1", h:output())
     end)
 
+    it("faults a permission check neither the recording nor the test decided", function()
+        local main = "say(Plugin.HasPermission(PluginPermissions.httpAccess))"
+        local h = harness.new(plugin(main))
+        h:useRecording({})
+        assert.matches(
+            "unrecorded: Plugin%.HasPermission%(httpAccess%)",
+            harness.errorOf(function()
+                h:load()
+            end)
+        )
+        -- Decided by the test, it is answered: granted up front, or revoked by the builder.
+        h = harness.new(plugin(main), { grant = { "httpAccess" } })
+        h:useRecording({})
+        h:load()
+        assert.are.equal("0 true", h:output())
+        h = harness.new(plugin(main))
+        h:useRecording({})
+        h.world:revoke("httpAccess")
+        h:load()
+        assert.are.equal("0 false", h:output())
+        -- Not replaying, an ungranted permission is simply not granted.
+        assert.are.equal("0 false", harness.load(plugin(main)):output())
+    end)
+
+    it("faults a PersistentDB read of a key neither recorded nor set in the replay", function()
+        local h = harness.new(plugin('say(PersistentDB:GetInt("n"))'))
+        h:useRecording({ { t = 0, k = "db", op = "GetInt", key = "other", v = 1 } })
+        assert.matches(
+            'unrecorded: PersistentDB:GetInt%("n"%)',
+            harness.errorOf(function()
+                h:load()
+            end)
+        )
+        h = harness.new(plugin('say(PersistentDB:CheckExists("n"))'))
+        h:useRecording({})
+        assert.matches(
+            'unrecorded: PersistentDB:CheckExists%("n"%)',
+            harness.errorOf(function()
+                h:load()
+            end)
+        )
+    end)
+
+    it("answers a PersistentDB key the recording, the plugin or the test accounts for", function()
+        local h = harness.new(plugin([[
+            PersistentDB:SetInt("mine", 3)
+            PersistentDB:Delete("gone")
+            say(PersistentDB:Get("unset"), PersistentDB:GetInt("mine"), PersistentDB:Get("gone"),
+                PersistentDB:GetString("given"))
+            PersistentDB:Clear()
+            say(PersistentDB:Get("anything"))
+        ]]))
+        -- "unset": recorded as a Get that found nothing (no "v").
+        h:useRecording({ { t = 0, k = "db", op = "Get", key = "unset" } })
+        h.db.given = { type = harness.enums.PersistentDBType.STRING, value = "x" }
+        h:load()
+        assert.are.equal("0 nil 3 nil x\n0 nil", h:output())
+        -- Not replaying, an unknown key is simply unset.
+        assert.are.equal("0 nil", harness.load(plugin('say(PersistentDB:Get("n"))')):output())
+    end)
+
+    it("refuses a recording with dropped entries unless the test allows the gap", function()
+        local function lossy()
+            return {
+                { t = 1, k = "read", path = "var.VarPlayer.QP.value", v = 1 },
+                { t = 4, k = "dropped", n = 7 },
+                { t = 4, k = "read", path = "var.VarPlayer.QP.value", v = 2 },
+            }
+        end
+        local h = harness.new(plugin(""))
+        assert.matches(
+            "recording lost 7 entries in 1 gap%(s%), the first at t=4; pass "
+                .. "{ allowDropped = true }",
+            harness.errorOf(function()
+                h:useRecording(lossy())
+            end)
+        )
+        h:useRecording(lossy(), { allowDropped = true })
+        assert.are.same({ { t = 4, n = 7 } }, h.replay.dropped)
+    end)
+
+    it("leaves ServerLogic to the harness clock when the recording has none", function()
+        local h =
+            harness.new(plugin('Event.ServerLogic.Subscribe("s", function() say("server") end)'))
+        h:useRecording({ { t = 40, k = "read", path = "var.VarPlayer.QP.value", v = 1 } })
+        h:load()
+        h:playRecording()
+        assert.are.equal("30 server", h:output())
+    end)
+
+    it("faults a recorded slot that has no obj id, naming its path", function()
+        local h = harness.new(plugin("local slots = Inventory.Find(93):GetSlots()"))
+        h:useRecording({
+            { t = 0, k = "read", path = "Inventory.Find(93)", v = "sol.jag::InventoryProxy" },
+            { t = 0, k = "read", path = "Inventory.Find(93):GetSlots()", v = { { obj = "LOGS" } } },
+        })
+        assert.matches(
+            "replay: the recorded slot at Inventory%.Find%(93%):GetSlots%(%)%[1%] has no obj id",
+            harness.errorOf(function()
+                h:load()
+            end)
+        )
+    end)
+
     it("refuses a recording in another schema", function()
         local h = harness.new(plugin(""))
         local schema2 = HEADER:gsub('"schema": 1', '"schema": 2')

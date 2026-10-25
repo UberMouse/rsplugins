@@ -26,11 +26,13 @@ local M = {}
 
 -- Attach a recording to a harness that isn't loaded yet: set each permission the recording
 -- checked as its first check found it (over opts.grant), and seed PersistentDB from each
--- key's first Get.
+-- key's first Get. A recording with dropped entries is refused unless opts.allowDropped:
+-- after a gap, reads and the world may not match what the plugin saw.
 ---@param h table
 ---@param source string|table a .jsonl path (repo-relative or absolute), or a list of entries
+---@param opts table? { allowDropped = true }
 ---@return table timeline
-function M.attach(h, source)
+function M.attach(h, source, opts)
     assert(not h.instance, "attach a recording before h:load()")
     local entries = source
     if type(source) == "string" then
@@ -39,6 +41,18 @@ function M.attach(h, source)
     end
     ---@cast entries table[]
     local tl = timeline.build(entries)
+    if tl.dropped > 0 and not (opts and opts.allowDropped) then
+        error(
+            string.format(
+                "recording lost %d entries in %d gap(s), the first at t=%s; pass "
+                    .. "{ allowDropped = true } to replay it anyway (h.replay.dropped lists them)",
+                tl.dropped,
+                #tl.gaps,
+                tostring(tl.gaps[1].t)
+            ),
+            3
+        )
+    end
     for permission, granted in pairs(tl.grants) do
         world.apply(
             h.world.state,
@@ -51,7 +65,24 @@ function M.attach(h, source)
     -- reads: path -> { v = value }, so a recorded nil is told apart from a path never read.
     -- readsDone / eventsDone: the last tick whose leading reads / events have been applied.
     -- skipped: { t, event, why } per recorded delivery the harness couldn't make.
-    h.replay = { timeline = tl, reads = {}, readsDone = -1, eventsDone = -1, skipped = {} }
+    -- dropped: the recording's gaps, { t, n } each.
+    -- dbKeys / dbCleared: the PersistentDB keys the replay can answer for although the store
+    -- lacks them (api/persistentdb.lua): ones the recording touched or the plugin deleted, or
+    -- every key once the plugin has called Clear.
+    local dbKeys = {}
+    for key in pairs(tl.dbKeys) do
+        dbKeys[key] = true
+    end
+    h.replay = {
+        timeline = tl,
+        reads = {},
+        readsDone = -1,
+        eventsDone = -1,
+        skipped = {},
+        dropped = tl.gaps,
+        dbKeys = dbKeys,
+        dbCleared = false,
+    }
     return tl
 end
 
@@ -168,8 +199,9 @@ function M.beforeLogic(h)
 end
 
 -- After Logic: this tick's events, each after its op and the reads its callbacks made.
--- Returns true while the recording supplies ServerLogic, so the harness's own clock doesn't
--- fire it too.
+-- Returns true while the recording supplies ServerLogic (it has some, and hasn't ended), so
+-- the harness's own clock doesn't fire it too. A recording without ServerLogic leaves the
+-- harness clock firing it.
 ---@param h table
 ---@return boolean
 function M.afterLogic(h)
@@ -186,7 +218,7 @@ function M.afterLogic(h)
             if not event.skip then fire(h, h.tick, event.entry) end
         end
     end
-    return h.tick <= rp.timeline.lastTick
+    return rp.timeline.serverLogic and h.tick <= rp.timeline.lastTick
 end
 
 return M

@@ -55,8 +55,8 @@ end
 ---@param tl table the timeline being built
 ---@param entry table
 local function noteStart(tl, entry)
-    if entry.k == "db" and type(entry.key) == "string" and not tl.dbSeen[entry.key] then
-        tl.dbSeen[entry.key] = true
+    if entry.k == "db" and type(entry.key) == "string" and not tl.dbKeys[entry.key] then
+        tl.dbKeys[entry.key] = true
         if entry.op:match("^Get") and entry.v ~= nil then
             tl.db[entry.key] = { op = entry.op, v = entry.v }
         end
@@ -68,14 +68,25 @@ end
 -- Group `entries` (a recording's lines, or a list of entries as the recorder POSTs them) into
 -- a timeline:
 --   ticks[t] = { leading = { read... }, events = { { entry, reads = { read... }, skip } } }
---   lastTick, the highest t; dropped, the entries the recording says it lost;
---   grants[permission] = bool and db[key] = { op, v }, the starting state (noteStart).
+--   lastTick, the highest t; serverLogic, whether any ServerLogic was recorded;
+--   dropped, the entries the recording says it lost, and gaps = { { t, n } } where;
+--   grants[permission] = bool and db[key] = { op, v }, the starting state (noteStart);
+--   dbKeys[key] = true for every PersistentDB key the recording touched.
 -- `skip` marks a ChatMessage of ChatType.PLUGIN: the plugin's own Chat.AddMessage coming back,
 -- which the harness delivers itself.
 ---@param entries table[]
 ---@return table timeline
 function M.build(entries)
-    local tl = { ticks = {}, lastTick = 0, dropped = 0, grants = {}, db = {}, dbSeen = {} }
+    local tl = {
+        ticks = {},
+        lastTick = 0,
+        serverLogic = false,
+        dropped = 0,
+        gaps = {},
+        grants = {},
+        db = {},
+        dbKeys = {},
+    }
     local lastT = 0
     for i, entry in ipairs(entries) do
         local k, t = entry.k, entry.t
@@ -91,6 +102,7 @@ function M.build(entries)
             end
         elseif k == "dropped" then
             tl.dropped = tl.dropped + (entry.n or 0)
+            tl.gaps[#tl.gaps + 1] = { t = t, n = entry.n }
         else
             assert(math.type(t) == "integer", "recording entry " .. i .. " has no integer t")
             assert(t >= lastT, "recording entry " .. i .. " goes back in time")
@@ -111,6 +123,7 @@ function M.build(entries)
                 end
                 local payload = entry.payload or {}
                 local skip = entry.name == "ChatMessage" and payload.chatType == PLUGIN_CHAT
+                tl.serverLogic = tl.serverLogic or entry.name == "ServerLogic"
                 group.events[#group.events + 1] = {
                     entry = { name = entry.name, payload = payload, op = op },
                     reads = {},
@@ -123,7 +136,6 @@ function M.build(entries)
             end
         end
     end
-    tl.dbSeen = nil
     return tl
 end
 

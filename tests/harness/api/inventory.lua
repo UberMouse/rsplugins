@@ -209,12 +209,20 @@ local Inv = strict.class("Inv", {
     },
 })
 
--- An InvSlot from its recorded form, { obj = { config, id, type }, count }.
+-- An InvSlot from its recorded form, { obj = { config, id, type }, count }. Anything else
+-- (an obj written as text, a value cut short by the recorder's cap) faults, naming the path.
 ---@param h table
----@param v table?
+---@param v any
+---@param path string the read's path, for the fault
 ---@return table?
-local function recordedSlot(h, v)
-    return v and InvSlot.new({ h = h, obj = v.obj.id, count = v.count })
+local function recordedSlot(h, v, path)
+    if v == nil then return nil end
+    local obj = type(v) == "table" and v.obj or nil
+    local id = type(obj) == "table" and obj.id or nil
+    if math.type(id) ~= "integer" then
+        strict.fault("replay: the recorded slot at " .. path .. " has no obj id")
+    end
+    return InvSlot.new({ h = h, obj = id, count = v.count })
 end
 
 -- Replay only: an Inv for an inventory the recording shows the plugin found, but that the
@@ -243,14 +251,15 @@ local RecordedInv = strict.class("Inv", {
     methods = {
         GetSlot = function(s, index)
             if math.type(index) ~= "integer" then strict.fault("Inv:GetSlot(index: Integer)") end
-            return recordedSlot(s.h, s.h:recorded(string.format("%s:GetSlot(%d)", s.path, index)))
+            local path = string.format("%s:GetSlot(%d)", s.path, index)
+            return recordedSlot(s.h, s.h:recorded(path), path)
         end,
         GetSlots = function(s)
             local slots = s.h:recorded(s.path .. ":GetSlots()")
             if slots == nil then return nil end
             local out = {}
             for i, v in pairs(slots) do
-                out[i] = recordedSlot(s.h, v)
+                out[i] = recordedSlot(s.h, v, s.path .. ":GetSlots()[" .. tostring(i) .. "]")
             end
             return out
         end,

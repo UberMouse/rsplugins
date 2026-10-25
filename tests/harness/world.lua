@@ -43,7 +43,9 @@ function M.new(manifest)
         invs = {},
         invGeneration = 0,
         objs = {}, -- obj id -> fields a test defined (name, category...)
-        permissions = { requested = requested, granted = {} },
+        -- known: every permission a setPermission op has named, granted or not, so a replay
+        -- can tell a decided permission from the default (api/plugin.lua).
+        permissions = { requested = requested, granted = {}, known = {} },
     }
 end
 
@@ -242,6 +244,7 @@ function ops.setPermission(state, op)
         strict.fault(tostring(op.permission) .. " is not requested in the plugin's plugin.json")
     end
     local enabled = op.enabled and true or false
+    perms.known[op.permission] = true
     if (perms.granted[op.permission] or false) == enabled then return {} end
     perms.granted[op.permission] = enabled or nil
     if kind ~= "optionalPermissions" then return {} end

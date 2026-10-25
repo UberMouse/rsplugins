@@ -173,7 +173,7 @@ end
 -- One logic step: deliver answered HTTP requests, then queued chat messages, then fire Logic,
 -- and ServerLogic every SERVER_TICK steps. The order within a step is the harness's choice;
 -- the client's is undocumented. Replaying, the recording's entries for this tick go around
--- Logic, and ServerLogic comes from the recording until it ends.
+-- Logic, and a recording that has ServerLogic events supplies it until it ends.
 function Harness:step()
     self.tick = self.tick + 1
     http.deliver(self)
@@ -223,11 +223,13 @@ end
 
 -- Drive the world from a recording: its events fire at their recorded ticks as the clock
 -- runs, and reads the world can't answer get the latest recorded value. Call before load().
--- Builder calls work as usual alongside and after it, on the same world.
+-- Builder calls work as usual alongside and after it, on the same world. A recording with
+-- dropped entries is refused unless opts.allowDropped.
 ---@param source string|table a .jsonl path (repo-relative or absolute), or a list of entries
+---@param opts table? { allowDropped = true }
 ---@return table timeline
-function Harness:useRecording(source)
-    return replay.attach(self, source)
+function Harness:useRecording(source, opts)
+    return replay.attach(self, source, opts)
 end
 
 -- Run the clock to the recording's last tick.

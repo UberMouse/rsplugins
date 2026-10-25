@@ -87,7 +87,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `h:advance(ms)` | Run the clock forward in 20 ms logic steps; a remainder carries over. Each step: deliver answered HTTP requests, deliver queued `Chat.AddMessage` messages, fire `Logic`, and every 30th step `ServerLogic` |
 | `h:fire(event, fields?)` | Fire any stub event; `fields` must be fields of the stub's `<Event>EventPayload`. For events the world builder doesn't model (`KeyDown`, `SkillTransmit`...) |
 | `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "" }`, `{ timedOut = true }` or `{ error = "info", errorCode = n }`. Delivered on the next step |
-| `h:useRecording(source)` | Drive the world from a recording (a `.jsonl` path, repo-relative or absolute, or a list of entries); call before `h:load()`. See [Replaying a recording](#replaying-a-recording) |
+| `h:useRecording(source, opts?)` | Drive the world from a recording (a `.jsonl` path, repo-relative or absolute, or a list of entries); call before `h:load()`. A recording with `dropped` entries is refused unless `opts.allowDropped`. See [Replaying a recording](#replaying-a-recording) |
 | `h:playRecording()` | Step the clock to the recording's last tick |
 | `h:output()` | Everything the plugin printed or logged, one line per call |
 | `h.env` | The current sandbox environment |
@@ -96,7 +96,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `h.requests` | Started HTTP requests in order: `{ method, url, body, headers, request }` |
 | `h.db` | PersistentDB entries, `key -> { type, value }`; survives reload |
 | `h.tick` | Logic ticks so far (`ev.logicTick`) |
-| `h.replay` | While replaying: `timeline`, `reads` (path -> `{ v }`, the reads seen so far) and `skipped` (`{ t, event, why }` per recorded delivery the harness couldn't make) |
+| `h.replay` | While replaying: `timeline`, `reads` (path -> `{ v }`, the reads seen so far), `skipped` (`{ t, event, why }` per recorded delivery the harness couldn't make) and `dropped` (`{ t, n }` per gap in the recording) |
 
 ### The world `h.world`
 
@@ -131,7 +131,8 @@ The harness fails loudly rather than guessing:
   includes the `oldValue` of the first `setVar` of a var: set it before `h:load()` so the plugin
   sees a change from a known value.
 - **`unrecorded: <path>`**: replaying, the plugin read something neither the world nor the
-  recording has a value for ([Replaying a recording](#replaying-a-recording)).
+  recording has a value for, or checked a permission or PersistentDB key that neither the
+  recording nor the test decided ([Replaying a recording](#replaying-a-recording)).
 - **Unknown names**: vars must exist in `docs/vars/vars.csv`, and invs and objs in
   `docs/api/consts/{Inv,Obj}.lua`, so a misspelt `var.VarPlayer.X` or `config.Obj.X` fails the
   test.
@@ -314,13 +315,23 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
   without the events the world would derive from it, and then the recorded event is fired: an
   `InventoryUpdated` stays one even for an inventory new to the world. Payload API objects
   are rebuilt from the world (`ev.var`, `ev.inv`); an event with any other object in its
-  payload faults. While the recording lasts, `ServerLogic` comes only from it.
+  payload faults. If the recording has any `ServerLogic`, then while it lasts `ServerLogic`
+  comes only from it; one without (the plugin never subscribed) leaves the harness clock
+  firing it every 30 ticks.
 - **Reads.** A mock serves what the world holds, and otherwise the latest read recorded under
   the same path at or before the current tick. A read the recording never made faults with
   `unrecorded: <path>`. Reads made by an event's callbacks are in place before that event
   fires, and reads made by `Logic` callbacks before `Logic` fires (within one tick, a later
   read of a path wins). Reads the world models also go into the world: a var's `.value`
   (when the world can hold the value) and the login (below).
+- **Permissions and PersistentDB** don't fall back to the scripted world's defaults (not
+  granted, unset), since the client's answer may have differed. `Plugin.HasPermission` of a
+  permission that no `perm` entry, `opts.grant`, `h.world:grant`/`revoke` or recorded
+  `OptionalPermissionChanged` has decided faults `unrecorded: Plugin.HasPermission(<perm>)`. A
+  `Get*` or `CheckExists*` of a key the store doesn't hold faults
+  `unrecorded: PersistentDB:<Method>("<key>")` unless the recording has a `db` entry for it
+  (so it was seen unset) or the plugin deleted it or called `Clear` during the replay. A key
+  the plugin stores, or the test puts in `h.db`, is answered from the store.
 - **An inventory the recording knows but the world doesn't yet** (no Added/Updated event so
   far): `Inventory.Find` returns a new `Inv` each call (as the client does) whose every member
   is the recorded read under its path (`Inventory.Find(config.Inv.INV).usedSlotCount`), or nil
@@ -340,9 +351,11 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
   value its type can't hold in the harness (config-typed vars, and BOOLEAN vars, which
   VarTransmit reports as 0/1). The event still fires with the recorded values, except for a
   var the catalog lacks: then the delivery is skipped and listed in `h.replay.skipped`.
-- `http` entries aren't replayed: answer the plugin's requests with `h:respond`. After a
-  `dropped` line, reads and the world may not match what the plugin saw (`timeline.dropped`
-  counts the lost entries). The header's `schema` must be 1.
+- **Gaps.** After a `dropped` line, reads and the world may not match what the plugin saw,
+  so `h:useRecording` refuses a recording with one, giving the count, unless the test passes
+  `{ allowDropped = true }`; then `h.replay.dropped` lists the gaps (`{ t, n }`).
+- `http` entries aren't replayed: answer the plugin's requests with `h:respond`. The header's
+  `schema` must be 1.
 
 ### Turning a session into a fixture
 
@@ -432,6 +445,9 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | `Chat.AddMessage` without chatAccess | Faults |
 | `ChatMessage.timestamp` | A fixed epoch (2026-01-01) plus elapsed logic time. The client's is unix seconds (recording `20261025-144642-8f7250b863`); a replay delivers the recorded one |
 | PersistentDB | `IterateEntries` goes in key order. `Delete` returns true. Typed setters return nil on a type mismatch |
+| Replaying: a permission check or PersistentDB key nothing accounts for | Faults `unrecorded: ...` instead of answering the scripted default (not granted, unset). `IterateEntries` visits only the keys the store holds (seeded, stored during the replay, or put in `h.db`), since the recorder logs only its count |
+| Replaying a recording with `dropped` entries | Refused unless the test passes `{ allowDropped = true }` |
+| Replaying, `ServerLogic` | Only the recorded ones while the recording lasts, if it has any; the harness clock's otherwise |
 | Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), and `debug`, `load*`, `dofile`, `package`, `collectgarbage` |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |

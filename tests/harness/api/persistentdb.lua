@@ -60,6 +60,19 @@ local function checkKey(key)
     if type(key) ~= "string" then strict.fault("PersistentDB key must be a string") end
 end
 
+-- Replaying, a read of a key the store lacks is answered only if the replay knows the key
+-- was unset (docs/testing.md, "Replaying a recording"); otherwise the client's store may
+-- have held a value the recording never showed, so it faults.
+---@param s table
+---@param method string e.g. "GetInt", for the fault
+---@param key string
+local function checkRecorded(s, method, key)
+    local rp = s.h.replay
+    if rp and s.db[key] == nil and not (rp.dbKeys[key] or rp.dbCleared) then
+        strict.fault(string.format("unrecorded: PersistentDB:%s(%q)", method, key))
+    end
+end
+
 ---@param s table
 ---@param key string
 ---@param value any
@@ -79,11 +92,13 @@ local function set(s, key, value, want)
 end
 
 ---@param s table
+---@param method string
 ---@param key string
 ---@param want integer
 ---@return any
-local function getTyped(s, key, want)
+local function getTyped(s, method, key, want)
     checkKey(key)
+    checkRecorded(s, method, key)
     local entry = s.db[key]
     if entry and entry.type == want then return valueOf(entry) end
     return nil
@@ -92,6 +107,7 @@ end
 local methods = {
     Get = function(s, key)
         checkKey(key)
+        checkRecorded(s, "Get", key)
         return valueOf(s.db[key])
     end,
     Set = function(s, key, value)
@@ -99,10 +115,12 @@ local methods = {
     end,
     CheckExists = function(s, key)
         checkKey(key)
+        checkRecorded(s, "CheckExists", key)
         return s.db[key] ~= nil
     end,
     CheckExistsTyped = function(s, key, wantType)
         checkKey(key)
+        checkRecorded(s, "CheckExistsTyped", key)
         local entry = s.db[key]
         return entry ~= nil and entry.type == wantType
     end,
@@ -123,12 +141,14 @@ local methods = {
     Delete = function(s, key)
         checkKey(key)
         s.db[key] = nil
+        if s.h.replay then s.h.replay.dbKeys[key] = true end
         return true
     end,
     Clear = function(s)
         for k in pairs(s.db) do
             s.db[k] = nil
         end
+        if s.h.replay then s.h.replay.dbCleared = true end
         return true
     end,
 }
@@ -142,7 +162,7 @@ local TYPED = {
 }
 for suffix, t in pairs(TYPED) do
     methods["Get" .. suffix] = function(s, key)
-        return getTyped(s, key, t)
+        return getTyped(s, "Get" .. suffix, key, t)
     end
     methods["Set" .. suffix] = function(s, key, value)
         return set(s, key, value, t)
@@ -165,7 +185,7 @@ end
 ---@param h table the harness
 ---@param env table the sandbox being built
 function M.install(h, env)
-    env.PersistentDB = PersistentDB.new({ db = h.db })
+    env.PersistentDB = PersistentDB.new({ h = h, db = h.db })
     env.PersistentDBType = strict.enum("PersistentDBType", M.PersistentDBType)
 end
 

@@ -179,6 +179,46 @@ buying out a shop line). See [testing.md](testing.md#recordings) for recordings.
 - **Modules and symlinks.** A `require`d module shares `main.lua`'s globals, `Event` included,
   and the client follows a directory symlink inside the plugin folder (the recorder's `dev/`).
 
+## Shops in the client
+
+Found by a throwaway probe in the beta client (2026-10-25): a purchase at each of 17 shops,
+logging `VarPlayer.SHOP` and the inventory events.
+
+- **A shop is an inventory the server sends only while the shop is open.** In order:
+  - **Opening:** `InventoryAdded` for the shop's inventory, then `VarPlayer.SHOP` (304, a
+    number) goes from -1 to that inventory's id. Some shops also send a second "free" inventory
+    alongside it: `RUNESHOP_FREEBIES` 557, `FISHINGSHOP_LUM_FREEBIES` 561,
+    `OMGE_HERBLORE_FREE_SHOP` 636 and others.
+  - **Closing:** `InventoryRemoved`, then `SHOP` goes back to -1.
+- **A purchase** is one `InventoryUpdated` on the shop whose line drops (`FEATHER_PACK x20` to
+  `x0`), next to the backpack (`INV` 93) gaining the items and the money pouch (`MONEY_POUCH`
+  623, slot 2 `COINS`) dropping. A bought-out line stays at x0.
+- **Stock is per character** (the user), so a drop in an open shop's line is the player's own
+  purchase.
+- **Each shop has its own inventory**, even shops selling the same thing:
+
+  | Shop | Inventory | id |
+  |---|---|---|
+  | Gerrant, Port Sarim | `FISHINGSHOP` | 30 |
+  | Lumbridge Fishing Supplies | `FISHINGSHOP_LUM` | 562 |
+  | Harry, Catherby | `FISHINGSHOP2` | 43 |
+  | Shantay Pass | `SHANTAYSHOP` | 78 |
+  | Jatix, Taverley | `OMGE_HERBLORE_SHOP` | 635 |
+  | Obli, Shilo Village | `SHILOJUNGLESTORE` | 138 |
+  | Lady Meilyr, Prifddinas | `ELFCITY_MEILYR_SHOP` | 738 |
+  | Jossik, Lighthouse | `LIGHTHOUSESHOP` | 214 |
+  | Vanligga, Jatizso (yak hide) | `FRISD_YAK_CONTRABAND` | 508 |
+  | Feathers of Ma'at, Sophanem | `MENAPHOS_SLAYER_SHOP` | 821 |
+  | Turael, Burthorpe | `OMGE_SLAYERSHOP_SMKI` | 633 |
+  | Sumona, Pollnivneach | `SMKI_SLAYERSHOP` | 538 |
+  | Aubury, Varrock | `RUNESHOP` | 5 |
+  | Betty, Port Sarim | `MAGICSHOP` | 25 |
+  | Ali Morrisane, Al Kharid | `FEUD_MORRISANES` | 252 |
+  | Carwen Essencebinder | `OMGE_RUNECRAFTING_SHOP` | 641 |
+
+- **Dell Monti is not a shop.** His apples and pineapples arrive as banknotes in the backpack
+  (`CERT_COOKING_APPLE`, `CERT_PINEAPPLE`) with no shop open.
+
 ## PrettyUI in the client
 
 [PrettyUI](https://prettyui.j3.gg) is a UI library plugin (mod.io 6398181). Found by three

@@ -93,6 +93,14 @@ describe("chore-tracker state", function()
     describe("purchases", function()
         local now = M["2026-10-25 01:43"]
 
+        it("auto-marks a chore not done this period, and leaves a done one as it was", function()
+            local s = state.autoMark(state.new(), byId.w1, now)
+            assert.are.equal(now, s.done.w1)
+            assert.are.equal(s, state.autoMark(s, byId.w1, now + 5))
+            local later = state.autoMark(s, byId.w1, M["2026-10-28"])
+            assert.are.equal(M["2026-10-28"], later.done.w1)
+        end)
+
         it("records the shop and marks the chore done at the purchase minute", function()
             local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_A", now)
             assert.are.equal(now, s.shops.wshop.SHOP_A)

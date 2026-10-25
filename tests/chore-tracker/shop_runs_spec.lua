@@ -222,6 +222,21 @@ describe("chore-tracker shop runs", function()
         assert.is_nil(h.db["state:Zezima"])
     end)
 
+    it("ticks on a purchase at an unproven shop as at a proven one", function()
+        local h = loaded()
+        pick(h, { "meat-packs", "rune-shop-run" })
+        h.world:setInventory("AFR_MEATSHOP", { { obj = "LOGS", count = 5 } })
+        h.world:setInventory("AFR_MEATSHOP", { { obj = "LOGS", count = 4 } })
+        h.world:setInventory("PEST_RUNE_STORE", { { obj = "AIRRUNE", count = 7000 } })
+        h.world:setInventory("PEST_RUNE_STORE", { { obj = "AIRRUNE", count = 0 } })
+        h:advance(20)
+        assert.is_true(ticked(h, "Meat Packs"))
+        assert.is_true(ticked(h, "Rune Shop Run"))
+        assert.are.equal("Rune Shop Run (1/9)", (rowShown(h, "Rune Shop Run")))
+        assert.matches("%[CHORES%] purchase meat%-packs at Chargurr, Oo'glog", h:output())
+        assert.matches("%[CHORES%] purchase rune%-shop%-run at Void Knight Magic Store", h:output())
+    end)
+
     it("loads a version 1 state with its picks and ticks", function()
         local h = loaded()
         h:unload()
@@ -241,5 +256,74 @@ describe("chore-tracker shop runs", function()
         h:advance(20)
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
         assert.are.equal(2, h.db["state:Zezima"].value.version)
+    end)
+end)
+
+describe("chore-tracker Dell Monti", function()
+    local DELL = { name = "Pineapples and Apples from Dell Monti", id = "dellmonti-pineapples" }
+    -- His tile, per runescape.wiki/w/Dell_Monti.
+    local X, Z = 2763, 3186
+
+    -- Logged in at the tile given, with some of his notes in the backpack, Dell Monti's
+    -- chore picked.
+    ---@param x integer
+    ---@param z integer
+    ---@param level integer?
+    ---@return table
+    local function standingAt(x, z, level)
+        local h = helpers.loaded({ load = false })
+        h.world:setPosition(x, z, level)
+        h.world:setInventory("INV", {
+            { obj = "CERT_PINEAPPLE", count = 10 },
+            { obj = "COINS", count = 500 },
+        }, 28)
+        h:load()
+        pick(h, { DELL.id })
+        return h
+    end
+
+    -- Dell Monti hands over notes: the backpack's apple and pineapple notes go up.
+    ---@param h table
+    local function collect(h)
+        h.world:setInventory("INV", {
+            { obj = "CERT_PINEAPPLE", count = 40 },
+            { obj = "COINS", count = 500 },
+            { obj = "CERT_COOKING_APPLE", count = 30 },
+        }, 28)
+    end
+
+    it("ticks when his notes arrive near him, once a period", function()
+        local h = standingAt(X + 10, Z - 10)
+        local writes = h.dbWrites
+        collect(h)
+        assert.is_true(ticked(h, DELL.name))
+        assert.are.equal(writes + 1, h.dbWrites)
+        assert.matches("%[CHORES%] collected dellmonti%-pineapples near Dell Monti", h:output())
+        -- More notes the same week change nothing stored.
+        h.world:setInventory("INV", { { obj = "CERT_PINEAPPLE", count = 99 } }, 28)
+        assert.are.equal(writes + 1, h.dbWrites)
+    end)
+
+    it("ignores his notes arriving further away or on another plane", function()
+        for _, at in ipairs({ { X + 11, Z, 0 }, { X, Z - 11, 0 }, { X, Z, 1 } }) do
+            local h = standingAt(at[1], at[2], at[3])
+            local writes = h.dbWrites
+            collect(h)
+            assert.is_false(ticked(h, DELL.name))
+            assert.are.equal(writes, h.dbWrites)
+            assert.is_nil(h:output():find("collected", 1, true))
+        end
+    end)
+
+    it("ignores notes leaving the backpack, and other items arriving", function()
+        local h = standingAt(X, Z)
+        local writes = h.dbWrites
+        h.world:setInventory("INV", { { obj = "CERT_PINEAPPLE", count = 1 } }, 28)
+        h.world:setInventory("INV", {
+            { obj = "CERT_PINEAPPLE", count = 1 },
+            { obj = "LOGS", count = 1 },
+        }, 28)
+        assert.is_false(ticked(h, DELL.name))
+        assert.are.equal(writes, h.dbWrites)
     end)
 end)

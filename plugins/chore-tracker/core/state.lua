@@ -170,19 +170,29 @@ function M.isDone(state, chore, now)
     return minute ~= nil and minute >= period.periodStart(chore.period, now)
 end
 
+-- `state` with `chore` marked done at `now` unless it already is this period, for a chore
+-- the plugin saw done: an earlier tick, by hand or detected, keeps its minute. A chore
+-- already done gives back `state` itself, so the caller can tell nothing changed.
+---@param state ChoreState
+---@param chore Chore
+---@param now integer
+---@return ChoreState
+function M.autoMark(state, chore, now)
+    if M.isDone(state, chore, now) then return state end
+    return M.mark(state, chore.id, now)
+end
+
 -- `state` after a purchase at shop `inv` for `chore` at `now`: the shop recorded as bought
--- at `now`, and the chore marked done at `now` unless it already is this period (an earlier
--- tick, by hand or by another of its shops, keeps its minute).
+-- at `now`, and the chore auto-marked.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param inv string the shop inventory's config name
 ---@param now integer
 ---@return ChoreState
 function M.recordPurchase(state, chore, inv, now)
-    local out = copy(state)
+    local out = copy(M.autoMark(state, chore, now))
     out.shops[chore.id] = out.shops[chore.id] or {}
     out.shops[chore.id][inv] = now
-    if not M.isDone(state, chore, now) then out.done[chore.id] = now end
     return out
 end
 

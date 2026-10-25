@@ -2,8 +2,10 @@
 
 A checklist for RuneScape's repeatable chores, the daily, weekly and monthly tasks such as the
 Daily Challenge, Soul Reaper or the Giant Oyster. Pick the ones you do, tick them off as you go,
-and they clear themselves when the game's reset comes round. It is a planner you tick by hand:
-it never reads what you did in game, does nothing for you, and sends nothing anywhere.
+and they clear themselves when the game's reset comes round. A few chores also tick themselves:
+the shop runs, when you buy from one of their shops, and Dell Monti's, when his notes arrive. It
+only reads what the game already shows you, never does anything in game for you, and sends
+nothing anywhere.
 
 ## Using it
 
@@ -11,8 +13,10 @@ it never reads what you did in game, does nothing for you, and sends nothing any
   says no chores are picked yet.
 - **Picking chores.** Click the settings button at the top left of the window. Every chore is
   listed under Daily, Weekly and Monthly; ones that are bought from a shop end in "(shop)".
-  Tick the ones you want to track: changes save straight away. Click the back button to return
-  to your list.
+  Tick the ones you want to track: changes save straight away. To return to your list, click
+  the back button in the window's top-right corner, where the menu button usually sits. It
+  stays there however far down you have scrolled. (Collapse the window from the list, not from
+  here.)
 - **Ticking chores.** The list shows the chores you picked under Daily, Weekly and Monthly
   headings, each with a count such as "Daily  2/5". Tick a chore when you've done it. It stays
   where it is, ticked and dimmed; click it again to untick it.
@@ -24,6 +28,40 @@ it never reads what you did in game, does nothing for you, and sends nothing any
 - **Moving it.** Drag the window by its title bar, and resize it from its edges or corners.
   While it is collapsed, hold **Alt** and drag the button to move it. Alt-dragging only works
   with the console closed.
+
+## Chores it ticks for you
+
+Ticking by hand still works for every chore, these included: a chore ticked either way stays
+ticked until its reset, and unticking one by hand changes nothing below.
+
+- **Shop runs.** Buy anything at any of a chore's shops and the chore ticks itself for the
+  period, whether or not you picked it, so picking it later shows it done. The plugin can tell
+  because the game only sends a shop's stock while that shop is open, and the stock is yours
+  alone: a line that goes down is you buying. A restock or something you sell to the shop
+  doesn't count. A chore with more than one shop shows how many you have bought from this
+  period, as "Feather Shop Run (1/4)", and its tooltip lists each shop as "bought" or "not
+  yet". When a count changes the window redraws, which scrolls it back to the top.
+- **Dell Monti.** His apples and pineapples arrive as banknotes in your backpack with no shop
+  open, so his chore ticks when his apple or pineapple notes go up in your backpack while you
+  are within 10 tiles of him, on his floor.
+
+The shops each chore watches. Those marked *unproven* were matched by name to the game's own
+list of shop inventories but no purchase there has been checked yet; they tick the same way.
+
+| Chore | Shops |
+|---|---|
+| Feather Shop Run | Gerrant (Port Sarim), Lumbridge Fishing Supplies, Harry (Catherby), Shantay Pass |
+| Vial of Water Packs | Jatix (Taverley), Obli (Shilo Village), Lady Meilyr (Prifddinas), Jossik (Lighthouse), Granny Rowan (Fort Forinthry, *unproven*) |
+| Yak Hide | Vanligga (Jatizso) |
+| Feathers of Ma'at | Feathers of Ma'at (Sophanem) |
+| Broad Arrowheads | Turael (Burthorpe), Sumona (Pollnivneach) |
+| Rune Shop Run | Aubury (Varrock), Betty (Port Sarim), Ali Morrisane (Al Kharid), Carwen Essencebinder, Void Knight Magic Store, Magic Guild (Yanille), Tutab (Ape Atoll), Lundail (Mage Arena), Rune store (Anachronia), the last five *unproven* |
+| Meat Packs | Chargurr (Oo'glog, *unproven*) |
+| Planks from Razmire | Razmire Keelgan (Mort'ton, *unproven*) |
+
+Not watched yet, so tick these by hand: Baba Yaga's and the Mage of Zamorak's rune shops (each
+has two versions in the game, before and after a quest, and which one you see isn't known),
+Bandit Duty Free (no match found), and the Weird Old Man (he isn't a shop).
 
 ## When chores reset
 
@@ -50,8 +88,9 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 - **PrettyUI** (mod.io 6398181), the interface library the window is built with. It is a
   required dependency: install it too.
-- **No permissions.** The plugin reads the game clock and your own character's display name,
-  both of which plugins can read without one.
+- **No permissions.** The plugin reads the game clock, your own character's display name and
+  position, your backpack, and the stock of an open shop it watches. Plugins can read all of
+  these without one.
 
 ## Credits
 
@@ -65,17 +104,24 @@ Everything the plugin logs carries the tag `[CHORES]`: loading, collapsing and e
 character changes and waiting for the clock. It never logs your display name. Grep regex:
 `\[CHORES\]`.
 
+A chore it ticks for you logs one line per detection, `[CHORES] purchase <chore id> at <shop>`
+(such as `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`) or
+`[CHORES] collected dellmonti-pineapples near Dell Monti`. Grep regex:
+`\[CHORES\] (purchase|collected)`.
+
 ## Files
 
 | File | What |
 |---|---|
-| `main.lua` | The window, its collapsed button, the two views, and following the login and clock |
+| `main.lua` | The window, its collapsed button, the two views, following the login and clock, and seeing shop runs and Dell Monti done |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
-| `core/state.lua` | Picks and ticks, and whether a chore is done now |
+| `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
+| `core/shops.lua` | Spotting a purchase in a shop's counts, and Dell Monti's notes near him |
 | `core/view.lua` | What the list shows, as plain data |
 | `core/layout.lua` | The saved window layout, read back and kept on screen |
 | `data/chores.lua` | The dailyscape chore list (generated) |
+| `data/shops.lua` | The shops each shop-run chore watches (hand-written) |
 
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
 (`docs/testing.md`).
@@ -93,7 +139,7 @@ By submitting a Plugin (as defined in Schedule 4 of the EULA), you acknowledge t
 This plugin requests no permissions.
 
 ## Data Protection
-This plugin uses the following information: the game clock, your own character's display name, and the chores you pick and tick.
+This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, and the chores you pick and tick.
 This information is not transmitted outside of the plugin under any circumstances.
-Your picked and ticked chores are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state.
+Your picked and ticked chores, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state.
 ```

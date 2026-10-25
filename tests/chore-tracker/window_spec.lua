@@ -137,4 +137,40 @@ describe("chore-tracker window", function()
         h:advance(20)
         assert.are.same({}, h.ui:find("Panel"))
     end)
+
+    it("swaps the title-bar slot for a back button in settings, and back again", function()
+        local h = loaded()
+        pick(h, { "daily-challenge" })
+        local win = h.ui:get("Window", { text = "Chores" })
+        local before = h.ui:layout(win)
+        helpers.openSettings(h)
+        -- One back button, in the slot where the hamburger was, and no hamburger.
+        local back = h.ui:get("SpriteButton", { sprite = "BACK" })
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "MENU" }))
+        local slot = h.ui:layout(back)
+        assert.are.same({ before.globalX + before.width - 28, before.globalY + 7 }, {
+            slot.globalX,
+            slot.globalY,
+        })
+        h.ui:hover(back)
+        assert.are.same({ "Back to the list" }, h.ui:tooltips())
+        h.ui:leave()
+
+        assert.is_true(h.ui:click(back))
+        h:advance(20)
+        local after = h.ui:layout(h.ui:get("Window", { text = "Chores" }))
+        assert.are.same(
+            { before.x, before.y, before.width, before.height },
+            { after.x, after.y, after.width, after.height }
+        )
+        row(h, "Daily Challenge")
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "BACK" }))
+        assert.are.same({}, h.ui:tooltips())
+
+        -- In the list, the slot collapses the window as before.
+        assert.is_true(h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU" })))
+        h:advance(20)
+        assert.is_false(h.ui:layout(h.ui:get("Window", { text = "Chores" })).visible)
+        h.ui:get("Panel")
+    end)
 end)

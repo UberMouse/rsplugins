@@ -26,6 +26,21 @@ describe("chore-tracker shops core", function()
         assert.is_false(shopCore.dropped({ 20 }, { 20, 3 }))
         assert.is_false(shopCore.dropped({ 20, 3 }, { 20 }))
     end)
+
+    it("sees a rise in any named count", function()
+        assert.is_true(shopCore.rose({ A = 0, B = 5 }, { A = 30, B = 5 }))
+        assert.is_false(shopCore.rose({ A = 30, B = 5 }, { A = 0, B = 5 }))
+        assert.is_false(shopCore.rose({ A = 3 }, { A = 3, B = 9 }))
+    end)
+
+    it("is near within the range on each axis, on the same plane only", function()
+        local spot = { x = 2763, z = 3186, level = 0 }
+        assert.is_true(shopCore.near({ x = 2763, z = 3186, level = 0 }, spot, 10))
+        assert.is_true(shopCore.near({ x = 2773, z = 3176, level = 0 }, spot, 10))
+        assert.is_false(shopCore.near({ x = 2774, z = 3186, level = 0 }, spot, 10))
+        assert.is_false(shopCore.near({ x = 2763, z = 3175, level = 0 }, spot, 10))
+        assert.is_false(shopCore.near({ x = 2763, z = 3186, level = 1 }, spot, 10))
+    end)
 end)
 
 describe("chore-tracker shop list", function()
@@ -87,5 +102,33 @@ describe("chore-tracker shop list", function()
                 "OMGE_RUNECRAFTING_SHOP",
             },
         }, proven)
+    end)
+
+    it("lists the unproven shops matched from the wiki, after the proven ones", function()
+        local unproven = {}
+        for id, list in pairs(shops) do
+            local seenUnproven = false
+            for _, shop in ipairs(list) do
+                if shop.proven then
+                    assert(not seenUnproven, id .. " lists a proven shop after an unproven one")
+                else
+                    seenUnproven = true
+                    unproven[id] = unproven[id] or {}
+                    table.insert(unproven[id], shop.inv)
+                end
+            end
+        end
+        assert.are.same({
+            ["meat-packs"] = { "AFR_MEATSHOP" },
+            ["vial-of-water-packs"] = { "PLAYER_FORT_BUILDINGS_BOTANISTS_SHOP" },
+            ["razmire-planks"] = { "RAZMIREBUILDINGSTORE" },
+            ["rune-shop-run"] = {
+                "PEST_RUNE_STORE",
+                "MAGICGUILDSHOP",
+                "MM_MAGIC_SHOP",
+                "MAGEARENA_RUNESHOP",
+                "DINO_BASE_CAMP_RUNE_SHOP",
+            },
+        }, unproven)
     end)
 end)

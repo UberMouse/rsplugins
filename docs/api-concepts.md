@@ -216,6 +216,11 @@ logging `VarPlayer.SHOP` and the inventory events.
   | Ali Morrisane, Al Kharid | `FEUD_MORRISANES` | 252 |
   | Carwen Essencebinder | `OMGE_RUNECRAFTING_SHOP` | 641 |
 
+- **A detector built on these facts works (user-checked in the client, 2026-10-25, Chore
+  Tracker C1 stage 1):** it snapshots a listed shop's slot counts on `InventoryAdded`
+  (and with `Inventory.Find` at load) and counts any drop on `InventoryUpdated` as a
+  purchase. It caught purchases at two shops, ignored a shop opened and closed without
+  buying, and still caught one after a `prl` with the shop open.
 - **Dell Monti is not a shop.** His apples and pineapples arrive as banknotes in the backpack
   (`CERT_COOKING_APPLE`, `CERT_PINEAPPLE`) with no shop open.
 

@@ -1,0 +1,615 @@
+#!/usr/bin/env python3
+"""The dev daemon and CLI: the host end of the dev recorder and of the dev bridge.
+
+Usage: scripts/rsdev.py daemon [--port 8766] [--out dumps]     run the daemon in the foreground
+       scripts/rsdev.py start | stop | status                  manage a detached daemon
+       scripts/rsdev.py exec <console command...> [--timeout 10]
+       scripts/rsdev.py events [--since N] [--follow] [--name X]
+
+The daemon listens on 127.0.0.1 only, port 8766 (the plugins' "recorder" and "rsdev" URLs).
+
+  POST /record       a batch from the dev recorder (lib/dev/recorder.lua):
+    {"schema": 1, "plugin": "...", "session": "...", "seq": n, "dropped": n, "entries": [...]}
+    Each plugin enable is one session, written to <out>/recordings/<plugin>/<time>-<session>.jsonl:
+    a header line {"k": "session", ...}, then one entry per line in the order they arrive. When
+    the batch's cumulative `dropped` count has grown, a {"k": "dropped", "n": ...} line marks the
+    gap first. The format is documented in docs/testing.md ("Recordings"). A malformed batch gets
+    a 400 (a body over MAX_BODY, a 413) and nothing is written.
+
+  POST /bridge/sync  the dev-bridge plugin's poll (docs/dev-environment.md, "Dev bridge"): it
+    sends its events and command results, and gets the queued commands back, one per line.
+
+  /cli/...           what the subcommands above talk to. Nothing else needs these.
+
+Every console command queued through `exec` is logged with its id: the audit trail.
+"""
+
+import argparse
+import json
+import os
+import re
+import secrets
+import signal
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from collections import deque
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+HOST = "127.0.0.1"
+DEFAULT_PORT = 8766
+DEFAULT_OUT = Path(__file__).resolve().parent.parent / "dumps"  # not cwd: the CLI works anywhere
+# Plugin and session names become path parts. A leading letter or digit rules out "." and "..".
+SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # used with fullmatch
+CMD_ID = re.compile(r"[A-Za-z0-9_-]{1,32}")  # used with fullmatch
+# Well above the recorder's 256 KB batches; a bigger body is refused unread.
+MAX_BODY = 2 * 1024 * 1024
+MAX_EVENTS = 10_000  # events kept in memory; every one is also on disk
+CONNECTED_WITHIN = 2.0  # seconds since the last sync that still counts as connected
+MAX_WAIT = 120.0  # cap on how long one /cli request may block a thread
+
+
+def is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def escape_arg(text):
+    """A command line's arg field: backslash, tab, newline and CR escaped, so it is one field."""
+    return (
+        text.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")
+    )
+
+
+def unescape_arg(text):
+    """Inverse of escape_arg (the plugin does this in Lua; tests use it to check the round trip)."""
+    table = {"\\": "\\", "t": "\t", "n": "\n", "r": "\r"}
+    return re.sub(r"\\(.)", lambda m: table.get(m.group(1), m.group(0)), text)
+
+
+class RecSession:
+    def __init__(self, path, seq):
+        self.path, self.seq, self.dropped = path, seq, 0
+
+
+class Command:
+    def __init__(self, cmd_id, kind, arg):
+        self.id, self.kind, self.arg = cmd_id, kind, arg
+        # queued -> delivered -> done, or queued -> withdrawn. Every move happens under State.cond.
+        self.state = "queued"
+        self.ok, self.error = None, None
+
+
+class State:
+    """Everything the handler threads share. One Condition guards all of it, and `exec` waits on
+    it, so a sync that resolves a command wakes the waiting thread."""
+
+    def __init__(self, out_dir):
+        self.out_dir = out_dir
+        self.cond = threading.Condition()
+        self.rec_sessions = {}  # (plugin, session) -> RecSession
+        self.bridge = None  # the last bridge session seen: dict, see sync()
+        self.queue = deque()  # Commands not yet delivered, FIFO
+        self.commands = {}  # id -> Command, for delivered ones awaiting a result
+        self.cmd_count = 0
+        self.events = deque(maxlen=MAX_EVENTS)
+        self.last_n = 0  # n of the newest event
+        self.total_dropped = 0
+
+    # --- recorder (POST /record) -------------------------------------------------------------
+
+    def record(self, batch):
+        """Write one validated recorder batch. Returns the log line to print."""
+        entries = batch["entries"]
+        with self.cond:
+            session = self._rec_session(batch)
+            lost = batch.get("dropped", 0) - session.dropped
+            with session.path.open("a") as f:
+                if lost > 0:
+                    first_t = entries[0].get("t") if entries else None
+                    f.write(json.dumps({"t": first_t, "k": "dropped", "n": lost}) + "\n")
+                    session.dropped = batch["dropped"]
+                for entry in entries:
+                    f.write(json.dumps(ordered(entry)) + "\n")
+        note = f", {lost} dropped before it" if lost > 0 else ""
+        return (
+            f"{batch['plugin']} {batch['session']}: batch {batch['seq']}, "
+            f"{len(entries)} entries{note}"
+        )
+
+    def _rec_session(self, batch):
+        """The open session for a batch, starting a new file for a new enable.
+
+        A session whose seq goes back down is a new enable that happened to get the same
+        session name, so it gets a new file too. Caller holds the lock.
+        """
+        key = (batch["plugin"], batch["session"])
+        current = self.rec_sessions.get(key)
+        if current is None or batch["seq"] <= current.seq:
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            folder = self.out_dir / "recordings" / batch["plugin"]
+            folder.mkdir(parents=True, exist_ok=True)
+            path, n = folder / f"{stamp}-{batch['session']}.jsonl", 1
+            while path.exists():  # a quick re-enable can land in the same second
+                n += 1
+                path = folder / f"{stamp}-{batch['session']}-{n}.jsonl"
+            current = RecSession(path, batch["seq"])
+            self.rec_sessions[key] = current
+            header = {
+                "k": "session",
+                "schema": batch["schema"],
+                "plugin": batch["plugin"],
+                "session": batch["session"],
+                "started": time.time(),
+            }
+            with current.path.open("a") as f:
+                f.write(json.dumps(header) + "\n")
+            print(f"{batch['plugin']}: new session -> {current.path}")
+        current.seq = batch["seq"]
+        return current
+
+    # --- bridge (POST /bridge/sync) ----------------------------------------------------------
+
+    def sync(self, body):
+        """Apply one validated sync and return the response body: the commands now delivered."""
+        with self.cond:
+            now = time.time()
+            bridge = self.bridge
+            if bridge is None or bridge["session"] != body["session"]:
+                print(f"bridge: new session {body['session']} (plugin {body['plugin']})")
+                # The old session can't report any more; don't leave its exec calls waiting.
+                for cmd in list(self.commands.values()):
+                    self._finish(cmd, False, "bridge restarted before reporting")
+                bridge = self.bridge = {"session": body["session"], "dropped": 0, "hello": None}
+            bridge.update(seq=body["seq"], seen=now)
+            if body.get("hello") is not None:  # the plugin sends it every sync; keep the last
+                bridge["hello"] = body["hello"]
+
+            for result in body.get("results", []):
+                cmd = self.commands.get(result["id"])
+                if cmd is not None:
+                    self._finish(cmd, result["ok"], result.get("error", ""))
+
+            lost = body.get("dropped", 0) - bridge["dropped"]
+            bridge["dropped"] = max(bridge["dropped"], body.get("dropped", 0))
+            events = body.get("events", [])
+            if lost > 0:
+                first_t = events[0].get("t") if events else None
+                self.total_dropped += lost
+                self._add_event(body["session"], {"t": first_t, "name": "dropped", "n_lost": lost})
+            for event in events:
+                self._add_event(body["session"], event)
+
+            lines = []
+            while self.queue:
+                cmd = self.queue.popleft()
+                cmd.state = "delivered"
+                self.commands[cmd.id] = cmd
+                lines.append(f"{cmd.id}\t{cmd.kind}\t{escape_arg(cmd.arg)}\n")
+                print(f"delivered command {cmd.id}")
+            return "".join(lines)
+
+    def _finish(self, cmd, ok, error):
+        """Resolve a delivered command. Caller holds the lock."""
+        cmd.state, cmd.ok, cmd.error = "done", ok, error
+        del self.commands[cmd.id]
+        self.cond.notify_all()
+
+    def _add_event(self, session, event):
+        """Number, keep and persist one event. Caller holds the lock."""
+        self.last_n += 1
+        stored = {"n": self.last_n, "session": session, **event}
+        self.events.append(stored)
+        folder = self.out_dir / "rsdev" / "events"
+        folder.mkdir(parents=True, exist_ok=True)
+        with (folder / f"{session}.jsonl").open("a") as f:
+            f.write(json.dumps(stored) + "\n")
+        self.cond.notify_all()  # wakes long-polling `events --follow` calls
+
+    # --- CLI ---------------------------------------------------------------------------------
+
+    def exec(self, text, timeout):
+        """Queue a console command and wait for its result. Returns {"outcome": ...}.
+
+        Outcomes: ok / error (it ran, with the plugin's verdict), withdrawn (never delivered
+        before the timeout, and now removed so it can never run), unknown (delivered, no result).
+        """
+        with self.cond:
+            self.cmd_count += 1
+            cmd = Command(f"c{self.cmd_count}-{secrets.token_hex(3)}", "exec", text)
+            self.queue.append(cmd)
+            print(f"queued command {cmd.id}: exec {text!r}")
+            deadline = time.monotonic() + timeout
+            while cmd.state in ("queued", "delivered"):
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                self.cond.wait(left)
+            if cmd.state == "queued":
+                # Delivery moves state under this same lock, so it is either delivered or
+                # withdrawn here, never both.
+                self.queue.remove(cmd)
+                cmd.state = "withdrawn"
+                print(f"withdrew command {cmd.id}: not delivered in {timeout}s")
+                return {"outcome": "withdrawn", "id": cmd.id}
+            if cmd.state == "delivered":
+                print(f"command {cmd.id} delivered but no result in {timeout}s")
+                return {"outcome": "unknown", "id": cmd.id}
+            outcome = "ok" if cmd.ok else "error"
+            return {"outcome": outcome, "id": cmd.id, "error": cmd.error or ""}
+
+    def events_after(self, since, name, wait):
+        """Events with n > since (filtered by name), waiting up to `wait` s for the first.
+
+        Returns (events, last): `last` is the newest n seen, which a follower passes back as
+        `since` even when the filter hid every event.
+        """
+        with self.cond:
+            deadline = time.monotonic() + wait
+            while self.last_n <= since:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                self.cond.wait(left)
+            found = [e for e in self.events if e["n"] > since]
+            if name is not None:
+                found = [e for e in found if e["name"] == name]
+            return found, max(self.last_n, since)
+
+    def status(self):
+        with self.cond:
+            b = self.bridge
+            seen = None if b is None else round(time.time() - b["seen"], 3)
+            return {
+                "up": True,
+                "bridge": None
+                if b is None
+                else {
+                    "session": b["session"],
+                    "seq": b["seq"],
+                    "hello": b["hello"],
+                    "seen_ago": seen,
+                    "connected": seen <= CONNECTED_WITHIN,
+                },
+                "queued": len(self.queue),
+                "awaiting_result": len(self.commands),
+                "events": self.last_n,
+                "dropped": self.total_dropped,
+            }
+
+
+def ordered(entry):
+    """The entry with t and k first, so the file reads well."""
+    head = {key: entry[key] for key in ("t", "k") if key in entry}
+    return {**head, **entry}
+
+
+def batch_error(batch):
+    """Why a decoded recorder batch can't be written, or None if it can."""
+    if not isinstance(batch, dict):
+        return "not a JSON object"
+    for key in ("plugin", "session"):
+        if not isinstance(batch.get(key), str) or not SAFE_NAME.fullmatch(batch[key]):
+            return f"bad {key} name {batch.get(key)!r}"
+    for key in ("schema", "seq"):
+        if not is_int(batch.get(key)):
+            return f"{key} is not an integer"
+    if batch["seq"] < 1:
+        return "seq is under 1 (the recorder counts batches from 1)"
+    if not is_int(batch.get("dropped", 0)):
+        return "dropped is not an integer"
+    if batch.get("dropped", 0) < 0:
+        return "dropped is negative"
+    entries = batch.get("entries")
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        return "entries is not a list of objects"
+    return None
+
+
+def sync_error(body):
+    """Why a decoded bridge sync can't be applied, or None if it can."""
+    err = batch_error({**body, "entries": []}) if isinstance(body, dict) else "not a JSON object"
+    if err:
+        return err
+    hello = body.get("hello")
+    if hello is not None:
+        env = hello.get("env") if isinstance(hello, dict) else None
+        if not isinstance(env, dict) or not all(isinstance(v, str) for v in env.values()):
+            return "hello.env is not an object of strings"
+    events = body.get("events", [])
+    if not isinstance(events, list):
+        return "events is not a list"
+    for e in events:
+        if not isinstance(e, dict) or not isinstance(e.get("name"), str):
+            return "an event is not an object with a string name"
+        if "t" in e and e["t"] is not None and not isinstance(e["t"], (int, float)):
+            return "an event's t is not a number"
+    results = body.get("results", [])
+    if not isinstance(results, list):
+        return "results is not a list"
+    for r in results:
+        if not isinstance(r, dict) or not isinstance(r.get("id"), str):
+            return "a result is not an object with a string id"
+        if not isinstance(r.get("ok"), bool):
+            return "a result's ok is not a boolean"
+        if "error" in r and not isinstance(r["error"], str):
+            return "a result's error is not a string"
+    return None
+
+
+class Handler(BaseHTTPRequestHandler):
+    # Seconds a socket read may wait, so a client that sends less body than its Content-Length
+    # can't hold a handler thread; the handler drops a timed-out connection. It does not limit
+    # how long `exec` and `events --follow` block, which wait on a Condition, not the socket.
+    timeout = 5
+
+    def do_POST(self):
+        route = urllib.parse.urlsplit(self.path).path
+        if route not in ("/record", "/bridge/sync", "/cli/exec"):
+            return self.reply(404)
+        # A missing or negative length would leave read() waiting on the client, and int()
+        # raises on a digit string thousands long, hence the 10-digit cap before it.
+        length = self.headers.get("Content-Length", "")
+        if not (length.isascii() and length.isdigit() and len(length) <= 10):
+            print(f"bad Content-Length: {length[:20]!r} ({len(length)} characters)")
+            return self.reply(400)
+        if int(length) > MAX_BODY:
+            print(f"body of {length} bytes is over the {MAX_BODY}-byte cap")
+            return self.reply(413)
+        raw = self.rfile.read(int(length))
+        try:
+            # Game text isn't always valid UTF-8, and one bad byte shouldn't lose a batch.
+            body = json.loads(raw.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError as err:
+            print(f"bad {route} body: {err!r}; {len(raw)} bytes, starts {raw[:80]!r}")
+            return self.reply(400)
+        state = self.server.state
+        if route == "/record":
+            error = batch_error(body)
+            if error:
+                print(f"bad batch: {error}")
+                return self.reply(400)
+            print(state.record(body))
+            return self.reply(200)
+        if route == "/bridge/sync":
+            error = sync_error(body)
+            if error:
+                print(f"bad sync: {error}")
+                return self.reply(400)
+            return self.reply(200, state.sync(body).encode(), "text/plain; charset=utf-8")
+        # /cli/exec
+        timeout = body.get("timeout") if isinstance(body, dict) else None
+        text = body.get("command") if isinstance(body, dict) else None
+        if not isinstance(text, str) or not text or isinstance(timeout, bool):
+            return self.reply(400)
+        if not isinstance(timeout, (int, float)) or not 0 <= timeout <= MAX_WAIT:
+            return self.reply(400)
+        self.reply_json(state.exec(text, timeout))
+
+    def do_GET(self):
+        parts = urllib.parse.urlsplit(self.path)
+        query = urllib.parse.parse_qs(parts.query)
+        state = self.server.state
+        if parts.path == "/cli/status":
+            return self.reply_json(state.status())
+        if parts.path == "/cli/events":
+            try:
+                since = int(query.get("since", ["0"])[0])
+                wait = min(float(query.get("wait", ["0"])[0]), MAX_WAIT)
+            except ValueError:
+                return self.reply(400)
+            name = query.get("name", [None])[0]
+            found, last = state.events_after(since, name, max(wait, 0.0))
+            return self.reply_json({"events": found, "last": last})
+        self.reply(404)
+
+    def reply_json(self, obj):
+        self.reply(200, json.dumps(obj).encode(), "application/json")
+
+    def reply(self, code, body=b"", content_type=None):
+        self.send_response(code)
+        if content_type:
+            self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass  # the per-request access log is noise; we print our own line per batch
+
+
+def make_server(port, out_dir):
+    server = ThreadingHTTPServer((HOST, port), Handler)
+    server.state = State(out_dir)
+    return server
+
+
+def run_daemon(args):
+    sys.stdout.reconfigure(line_buffering=True)  # show output promptly even when piped
+    args.out.mkdir(parents=True, exist_ok=True)
+    server = make_server(args.port, args.out)
+    print(f"listening on http://{HOST}:{args.port}, writing to {args.out}/")
+    server.serve_forever()
+
+
+# --- CLI side --------------------------------------------------------------------------------
+
+
+def call(args, path, payload=None, timeout=5.0):
+    """One request to the daemon; the decoded JSON reply. Raises OSError if it isn't there."""
+    url = f"http://{HOST}:{args.port}{path}"
+    data = None if payload is None else json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=data)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as err:  # a daemon that answers badly is still "up"
+        raise OSError(f"daemon answered {err.code} to {path}") from err
+
+
+def daemon_up(args):
+    try:
+        call(args, "/cli/status", timeout=1.0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def pid_file(args):
+    return args.out / "rsdev" / "daemon.pid"
+
+
+def cmd_start(args):
+    if daemon_up(args):
+        print(f"rsdev already running on port {args.port}")
+        return 0
+    folder = args.out / "rsdev"
+    folder.mkdir(parents=True, exist_ok=True)
+    log = (folder / "daemon.log").open("a")
+    argv = [sys.executable, str(Path(__file__).resolve()), "daemon"]
+    argv += ["--port", str(args.port), "--out", str(args.out)]
+    # A new session, so closing the terminal that ran `start` doesn't take the daemon with it.
+    proc = subprocess.Popen(
+        argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
+    )
+    pid_file(args).write_text(f"{proc.pid}\n")
+    for _ in range(50):
+        if daemon_up(args):
+            print(f"rsdev started (pid {proc.pid}), log {folder / 'daemon.log'}")
+            return 0
+        if proc.poll() is not None:
+            break
+        time.sleep(0.1)
+    print(f"rsdev did not come up; see {folder / 'daemon.log'}", file=sys.stderr)
+    return 1
+
+
+def pid_is_rsdev(pid):
+    """Whether pid is one of our daemons, so a stale pid file can't make us kill a stranger."""
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    return b"rsdev.py" in cmdline
+
+
+def cmd_stop(args):
+    path = pid_file(args)
+    try:
+        pid = int(path.read_text().strip())
+    except (OSError, ValueError):
+        print("rsdev is not running (no pid file)")
+        return 0
+    if not pid_is_rsdev(pid):
+        path.unlink(missing_ok=True)
+        print(f"rsdev is not running (stale pid file for {pid} removed)")
+        return 0
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(50):
+        if not pid_is_rsdev(pid):
+            break
+        time.sleep(0.1)
+    else:
+        print(f"rsdev (pid {pid}) did not stop", file=sys.stderr)
+        return 1
+    path.unlink(missing_ok=True)
+    print(f"rsdev stopped (pid {pid})")
+    return 0
+
+
+def cmd_status(args):
+    try:
+        st = call(args, "/cli/status")
+    except (OSError, ValueError):
+        print(f"daemon: not running on port {args.port}")
+        return 0
+    print(f"daemon: up on port {args.port}")
+    bridge = st["bridge"]
+    if bridge is None:
+        print("bridge: never connected")
+    else:
+        if bridge["connected"]:
+            print(f"bridge: connected (last sync {bridge['seen_ago']:.1f}s ago)")
+        else:
+            print(f"bridge: not connected (last sync {bridge['seen_ago']:.0f}s ago)")
+        print(f"session: {bridge['session']}, seq {bridge['seq']}")
+        hello = bridge["hello"] or {}
+        print(f"version: {hello.get('version')}")
+        env = hello.get("env") or {}
+        print("env: " + (", ".join(f"{k}={v}" for k, v in sorted(env.items())) or "(none)"))
+    print(f"commands: {st['queued']} queued, {st['awaiting_result']} awaiting a result")
+    print(f"events: {st['events']}, dropped: {st['dropped']}")
+    return 0
+
+
+def cmd_exec(args):
+    text = " ".join(args.command)
+    # The daemon waits `timeout` itself; the extra seconds are for the reply to arrive.
+    try:
+        reply = call(args, "/cli/exec", {"command": text, "timeout": args.timeout}, args.timeout + 10)
+    except (OSError, ValueError) as err:
+        print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
+        return 2
+    outcome = reply["outcome"]
+    if outcome == "ok":
+        print(f"ok ({reply['id']})")
+        return 0
+    if outcome == "error":
+        print(f"error: {reply['error']}", file=sys.stderr)
+        return 1
+    if outcome == "withdrawn":
+        print(f"not delivered in {args.timeout}s (bridge not polling?); withdrawn", file=sys.stderr)
+        return 2
+    print(f"delivered but no result in {args.timeout}s: outcome unknown ({reply['id']})", file=sys.stderr)
+    return 3
+
+
+def cmd_events(args):
+    since = args.since
+    try:
+        while True:
+            wait = 25 if args.follow else 0
+            path = f"/cli/events?since={since}&wait={wait}"
+            if args.name:
+                path += "&name=" + urllib.parse.quote(args.name)
+            reply = call(args, path, timeout=wait + 10)
+            for event in reply["events"]:
+                print(json.dumps(event), flush=True)
+            since = reply["last"]
+            if not args.follow:
+                return 0
+    except KeyboardInterrupt:
+        return 0
+    except (OSError, ValueError) as err:
+        print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
+        return 2
+
+
+def main(argv=None):
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--port", type=int, default=DEFAULT_PORT)
+    common.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("daemon", parents=[common]).set_defaults(run=lambda a: run_daemon(a))
+    for name, fn in (("start", cmd_start), ("stop", cmd_stop), ("status", cmd_status)):
+        sub.add_parser(name, parents=[common]).set_defaults(run=fn)
+    p = sub.add_parser("exec", parents=[common])
+    p.add_argument("command", nargs="+")
+    p.add_argument("--timeout", type=float, default=10.0)
+    p.set_defaults(run=cmd_exec)
+    p = sub.add_parser("events", parents=[common])
+    p.add_argument("--since", type=int, default=0)
+    p.add_argument("--follow", action="store_true")
+    p.add_argument("--name")
+    p.set_defaults(run=cmd_events)
+    args = parser.parse_args(argv)
+    return args.run(args) or 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

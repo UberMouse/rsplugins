@@ -1,5 +1,5 @@
 -- Dev recorder (a dev tool, not for submission): records what a plugin does with the Client
--- Plugin API in the real client, and streams it to scripts/dev-receiver.py on this machine.
+-- Plugin API in the real client, and streams it to scripts/rsdev.py on this machine.
 -- A recording shows what went wrong in the client, and is what the test harness learns from
 -- (docs/testing.md, "Recordings").
 --
@@ -99,7 +99,7 @@ local function noteDropped(count, why)
     lostThrough = buffer.first - 1
     if not warnedDrop then
         warnedDrop = true
-        say("dropping the oldest entries (" .. why .. "); is scripts/dev-receiver.py running?")
+        say("dropping the oldest entries (" .. why .. "); is scripts/rsdev.py running?")
     end
 end
 

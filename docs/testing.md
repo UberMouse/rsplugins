@@ -26,7 +26,7 @@ client (`prl <plugin>`).
 | `tests/harness/timeline.lua`, `replay.lua` | Replaying a recording: grouping its entries by tick (pure), and driving the world from them |
 | `tests/harness/*_spec.lua` | The harness's own tests |
 | `tests/<plugin>/*_spec.lua` | A plugin's tests |
-| `lib/dev/`, `scripts/dev-receiver.py` | The dev recorder and its receiver ([Recordings](#recordings)) |
+| `lib/dev/`, `scripts/rsdev.py` | The dev recorder and the daemon that receives it ([Recordings](#recordings)) |
 | `scripts/recording-sanitise.py`, `recording-chat-allowlist.txt`, `test_recording_sanitise.py`, `tests/fixtures/` | Recorded sessions made into committed fixtures, the game chat a fixture may keep, and the sanitiser's tests ([Turning a session into a fixture](#turning-a-session-into-a-fixture)) |
 | `tests/recorder/` | The recorder's tests, with `plugins/recorder-demo` |
 
@@ -214,7 +214,7 @@ round trip.
 
 The harness models the client from docs and guesses. The dev recorder (`lib/dev/`) checks those
 guesses against the real thing. A plugin opts in; the recorder then notes what the plugin did with
-the API in the beta client, and streams it to `scripts/dev-receiver.py` on this machine. A
+the API in the beta client, and streams it to `scripts/rsdev.py` on this machine. A
 recording shows what went wrong in the client, and is the input for replaying a session in the
 harness. `plugins/recorder-demo` is the worked example.
 
@@ -255,13 +255,13 @@ them local.
 
 ### Recording a session
 
-1. From the repo root, run `scripts/dev-receiver.py` (`--port`, `--out`; it listens on
+1. From the repo root, run `scripts/rsdev.py start` (`--port`, `--out`; it listens on
    127.0.0.1:8766 and writes to `dumps/recordings/`, which is gitignored).
 2. In the client: `prf`, `pon <name>`, `ppr <name>`, then `ppe <name> httpAccess`. Always
    `ppr` before `ppe`: `ppe` on a permission the plugin hasn't requested does nothing, and
    says nothing either.
 3. Each enable is one session, written to `dumps/recordings/<name>/<time>-<session>.jsonl`. The
-   receiver prints one line per batch.
+   daemon logs one line per batch (`dumps/rsdev/daemon.log`).
 
 Console lines from the recorder carry `[RECORDER]` (grep: `\[RECORDER\]`).
 

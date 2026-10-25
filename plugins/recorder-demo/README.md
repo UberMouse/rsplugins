@@ -15,7 +15,7 @@ what a plugin's other modules do.
 
 ## Use
 
-1. From the repo root: `scripts/dev-receiver.py` (writes to `dumps/recordings/`, gitignored).
+1. From the repo root: `scripts/rsdev.py start` (writes to `dumps/recordings/`, gitignored).
 2. In the client console: `prf`, `pon recorder-demo`, `ppr recorder-demo`, then
    `ppe recorder-demo httpAccess`, and for chat lines in the recording
    `ppe recorder-demo chatAccess`. Always `ppr` before `ppe`: `ppe` on a permission the plugin

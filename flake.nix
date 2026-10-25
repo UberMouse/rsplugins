@@ -108,6 +108,7 @@
               echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
               echo "  plugins/debug-plugin, plugins/dev-kit  third-party dev plugins (flake inputs, gitignored links)"
               echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
+              echo "  scripts/rsdev.py              dev daemon + CLI: recorder receiver, dev bridge"
             '';
           };
         }

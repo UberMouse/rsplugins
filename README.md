@@ -18,9 +18,12 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
   [docs/dev-environment.md](docs/dev-environment.md)).
 - `scripts/var-dump-receiver.py`: local HTTP receiver for the `var-dump` dev plugin (see
   [plugins/var-dump/README.md](plugins/var-dump/README.md)).
-- `lib/dev/` + `scripts/dev-receiver.py`: a dev recorder a plugin opts into, which streams what
-  it does with the API in the client to a local receiver (see
-  [docs/testing.md](docs/testing.md#recordings); `plugins/recorder-demo` is the example).
+- `lib/dev/` + `scripts/rsdev.py`: a dev recorder a plugin opts into, which streams what it does
+  with the API in the client to the local rsdev daemon (see
+  [docs/testing.md](docs/testing.md#recordings); `plugins/recorder-demo` is the example). The same
+  daemon is the host end of the dev bridge, which lets Claude queue console commands for the
+  client and read the events it forwards (see
+  [docs/dev-environment.md](docs/dev-environment.md#dev-bridge)).
 
 ## License
 

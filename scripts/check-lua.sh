@@ -14,7 +14,8 @@
 #                     harness code run outside the plugin sandbox
 #   6. tests          scripts/test-lua.sh: every tests/**/*_spec.lua under busted (always the
 #                     whole suite, whatever paths were given)
-#   7. sanitiser      scripts/test_recording_sanitise.py, the fixture sanitiser's tests (always)
+#   7. python tests   scripts/test_recording_sanitise.py (the fixture sanitiser) and
+#                     scripts/test_rsdev.py (the dev daemon and CLI), always
 #
 # Usage: scripts/check-lua.sh [path ...]
 #   Paths default to plugins/, lib/ and tests/ (those that exist). Exit 0 = all checks passed;
@@ -120,6 +121,12 @@ fi
 if ! py_out=$(PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/test_recording_sanitise.py 2>&1); then
     echo "$py_out"
     failed+=("sanitiser tests (run: python3 -m unittest scripts/test_recording_sanitise.py)")
+fi
+
+# The dev daemon is what recordings and bridge commands pass through, so its tests gate too.
+if ! py_out=$(PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/test_rsdev.py 2>&1); then
+    echo "$py_out"
+    failed+=("rsdev tests (run: python3 -m unittest scripts/test_rsdev.py)")
 fi
 
 if [[ ${#failed[@]} -gt 0 ]]; then

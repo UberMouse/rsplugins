@@ -503,7 +503,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Game text isn't always valid UTF-8, and one bad byte shouldn't lose a batch.
             body = json.loads(raw.decode("utf-8", errors="replace"))
-        except (json.JSONDecodeError, RecursionError) as err:  # the latter: absurdly deep nesting
+        except (ValueError, RecursionError) as err:  # JSONDecodeError, int past the digit limit; deep nesting
             print(f"bad {route} body: {err!r}; {len(raw)} bytes, starts {raw[:80]!r}")
             return self.reply(400)
         state = self.server.state

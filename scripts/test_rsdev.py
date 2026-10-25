@@ -765,6 +765,11 @@ class TeeTests(DaemonCase):
         self.assertEqual(post(self.port, "/tee", b"[" * 100_000, cli=False)[0], 400)
         self.assertEqual(post(self.port, "/tee", tee_body())[0], 200)  # the handler survived
 
+    def test_overlong_integer_body_is_a_400(self):
+        # json.loads raises a bare ValueError (not JSONDecodeError) past the int digit limit.
+        self.assertEqual(post(self.port, "/tee", b"1" * 5000, cli=False)[0], 400)
+        self.assertEqual(post(self.port, "/tee", tee_body())[0], 200)
+
     def test_tee_routes_share_the_browser_guards(self):
         self.assertEqual(post(self.port, "/tee", tee_body(), {"Origin": "http://evil"})[0], 403)
         self.assertEqual(post(self.port, "/tee", tee_body(), {"Host": "evil.test"})[0], 403)

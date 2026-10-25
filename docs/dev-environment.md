@@ -180,14 +180,14 @@ printing each new event once. Without `--follow`, a down daemon exits 2. `--sinc
 after `n`; `--name` keeps one event name; `--follow` keeps printing until interrupted. The last
 10,000 are kept in memory, across bridge and tee events together, so a chatty plugin can push
 older events out of memory (they remain in the files); every event is also appended to
-`dumps/rsdev/events/<session>.jsonl`. A
-growth in a sync's `dropped` count appears as an event `{"name": "dropped", "n_lost": ...}`.
+`dumps/rsdev/events/<session>.jsonl`. A growth in a sync's `dropped` count appears as an event
+`{"name": "dropped", "n_lost": ...}`.
 
 **`eval`** queues a command of kind `eval` whose arg is Lua source (the words joined with spaces,
 or the contents of `--file`; exactly one of the two, else a usage error), waits for the result
 like `exec` and exits with the same codes (0 ok; 1 the plugin reported an error, printed on
-stderr, e.g. a Lua error, after any `output` lines the snippet printed before it; 2 never delivered or daemon down; 3 delivered, no result in time). On
-success it prints one JSON object to stdout, indented by 2: `{"values": [...], "nvalues": n,
+stderr, e.g. a Lua error, after any `output` lines the snippet printed before it; 2 never
+delivered or daemon down; 3 delivered, no result in time). On success it prints one JSON object to stdout, indented by 2: `{"values": [...], "nvalues": n,
 "output": [...]}`, plus `"truncated": true` when the plugin cut something to fit its caps.
 `eval --reset` (no code allowed) queues a `reset` command and prints `ok (<id>)`. The daemon only
 queues and relays these; running the Lua and enforcing the caps is the plugin's job. The Lua is
@@ -195,9 +195,8 @@ sent by the local daemon, so it has the same trust as `exec`.
 
 **`logs`** prints the `Log` events as `n [plugin] level: text` lines (a multi-line text continues on
 lines indented by four spaces), or the raw event JSON lines with `--json`. `--since`, `--follow`
-and the restart handling are those of `events`; `--plugin X` keeps one plugin's lines. Lines a tee lost show as `n [plugin] dropped: <n> lines
-lost` (see below). `Log`
-events come from the bridge's own sync (payload `{plugin, level: "print"|"log"|"error", text,
+and the restart handling are those of `events`; `--plugin X` keeps one plugin's lines. Lines a tee
+lost show as `n [plugin] dropped: <n> lines lost` (see below). `Log` events come from the bridge's own sync (payload `{plugin, level: "print"|"log"|"error", text,
 source?}`) and from `POST /tee` below. An `Emit` event (payload `{tag, value}`) is an ordinary
 event too: read it with `events --name Emit`.
 
@@ -282,7 +281,8 @@ A plugin can forward its log lines to the daemon with `POST <urls.rsdev>/tee`:
 ```
 
 `plugin`, `session`, `seq` and `dropped` follow the rules of a sync above; `t` is an integer,
-`level` is `print`, `log` or `error`, and `text` a string. The reply is `200` with an empty body,
+`level` is `print`, `log` or `error` (anything else is a 400; `dropped` is produced only by the
+daemon), and `text` a string. The reply is `200` with an empty body,
 or `400` with nothing applied. The body cap, `Content-Length` rules and `Host`/`Origin` refusals
 are those of `/bridge/sync`. Each line becomes a `Log` event with payload `{plugin, level, text}`,
 the line's `t` and the tee's `session`, numbered in the same stream `events` and `logs` read, and

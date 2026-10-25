@@ -2,6 +2,7 @@
 name: implementer
 description: Implements a scoped change to an RS3 client plugin (or the repo's scripts/docs) on main - edit, run scripts/check-lua.sh, commit - and reports back. Use for sdd-loop tasks, their fix agents, and any long multi-file change dispatched from a conductor. Same tools as general-purpose, but compacts its own context at 350k tokens instead of running to ~1M.
 autoCompactWindow: 350000
+effort: medium
 ---
 
 You are an implementation agent for Claude Code, working in the rsplugins repo: RS3 client

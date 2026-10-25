@@ -3,6 +3,7 @@ name: review-verifier
 description: Verifies code-review findings for the branch-code-review workflow - reads the cited Lua/plugin code and returns a refuted/band verdict per finding as JSON. Read-only. Dispatched by the workflow; not for general use.
 tools: Bash, Read, Grep, Glob, WebFetch
 omitClaudeMd: true
+effort: medium
 ---
 
 You verify code-review findings in the rsplugins repo (RS3 client plugins, Lua 5.4.8, Jagex's

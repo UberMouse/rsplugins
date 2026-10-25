@@ -5,6 +5,8 @@ Usage: scripts/rsdev.py daemon [--port 8766] [--out dumps]     run the daemon in
        scripts/rsdev.py start | stop | status                  manage a detached daemon
        scripts/rsdev.py exec <console command...> [--timeout 10]
        scripts/rsdev.py events [--since N] [--follow] [--name X]
+       scripts/rsdev.py eval <lua code...> | --file F | --reset [--timeout 10]
+       scripts/rsdev.py logs [--since N] [--follow] [--plugin X] [--json]
        scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S]
        scripts/rsdev.py exec <console command...> --shot [--shot-delay 1.0]
 
@@ -21,9 +23,16 @@ The daemon listens on 127.0.0.1 only, port 8766 (the plugins' "recorder" and "rs
   POST /bridge/sync  the dev-bridge plugin's poll (docs/dev-environment.md, "Dev bridge"): it
     sends its events and command results, and gets the queued commands back, one per line.
 
+  POST /tee          log lines a plugin forwards (lib/dev/tee): {"schema": 1, "plugin": "...",
+    "session": "...", "seq": n, "dropped": n, "lines": [{"t": n, "level": "...", "text": "..."}]}.
+    Each line becomes a `Log` event in the same numbered stream as the bridge's, written to
+    <out>/rsdev/events/tee-<plugin>-<session>.jsonl. A malformed body gets a 400 and nothing is
+    applied.
+
   /cli/...           what the subcommands above talk to. Nothing else needs these.
 
-Every console command queued through `exec` is logged with its id: the audit trail.
+Every console command queued through `exec` is logged with its id: the audit trail. So is every
+`eval` and `reset`, an eval's Lua source cut to its first 200 characters.
 """
 
 import argparse
@@ -54,6 +63,11 @@ SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # used with fullmatc
 CMD_ID = re.compile(r"[A-Za-z0-9_-]{1,32}")  # used with fullmatch
 # Well above the recorder's 256 KB batches; a bigger body is refused unread.
 MAX_BODY = 2 * 1024 * 1024
+# Command kinds the bridge understands. The daemon only queues them; the plugin runs them.
+KINDS = ("exec", "eval", "reset")
+LOG_LEVELS = ("print", "log", "error")
+AUDIT_SOURCE_CHARS = 200  # how much of an eval's source the daemon log keeps
+RESULT_FIELDS = ("values", "nvalues", "output", "truncated")  # what an eval result may carry
 MAX_EVENTS = 10_000  # events kept in memory; every one is also on disk
 CONNECTED_WITHIN = 2.0  # seconds since the last sync that still counts as connected
 MAX_WAIT = 120.0  # cap on how long one /cli request may block a thread
@@ -94,6 +108,7 @@ class Command:
         # queued -> delivered -> done, or queued -> withdrawn. Every move happens under State.cond.
         self.state = "queued"
         self.ok, self.error = None, None
+        self.result = {}  # eval's values/nvalues/output/truncated, as the plugin sent them
 
 
 class State:
@@ -111,6 +126,7 @@ class State:
         self.events = deque(maxlen=MAX_EVENTS)
         self.last_n = 0  # n of the newest event
         self.total_dropped = 0
+        self.tee_dropped = {}  # (plugin, session) -> the cumulative dropped count last seen
         self.run = secrets.token_hex(4)  # event numbers restart per daemon run; followers check it
 
     # --- recorder (POST /record) -------------------------------------------------------------
@@ -185,18 +201,15 @@ class State:
             for result in body.get("results", []):
                 cmd = self.commands.get(result["id"])
                 if cmd is not None:
-                    self._finish(cmd, result["ok"], result.get("error", ""))
+                    extra = {k: result[k] for k in RESULT_FIELDS if k in result}
+                    self._finish(cmd, result["ok"], result.get("error", ""), extra)
                 else:  # e.g. the late result of an exec that already gave up on it
                     print(f"ignored result for unknown command id {result['id']!r}")
 
             lost = body.get("dropped", 0) - bridge["dropped"]
             bridge["dropped"] = max(bridge["dropped"], body.get("dropped", 0))
-            events = body.get("events", [])
-            if lost > 0:
-                first_t = events[0].get("t") if events else None
-                self.total_dropped += lost
-                events = [{"t": first_t, "name": "dropped", "n_lost": lost}, *events]
-            self._add_events(body["session"], events)
+            events = self._with_drop_marker(body.get("events", []), lost)
+            self._add_events(f"{body['session']}.jsonl", body["session"], events)
 
             lines = []
             while self.queue:
@@ -207,13 +220,45 @@ class State:
                 print(f"delivered command {cmd.id}")
             return "".join(lines)
 
-    def _finish(self, cmd, ok, error):
+    def tee(self, body):
+        """Apply one validated tee batch: each line becomes a Log event. Returns nothing."""
+        with self.cond:
+            key = (body["plugin"], body["session"])
+            seen = self.tee_dropped.get(key, 0)
+            self.tee_dropped[key] = max(seen, body.get("dropped", 0))
+            events = [
+                {
+                    "t": line["t"],
+                    "name": "Log",
+                    "payload": {
+                        "plugin": body["plugin"],
+                        "level": line["level"],
+                        "text": line["text"],
+                    },
+                }
+                for line in body["lines"]
+            ]
+            events = self._with_drop_marker(events, body.get("dropped", 0) - seen)
+            # The tee- prefix keeps this file apart from a bridge session's <session>.jsonl.
+            name = f"tee-{body['plugin']}-{body['session']}.jsonl"
+            self._add_events(name, body["session"], events)
+
+    def _with_drop_marker(self, events, lost):
+        """`events`, led by a dropped marker if `lost` events never arrived. Caller holds the lock."""
+        if lost > 0:
+            first_t = events[0].get("t") if events else None
+            self.total_dropped += lost
+            events = [{"t": first_t, "name": "dropped", "n_lost": lost}, *events]
+        return events
+
+    def _finish(self, cmd, ok, error, result=None):
         """Resolve a delivered command. Caller holds the lock."""
         cmd.state, cmd.ok, cmd.error = "done", ok, error
+        cmd.result = result or {}
         del self.commands[cmd.id]
         self.cond.notify_all()
 
-    def _add_events(self, session, events):
+    def _add_events(self, filename, session, events):
         """Number, keep and persist a sync's events. Caller holds the lock.
 
         One file open per sync: a login burst can be hundreds of events, and every handler thread
@@ -230,23 +275,28 @@ class State:
             lines.append(json.dumps(stored) + "\n")
         folder = self.out_dir / "rsdev" / "events"
         folder.mkdir(parents=True, exist_ok=True)
-        with (folder / f"{session}.jsonl").open("a") as f:
+        with (folder / filename).open("a") as f:
             f.write("".join(lines))
         self.cond.notify_all()  # wakes long-polling `events --follow` calls
 
     # --- CLI ---------------------------------------------------------------------------------
 
-    def exec(self, text, timeout):
-        """Queue a console command and wait for its result. Returns {"outcome": ...}.
+    def exec(self, text, timeout, kind="exec"):
+        """Queue a command (`kind`: exec, eval or reset) and wait for its result.
+
+        Returns {"outcome": ...}.
 
         Outcomes: ok / error (it ran, with the plugin's verdict), withdrawn (never delivered
         before the timeout, and now removed so it can never run), unknown (delivered, no result).
         """
         with self.cond:
             self.cmd_count += 1
-            cmd = Command(f"c{self.cmd_count}-{secrets.token_hex(3)}", "exec", text)
+            cmd = Command(f"c{self.cmd_count}-{secrets.token_hex(3)}", kind, text)
             self.queue.append(cmd)
-            print(f"queued command {cmd.id}: exec {text!r}")
+            # Console commands are short and logged whole; Lua source is cut to keep the log readable.
+            shown = text if kind == "exec" else text[:AUDIT_SOURCE_CHARS]
+            more = f" (+{len(text) - len(shown)} more characters)" if len(shown) < len(text) else ""
+            print(f"queued command {cmd.id}: {kind} {shown!r}{more}")
             deadline = time.monotonic() + timeout
             while cmd.state in ("queued", "delivered"):
                 left = deadline - time.monotonic()
@@ -267,7 +317,7 @@ class State:
                 del self.commands[cmd.id]
                 return {"outcome": "unknown", "id": cmd.id}
             outcome = "ok" if cmd.ok else "error"
-            return {"outcome": outcome, "id": cmd.id, "error": cmd.error or ""}
+            return {"outcome": outcome, "id": cmd.id, "error": cmd.error or "", **cmd.result}
 
     def events_after(self, since, name, wait):
         """Events with n > since (filtered by name), waiting up to `wait` s for the first.
@@ -366,6 +416,36 @@ def sync_error(body):
             return "a result's ok is not a boolean"
         if "error" in r and not isinstance(r["error"], str):
             return "a result's error is not a string"
+        if "values" in r and not isinstance(r["values"], list):
+            return "a result's values is not a list"
+        if "nvalues" in r and not is_int(r["nvalues"]):
+            return "a result's nvalues is not an integer"
+        if "output" in r and not (
+            isinstance(r["output"], list) and all(isinstance(s, str) for s in r["output"])
+        ):
+            return "a result's output is not a list of strings"
+        if "truncated" in r and not isinstance(r["truncated"], bool):
+            return "a result's truncated is not a boolean"
+    return None
+
+
+def tee_error(body):
+    """Why a decoded tee batch can't be applied, or None if it can."""
+    err = batch_error({**body, "entries": []}) if isinstance(body, dict) else "not a JSON object"
+    if err:
+        return err
+    lines = body.get("lines")
+    if not isinstance(lines, list):
+        return "lines is not a list"
+    for line in lines:
+        if not isinstance(line, dict):
+            return "a line is not an object"
+        if not is_int(line.get("t")):
+            return "a line's t is not an integer"
+        if line.get("level") not in LOG_LEVELS:
+            return f"a line's level is not one of {', '.join(LOG_LEVELS)}"
+        if not isinstance(line.get("text"), str):
+            return "a line's text is not a string"
     return None
 
 
@@ -402,7 +482,7 @@ class Handler(BaseHTTPRequestHandler):
         route = urllib.parse.urlsplit(self.path).path
         if self.refused(route):
             return None
-        if route not in ("/record", "/bridge/sync", "/cli/exec"):
+        if route not in ("/record", "/bridge/sync", "/tee", "/cli/exec"):
             return self.reply(404)
         # A missing or negative length would leave read() waiting on the client, and int()
         # raises on a digit string thousands long, hence the 10-digit cap before it.
@@ -434,14 +514,24 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"bad sync: {error}")
                 return self.reply(400)
             return self.reply(200, state.sync(body).encode(), "text/plain; charset=utf-8")
-        # /cli/exec
+        if route == "/tee":
+            error = tee_error(body)
+            if error:
+                print(f"bad tee batch: {error}")
+                return self.reply(400)
+            state.tee(body)
+            return self.reply(200)
+        # /cli/exec: `command` is the console command or Lua source; a reset takes none.
         timeout = body.get("timeout") if isinstance(body, dict) else None
-        text = body.get("command") if isinstance(body, dict) else None
-        if not isinstance(text, str) or not text or isinstance(timeout, bool):
+        kind = body.get("kind", "exec") if isinstance(body, dict) else None
+        text = body.get("command", "") if isinstance(body, dict) else None
+        if kind not in KINDS or not isinstance(text, str) or (text == "") != (kind == "reset"):
             return self.reply(400)
-        if not isinstance(timeout, (int, float)) or not 0 <= timeout <= MAX_WAIT:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             return self.reply(400)
-        self.reply_json(state.exec(text, timeout))
+        if not 0 <= timeout <= MAX_WAIT:
+            return self.reply(400)
+        self.reply_json(state.exec(text, timeout, kind))
 
     def do_GET(self):
         parts = urllib.parse.urlsplit(self.path)
@@ -623,29 +713,65 @@ def cmd_status(args):
     return 0
 
 
-def exec_command(args):
-    text = " ".join(args.command)
+def send_command(args, kind, text):
+    """Queue a command and wait for its result. Returns (exit code, reply); the reply is the
+    daemon's result dict when the code is 0, else None. Failures are already printed."""
     # The daemon waits `timeout` itself; the extra seconds are for the reply to arrive.
+    payload = {"kind": kind, "command": text, "timeout": args.timeout}
     try:
-        reply = call(args, "/cli/exec", {"command": text, "timeout": args.timeout}, args.timeout + 10)
+        reply = call(args, "/cli/exec", payload, args.timeout + 10)
     except DaemonRefused as err:
         print(f"rsdev: {err}", file=sys.stderr)
-        return 2
+        return 2, None
     except (OSError, ValueError) as err:
         print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
-        return 2
+        return 2, None
     outcome = reply["outcome"]
     if outcome == "ok":
-        print(f"ok ({reply['id']})")
-        return 0
+        return 0, reply
     if outcome == "error":
         print(f"error: {reply['error']}", file=sys.stderr)
-        return 1
+        return 1, None
     if outcome == "withdrawn":
         print(f"not delivered in {args.timeout}s (bridge not polling?); withdrawn", file=sys.stderr)
-        return 2
+        return 2, None
     print(f"delivered but no result in {args.timeout}s: outcome unknown ({reply['id']})", file=sys.stderr)
-    return 3
+    return 3, None
+
+
+def exec_command(args):
+    code, reply = send_command(args, "exec", " ".join(args.command))
+    if reply:
+        print(f"ok ({reply['id']})")
+    return code
+
+
+def cmd_eval(args):
+    if args.reset:
+        code, reply = send_command(args, "reset", "")
+        if reply:
+            print(f"ok ({reply['id']})")
+        return code
+    if args.file:
+        try:
+            source = args.file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as err:
+            print(f"rsdev: cannot read {args.file}: {err}", file=sys.stderr)
+            return 2
+    else:
+        source = " ".join(args.code)
+    code, reply = send_command(args, "eval", source)
+    if reply:
+        values = reply.get("values", [])
+        shown = {
+            "values": values,
+            "nvalues": reply.get("nvalues", len(values)),
+            "output": reply.get("output", []),
+        }
+        if reply.get("truncated"):
+            shown["truncated"] = True
+        print(json.dumps(shown, indent=2))
+    return code
 
 
 def cmd_exec(args):
@@ -872,7 +998,9 @@ def cmd_shot(args):
     return 0
 
 
-def cmd_events(args):
+def follow_events(args, name, show):
+    """Print events through `show`: those after args.since, named `name` (None for all), and with
+    args.follow, new ones as they arrive. Returns the exit code."""
     since = args.since
     run = None  # the daemon run the numbers belong to
     delay = None  # backoff before the next retry; None while connected
@@ -881,8 +1009,8 @@ def cmd_events(args):
         # daemon's low-numbered events until it timed out, before the run change showed.
         wait = 25 if args.follow and delay is None else 0
         path = f"/cli/events?since={since}&wait={wait}"
-        if args.name:
-            path += "&name=" + urllib.parse.quote(args.name)
+        if name:
+            path += "&name=" + urllib.parse.quote(name)
         try:
             reply = call(args, path, timeout=wait + 10)
         except KeyboardInterrupt:
@@ -911,10 +1039,32 @@ def cmd_events(args):
             run, since = reply["run"], 0
             continue
         for event in reply["events"]:
-            print(json.dumps(event), flush=True)
+            show(event)
         run, since = reply["run"], reply["last"]
         if not args.follow:
             return 0
+
+
+def cmd_events(args):
+    return follow_events(args, args.name, lambda event: print(json.dumps(event), flush=True))
+
+
+def format_log(event):
+    """`n [plugin] level: text`; the text's later lines are indented under the first."""
+    payload = event.get("payload")
+    payload = payload if isinstance(payload, dict) else {}
+    text = str(payload.get("text", "")).replace("\n", "\n    ")
+    return f"{event['n']} [{payload.get('plugin')}] {payload.get('level')}: {text}"
+
+
+def cmd_logs(args):
+    def show(event):
+        payload = event.get("payload")
+        if args.plugin and not (isinstance(payload, dict) and payload.get("plugin") == args.plugin):
+            return
+        print(json.dumps(event) if args.json else format_log(event), flush=True)
+
+    return follow_events(args, "Log", show)
 
 
 def main(argv=None):
@@ -947,6 +1097,18 @@ def main(argv=None):
     p.add_argument("--follow", action="store_true")
     p.add_argument("--name")
     p.set_defaults(run=cmd_events)
+    p = sub.add_parser("eval", parents=[common], help="run Lua in the client and print the result")
+    p.add_argument("code", nargs="*")
+    p.add_argument("--file", type=Path, help="read the Lua source from this file instead")
+    p.add_argument("--reset", action="store_true", help="clear the plugin's eval state")
+    p.add_argument("--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0)
+    p.set_defaults(run=cmd_eval)
+    p = sub.add_parser("logs", parents=[common], help="print the Log events plugins forward")
+    p.add_argument("--since", type=int, default=0)
+    p.add_argument("--follow", action="store_true")
+    p.add_argument("--plugin")
+    p.add_argument("--json", action="store_true", help="print the raw event JSON lines")
+    p.set_defaults(run=cmd_logs)
     p = sub.add_parser("shot", parents=[common, shot_opts], help="capture the client window to an image")
     p.add_argument("--count", type=number_arg(1, MAX_SHOT_COUNT, "--count", int), default=1)
     p.add_argument("--every", type=number_arg(0, 3600, "--every", low_open=True), default=1.0)
@@ -959,6 +1121,12 @@ def main(argv=None):
             parser.error("--window, --region, --max and --shot-delay only apply with --shot")
         args.max = DEFAULT_SHOT_MAX if args.max is None else args.max
         args.shot_delay = 1.0 if args.shot_delay is None else args.shot_delay
+    if args.cmd == "eval":
+        sources = bool(args.code) + (args.file is not None)
+        if args.reset and sources:
+            parser.error("--reset takes no code and no --file")
+        if not args.reset and sources != 1:
+            parser.error("give the Lua code as words or with --file, not both and not neither")
     return args.run(args) or 0
 
 

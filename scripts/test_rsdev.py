@@ -512,6 +512,303 @@ class StopTests(DaemonCase):
         self.assertIn("already gone", out.getvalue())
 
 
+def tee_body(**over):
+    return {
+        "schema": 1,
+        "plugin": "demo",
+        "session": "t1",
+        "seq": 1,
+        "dropped": 0,
+        "lines": [{"t": 7, "level": "print", "text": "hello"}],
+        **over,
+    }
+
+
+class ResultFieldTests(DaemonCase):
+    def test_bad_field_types_are_400_and_apply_nothing(self):
+        for bad in (
+            {"values": "x"},
+            {"values": {"a": 1}},
+            {"nvalues": "2"},
+            {"nvalues": 1.5},
+            {"nvalues": True},
+            {"output": "x"},
+            {"output": ["a", 3]},
+            {"truncated": 1},
+            {"truncated": "true"},
+        ):
+            body = sync_body(results=[{"id": "a", "ok": True, **bad}])
+            self.assertEqual(post(self.port, "/bridge/sync", body)[0], 400, bad)
+        self.assertIsNone(self.server.state.status()["bridge"])
+
+    def test_good_fields_are_kept_for_the_waiting_request(self):
+        t, result = self.exec_async("1+1")
+        self.wait_queued()
+        (line,) = self.sync()
+        fields = {"values": [2, None, {"a": [1]}], "nvalues": 4, "output": ["x"], "truncated": True}
+        self.sync(seq=2, results=[{"id": line[0], "ok": True, **fields}])
+        t.join()
+        self.assertEqual({k: result[k] for k in fields}, fields)
+
+
+class ThreadOutput:
+    """A stdout that sends a thread's writes to its own buffer if it set one (the CLI under test),
+    else to `default` (the daemon's handler threads). redirect_stdout alone is process-wide."""
+
+    def __init__(self, default):
+        self.default, self.local = default, threading.local()
+
+    def write(self, text):
+        return getattr(self.local, "buf", self.default).write(text)
+
+    def flush(self):
+        pass
+
+
+class CliCase(DaemonCase):
+    def setUp(self):
+        super().setUp()
+        self.stdout = ThreadOutput(self.log)
+        sys.stdout = self.stdout  # tearDown's redirect exit restores the real one
+
+    def run_cli(self, *argv):
+        """Run the CLI on another thread; returns (thread, dict of code/stdout/stderr)."""
+        out = {}
+
+        def run():
+            stdout, stderr = StringIO(), StringIO()
+            self.stdout.local.buf = stdout
+            with mock.patch("sys.stderr", stderr):
+                out["code"] = rsdev.main([*argv, "--port", str(self.port)])
+            out["stdout"], out["stderr"] = stdout.getvalue(), stderr.getvalue()
+
+        t = threading.Thread(target=run)
+        t.start()
+        return t, out
+
+    def deliver(self, **result):
+        """Sync until the queued command arrives, then report `result` for it. Returns its line."""
+        self.wait_queued()
+        (line,) = self.sync()
+        self.sync(seq=2, results=[{"id": line[0], **result}])
+        return line
+
+
+class EvalTests(CliCase):
+    def test_round_trip_prints_the_result_as_json(self):
+        t, out = self.run_cli("eval", "return", "1,\tnil\nx\\")
+        line = self.deliver(ok=True, values=[1], nvalues=2, output=["hi"])
+        t.join()
+        self.assertEqual(line[1:], ("eval", "return 1,\tnil\nx\\"))
+        self.assertEqual(out["code"], 0)
+        self.assertEqual(json.loads(out["stdout"]), {"values": [1], "nvalues": 2, "output": ["hi"]})
+        self.assertIn('\n  "values"', out["stdout"])  # indent 2
+
+    def test_truncated_is_shown_only_when_set(self):
+        t, out = self.run_cli("eval", "x")
+        self.deliver(ok=True, values=[], nvalues=0, output=[], truncated=True)
+        t.join()
+        self.assertIs(json.loads(out["stdout"])["truncated"], True)
+
+    def test_a_lua_error_exits_1_on_stderr(self):
+        t, out = self.run_cli("eval", "error('x')")
+        self.deliver(ok=False, error="boom")
+        t.join()
+        self.assertEqual((out["code"], out["stdout"]), (1, ""))
+        self.assertIn("boom", out["stderr"])
+
+    def test_multi_line_source_arrives_escaped_on_one_line(self):
+        t, out = self.run_cli("eval", "local a = 1\nreturn a")
+        line = self.deliver(ok=True, values=[1], nvalues=1, output=[])
+        t.join()
+        self.assertEqual(line[2], "local a = 1\nreturn a")
+
+    def test_file_is_read_whole(self):
+        src = self.out / "snippet.lua"
+        src.write_text("local a = 1\nreturn a\n")
+        t, out = self.run_cli("eval", "--file", str(src))
+        line = self.deliver(ok=True, values=[1], nvalues=1, output=[])
+        t.join()
+        self.assertEqual(line[1:], ("eval", "local a = 1\nreturn a\n"))
+
+    def test_unreadable_file_exits_2(self):
+        t, out = self.run_cli("eval", "--file", str(self.out / "missing.lua"))
+        t.join()
+        self.assertEqual(out["code"], 2)
+        self.assertIn("cannot read", out["stderr"])
+
+    def test_usage_errors(self):
+        for argv in (
+            ["eval"],
+            ["eval", "--file", "f", "x"],
+            ["eval", "--reset", "x"],
+            ["eval", "--reset", "--file", "f"],
+        ):
+            with self.subTest(argv), mock.patch("sys.stderr", StringIO()):
+                with self.assertRaises(SystemExit) as ctx:
+                    rsdev.main(argv)
+                self.assertEqual(ctx.exception.code, 2)
+
+    def test_reset_queues_a_reset_with_an_empty_arg(self):
+        t, out = self.run_cli("eval", "--reset")
+        line = self.deliver(ok=True)
+        t.join()
+        self.assertEqual(line[1:], ("reset", ""))
+        self.assertEqual(out["code"], 0)
+
+    def test_exit_codes_for_undelivered_and_unanswered(self):
+        t, out = self.run_cli("eval", "--timeout", "0.2", "x")
+        t.join()
+        self.assertEqual(out["code"], 2)  # nobody polling: withdrawn
+        self.assertEqual(self.sync(), [])
+        t, out = self.run_cli("eval", "--timeout", "0.3", "x")
+        self.wait_queued()
+        self.assertEqual(len(self.sync(seq=2)), 1)
+        t.join()
+        self.assertEqual(out["code"], 3)
+
+    def test_cli_requests_reject_a_bad_kind_or_arg(self):
+        for bad in (
+            {"kind": "nope", "command": "x"},
+            {"kind": "eval", "command": ""},
+            {"kind": "reset", "command": "x"},
+            {"kind": 5, "command": "x"},
+        ):
+            self.assertEqual(post(self.port, "/cli/exec", {**bad, "timeout": 1})[0], 400, bad)
+
+    def test_the_audit_log_names_each_eval_and_reset_and_cuts_long_sources(self):
+        source = "x" * 250
+        for kind, text in (("eval", source), ("reset", "")):
+            t, result = self.exec_kind(kind, text)
+            line = self.deliver(ok=True)
+            t.join()
+            self.assertIn(f"queued command {line[0]}: {kind}", self.log.getvalue())
+        log = self.log.getvalue()
+        self.assertIn("x" * 200 + "' (+50 more characters)", log)
+        self.assertNotIn("x" * 201, log)
+
+    def exec_kind(self, kind, text):
+        result = {}
+
+        def run():
+            body = {"kind": kind, "command": text, "timeout": 5}
+            result.update(json.loads(post(self.port, "/cli/exec", body)[1]))
+
+        t = threading.Thread(target=run)
+        t.start()
+        return t, result
+
+
+class TeeTests(DaemonCase):
+    def events(self, query=""):
+        return get(self.port, "/cli/events" + query)["events"]
+
+    def test_lines_become_numbered_log_events_and_are_persisted(self):
+        self.sync(events=[{"t": 1, "name": "A", "payload": 1}])
+        lines = [{"t": 7, "level": "print", "text": "a"}, {"t": 8, "level": "error", "text": "b"}]
+        status, body = post(self.port, "/tee", tee_body(lines=lines))
+        self.assertEqual((status, body), (200, ""))
+        got = self.events("?name=Log")
+        self.assertEqual([e["n"] for e in got], [2, 3])
+        self.assertEqual(
+            got[1],
+            {"t": 8, "name": "Log", "payload": {"plugin": "demo", "level": "error", "text": "b"}, "n": 3, "session": "t1"},
+        )
+        path = self.out / "rsdev" / "events" / "tee-demo-t1.jsonl"
+        self.assertEqual([json.loads(ln) for ln in path.read_text().splitlines()], got)
+
+    def test_bad_bodies_are_400_and_apply_nothing(self):
+        ok = {"t": 1, "level": "log", "text": "x"}
+        for bad in (
+            [],
+            tee_body(schema="1"),
+            tee_body(plugin="a/b"),
+            tee_body(session=3),
+            tee_body(seq="1"),
+            tee_body(dropped=-1),
+            tee_body(dropped="2"),
+            tee_body(lines="x"),
+            tee_body(lines=["x"]),
+            tee_body(lines=[ok, {**ok, "t": "1"}]),
+            tee_body(lines=[ok, {**ok, "t": 1.5}]),
+            tee_body(lines=[ok, {**ok, "level": "warn"}]),
+            tee_body(lines=[ok, {**ok, "text": 3}]),
+        ):
+            self.assertEqual(post(self.port, "/tee", bad)[0], 400, bad)
+        self.assertEqual(self.events(), [])
+        self.assertFalse((self.out / "rsdev").exists())
+
+    def test_dropped_growth_adds_a_marker_once(self):
+        post(self.port, "/tee", tee_body(dropped=3))
+        post(self.port, "/tee", tee_body(seq=2, dropped=3))
+        post(self.port, "/tee", tee_body(seq=3, dropped=4))
+        marks = [e for e in self.events() if e["name"] == "dropped"]
+        self.assertEqual([(m["n_lost"], m["t"]) for m in marks], [(3, 7), (1, 7)])
+        self.assertEqual(self.server.state.status()["dropped"], 4)
+
+    def test_tee_routes_share_the_browser_guards(self):
+        self.assertEqual(post(self.port, "/tee", tee_body(), {"Origin": "http://evil"})[0], 403)
+        self.assertEqual(post(self.port, "/tee", tee_body(), {"Host": "evil.test"})[0], 403)
+        self.assertEqual(post(self.port, "/tee", b"{", cli=False)[0], 400)
+        # Same Content-Length rules as /record: refused before the body is read.
+        self.assertEqual(RecordTests.raw_post(self, "/tee", str(rsdev.MAX_BODY + 1)), 413)
+        self.assertEqual(RecordTests.raw_post(self, "/tee", "-1"), 400)
+
+
+class LogsTests(CliCase):
+    def seed(self):
+        self.sync(events=[{"t": 1, "name": "A", "payload": 1}])
+        lines = [
+            {"t": 1, "level": "print", "text": "one"},
+            {"t": 2, "level": "error", "text": "two\nmore"},
+        ]
+        post(self.port, "/tee", tee_body(lines=lines))
+        post(self.port, "/tee", tee_body(plugin="other", session="t2", lines=lines[:1]))
+        self.sync(seq=2, events=[{"t": 3, "name": "Log", "payload": {"plugin": "bridged", "level": "log", "text": "z"}}])
+
+    def logs(self, *argv):
+        t, out = self.run_cli("logs", *argv)
+        t.join()
+        self.assertEqual(out["code"], 0)
+        return out["stdout"]
+
+    def test_formats_log_events_only(self):
+        self.seed()
+        self.assertEqual(
+            self.logs().splitlines(),
+            ["2 [demo] print: one", "3 [demo] error: two", "    more", "4 [other] print: one", "5 [bridged] log: z"],
+        )
+
+    def test_plugin_filter_and_since(self):
+        self.seed()
+        self.assertEqual(self.logs("--plugin", "other").splitlines(), ["4 [other] print: one"])
+        self.assertEqual(self.logs("--since", "4").splitlines(), ["5 [bridged] log: z"])
+
+    def test_json_prints_the_raw_events(self):
+        self.seed()
+        events = [json.loads(ln) for ln in self.logs("--json", "--plugin", "demo").splitlines()]
+        self.assertEqual([e["n"] for e in events], [2, 3])
+        self.assertEqual(events[0]["payload"], {"plugin": "demo", "level": "print", "text": "one"})
+
+    def test_follow_reuses_the_events_poll_and_asks_for_log_events(self):
+        log = lambda n, plugin: {"n": n, "name": "Log", "payload": {"plugin": plugin, "level": "log", "text": "t"}}  # noqa: E731
+        replies = [{"events": [log(1, "a"), log(2, "b")], "last": 2, "run": "r"}]
+        paths = []
+
+        def fake_call(args, path, payload=None, timeout=5.0):
+            paths.append(path)
+            if not replies:
+                raise KeyboardInterrupt
+            return replies.pop(0)
+
+        args = SimpleNamespace(port=1, since=0, follow=True, plugin="b", json=False)
+        out = StringIO()
+        with mock.patch.object(rsdev, "call", fake_call), redirect_stdout(out):
+            self.assertEqual(rsdev.cmd_logs(args), 0)
+        self.assertEqual(out.getvalue().splitlines(), ["2 [b] log: t"])
+        self.assertEqual(paths, ["/cli/events?since=0&wait=25&name=Log", "/cli/events?since=2&wait=25&name=Log"])
+
+
 class EventsTests(DaemonCase):
     def test_a_sync_lands_in_the_session_file_in_order(self):
         self.sync(dropped=2, events=[{"t": i, "name": "E", "payload": i} for i in (5, 6, 7)])

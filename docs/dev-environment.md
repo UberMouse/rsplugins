@@ -100,8 +100,9 @@ event subscriptions (see [api-concepts.md](api-concepts.md#events)).
 
 Two community dev tools are pinned in `flake.nix` (as `flake = false` inputs, not vendored) and
 linked into `plugins/` by the dev shell's `shellHook`, so the client's `dev_plugins` symlink picks
-them up. The links are gitignored, and `.luarc.json`, `scripts/check-lua.sh`, selene, stylua and
-the tests do not touch them. Neither is ours: they are never submitted, and they are not held to
+them up. The links are gitignored, and `.luarc.json` skips them (`workspace.ignoreDir`); `scripts/check-lua.sh`
+(so selene, stylua and LuaLS) and the tests never reach them, because its `find` doesn't follow
+symlinked folders. Neither is ours: they are never submitted, and they are not held to
 this repo's code rules.
 
 | Folder | Source | What it is |

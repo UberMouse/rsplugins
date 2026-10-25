@@ -88,11 +88,15 @@
               # Same rule for the third-party dev plugins: plugins/<name> is what the client's
               # dev_plugins symlink exposes, and the folder name is the plugin's console name.
               # dev-kit keeps its plugin in a dev-kit/ subfolder of the repo.
+              # A link whose target has no main.lua means upstream moved its plugin folder: warn,
+              # since the link would otherwise dangle silently.
               if [ -n "$root" ] && { [ -L "$root/plugins/debug-plugin" ] || [ ! -e "$root/plugins/debug-plugin" ]; }; then
                 ln -sfn ${debug-plugin} "$root/plugins/debug-plugin"
+                [ -f ${debug-plugin}/main.lua ] || echo "warning: debug-plugin input has no main.lua" >&2
               fi
               if [ -n "$root" ] && { [ -L "$root/plugins/dev-kit" ] || [ ! -e "$root/plugins/dev-kit" ]; }; then
                 ln -sfn ${dev-kit}/dev-kit "$root/plugins/dev-kit"
+                [ -f ${dev-kit}/dev-kit/main.lua ] || echo "warning: dev-kit input has no dev-kit/main.lua" >&2
               fi
 
               echo "rsplugins dev shell"

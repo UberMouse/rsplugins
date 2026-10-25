@@ -1,9 +1,10 @@
 -- busted configuration: scripts/test-lua.sh runs every tests/**/*_spec.lua from the repo root,
--- so specs `require("tests.harness")`.
+-- so specs `require("tests.harness")`. lib/ is on the path too, so a spec can load a shared
+-- plugin module the way plugins name it, e.g. require("dev/recording") for lib/dev/recording.lua.
 return {
     default = {
         ROOT = { "tests" },
         pattern = "_spec%.lua$",
-        lpath = "./?.lua;./?/init.lua",
+        lpath = "./?.lua;./?/init.lua;./lib/?.lua",
     },
 }

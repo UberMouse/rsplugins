@@ -49,12 +49,15 @@ end
 ---@param env table the sandbox being built
 function M.install(h, env)
     local urls = h.manifest.urls or {}
-    env.Plugin = Plugin.new({
-        h = h,
-        urls = strict.lookup(function(name)
-            strict.fault("Plugin.urls." .. tostring(name) .. " is not in plugin.json urls")
-        end, urls),
-    })
+    local lookup = strict.lookup(function(name)
+        strict.fault("Plugin.urls." .. tostring(name) .. " is not in plugin.json urls")
+    end, urls)
+    -- The page calls urls a table, so pairs() over it lists the manifest's urls. It is the
+    -- one way to ask for a url that may be missing without the fault above (dev/recorder).
+    getmetatable(lookup).__pairs = function()
+        return next, urls, nil
+    end
+    env.Plugin = Plugin.new({ h = h, urls = lookup })
     env.PluginPermissions = strict.enum("PluginPermissions", M.PluginPermissions)
 
     -- Console output is captured for tests to read (h:output()); `echo` also prints it.

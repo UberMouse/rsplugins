@@ -36,6 +36,14 @@ describe("Plugin", function()
         )
     end)
 
+    it("lists the manifest urls with pairs", function()
+        local h = harness.load(plugin([[
+            names = {}
+            for name, url in pairs(Plugin.urls) do names[#names + 1] = name .. "=" .. url end
+        ]]))
+        assert.are.same({ "sink=http://127.0.0.1:8765" }, h.env.names)
+    end)
+
     it("fires OptionalPermissionChanged when a permission is granted or revoked", function()
         local h = harness.load(plugin([[
             Event.OptionalPermissionChanged.Subscribe("p", function(ev)

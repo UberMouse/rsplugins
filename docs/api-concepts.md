@@ -227,6 +227,10 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   `SetTooltip(value)` / `SetOptionTooltip(value, tooltip)` with a **table** value, which
   destroys the old tooltip and attaches a new, hidden one. A string on an existing tooltip only
   changes its text (`Tooltip.set`), so it stays up.
+- **Building a big window in one call is fine.** Chore Tracker's list with all 67 chores picked
+  (134 CheckboxButtons, two per row, each with a tooltip, plus headings) builds in one Lua call
+  without hitting the 1000 ms limit (user-checked 2026-10-25). That is one machine, not a
+  bound: a window with many times that would still need slicing across `Logic` ticks.
 
 The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
 types are in `types/prettyui.lua`.

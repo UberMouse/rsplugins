@@ -93,6 +93,8 @@ describe("chore-tracker view", function()
             links = {},
             shop = false,
             done = true,
+            shops = {},
+            bought = 0,
         }, section.rows[1])
         assert.is_false(section.rows[2].done)
         assert.are.equal(1, section.done)
@@ -105,6 +107,62 @@ describe("chore-tracker view", function()
         local sections = view.view(s, chores, M["2026-10-28"])
         assert.are.equal(0, sections[1].done)
         assert.are.equal(0, sections[2].done)
+    end)
+
+    describe("shops", function()
+        local listed = {
+            wshop = {
+                { name = "Shop A", inv = "SHOP_A", proven = true },
+                { name = "Shop B", inv = "SHOP_B", proven = true },
+            },
+            dshop = { { name = "Only Shop", inv = "SHOP_C", proven = true } },
+        }
+        local now = M["2026-10-25 01:43"]
+
+        it("lists each row's shops, bought this period or not, and counts them", function()
+            local s = state.recordPurchase(selecting({ "wshop" }), chores[5], "SHOP_B", now)
+            local row = view.view(s, chores, now, listed)[1].rows[1]
+            assert.are.same(
+                { { name = "Shop A", bought = false }, { name = "Shop B", bought = true } },
+                row.shops
+            )
+            assert.are.equal(1, row.bought)
+            assert.is_true(row.done)
+        end)
+
+        it("counts no shop bought after the reset or without a clock", function()
+            local s = state.recordPurchase(selecting({ "wshop" }), chores[5], "SHOP_B", now)
+            assert.are.equal(0, view.view(s, chores, M["2026-10-28"], listed)[1].rows[1].bought)
+            assert.are.equal(0, view.view(s, chores, nil, listed)[1].rows[1].bought)
+        end)
+
+        it("counts a multi-shop row in its text, and leaves a single-shop row's alone", function()
+            local s =
+                state.recordPurchase(selecting({ "wshop", "dshop" }), chores[5], "SHOP_A", now)
+            local sections = view.view(s, chores, now, listed)
+            assert.are.equal("DSHOP", view.rowText(sections[1].rows[1]))
+            assert.are.equal("WSHOP (1/2)", view.rowText(sections[2].rows[1]))
+            assert.are.equal(
+                "D1",
+                view.rowText(view.view(selecting({ "d1" }), chores, now)[1].rows[1])
+            )
+        end)
+
+        it("gives tooltip lines headed with the period and the count", function()
+            local s =
+                state.recordPurchase(selecting({ "wshop", "dshop" }), chores[5], "SHOP_A", now)
+            local sections = view.view(s, chores, now, listed)
+            assert.are.same(
+                { "Shops this day (0/1):", "not yet  Only Shop" },
+                view.shopTooltip(sections[1].rows[1], "daily")
+            )
+            assert.are.same(
+                { "Shops this week (1/2):", "bought  Shop A", "not yet  Shop B" },
+                view.shopTooltip(sections[2].rows[1], "weekly")
+            )
+            local plain = view.view(selecting({ "d1" }), chores, now, listed)[1].rows[1]
+            assert.are.same({}, view.shopTooltip(plain, "daily"))
+        end)
     end)
 
     it("shows nothing done without a clock, keeping the rows", function()

@@ -90,19 +90,73 @@ describe("chore-tracker state", function()
         end)
     end)
 
+    describe("purchases", function()
+        local now = M["2026-10-25 01:43"]
+
+        it("records the shop and marks the chore done at the purchase minute", function()
+            local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_A", now)
+            assert.are.equal(now, s.shops.wshop.SHOP_A)
+            assert.are.equal(now, s.done.wshop)
+            assert.is_true(state.shopBought(s, byId.wshop, "SHOP_A", now))
+            assert.is_false(state.shopBought(s, byId.wshop, "SHOP_B", now))
+            assert.is_true(state.isDone(s, byId.wshop, now))
+        end)
+
+        it("keeps an earlier done minute from this period", function()
+            local s = state.mark(state.new(), "wshop", now - 60)
+            s = state.recordPurchase(s, byId.wshop, "SHOP_A", now)
+            s = state.recordPurchase(s, byId.wshop, "SHOP_B", now + 5)
+            assert.are.equal(now - 60, s.done.wshop)
+            assert.are.same({ SHOP_A = now, SHOP_B = now + 5 }, s.shops.wshop)
+        end)
+
+        it("re-marks a chore whose last tick was in an earlier period", function()
+            local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_A", M["2026-10-21"])
+            s = state.recordPurchase(s, byId.wshop, "SHOP_B", M["2026-10-28"])
+            assert.are.equal(M["2026-10-28"], s.done.wshop)
+            assert.is_false(state.shopBought(s, byId.wshop, "SHOP_A", M["2026-10-28"]))
+            assert.is_true(state.shopBought(s, byId.wshop, "SHOP_B", M["2026-10-28"]))
+        end)
+
+        it("counts a shop as bought only within the chore's period", function()
+            local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_A", M["2026-10-21"])
+            assert.is_true(state.shopBought(s, byId.wshop, "SHOP_A", M["2026-10-27 23:59"]))
+            assert.is_false(state.shopBought(s, byId.wshop, "SHOP_A", M["2026-10-28"]))
+        end)
+
+        it("is not undone by unticking or unpicking, and never changes its input", function()
+            local s = state.select(state.new(), chores, "wshop")
+            local bought = state.recordPurchase(s, byId.wshop, "SHOP_A", now)
+            assert.are.same({}, s.shops)
+            assert.is_nil(s.done.wshop)
+            local unticked = state.unmark(bought, "wshop")
+            assert.is_nil(unticked.done.wshop)
+            assert.are.same({ SHOP_A = now }, unticked.shops.wshop)
+            local unpicked = state.deselect(bought, "wshop")
+            assert.are.same({ SHOP_A = now }, unpicked.shops.wshop)
+            assert.are.same({ SHOP_A = now }, state.mark(bought, "wshop", now + 1).shops.wshop)
+            assert.are.same({ SHOP_A = now }, state.select(bought, chores, "d1").shops.wshop)
+        end)
+    end)
+
     describe("serialise", function()
-        it("gives version 1, selected ids in chore-list order, and done minutes", function()
+        it("gives version 2, selected ids in chore-list order, done and shop minutes", function()
             local s = state.select(state.select(state.new(), chores, "w1"), chores, "d1")
             s = state.mark(s, "w1", 123)
-            assert.are.same(
-                { version = 1, selected = { "d1", "w1" }, done = { w1 = 123 } },
-                state.serialise(s)
-            )
+            s = state.recordPurchase(s, byId.wshop, "SHOP_A", 456)
+            assert.are.same({
+                version = 2,
+                selected = { "d1", "w1" },
+                done = { w1 = 123, wshop = 456 },
+                shops = { wshop = { SHOP_A = 456 } },
+            }, state.serialise(s))
         end)
 
         it("emits only strings, integers and tables", function()
             local s = state.mark(state.select(state.new(), chores, "d1"), "d1", 5)
+            s = state.recordPurchase(s, byId.dshop, "SHOP_A", 5)
             s.done.d2 = 1.5 -- a float minute can't come from the clock, but must not be stored
+            s.shops.dshop.SHOP_B = 2.5
             ---@param v any
             local function check(v)
                 if type(v) == "table" then
@@ -117,17 +171,19 @@ describe("chore-tracker state", function()
             local out = state.serialise(s)
             check(out)
             assert.is_nil(out.done.d2)
+            assert.is_nil(out.shops.dshop.SHOP_B)
         end)
 
         it("round-trips through deserialise", function()
             local s = state.select(state.select(state.new(), chores, "m1"), chores, "dshop")
             s = state.mark(s, "m1", M["2026-10-25 01:43"])
+            s = state.recordPurchase(s, byId.dshop, "SHOP_A", M["2026-10-25 01:43"])
             assert.are.same(s, state.deserialise(state.serialise(s), chores))
         end)
     end)
 
     describe("deserialise", function()
-        local empty = { selected = {}, done = {} }
+        local empty = { selected = {}, done = {}, shops = {} }
 
         it("gives an empty state for nil or a non-table", function()
             assert.are.same(empty, state.deserialise(nil, chores))
@@ -138,7 +194,7 @@ describe("chore-tracker state", function()
         it("gives an empty state for a missing or unknown version", function()
             local stored = { selected = { "d1" }, done = { d1 = 5 } }
             assert.are.same(empty, state.deserialise(stored, chores))
-            stored.version = 2
+            stored.version = 3
             assert.are.same(empty, state.deserialise(stored, chores))
             stored.version = "1"
             assert.are.same(empty, state.deserialise(stored, chores))
@@ -168,7 +224,39 @@ describe("chore-tracker state", function()
             local s = state.deserialise({ version = 1, selected = "d1", done = 5 }, chores)
             assert.are.same(empty, s)
             s = state.deserialise({ version = 1, done = { d1 = 1 } }, chores)
-            assert.are.same({ selected = {}, done = { d1 = 1 } }, s)
+            assert.are.same({ selected = {}, done = { d1 = 1 }, shops = {} }, s)
+        end)
+
+        it("loads version 1 with its picks and ticks, and no shop progress", function()
+            local stored = {
+                version = 1,
+                selected = { "dshop", "d1" },
+                done = { dshop = 9 },
+                shops = { dshop = { SHOP_A = 9 } }, -- not part of version 1
+            }
+            assert.are.same(
+                { selected = { "d1", "dshop" }, done = { dshop = 9 }, shops = {} },
+                state.deserialise(stored, chores)
+            )
+        end)
+
+        it("drops malformed shop progress and keeps the rest", function()
+            local stored = {
+                version = 2,
+                selected = { "d1" },
+                done = { d1 = 1 },
+                shops = {
+                    dshop = { SHOP_A = 10, SHOP_B = "10", SHOP_C = 1.5, SHOP_D = 7.0, [3] = 4 },
+                    wshop = "x",
+                    gone = { SHOP_A = 1 },
+                    m1 = { SHOP_A = "nope" },
+                },
+            }
+            local got = state.deserialise(stored, chores)
+            assert.are.same({ dshop = { SHOP_A = 10, SHOP_D = 7 } }, got.shops)
+            assert.are.same({ "d1" }, got.selected)
+            assert.are.same({ d1 = 1 }, got.done)
+            assert.are.same({}, state.deserialise({ version = 2, shops = 5 }, chores).shops)
         end)
     end)
 end)

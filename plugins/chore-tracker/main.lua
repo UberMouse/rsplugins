@@ -14,14 +14,22 @@
 --   * A chore counts as done until its period resets, by the game clock (UTC): daily at
 --     00:00, weekly on Wednesday 00:00, monthly at 00:00 on the 1st. Ticks clear by
 --     themselves when the clock passes a reset.
+--   * Shop runs tick themselves: any purchase at any of a chore's shops (data/shops.lua)
+--     marks it done for the period, whether or not it is picked. A chore with more than one
+--     shop shows how many were bought from this period, as "Feather Shop Run (1/4)", and its
+--     tooltip lists each shop as bought or not yet. A shop is an inventory the client gets
+--     only while that shop is open, and its stock is the player's own, so a line whose count
+--     drops is the player buying. Only the listed shops' inventories are read. Ticking by
+--     hand still works and changes no shop's progress. Each purchase logs a line
+--     "[CHORES] purchase <chore id> at <shop>" (grep: \[CHORES\] purchase).
 --   * Picks and ticks are saved per character (by display name) as they change. The window's
 --     position, size and collapsed state, and the collapsed button's spot, are saved for all
 --     characters. Logged out, the window says so; until the game clock reads, nothing can be
 --     ticked.
 --
--- It only shows a list you tick by hand: no permissions, nothing sent to the game, nothing
--- about other players. Console lines carry [CHORES] (grep: \[CHORES\]); the display name is
--- never logged.
+-- It reads only what the game already shows the player (an open shop's stock): no
+-- permissions, nothing sent to the game, nothing about other players. Console lines carry
+-- [CHORES] (grep: \[CHORES\]); the display name is never logged.
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -31,7 +39,9 @@
 -- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
 
 local chores = require("data/chores")
+local shops = require("data/shops")
 local layout = require("core/layout")
+local shopCore = require("core/shops")
 local state = require("core/state")
 local view = require("core/view")
 local store = require("shell/store")
@@ -56,6 +66,8 @@ local COLLAPSE_TOOLTIP = { text = "Collapse" }
 
 -- Tooltips wrap at this width; wiki URLs are long.
 local TOOLTIP_WIDTH = 360
+
+---@alias ChoreTooltip { text: string, maxWidth: integer }
 
 -- How often, in Logic ticks (50 a second), to look for a login change and a moved or
 -- resized window.
@@ -82,15 +94,20 @@ local win = nil ---@type prettyui.Window?
 local openButton = nil ---@type prettyui.SpriteButton? the hamburger in the window
 local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
 local collapsedButton = nil ---@type prettyui.SpriteButton?
--- The list view's widgets, to update in place: chore id -> its two rows, and period ->
--- its heading.
-local rowWidgets = {} ---@type table<string, { normal: prettyui.CheckboxButton, dimmed: prettyui.CheckboxButton, tooltip: prettyui.Tooltip, done: boolean? }>
+-- The list view's widgets, to update in place: chore id -> its two rows (with the text they
+-- were made with), and period -> its heading.
+local rowWidgets = {} ---@type table<string, { normal: prettyui.CheckboxButton, dimmed: prettyui.CheckboxButton, text: string, tooltip: ChoreTooltip, done: boolean? }>
 local headings = {} ---@type table<string, ui.Text>
 -- Work left for the next Logic tick. A button's action mustn't destroy the button while
--- PrettyUI is still handling its click, so a view switch (which rebuilds the window) and
--- removing the collapsed panel after expanding wait a tick.
+-- PrettyUI is still handling its click, so a view switch or a row whose text changed (both
+-- rebuild the window) and removing the collapsed panel after expanding wait a tick.
 local pendingMode = nil ---@type ChoreMode?
+local pendingRebuild = false
 local retiring = nil ---@type prettyui.Panel?
+-- Shop inventory name -> the chores it serves, and the slot counts of each listed shop
+-- inventory the client holds now (one is held only while its shop is open).
+local SHOP_INDEX = shopCore.index(shops)
+local shopCounts = {} ---@type table<string, integer[]>
 -- The layout the store holds, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
 
@@ -127,12 +144,17 @@ local function screenPos(component)
     return math.floor(at.x - origin.x + 0.5), math.floor(at.y - origin.y + 0.5)
 end
 
--- A chore's tooltip: its description, then its wiki page and any other links, as text.
+-- A chore's tooltip: its description, then `extra` lines (a list row's shops), then its wiki
+-- page and any other links, as text.
 ---@param chore { desc: string, url: string, links: string[] }
----@return prettyui.Tooltip
-local function tooltipFor(chore)
+---@param extra string[]?
+---@return ChoreTooltip
+local function tooltipFor(chore, extra)
     local lines = {}
     if chore.desc ~= "" then lines[#lines + 1] = chore.desc end
+    for _, line in ipairs(extra or {}) do
+        lines[#lines + 1] = line
+    end
     lines[#lines + 1] = chore.url
     for _, link in ipairs(chore.links) do
         lines[#lines + 1] = link
@@ -174,14 +196,42 @@ local function showDone(id, done)
     hiding:SetOptionTooltip(id, widgets.tooltip)
 end
 
--- Bring the list's ticks, dimming and counts up to date with the tracker and the clock, in
--- place. Only rows whose done state changed are touched.
+-- Give a row a new tooltip. A table, as in showDone, so a shown one is replaced by a fresh,
+-- hidden one rather than left up.
+---@param id string
+---@param tooltip ChoreTooltip
+local function setRowTooltip(id, tooltip)
+    local widgets = rowWidgets[id]
+    widgets.tooltip = tooltip
+    widgets.normal:SetOptionTooltip(id, tooltip)
+    widgets.dimmed:SetOptionTooltip(id, tooltip)
+end
+
+-- Bring the list's ticks, dimming, counts and tooltips up to date with the tracker and the
+-- clock. Only rows that changed are touched, in place, except that PrettyUI 1.2.0 has no
+-- call to change a choice's text: a row whose shop count changed means rebuilding the
+-- window (next tick, as this can run inside a row's click).
 local function refreshList()
-    for _, section in ipairs(view.view(tracker, chores, clockNow())) do
+    local sections = view.view(tracker, chores, clockNow(), shops)
+    for _, section in ipairs(sections) do
+        for _, row in ipairs(section.rows) do
+            local widgets = rowWidgets[row.id]
+            if widgets and widgets.text ~= view.rowText(row) then
+                pendingRebuild = true
+                return
+            end
+        end
+    end
+    for _, section in ipairs(sections) do
         local heading = headings[section.period]
         if heading then heading.content = headingText(section) end
         for _, row in ipairs(section.rows) do
-            if rowWidgets[row.id] then showDone(row.id, row.done) end
+            local widgets = rowWidgets[row.id]
+            if widgets then
+                local tooltip = tooltipFor(row, view.shopTooltip(row, section.period))
+                if tooltip.text ~= widgets.tooltip.text then setRowTooltip(row.id, tooltip) end
+                showDone(row.id, row.done)
+            end
         end
     end
 end
@@ -213,7 +263,7 @@ local function buildList(w, openSettings)
     w:AddSpriteButton("SETTINGS", openSettings, { size = BUTTON_SIZE, tooltip = "Pick chores" })
     local now = clockNow()
     if now == nil then w:AddText("Waiting for the game clock.") end
-    local sections = view.view(tracker, chores, now)
+    local sections = view.view(tracker, chores, now, shops)
     if #sections == 0 then
         w:AddText("No chores picked yet: use the settings button above to choose some.")
         return
@@ -221,8 +271,9 @@ local function buildList(w, openSettings)
     for _, section in ipairs(sections) do
         headings[section.period] = w:AddTitle(headingText(section))
         for _, row in ipairs(section.rows) do
-            local tooltip = tooltipFor(row)
-            local choice = { text = row.name, value = row.id, tooltip = tooltip }
+            local tooltip = tooltipFor(row, view.shopTooltip(row, section.period))
+            local text = view.rowText(row)
+            local choice = { text = text, value = row.id, tooltip = tooltip }
             local normal = w:AddCheckboxButton(
                 { choice },
                 { onChange = onTick, colour = TEXT_COLOUR }
@@ -236,7 +287,7 @@ local function buildList(w, openSettings)
             -- done row.
             dimmed.root.hidden = true
             rowWidgets[row.id] =
-                { normal = normal, dimmed = dimmed, tooltip = tooltip, done = false }
+                { normal = normal, dimmed = dimmed, text = text, tooltip = tooltip, done = false }
             showDone(row.id, row.done)
         end
     end
@@ -293,6 +344,7 @@ local collapse -- defined below; the window's hamburger calls it
 local function buildWindow(at)
     if win then win:Destroy() end
     rowWidgets, headings = {}, {}
+    pendingRebuild = false
     local w = prettyui.Window.new(parent, {
         title = "Chores",
         x = at.x,
@@ -411,6 +463,83 @@ local function saveLayoutIfChanged()
 end
 
 ---------------------------------------------------------------------------
+-- Shop runs
+---------------------------------------------------------------------------
+
+-- The slot counts of a shop inventory, or nil if the client doesn't hold it.
+---@param invType InvType
+---@return integer[]?
+local function readCounts(invType)
+    -- Find returns an Inv, per game/inventory.html#findinvtype (the stub says Inv[]).
+    local inv = Inventory.Find(invType) --[[@as Inv?]]
+    -- isValid, per game/inventory.html#properties (the stub says `valid`).
+    ---@diagnostic disable-next-line: undefined-field
+    if not (inv and inv.isValid) then return nil end
+    local slots = inv:GetSlots() -- "Returns nil on failure"
+    if not slots then return nil end
+    local counts = {}
+    for i, slot in ipairs(slots) do
+        counts[i] = slot.count
+    end
+    return counts
+end
+
+-- Take the counts of every listed shop the client holds now, dropping older ones. Done on
+-- each character switch, which includes the load's first sync when logged in, so a plugin
+-- reloaded with a shop open still sees the next purchase, and one character's stock is
+-- never compared with another's.
+local function scanShops()
+    shopCounts = {}
+    for name in pairs(SHOP_INDEX) do
+        -- The cast drops config.Inv's FromID member from the type: `name` is an inv name.
+        shopCounts[name] = readCounts(config.Inv[name] --[[@as InvType]])
+    end
+end
+
+-- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
+-- not, so picking one later shows the period's truth), tick the chore if it isn't done this
+-- period, save, and show it. Like a tick by hand, it's ignored without a character and a
+-- clock to mark it against.
+---@param name string
+local function onPurchase(name)
+    local now = clockNow()
+    if character == nil or now == nil then return end
+    for _, entry in ipairs(SHOP_INDEX[name]) do
+        local chore = state.find(chores, entry.chore)
+        assert(chore, "data/shops.lua names only chores in data/chores.lua")
+        tracker = state.recordPurchase(tracker, chore, name, now)
+        say("purchase", entry.chore, "at", entry.shop.name)
+    end
+    store.saveState(character, tracker)
+    if phase == "ready" and mode == "list" then refreshList() end
+end
+
+-- Inventory events for anything but a listed shop (the bank, the backpack) return after
+-- reading the inventory's name, so their size costs nothing here.
+
+---@param ev InventoryAddedEventPayload
+local function onInventoryAdded(ev)
+    local name = ev.inv.configName
+    if SHOP_INDEX[name] then shopCounts[name] = readCounts(ev.inv) end
+end
+
+-- A listed shop's stock changed: any line lower than before is a purchase. The new counts
+-- become the baseline either way, so a restock or a sale (counts rising) only moves it.
+---@param ev InventoryUpdatedEventPayload
+local function onInventoryUpdated(ev)
+    local name = ev.inv.configName
+    if not SHOP_INDEX[name] then return end
+    local before, after = shopCounts[name], readCounts(ev.inv)
+    shopCounts[name] = after
+    if before and after and shopCore.dropped(before, after) then onPurchase(name) end
+end
+
+---@param ev InventoryRemovedEventPayload
+local function onInventoryRemoved(ev)
+    shopCounts[ev.inv.configName] = nil
+end
+
+---------------------------------------------------------------------------
 -- Following the game
 ---------------------------------------------------------------------------
 
@@ -434,6 +563,7 @@ local function sync(clockTicked)
             tracker = state.new()
             say("logged out")
         end
+        scanShops()
     end
     if switched or nextPhase ~= phase then
         if nextPhase == "waiting" and phase ~= "waiting" then say("waiting for the game clock") end
@@ -461,6 +591,8 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
         mode = pendingMode
         pendingMode = nil
         rebuild()
+    elseif pendingRebuild then
+        rebuild()
     end
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)
@@ -471,6 +603,10 @@ end)
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)
     if ev.var.id == CLOCK_ID and ev.var.typeName == CLOCK_DOMAIN then sync(true) end
 end)
+
+Event.InventoryAdded.Subscribe("chore-tracker", onInventoryAdded)
+Event.InventoryUpdated.Subscribe("chore-tracker", onInventoryUpdated)
+Event.InventoryRemoved.Subscribe("chore-tracker", onInventoryRemoved)
 
 sync(false)
 -- The layout as stored, then fitted to the plugin layer. savedLayout keeps the stored one,
@@ -485,6 +621,9 @@ say("loaded", #chores, "chores")
 function PluginShutdown()
     Event.Logic.Unsubscribe("chore-tracker")
     Event.VarTransmit.Unsubscribe("chore-tracker")
+    Event.InventoryAdded.Unsubscribe("chore-tracker")
+    Event.InventoryUpdated.Unsubscribe("chore-tracker")
+    Event.InventoryRemoved.Unsubscribe("chore-tracker")
     if win then
         saveLayoutIfChanged()
         win:Destroy()

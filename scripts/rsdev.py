@@ -26,7 +26,7 @@ The daemon listens on 127.0.0.1 only, port 8766 (the plugins' "recorder" and "rs
   POST /tee          log lines a plugin forwards (lib/dev/tee): {"schema": 1, "plugin": "...",
     "session": "...", "seq": n, "dropped": n, "lines": [{"t": n, "level": "...", "text": "..."}]}.
     Each line becomes a `Log` event in the same numbered stream as the bridge's, written to
-    <out>/rsdev/events/tee-<plugin>-<session>.jsonl. A malformed body gets a 400 and nothing is
+    <out>/rsdev/events/tee/<plugin>/<session>.jsonl. A malformed body gets a 400 and nothing is
     applied.
 
   /cli/...           what the subcommands above talk to. Nothing else needs these.
@@ -238,10 +238,16 @@ class State:
                 }
                 for line in body["lines"]
             ]
-            events = self._with_drop_marker(events, body.get("dropped", 0) - seen)
-            # The tee- prefix keeps this file apart from a bridge session's <session>.jsonl.
-            name = f"tee-{body['plugin']}-{body['session']}.jsonl"
-            self._add_events(name, body["session"], events)
+            lost = body.get("dropped", 0) - seen
+            if lost > 0:
+                # A Log event, not the bridge's bare marker: carrying the plugin is what lets
+                # `logs` (and `logs --plugin X`) show which plugin lost lines.
+                self.total_dropped += lost
+                first_t = events[0]["t"] if events else None
+                marker = {"plugin": body["plugin"], "level": "dropped", "text": f"{lost} lines lost"}
+                events.insert(0, {"t": first_t, "name": "Log", "payload": marker})
+            # A directory per plugin: a joined name could not tell plugin a-b/session c from a/b-c.
+            self._add_events(Path("tee") / body["plugin"] / f"{body['session']}.jsonl", body["session"], events)
 
     def _with_drop_marker(self, events, lost):
         """`events`, led by a dropped marker if `lost` events never arrived. Caller holds the lock."""
@@ -258,7 +264,7 @@ class State:
         del self.commands[cmd.id]
         self.cond.notify_all()
 
-    def _add_events(self, filename, session, events):
+    def _add_events(self, filename, session, events):  # filename: relative to <out>/rsdev/events
         """Number, keep and persist a sync's events. Caller holds the lock.
 
         One file open per sync: a login burst can be hundreds of events, and every handler thread
@@ -273,9 +279,9 @@ class State:
             stored = {**event, "n": self.last_n, "session": session}
             self.events.append(stored)
             lines.append(json.dumps(stored) + "\n")
-        folder = self.out_dir / "rsdev" / "events"
-        folder.mkdir(parents=True, exist_ok=True)
-        with (folder / filename).open("a") as f:
+        path = self.out_dir / "rsdev" / "events" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as f:
             f.write("".join(lines))
         self.cond.notify_all()  # wakes long-polling `events --follow` calls
 
@@ -497,7 +503,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Game text isn't always valid UTF-8, and one bad byte shouldn't lose a batch.
             body = json.loads(raw.decode("utf-8", errors="replace"))
-        except json.JSONDecodeError as err:
+        except (json.JSONDecodeError, RecursionError) as err:  # the latter: absurdly deep nesting
             print(f"bad {route} body: {err!r}; {len(raw)} bytes, starts {raw[:80]!r}")
             return self.reply(400)
         state = self.server.state
@@ -730,6 +736,9 @@ def send_command(args, kind, text):
     if outcome == "ok":
         return 0, reply
     if outcome == "error":
+        # An eval's print output before the error is the best clue to where it failed.
+        for line in reply.get("output", []) if kind == "eval" else []:
+            print(line, file=sys.stderr)
         print(f"error: {reply['error']}", file=sys.stderr)
         return 1, None
     if outcome == "withdrawn":

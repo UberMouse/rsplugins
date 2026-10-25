@@ -617,6 +617,13 @@ class EvalTests(CliCase):
         self.assertEqual((out["code"], out["stdout"]), (1, ""))
         self.assertIn("boom", out["stderr"])
 
+    def test_a_lua_error_shows_the_output_printed_before_it(self):
+        t, out = self.run_cli("eval", "print('a') error('x')")
+        self.deliver(ok=False, error="boom", output=["a", "b"])
+        t.join()
+        self.assertEqual((out["code"], out["stdout"]), (1, ""))
+        self.assertEqual(out["stderr"].splitlines(), ["a", "b", "error: boom"])
+
     def test_multi_line_source_arrives_escaped_on_one_line(self):
         t, out = self.run_cli("eval", "local a = 1\nreturn a")
         line = self.deliver(ok=True, values=[1], nvalues=1, output=[])
@@ -714,7 +721,7 @@ class TeeTests(DaemonCase):
             got[1],
             {"t": 8, "name": "Log", "payload": {"plugin": "demo", "level": "error", "text": "b"}, "n": 3, "session": "t1"},
         )
-        path = self.out / "rsdev" / "events" / "tee-demo-t1.jsonl"
+        path = self.out / "rsdev" / "events" / "tee" / "demo" / "t1.jsonl"
         self.assertEqual([json.loads(ln) for ln in path.read_text().splitlines()], got)
 
     def test_bad_bodies_are_400_and_apply_nothing(self):
@@ -742,9 +749,21 @@ class TeeTests(DaemonCase):
         post(self.port, "/tee", tee_body(dropped=3))
         post(self.port, "/tee", tee_body(seq=2, dropped=3))
         post(self.port, "/tee", tee_body(seq=3, dropped=4))
-        marks = [e for e in self.events() if e["name"] == "dropped"]
-        self.assertEqual([(m["n_lost"], m["t"]) for m in marks], [(3, 7), (1, 7)])
+        marks = [e for e in self.events("?name=Log") if e["payload"]["level"] == "dropped"]
+        self.assertEqual([(m["payload"]["text"], m["t"]) for m in marks], [("3 lines lost", 7), ("1 lines lost", 7)])
+        self.assertEqual({m["payload"]["plugin"] for m in marks}, {"demo"})
         self.assertEqual(self.server.state.status()["dropped"], 4)
+
+    def test_ambiguous_names_get_separate_files(self):
+        post(self.port, "/tee", tee_body(plugin="a-b", session="c"))
+        post(self.port, "/tee", tee_body(plugin="a", session="b-c"))
+        base = self.out / "rsdev" / "events" / "tee"
+        self.assertTrue((base / "a-b" / "c.jsonl").is_file())
+        self.assertTrue((base / "a" / "b-c.jsonl").is_file())
+
+    def test_deeply_nested_body_is_a_400(self):
+        self.assertEqual(post(self.port, "/tee", b"[" * 100_000, cli=False)[0], 400)
+        self.assertEqual(post(self.port, "/tee", tee_body())[0], 200)  # the handler survived
 
     def test_tee_routes_share_the_browser_guards(self):
         self.assertEqual(post(self.port, "/tee", tee_body(), {"Origin": "http://evil"})[0], 403)
@@ -783,6 +802,15 @@ class LogsTests(CliCase):
         self.seed()
         self.assertEqual(self.logs("--plugin", "other").splitlines(), ["4 [other] print: one"])
         self.assertEqual(self.logs("--since", "4").splitlines(), ["5 [bridged] log: z"])
+
+    def test_lost_lines_show_in_logs_for_their_plugin_only(self):
+        self.seed()
+        post(self.port, "/tee", tee_body(seq=2, dropped=2, lines=[]))
+        post(self.port, "/tee", tee_body(plugin="other", session="t2", seq=2, dropped=1, lines=[]))
+        shown = self.logs("--plugin", "demo").splitlines()
+        self.assertEqual(shown[-1], "6 [demo] dropped: 2 lines lost")
+        self.assertNotIn("[other] dropped", "\n".join(shown))
+        self.assertIn("[other] dropped: 1 lines lost", self.logs())
 
     def test_json_prints_the_raw_events(self):
         self.seed()

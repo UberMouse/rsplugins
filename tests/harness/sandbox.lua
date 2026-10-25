@@ -3,6 +3,7 @@
 -- `unmocked API: <name>`, so a plugin using an API the harness doesn't model fails its test
 -- instead of quietly getting nil. Plugins may still assign globals (PluginShutdown...).
 
+local prettyui = require("tests.harness.api.prettyui")
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
 
@@ -56,7 +57,51 @@ local API_MODULES = {
     "tests.harness.api.player",
     "tests.harness.api.inventory",
     "tests.harness.api.chat",
+    "tests.harness.api.ui",
 }
+
+-- The plugin dependencies the harness has a fake for, by what a manifest names: a mod.io ID
+-- (`{ "prettyui": 6398181 }`) or a plugin folder name (`["prettyui"]`).
+local DEPENDENCY_FAKES = { [prettyui.MOD_ID] = prettyui, prettyui = prettyui }
+
+-- The global an array-form dependency gets: its name, with characters that aren't valid in a
+-- Lua identifier made `_` and a leading digit prefixed with `_` (docs/plugin-anatomy.md).
+---@param name string
+---@return string
+local function luaName(name)
+    local out = tostring(name):gsub("[^%w_]", "_")
+    if out:match("^%d") then out = "_" .. out end
+    return out
+end
+
+-- Expose each dependency the manifest lists as its global; one without a fake fails the load.
+-- The fakes are always present and enabled, so optional ones are never nil.
+---@param h table
+---@param env table
+local function installDependencies(h, env)
+    for _, field in ipairs({ "requiredDependencies", "optionalDependencies" }) do
+        local deps = h.manifest[field]
+        if deps ~= nil and type(deps) ~= "table" then
+            error("plugin.json " .. field .. " must be an array or an object", 0)
+        end
+        for key, target in pairs(deps or {}) do
+            local global = type(key) == "number" and luaName(target) or key
+            local fake = DEPENDENCY_FAKES[target]
+            if not fake then
+                error(
+                    string.format(
+                        "plugin.json %s: the harness has no fake for dependency %s (global %s)",
+                        field,
+                        tostring(target),
+                        global
+                    ),
+                    0
+                )
+            end
+            fake.install(h, env, global)
+        end
+    end
+end
 
 ---@param lib table
 ---@return table
@@ -163,6 +208,9 @@ function M.build(h, instance)
             strict.declare("_G", name, "global")
         end
     end
+    -- After the registry above: dependency globals are other plugins' exports, not API the
+    -- stubs declare.
+    installDependencies(h, env)
 
     return setmetatable(env, {
         __index = function(_, name)

@@ -12,30 +12,42 @@ local OFFICIAL_ONLY = {
         .. "(the stub calls it `valid`)",
 }
 
--- Whether the stubs declare `owner.member` as a member of this kind.
+-- Whether the stubs declare `owner.member` as a member of this kind, on `owner` itself or a
+-- class it inherits from (`---@class ui.Text : ui.Component`).
 ---@return boolean
 local function inStubs(index, owner, member, kind)
     if owner == "_G" then
         if kind == "enum" then return index.enums[member] == true end
         return index.globals[member] ~= nil
     end
-    local fields = index.classes[owner] or {}
-    if kind == "inline" then
-        -- "VarPlayer.FromID": a function listed inside a field's type, e.g.
-        -- `---@field VarPlayer { [string]: VarType, FromID: fun(...) }`.
-        local field, fn = member:match("^([%w_]+)%.([%w_]+)$")
-        local line = fields[field]
-        return line ~= nil and line:find(fn .. ":", 1, true) ~= nil
+    -- "ui.Interfaces": a table the stubs declare as its own class, not as a field of `ui`.
+    if kind == "namespace" then return index.classes[owner .. "." .. member] ~= nil end
+    local class = owner
+    while class do
+        local fields = index.classes[class] or {}
+        if kind == "inline" then
+            -- "VarPlayer.FromID": a function listed inside a field's type, e.g.
+            -- `---@field VarPlayer { [string]: VarType, FromID: fun(...) }`.
+            local field, fn = member:match("^([%w_]+)%.([%w_]+)$")
+            local line = fields[field]
+            if line ~= nil and line:find(fn .. ":", 1, true) ~= nil then return true end
+        elseif kind == "field" then
+            if fields[member] ~= nil then return true end
+        -- EventSubscription declares Subscribe/Unsubscribe as fun-typed fields, not functions.
+        elseif kind == "method" then
+            if (index.methods[class] or {})[member] ~= nil or fields[member] ~= nil then
+                return true
+            end
+        elseif kind == "static" then
+            if (index.statics[class] or {})[member] ~= nil or fields[member] ~= nil then
+                return true
+            end
+        else
+            error("unknown kind " .. kind)
+        end
+        class = index.parents[class]
     end
-    if kind == "field" then return fields[member] ~= nil end
-    -- EventSubscription declares Subscribe/Unsubscribe as fun-typed fields, not functions.
-    if kind == "method" then
-        return (index.methods[owner] or {})[member] ~= nil or fields[member] ~= nil
-    end
-    if kind == "static" then
-        return (index.statics[owner] or {})[member] ~= nil or fields[member] ~= nil
-    end
-    error("unknown kind " .. kind)
+    return false
 end
 
 describe("mocked API names", function()
@@ -65,12 +77,17 @@ describe("mocked API names", function()
         assert.are.equal("static", d.HTTPRequest.new)
         assert.are.equal("field", d.Plugin.urls)
         assert.are.equal("global", d._G.require)
+        assert.are.equal("method", d["ui.Interfaces"].GetComponent)
+        assert.are.equal("method", d["ui.Layer"].SetPos) -- inherited from ui.Component
+        assert.are.equal("field", d["ui.Text"].content)
     end)
 
     it("would catch an invented name or a wrong call form", function()
         assert.is_false(inStubs(index, "Player", "GetTrackingIDs", "static"))
         assert.is_false(inStubs(index, "PersistentDB", "Get", "static"))
         assert.is_false(inStubs(index, "_G", "World2", "global"))
+        assert.is_false(inStubs(index, "ui.Text", "SetContent", "method"))
+        assert.is_false(inStubs(index, "ui", "Widgets", "namespace"))
     end)
 
     it("list each OFFICIAL_ONLY name because the stub really lacks it", function()

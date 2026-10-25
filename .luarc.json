@@ -1,7 +1,18 @@
 {
   "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
   "runtime.version": "Lua 5.4",
-  "workspace.library": ["docs/api/types.lua", "docs/api/generated/"],
+  "workspace.library": [
+    "docs/api/types.lua",
+    "docs/api/generated/",
+    "types/prettyui.lua"
+  ],
   "workspace.checkThirdParty": false,
-  "workspace.ignoreDir": [".direnv", ".claude", "dumps", "docs", "tests"]
+  "workspace.ignoreDir": [
+    ".direnv",
+    ".claude",
+    "dumps",
+    "docs",
+    "tests",
+    "types"
+  ]
 }

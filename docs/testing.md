@@ -19,7 +19,8 @@ client (`prl <plugin>`).
 |---|---|
 | `tests/harness/init.lua` | The entry module, `require("tests.harness")`: lifecycle, clock, world builder |
 | `tests/harness/world.lua` | The world as plain data, changed only by world ops |
-| `tests/harness/api/*.lua` | The mocks, one module per API area |
+| `tests/harness/api/*.lua` | The mocks, one module per API area; `api/prettyui.lua` is the PrettyUI fake and the `h.ui` driver ([Testing a PrettyUI plugin](#testing-a-prettyui-plugin)) |
+| `types/prettyui.lua` | LuaLS types for the PrettyUI subset the fake models, loaded by `.luarc.json` |
 | `tests/harness/sandbox.lua`, `runtime.lua`, `strict.lua` | The plugin's environment, client limits, strict proxies |
 | `tests/harness/stubs.lua`, `catalog.lua` | Reads `docs/api/` and `docs/vars/vars.csv` |
 | `tests/harness/timeline.lua`, `replay.lua` | Replaying a recording: grouping its entries by tick (pure), and driving the world from them |
@@ -96,6 +97,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `h.requests` | Started HTTP requests in order: `{ method, url, body, headers, request }` |
 | `h.db` | PersistentDB entries, `key -> { type, value }`; survives reload |
 | `h.tick` | Logic ticks so far (`ev.logicTick`) |
+| `h.ui` | The PrettyUI driver: find, click, drag and resize the plugin's PrettyUI objects ([below](#the-prettyui-driver-hui)) |
 | `h.replay` | While replaying: `timeline`, `reads` (path -> `{ v }`, the reads seen so far), `skipped` (`{ t, event, why }` per recorded delivery the harness couldn't make) and `dropped` (`{ t, n }` per gap in the recording) |
 
 ### The world `h.world`
@@ -116,6 +118,23 @@ Each builder call is a world op, e.g. `{ op = "setVar", domain = "VarPlayer", na
 value = 3 }`. `world.apply(state, op)` (in `world.lua`) validates it, changes `h.world.state` and
 returns the changes; the harness turns those into events. Ops are plain data, so a recorded
 timeline can drive the same world.
+
+### The PrettyUI driver `h.ui`
+
+For a plugin that lists PrettyUI as a dependency. A target is an object the plugin got from
+the fake (a Window, Panel, SpriteButton, CheckboxButton, a Text from `AddText`) or a component
+such as `win.closeButton`. Plugin callbacks it triggers run under the client's limits, like
+event subscribers.
+
+| Call | Does |
+|---|---|
+| `find(kind, filter?)` | The live objects of `kind` (`"Window"`, `"Panel"`, `"SpriteButton"`, `"Text"`, `"Title"`, `"CheckboxButton"`, `"Divider"`), in creation order. `filter`: `{ sprite = "MENU" }` (any case) and/or `{ text = "substring" }`, matched against a Window's title, a Text's current content or a checkbox choice |
+| `get(kind, filter?)` | The one object `find` returns; errors on none or several |
+| `click(target, value?)` | A SpriteButton: `action(button, true)`. A Window's `closeButton`: `Close()`. A CheckboxButton: toggles the choice whose value is `value`, firing `onChange`. Returns true, or false and why when the click wouldn't reach it: hidden (itself or an ancestor), under a window's title-bar drag layer, Alt held over a Panel, a disabled choice |
+| `dragTitle(win, dx, dy)` | Drag a titled Window's title bar, clamped inside its parent |
+| `resize(win, dw, dh)` | Drag a resizable Window's bottom-right corner; clamped to its min/max and the parent's edge |
+| `holdAlt(held)` / `altDrag(panel, dx, dy)` | Hold Alt (with the console closed), then Alt-drag a Panel, clamped inside its parent. `altDrag` returns false and leaves the panel alone unless Alt is held |
+| `layout(target)` | `{ x, y, width, height, hidden, globalX, globalY, visible }` of a component or an object's root. Specs can also read `x`, `y`, `width`, `height`, `hidden` and `xyGlobal` off the components directly |
 
 ## Strictness
 
@@ -146,7 +165,9 @@ The harness fails loudly rather than guessing:
 
 `tests/harness/api_names_spec.lua` checks every mocked global and member against the stubs, with
 its call form, and fails on any the stubs lack. It doesn't take the harness's word for it. The one
-exception is listed with the official page that proves the stub wrong.
+exception is listed with the official page that proves the stub wrong. A member a class inherits
+counts (`ui.Layer:SetPos` is `ui.Component`'s). The PrettyUI fake's classes are not API, so they
+are left out (`strict.class(..., { undeclared = true })`); `types/prettyui.lua` is their reference.
 
 ## Lint and type-check config for tests/
 
@@ -158,6 +179,28 @@ plain Lua and busted, not in the plugin sandbox:
 - `tests/.luarc.json`: LuaLS against LuaLS's bundled busted and luassert definitions, *without*
   the API stubs. An API global used in a spec is a bug, since it is nil there. The root
   `.luarc.json` ignores `tests/`.
+
+## Testing a PrettyUI plugin
+
+When `plugin.json` lists PrettyUI (`"requiredDependencies": { "prettyui": 6398181 }`, or
+`["prettyui"]`), `h:load()` exposes the fake under that global. Any other dependency fails the
+load, naming it. The fake models the part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`,
+with `root`, `closeButton`, `SetSize`, `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
+`AddCheckboxButton` and `AddDivider`; `Panel.new`, with `root`, `width`, `height`, `SetSize`,
+`AddSpriteButton` and `Destroy`; and `SpriteButton.new`. Any other member, method or option
+faults as unmocked: extend `api/prettyui.lua` and `types/prettyui.lua` together, with a ledger
+row, when a plugin needs more.
+
+```lua
+local h = harness.load({ ["main.lua"] = main, ["plugin.json"] = manifest })
+local win = h.ui:get("Window", { text = "Chores" })
+h.ui:dragTitle(win, 100, 50)
+h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU" }))
+assert.is_true(win.root.hidden)
+```
+
+`tests/harness/prettyui_spec.lua` has worked examples, including the probe's collapse-to-a-button
+round trip.
 
 ## Recordings
 
@@ -440,6 +483,18 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Starting an HTTP request inside a completion callback fails the test (it crashed the client) | [api-concepts.md](api-concepts.md#runtime-limits-weve-hit) |
 | A call running past 1000 ms is aborted with `Maximum function execution time of 1000 ms exceeded` | [api-concepts.md](api-concepts.md#runtime-limits-weve-hit) |
 | `Chat` needs chatAccess; `AddMessage` is queued until the next logic update and comes back as `ChatMessage` with `ChatType.PLUGIN`; `ChatMessage` only reaches plugins with chatAccess | game/chat.html, core/events.html#chatmessage |
+| `ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)` is a 3836x2121 layer at global 0,0 | PrettyUI probe in the beta client, 2026-10-25; the ID from `docs/api/consts/Component.lua` |
+| Components: `SetPos(x, y, relX?, relY?)` / `SetSize(w, h, relW?, relH?)` add a fraction of the parent's size, kept live, so a child anchored to its parent's right edge follows it as it moves and resizes; `MoveToFront`; `Destroy` takes the children with it | ui/component.html; probe 2026-10-25: a MENU button at `x = -28, xAnchor = 1.0` on a window at 600,300, 300 wide, sat at global 872,307 |
+| A manifest dependency on mod.io ID 6398181 (object form) resolves, for a dev_plugins plugin, to PrettyUI 1.2.0 as the global named by the key | probe 2026-10-25 |
+| Window: defaults (80,80, 480x340, min 220x140); `closeButton` at (width-28, 7), 20x20, and clicking it is `Close()`; `Close` calls `onClose(window)`, then hides the root; `Show` unhides it; `SetSize` clamps to min/max | PrettyUI 1.2.0 source (`src/window.lua`); the X's position matches the probe |
+| A titled Window drags by its title bar, clamped inside its parent; a child of `window.root` moves with it in the same step; root x/y/width/height read back after a drag or resize | probe 2026-10-25 (clamped at 1004,1013 and other spots; root read back) |
+| The title-bar drag layer covers the title bar except the X's slot (width-34..width), so a button of the window elsewhere on the title bar gets no clicks | probe 2026-10-25; 1.2.0 source (`titleDrag`, width - CLOSE_SIZE - 14) |
+| A bare `root:SetPos` on a Window or Panel root is reverted to the remembered position at the next harness step, unless the owner's `SetSize` follows. `Panel:SetSize`, `Window:SetSize`, a title drag, a resize and an Alt-drag all remember the current position. The fake does this for a Panel and for a titled or resizable Window (the ones 1.2.0 gives drag bounds), before `Logic` | probe 2026-10-25: a Panel `root:SetPos(1593,571)` stayed at 0,0, and SetPos then SetSize stuck. PrettyUI's DragBounds does the reverting; **the client's exact trigger is unknown** (1.2.0 refreshes it from the Panel's Logic poll and on the parent's ONRESIZE), so the snap may come later or, for a Window, not at all |
+| `Panel:SetSize` clamps to at least 9x9 and keeps the panel inside its parent | 1.2.0 source (`src/panel.lua`, DragBounds:Clamp) |
+| A Panel's first child sits at +18,+16 inside it; content rows flow down from (14, 12) inside the frame (4 px for a Panel; 8 px, and 32 under a title, for a Window) | probe 2026-10-25 for the Panel; the Window's offsets from 1.2.0 (`src/core/layout.lua`) |
+| Alt-drag moves a standalone Panel, clamped inside its parent, only while Alt is held, and while it is held the panel's drag layer takes clicks on it | probe 2026-10-25 (alt read true only with the console closed); 1.2.0 source for the click |
+| SpriteButton: unknown sprite names raise `Unknown SpriteButton sprite: <name>` (a plain error a plugin can catch); names are case-insensitive; `action(button, enabled)`, with enabled true for a non-toggle button; default size 24 | 1.2.0 source (`src/sprite_button.lua`, `src/core/sprites.lua`) |
+| CheckboxButton: `GetSelectedValues` in choice order, `IsSelected`, `SetSelected(value, selected, notify?)` false for an unknown value; `onChange(group, values, value, selected)` only on a change; rows 22 px; a disabled choice ignores clicks | 1.2.0 source (`src/selection_button.lua`), https://prettyui.j3.gg |
 
 ### Harness choices: unknown client behaviour, or stricter than the client on purpose
 
@@ -470,13 +525,23 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), and `debug`, `load*`, `dofile`, `package`, `collectgarbage` |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
+| `ui.Interfaces:GetComponent` | Only the plugin layer; any other ID, or the 2- and 4-argument forms, faults. The same root object comes back on every call of one load (the client may hand out a fresh one). Moving, resizing or destroying it faults |
+| Component positions | Rounded to whole pixels. `SetPos`'s self-percentage arguments fault |
+| A destroyed component, or a PrettyUI object after `Destroy()` | Any member faults (the client's behaviour is undocumented; 1.2.0 ignores some calls on a destroyed object). A destroyed Window's or Panel's `root` reads nil, as in 1.2.0 |
+| Dependency fakes | Always present and enabled, so an optional one is never nil and `PluginDependencyUpdate` never fires |
+| PrettyUI text | Doesn't wrap: the fake can't measure fonts, so a body row is 24 px, or 18 px per `<br>`-separated line plus 6 |
+| PrettyUI clicks | `h.ui:click` hits a component's centre. Only a target's own window's title-bar drag layer can cover it; other windows' z-order isn't modelled |
+| PrettyUI scrolling, tooltips and hover states | Not modelled: content that overflows doesn't scroll (the client's Panel does), and tooltips are accepted but never shown |
 
 ### Not modelled
 
-- **APIs** (they fault as unmocked): `ui.*` and PrettyUI, `World`, entity lists
+- **APIs** (they fault as unmocked): `ui.*` beyond the plugin root layer (the components a
+  plugin would make itself, hooks, style sheets...), PrettyUI beyond the subset in
+  [Testing a PrettyUI plugin](#testing-a-prettyui-plugin), `World`, entity lists
   (`NPCList`, `PlayerList`, `LocList`, `ObjStackList`), `Camera`, `audio`, `Keyboard`, `Mouse`,
   `MiniMenu`, `GrandExchange`, `ClientOptions`, `ScreenConvert`, `Shapes`, `CoordGrid`, math
-  types, `formatStr`, `ExecuteConsoleCommand`, `id.*`, `config.*` beyond `Inv` and `Obj`,
+  types (bar `xyGlobal`'s `x`/`y`), `formatStr`, `ExecuteConsoleCommand`, `id.*` beyond
+  `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP`, `config.*` beyond `Inv` and `Obj`,
   `Plugin.resources`, `Player.GetTrackingID` / `GetRunEnergy` / `GetWeight` / `GetCombatLevel`,
   `PlayerEntity` beyond `displayName`, `InvType.stockCount`.
 - **Vars**: VarBit packing (setting a base var doesn't change its VarBits, nor the reverse).
@@ -491,7 +556,8 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 - **Events the builder doesn't fire**: `SkillTransmit`, `RunEnergyTransmit`, `GameStateChanged`
   on login/logout, entity and loc events, keys, `Draw`. Use `h:fire`. Logging out doesn't clear
   inventories or vars.
-- **Dependencies**: `PluginDependencyUpdate`, `OptionalDependencyChanged`, dependency globals.
+- **Dependencies**: `PluginDependencyUpdate`, `OptionalDependencyChanged`, and the globals of any
+  dependency but PrettyUI. The UI hooks aren't recorded by the dev recorder either.
 - **HTTP request bodies being garbage-collected** before the request finishes (a suspicion in
   api-concepts.md), and coroutines crashing the client.
 - **An HTTP request started from a coroutine resumed after a completion callback.** Only a

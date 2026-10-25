@@ -78,6 +78,9 @@ end
 --   methods  = { name = function(state, ...) end }   called as obj:name(...)
 --   statics  = { name = function(state, ...) end }   called as Obj.name(...)
 --   writable = { name = true }                       field may be assigned (stored in state)
+--   undeclared = true                                keep it out of M.declared: for fakes of
+--                                                    another plugin's exports (PrettyUI), which
+--                                                    the API stubs rightly lack
 -- `state` is the per-object table passed to new(); getters read the live world through it,
 -- so an object always reflects current state rather than a snapshot.
 ---@param name string the stub class name, used in error messages and the registry
@@ -86,14 +89,16 @@ end
 function M.class(name, def)
     local fields, methods, statics = def.fields or {}, def.methods or {}, def.statics or {}
     local writable = def.writable or {}
-    for k in pairs(fields) do
-        M.declare(name, k, "field")
-    end
-    for k in pairs(methods) do
-        M.declare(name, k, "method")
-    end
-    for k in pairs(statics) do
-        M.declare(name, k, "static")
+    if not def.undeclared then
+        for k in pairs(fields) do
+            M.declare(name, k, "field")
+        end
+        for k in pairs(methods) do
+            M.declare(name, k, "method")
+        end
+        for k in pairs(statics) do
+            M.declare(name, k, "static")
+        end
     end
 
     local class = { name = name }

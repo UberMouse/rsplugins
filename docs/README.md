@@ -11,7 +11,7 @@ Start with [overview.md](overview.md).
 | [overview.md](overview.md) | What the API is, dev → moderation → Mod.io pipeline, community links |
 | [dev-environment.md](dev-environment.md) | Beta world access, plugin folder paths (incl. Linux), console, plugin commands, dev loop |
 | [plugin-anatomy.md](plugin-anatomy.md) | Folder layout, `plugin.json`, permissions, `require`, plugin dependencies, lifecycle hooks, PersistentDB, resources |
-| [api-concepts.md](api-concepts.md) | Type notation, API namespace map, configs vs entities, vars, coords, events, UI gotchas, runtime limits and what recordings have shown about the client |
+| [api-concepts.md](api-concepts.md) | Type notation, API namespace map, configs vs entities, vars, coords, events, UI gotchas, runtime limits, what recordings have shown about the client, and PrettyUI in the client |
 | [cheats.md](cheats.md) | Dev-only `!` cheat commands |
 | [guidelines.md](guidelines.md) | Allowed / reviewed / prohibited features, AI policy |
 | [submission.md](submission.md) | Mod.io upload, required description sections and template, data protection, moderation |

@@ -21,6 +21,7 @@ local paths = require("tests.harness.paths")
 local persistentdb = require("tests.harness.api.persistentdb")
 local player = require("tests.harness.api.player")
 local pluginApi = require("tests.harness.api.plugin")
+local prettyui = require("tests.harness.api.prettyui")
 local replay = require("tests.harness.replay")
 local runtime = require("tests.harness.runtime")
 local sandbox = require("tests.harness.sandbox")
@@ -99,6 +100,7 @@ function M.new(plugin, opts)
     end
 
     h.world = setmetatable({ h = h, state = world.new(h.manifest) }, Builder)
+    h.ui = prettyui.driver(h)
     for _, perm in ipairs(opts.grant or {}) do
         world.apply(h.world.state, { op = "setPermission", permission = perm, enabled = true })
     end
@@ -170,14 +172,16 @@ end
 -- Time
 ---------------------------------------------------------------------------
 
--- One logic step: deliver answered HTTP requests, then queued chat messages, then fire Logic,
--- and ServerLogic every SERVER_TICK steps. The order within a step is the harness's choice;
+-- One logic step: deliver answered HTTP requests, then queued chat messages, then snap back
+-- PrettyUI roots moved by a bare SetPos (api/prettyui.lua), then fire Logic, and ServerLogic
+-- every SERVER_TICK steps. The order within a step is the harness's choice;
 -- the client's is undocumented. Replaying, the recording's entries for this tick go around
 -- Logic, and a recording that has ServerLogic events supplies it until it ends.
 function Harness:step()
     self.tick = self.tick + 1
     http.deliver(self)
     chat.flush(self)
+    prettyui.step(self)
     replay.beforeLogic(self)
     events.dispatch(self, "Logic", events.payload("Logic", { logicTick = self.tick }))
     local recorded = replay.afterLogic(self)

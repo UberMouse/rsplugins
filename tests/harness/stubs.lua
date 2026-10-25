@@ -9,12 +9,15 @@ local M = {}
 -- Parsed once per process: it reads every generated stub file.
 local cached = nil ---@type table?
 
--- Index the stubs: classes (with their ---@field names), static functions (`function T.f(`),
--- methods (`function T:M(`), global functions and tables, and enums.
+-- Index the stubs: classes (with their ---@field names and `: Parent` classes), static
+-- functions (`function T.f(`), methods (`function T:M(`), global functions and tables, and
+-- enums. A class whose functions are written against a local (`---@class ui.Component` then
+-- `local Component = {}` and `function Component:SetPos(`) gets them under both names.
 ---@return table
 function M.index()
     if cached then return cached end
-    local index = { classes = {}, statics = {}, methods = {}, globals = {}, enums = {} }
+    local index =
+        { classes = {}, parents = {}, statics = {}, methods = {}, globals = {}, enums = {} }
     local files = {}
     local find = assert(io.popen("find '" .. paths.repo("docs/api/generated") .. "' -name '*.lua'"))
     for file in find:lines() do
@@ -30,15 +33,20 @@ function M.index()
     end
     for _, file in ipairs(files) do
         local class = nil ---@type string?
+        local aliases = {} -- local name -> class, for this file
         for line in io.lines(file) do
             local name = line:match("^%-%-%-@class%s+([%w_%.]+)")
             local field = line:match("^%-%-%-@field%s+([%w_]+)")
             if name then
                 class = name
                 index.classes[name] = index.classes[name] or {}
+                local parent = line:match("^%-%-%-@class%s+[%w_%.]+%s*:%s*([%w_%.]+)")
+                if parent then index.parents[name] = parent end
             elseif field and class then
                 index.classes[class][field] = line
             elseif not line:match("^%-%-%-") then
+                local alias = line:match("^local%s+([%w_]+)%s*=%s*{}")
+                if alias and class then aliases[alias] = class end
                 class = nil
             end
             local enum = line:match("^%-%-%-@enum%s+([%w_%.]+)")
@@ -46,7 +54,10 @@ function M.index()
             local owner, static = line:match("^function%s+([%w_%.]+)%.([%w_]+)%s*%(")
             if owner then add(index.statics, owner, static, line) end
             local mowner, method = line:match("^function%s+([%w_%.]+):([%w_]+)%s*%(")
-            if mowner then add(index.methods, mowner, method, line) end
+            if mowner then
+                add(index.methods, mowner, method, line)
+                if aliases[mowner] then add(index.methods, aliases[mowner], method, line) end
+            end
             local fn = line:match("^function%s+([%w_]+)%s*%(")
             local tbl = line:match("^([%w_]+)%s*=")
             if fn or tbl then index.globals[fn or tbl] = line end

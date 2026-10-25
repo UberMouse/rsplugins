@@ -72,6 +72,9 @@ The current `PluginPermissions` values:
   plugin**. Names that aren't valid Lua identifiers get `_` replacements/prefixes
   (`2!GraphLib` → `_2_GraphLib`). Alias with the object form instead:
   `"requiredDependencies": { "Graph": "2!GraphLib" }`.
+- The object form's value can also be the dependency's mod.io ID: `{ "prettyui": 6398181 }`
+  gave a `dev_plugins` plugin PrettyUI as `prettyui` (beta client, 2026-10-25; see
+  [api-concepts.md](api-concepts.md#prettyui-in-the-client)).
 - An optional dependency's global is `nil` when that plugin is absent or disabled. Check before
   using it.
 - Exports are shared by every importer. **Never modify** an imported table. Library plugins

@@ -178,3 +178,34 @@ buying out a shop line). See [testing.md](testing.md#recordings) for recordings.
   (`COORDGRID`, `INV`, `OBJ`, `ACHIEVEMENT`, `COMPONENT`...), whatever `.value` gives for them.
 - **Modules and symlinks.** A `require`d module shares `main.lua`'s globals, `Event` included,
   and the client follows a directory symlink inside the plugin folder (the recorder's `dev/`).
+
+## PrettyUI in the client
+
+[PrettyUI](https://prettyui.j3.gg) is a UI library plugin (mod.io 6398181). Found by three
+throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 installed:
+
+- **The dependency.** `"requiredDependencies": { "prettyui": 6398181 }`, the object form with a
+  mod.io ID as the value, resolves for a plugin in `dev_plugins` too: the plugin sees PrettyUI
+  1.2.0 as the global `prettyui`.
+- **The plugin layer** (`ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)`)
+  was 3836x2121 at global 0,0.
+- **Reading a window's geometry.** `window.root`'s `x`, `y`, `width` and `height` read back the
+  window's position and size after the user drags or resizes it, so a plugin can persist them.
+  A titled window drags by its title bar and stays clamped inside its parent.
+- **The close X** sits at (width - 28, 7). A component made a child of `window.root` at
+  `x = -28, y = 7, xAnchor = 1.0` lands in the X's slot (global 872,307 for a 300-wide window at
+  600,300) and moves with the window in the same frame. Hide the X with
+  `window.closeButton.hidden = true` to put your own button there.
+- **The title bar takes clicks.** Its drag layer covers the whole title bar except the X's slot
+  (width - 34 to width), so a button anywhere else on the title bar gets no clicks.
+- **Moving a window or panel from code.** A bare `root:SetPos(x, y)` gets snapped back by
+  PrettyUI's drag bounds (a Panel moved to 1593,571 stayed at 0,0). `root:SetPos(x, y)` followed
+  by the owner's `SetSize(width, height)` (its current size will do) sticks, because SetSize
+  makes PrettyUI remember the new spot.
+- **Panels Alt-drag**, but only with the console closed: the console blocks the keyboard, so
+  PrettyUI never sees Alt while it is open.
+- **Panel drawing.** A Panel draws its frame even at `backgroundAlpha = 0`, and scrolls content
+  that overflows it.
+
+The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
+types are in `types/prettyui.lua`.

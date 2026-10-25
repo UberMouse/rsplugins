@@ -1,7 +1,7 @@
 -- Seeing chores done from what the client shows the player: purchases at the shops in
 -- data/shops.lua, and banknotes collected near the givers in data/collections.lua. It reads
--- only those shops' inventories, the backpack, and the player's own tile; the pure tests
--- are in core/shops.lua.
+-- only those shops' inventories, the backpack, and the player's own tile; the pure
+-- comparisons are in core/shops.lua.
 --
 -- main.lua subscribes the inventory events to the handlers here and hands in an `apply`
 -- that changes the tracker, so this module keeps no chore state of its own: only the last
@@ -133,15 +133,17 @@ end
 
 -- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
 -- not, so picking one later shows the period's truth), and tick the chore if it isn't done
--- this period. One log line per chore it is recorded for.
+-- this period. A log line for each chore it changed: a repeat purchase at a shop already
+-- bought from this period changes nothing, and logs nothing.
 ---@param name string
 local function onPurchase(name)
     assert(options, "init runs before any inventory event")
     local say = options.say
     options.apply(function(tracker, now)
         for _, entry in ipairs(shopIndex[name]) do
-            tracker = state.recordPurchase(tracker, chore(entry.chore), name, now)
-            say("purchase", entry.chore, "at", entry.shop.name)
+            local recorded = state.recordPurchase(tracker, chore(entry.chore), name, now)
+            if recorded ~= tracker then say("purchase", entry.chore, "at", entry.shop.name) end
+            tracker = recorded
         end
         return tracker
     end)

@@ -235,6 +235,8 @@ describe("chore-tracker shop runs", function()
         assert.are.equal(writes, h.dbWrites)
         assert.are.equal(win, window(h))
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
+        local _, lines = h:output():gsub("%[CHORES%] purchase", "")
+        assert.are.equal(1, lines)
     end)
 
     it("counts a shop with two inventories as one, whichever is bought from", function()
@@ -356,6 +358,17 @@ describe("chore-tracker collections", function()
                 "%[CHORES%] collected " .. c.chore:gsub("%-", "%%-") .. " near " .. c.npc,
                 h:output()
             )
+        end)
+
+        it("ignores " .. c.chore .. "'s notes further away or on another plane", function()
+            for _, at in ipairs({ { c.x + 11, c.z, 0 }, { c.x, c.z - 11, 0 }, { c.x, c.z, 1 } }) do
+                local h = collectorAt(c.chore, c.notes, at[1], at[2], at[3])
+                local writes = h.dbWrites
+                gain(h, c.notes)
+                assert.is_false(ticked(h, c.name))
+                assert.are.equal(writes, h.dbWrites)
+                assert.is_nil(h:output():find("collected", 1, true))
+            end
         end)
 
         it("ignores " .. c.chore .. " without a clock or logged out", function()

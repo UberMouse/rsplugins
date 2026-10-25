@@ -106,7 +106,8 @@ Everything the plugin logs carries the tag `[CHORES]`: loading, collapsing and e
 character changes and waiting for the clock. It never logs your display name. Grep regex:
 `\[CHORES\]`.
 
-A purchase at a watched shop logs `[CHORES] purchase <chore id> at <shop>` (such as
+A purchase that ticks a chore, or is the period's first at that shop, logs
+`[CHORES] purchase <chore id> at <shop>` (such as
 `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`), and a collection that ticks its
 chore logs `[CHORES] collected <chore id> near <giver>` (such as
 `[CHORES] collected oldman-potato-cactus near the Weird Old Man`). Grep regex:

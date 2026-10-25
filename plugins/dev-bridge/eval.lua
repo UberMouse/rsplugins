@@ -6,7 +6,8 @@
 -- fanOut, which calls that event's probes. Four client aborts (docs/api-concepts.md, "Runtime
 -- limits we've hit") showed that a subscription made inside a callback, where snippets run,
 -- can never be unsubscribed safely, so a snippet's Subscribe and Unsubscribe only edit the
--- table, and reset clears it without a client call.
+-- table, and reset clears it without a client call. A fifth (a self-reload from Logic with 39
+-- load-time subscriptions) is why PROBE_EVENTS is only stage 1's six.
 --
 -- A snippet's globals live in the scratch table (its _G too); reads fall through to the
 -- bridge's globals. In it, these globals differ from the bridge's:
@@ -28,7 +29,9 @@
 --
 -- A snippet runs inside the bridge's Logic call, so one that runs past the client's 1000 ms
 -- limit is aborted by the client, which takes the bridge down with it (`pon dev-bridge`
--- recovers). Nothing guards against that.
+-- recovers). A probe on Logic runs in the same handler call as the bridge's own Logic work and
+-- shares that 1000 ms budget, so a slow one takes the bridge down too. Nothing guards against
+-- either.
 
 local protocol = require("protocol")
 local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is missing")
@@ -179,7 +182,8 @@ function eval.new(host)
     -- can't affect the client that way. Mark and sweep: a probe removed during the pass (by
     -- itself, another probe, an error or a clear) is only marked, so it isn't called later in
     -- the pass, and the pass sweeps it at the end; a probe added during the pass lands past
-    -- the length read at its start, so it is first called on the next dispatch. A probe's
+    -- the length read at its start, so it is first called on the next dispatch of that event,
+    -- including a nested one during this pass. A probe's
     -- first error removes it, logged once on the console and as a Log event.
     ---@param event string
     ---@param payload any

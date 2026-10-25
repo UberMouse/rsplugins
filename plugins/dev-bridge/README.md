@@ -59,8 +59,9 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   whitespace-separated words, so a quoted target, an extra leading word, an alias not listed
   above, or a bare `prl` or `poff` with no argument (whether the client treats that as "all
   plugins" is unknown) would pass: don't send one.
-- `prl dev-bridge` (or `plugins_reload dev-bridge`) is allowed: probed in the client, a plugin
-  reloads itself cleanly from its own `Logic` callback. The reloaded bridge is a new session, so
+- `prl dev-bridge` (or `plugins_reload dev-bridge`) is allowed: probed in the client, the
+  bridge reloads itself cleanly from its own `Logic` callback with its six load-time
+  subscriptions (with 39 it aborted the client, see below). The reloaded bridge is a new session, so
   that command's result is never reported. The daemon resolves it as "bridge restarted before
   reporting" as soon as the new session syncs, so `rsdev.py exec "prl dev-bridge"` exits 1
   (`error: bridge restarted before reporting`), or 3 (outcome unknown) if the new session hasn't
@@ -69,10 +70,12 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   answered), those commands are never run and never re-sent, and `rsdev.py exec` reports
   "delivered but no result" (exit 3). That is safe for non-idempotent commands, but exit 3
   means "unknown": check the client.
-- It subscribes once, at load, to every event in `protocol.PROBE_EVENTS` (all the API's events
-  but four, see "Eval"), each as `devBridge<Event>`, and never subscribes or unsubscribes
-  anything after that: an `Unsubscribe` of a subscription made inside a callback, or one called
-  during a dispatch, aborted the client four times (docs/api-concepts.md, "Runtime limits we've
+- It subscribes once, at load, to the six events in `protocol.PROBE_EVENTS`: `Logic` (as
+  `devBridgeLogic`), then the five above, each as `devBridge<Event>`, the same names and order
+  as stage 1's bridge. It never subscribes or unsubscribes anything after that: an
+  `Unsubscribe` of a subscription made inside a callback, or one called during a dispatch,
+  aborted the client four times, and a fifth abort came from `prl dev-bridge` run from `Logic`
+  while the bridge held 39 load-time subscriptions (docs/api-concepts.md, "Runtime limits we've
   hit"). Each handler forwards its event if it is one of the five above, does the bridge's own
   work on `Logic`, then runs the eval probes on that event. With none, that costs one table
   read per delivery.
@@ -112,18 +115,22 @@ Logic tick, one command per tick, like `exec`.
   forwarding happens before the probes run.
 - `Event.<Name>.Unsubscribe(name)` removes the probe; an unknown name does nothing. Both are
   table edits, safe anywhere, including from inside a probe.
-- **Probe-able events** are those in `protocol.PROBE_EVENTS`: every event in the API's `Event`
-  table except four, which `Subscribe` and `Unsubscribe` refuse with a Lua error naming the
-  event and why (an unknown name is refused the same way). `Draw` fires every rendered frame,
-  so a handler there would cost frame time for the whole session. `EntityDraw` fires for every
-  entity on every frame, and its subscribers' boolean return decides whether the entity is
-  drawn. `SettingsLayerReady` and `ContentLayerReady` need `hasSettingsIcon` / `hasRibbonIcon`
-  in the manifest, which the bridge lacks, so they never fire for it. Every other event, so a
-  probe can be added to any of them later without a new client subscription.
+- **Probe-able events** are the six in `protocol.PROBE_EVENTS`, the bridge's only
+  subscriptions: `Logic`, `ChatMessage`, `VarTransmit`, `InventoryUpdated`,
+  `MiniMenuEntrySelected` and `GameStateChanged`. The list is short because of the fifth client
+  abort: with 39 events (all but four) subscribed at load, `prl dev-bridge` from `Logic` aborted
+  the client, while stage 1's bridge, with these six, survived the same reload twice. Which of
+  the other events (or how many) caused it is unknown, so none is subscribed. `Subscribe` and
+  `Unsubscribe` refuse every other event with a Lua error naming the event and why: `Draw` fires
+  every rendered frame, so a handler there would cost frame time for the whole session;
+  `EntityDraw` fires for every entity on every frame, and its subscribers' boolean return
+  decides whether the entity is drawn; any other event is "not subscribed at load". An unknown
+  name is refused as "no such event".
 - **Changes during a fan-out** (mark and sweep): a probe removed while its event's probes are
   being called (by itself, another probe or an error) is not called again in that pass, and is
   dropped from the table when the pass ends. One added or replaced during the pass is first
-  called on the next delivery.
+  called on the next delivery of that event, including a nested delivery during the current
+  pass.
 - A probe whose callback raises is removed after its first error, which is reported once as a
   `Log` event (level `error`, source `eval`, naming the event, the probe's name and the error)
   and on the console. Other probes keep running.
@@ -150,8 +157,10 @@ Logic tick, one command per tick, like `exec`.
   text, an `Emit` tag or an error over 2 KB is cut, ending in `<+N bytes>`.
 - **A snippet that runs for over 1000 ms is killed by the client** (the per-call limit,
   docs/api-concepts.md). It runs inside the bridge's own Logic callback, so that takes the
-  bridge down with it, and only `pon dev-bridge` from the console brings it back. Nothing guards
-  against this: keep snippets short, and spread long work across ticks with a probe.
+  bridge down with it, and only `pon dev-bridge` from the console brings it back. A probe on
+  `Logic` runs in the same handler call as the bridge's own Logic work and shares that 1000 ms
+  budget, so a slow probe takes the bridge down the same way. Nothing guards against either:
+  keep snippets and probes short, and spread long work across ticks.
 - Eval compiles with `load(chunk, "=eval", "t", scratchEnv)`; the client honours the mode and
   env arguments (seen 2026-10-26: a snippet's `x = 1` stayed in the scratch env). Without
   `load`, every eval fails with "this client has no load()".
@@ -166,9 +175,12 @@ that text can still name other players. Residual risk: a `MiniMenuEntrySelected`
 player without `playerData`, a `PLAYER` entry type or a player action type (friends-list or
 chat-name right-clicks, say; unprobed) is not redacted.
 
-Those chat and menu filters cover only the events the bridge forwards itself. **They do not
-apply to eval:** a snippet can read anything the API exposes, other players included, and what
-it returns or emits reaches the daemon unfiltered. Eval is the conductor's local dev tool, with
+Those chat and menu filters cover only the events the bridge forwards itself, and default
+forwarding is unchanged by eval. **They do not apply to eval:** a snippet can read anything the
+API exposes, other players included, and a probe sees the full payload of every subscribed
+event (other players' chat text, inventories, menu entries naming players) and could emit it.
+What a snippet returns or emits reaches the daemon unfiltered. `KeyUp`, `KeyDown` and `KeyTyped`
+are no longer subscribed, so no probe sees keystrokes. Eval is the conductor's local dev tool, with
 the same trust as `exec`: it runs only Lua that the daemon on this machine sends. The daemon
 logs each snippet's first 200 characters to `dumps/rsdev/daemon.log` and hands the result to
 the waiting `rsdev.py eval`, which prints it. Its `Emit` and `Log` events are written to

@@ -10,9 +10,10 @@
 -- Logic tick. Requests start only from Logic, never from a completion callback (that crashed
 -- the client; docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
 --
--- The bridge subscribes each event in protocol.PROBE_EVENTS exactly once, here at load, and
--- unsubscribes them only in PluginShutdown: an Unsubscribe of a subscription made inside a
--- callback, or one called during a dispatch, aborted the client (docs/api-concepts.md,
+-- The bridge subscribes each event in protocol.PROBE_EVENTS (stage 1's six) exactly once, here
+-- at load, and unsubscribes them only in PluginShutdown: an Unsubscribe of a subscription made
+-- inside a callback, or one called during a dispatch, aborted the client, and so did a
+-- self-reload from Logic with more load-time subscriptions than these (docs/api-concepts.md,
 -- "Runtime limits we've hit"). Each handler forwards its event (the FORWARDED ones), does the
 -- bridge's own work (Logic), then calls the eval probes on that event (eval.lua), which are
 -- table entries, not subscriptions. An internal error stops the bridge by making every handler

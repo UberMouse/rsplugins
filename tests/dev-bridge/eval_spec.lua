@@ -182,17 +182,17 @@ describe("dev-bridge eval", function()
 
     it("streams a probe's print as a Log event, source eval, and writes the console", function()
         local h = support.loadEval()
-        support.eval(h, "Event.ServerLogic.Subscribe('p', function() print('server', 1) end)")
+        support.eval(h, "Event.Logic.Subscribe('p', function() print('probe', 1) end)")
         h:advance(20 * 30)
         support.answer(h)
         h:advance(20 * 10)
         local logs = evalLogs(support.last(h))
         assert.is_true(#logs >= 1)
         assert.are.same(
-            { plugin = "dev-bridge", level = "print", text = "server 1", source = "eval" },
+            { plugin = "dev-bridge", level = "print", text = "probe 1", source = "eval" },
             logs[1]
         )
-        assert.is_true(support.lines(h, "server 1") >= 1)
+        assert.is_true(support.lines(h, "probe 1") >= 1)
     end)
 
     it(
@@ -305,6 +305,14 @@ end)]]
             "^eval:1: Event.Draw is not probe%-able: it fires every rendered frame",
             draw.error
         )
+        -- Probe-able before the fifth client abort; no longer subscribed at load.
+        local server = support.eval(h, "local x = Event.ServerLogic.Subscribe('s', print)")
+        assert.is_false(server.ok)
+        assert.matches(
+            "^eval:1: Event.ServerLogic is not probe%-able: not subscribed at load: a "
+                .. "self%-reload from Logic with more subscriptions aborted the client",
+            server.error
+        )
         local nope = support.eval(h, "Event.Nope.Unsubscribe('d')")
         assert.is_false(nope.ok)
         assert.matches("Event.Nope is not probe%-able: no such event", nope.error)
@@ -314,7 +322,7 @@ end)]]
         local h = support.loadEval()
         h.env.require("protocol").limits.probes = 2
         support.eval(h, "Event.Logic.Subscribe('a', function() end)")
-        support.eval(h, "Event.ServerLogic.Subscribe('a', function() end)") -- another pair
+        support.eval(h, "Event.ChatMessage.Subscribe('a', function() end)") -- another pair
         local r = support.eval(h, "Event.Logic.Subscribe('b', function() end)")
         assert.is_false(r.ok)
         assert.matches("at most 2 probes per bridge session", r.error)

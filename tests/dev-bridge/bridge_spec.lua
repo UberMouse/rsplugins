@@ -12,9 +12,50 @@ local FORWARDED = {
     "GameStateChanged",
 }
 
+-- Load the bridge, recording every real Event.<X>.Subscribe it makes while main.lua runs, as
+-- "<event> <name>", in call order (the harness keeps subscriptions per event, not in order).
+---@return table h
+---@return string[] calls
+local function loadRecordingSubscribes()
+    local sandbox = require("tests.harness.sandbox")
+    local build = sandbox.build
+    local calls = {}
+    rawset(sandbox, "build", function(...)
+        local env = build(...)
+        local real = env.Event
+        env.Event = setmetatable({}, {
+            __index = function(_, event)
+                local sub = real[event]
+                return {
+                    Subscribe = function(name, fn)
+                        calls[#calls + 1] = event .. " " .. name
+                        return sub.Subscribe(name, fn)
+                    end,
+                    Unsubscribe = sub.Unsubscribe,
+                }
+            end,
+        })
+        return env
+    end)
+    local ok, h = pcall(support.load)
+    rawset(sandbox, "build", build)
+    assert(ok, h)
+    return h, calls
+end
+
 describe("dev-bridge", function()
-    it("subscribes each probe-able event once at load, and nothing else", function()
-        local h = support.load()
+    it("subscribes stage 1's six events at load, in stage 1's order and names", function()
+        -- Stage 1's bridge (commit 684eedc) ran a self-reload from Logic twice with exactly
+        -- these; one with 39 load-time subscriptions aborted the client (docs/api-concepts.md).
+        local h, calls = loadRecordingSubscribes()
+        assert.are.same({
+            "Logic devBridgeLogic",
+            "ChatMessage devBridgeChatMessage",
+            "VarTransmit devBridgeVarTransmit",
+            "InventoryUpdated devBridgeInventoryUpdated",
+            "MiniMenuEntrySelected devBridgeMiniMenuEntrySelected",
+            "GameStateChanged devBridgeGameStateChanged",
+        }, calls)
         local protocol = h.env.require("protocol")
         for _, event in ipairs(protocol.PROBE_EVENTS) do
             local subs = h.instance.subs[event]
@@ -22,13 +63,6 @@ describe("dev-bridge", function()
         end
         for event in pairs(protocol.PROBE_EXCLUDED) do
             assert.are.same({}, h.instance.subs[event], event)
-        end
-        local probeable = {}
-        for _, event in ipairs(protocol.PROBE_EVENTS) do
-            probeable[event] = true
-        end
-        for _, event in ipairs(FORWARDED) do
-            assert(probeable[event], event)
         end
     end)
 

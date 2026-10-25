@@ -532,28 +532,40 @@ describe("protocol probe-able events", function()
         return names
     end
 
-    it("lists every stub event in stub order, less the excluded ones, each once", function()
-        local expected = {}
-        for _, name in ipairs(stubEvents()) do
-            if not protocol.PROBE_EXCLUDED[name] then expected[#expected + 1] = name end
+    it("probes only stage 1's six events, and excludes every other stub event", function()
+        -- Stage 1's load-time subscriptions (commit 684eedc), in its order: the only set a
+        -- self-reload from Logic is known to survive (docs/api-concepts.md).
+        assert.are.same({
+            "Logic",
+            "ChatMessage",
+            "VarTransmit",
+            "InventoryUpdated",
+            "MiniMenuEntrySelected",
+            "GameStateChanged",
+        }, protocol.PROBE_EVENTS)
+        local covered = {}
+        for _, name in ipairs(protocol.PROBE_EVENTS) do
+            assert(protocol.PROBE_EXCLUDED[name] == nil, name .. " is probe-able and excluded")
+            covered[name] = true
         end
-        assert.are.same(expected, protocol.PROBE_EVENTS)
-        local stub = require("tests.harness.stubs").fields("Event")
         for name in pairs(protocol.PROBE_EXCLUDED) do
-            assert(stub[name], name .. " is excluded but not a stub event")
+            covered[name] = true
         end
+        local stub = {}
+        for _, name in ipairs(stubEvents()) do
+            stub[name] = true
+        end
+        assert.are.same(stub, covered)
     end)
 
-    it("leaves out the per-frame draw hooks and the layer events", function()
-        local excluded = {}
-        for name in pairs(protocol.PROBE_EXCLUDED) do
-            excluded[#excluded + 1] = name
+    it("keeps the render reasons for the draw hooks and one reason for the rest", function()
+        assert.matches("^it fires every rendered frame", protocol.PROBE_EXCLUDED.Draw)
+        assert.matches("^it fires for every entity", protocol.PROBE_EXCLUDED.EntityDraw)
+        local reason = "not subscribed at load: a self-reload from Logic with more "
+            .. "subscriptions aborted the client (docs/api-concepts.md)"
+        for name, why in pairs(protocol.PROBE_EXCLUDED) do
+            if name ~= "Draw" and name ~= "EntityDraw" then assert.are.equal(reason, why, name) end
         end
-        table.sort(excluded)
-        assert.are.same(
-            { "ContentLayerReady", "Draw", "EntityDraw", "SettingsLayerReady" },
-            excluded
-        )
     end)
 
     it("says why an event can't be probed, or nil when it can", function()
@@ -561,6 +573,11 @@ describe("protocol probe-able events", function()
         assert.matches(
             "^Event.EntityDraw is not probe%-able: it fires for every entity",
             protocol.probeEventError("EntityDraw")
+        )
+        assert.are.equal(
+            "Event.ServerLogic is not probe-able: not subscribed at load: a self-reload from "
+                .. "Logic with more subscriptions aborted the client (docs/api-concepts.md)",
+            protocol.probeEventError("ServerLogic")
         )
         assert.matches(
             "^Event.Nope is not probe%-able: no such event",

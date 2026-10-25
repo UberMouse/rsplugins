@@ -415,22 +415,40 @@ end
 ---------------------------------------------------------------------------
 
 -- Every event the bridge subscribes to, each once, at load, as "devBridge<Event>" (main.lua),
--- and so the events an eval probe may use: a probe is an entry in eval.lua's table that the
--- bridge's handler calls, never a client subscription of its own. Four client aborts
--- (docs/api-concepts.md, "Runtime limits we've hit") showed that a subscription made inside a
--- callback can never be unsubscribed safely, so nothing is subscribed after load.
--- The stub's Event table (docs/api/generated/core/events.lua) in its order, less
--- PROBE_EXCLUDED; a spec checks the two cover it exactly.
+-- in this order, and so the events an eval probe may use: a probe is an entry in eval.lua's
+-- table that the bridge's handler calls, never a client subscription of its own. These are
+-- stage 1's six (commit 684eedc): Logic, then the five forwarded events. Four client aborts
+-- showed that a subscription made inside a callback can never be unsubscribed safely, so
+-- nothing is subscribed after load; a fifth showed that a self-reload (`prl dev-bridge`) from
+-- Logic aborted the client with 39 load-time subscriptions, while it ran cleanly twice with
+-- these six (docs/api-concepts.md, "Runtime limits we've hit").
 protocol.PROBE_EVENTS = {
     "Logic",
+    "ChatMessage",
+    "VarTransmit",
+    "InventoryUpdated",
+    "MiniMenuEntrySelected",
+    "GameStateChanged",
+}
+
+local NOT_SUBSCRIBED = "not subscribed at load: a self-reload from Logic with more "
+    .. "subscriptions aborted the client (docs/api-concepts.md)"
+
+-- Every other event in the stub's Event table (docs/api/generated/core/events.lua), and why a
+-- probe can't use it. A spec checks that this and PROBE_EVENTS cover the stub exactly.
+protocol.PROBE_EXCLUDED = {
+    Draw = "it fires every rendered frame, so a handler there would cost frame time for the "
+        .. "whole session",
+    EntityDraw = "it fires for every entity on every frame, and its subscribers' boolean "
+        .. "return decides whether the entity is drawn, which a handler must not touch",
+}
+for _, event in ipairs({
     "ServerLogic",
     "OptionalDependencyChanged",
     "OptionalPermissionChanged",
     "KeyUp",
     "KeyDown",
     "KeyTyped",
-    "VarTransmit",
-    "ChatMessage",
     "PlayerEntityAdded",
     "PlayerEntityRemoved",
     "NPCEntityAdded",
@@ -439,7 +457,6 @@ protocol.PROBE_EVENTS = {
     "ObjStackEntityRemoved",
     "ObjStackEntityChanged",
     "WindowFocusChanged",
-    "GameStateChanged",
     "WindowSizeChanged",
     "SkillTransmit",
     "RunEnergyTransmit",
@@ -448,33 +465,22 @@ protocol.PROBE_EVENTS = {
     "MiniMenuClosed",
     "MiniMenuReady",
     "MiniMenuEntryAdded",
-    "MiniMenuEntrySelected",
     "LocAdded",
     "LocRemoved",
     "LocCustomised",
     "LocAnimation",
     "InventoryAdded",
-    "InventoryUpdated",
     "InventoryRemoved",
     "GrandExchangeOfferUpdated",
     "WorldCreated",
     "WorldUpdated",
     "RegionCreated",
     "RegionUpdated",
-}
-
--- The stub's events the bridge does not subscribe to, and why: a subscription can't be added
--- later, so leaving one out means no probe can ever use it.
-protocol.PROBE_EXCLUDED = {
-    Draw = "it fires every rendered frame, so a handler there would cost frame time for the "
-        .. "whole session",
-    EntityDraw = "it fires for every entity on every frame, and its subscribers' boolean "
-        .. "return decides whether the entity is drawn, which a handler must not touch",
-    SettingsLayerReady = "it needs hasSettingsIcon in the manifest, which dev-bridge lacks, so "
-        .. "it never fires for the bridge",
-    ContentLayerReady = "it needs hasRibbonIcon in the manifest, which dev-bridge lacks, so it "
-        .. "never fires for the bridge",
-}
+    "SettingsLayerReady",
+    "ContentLayerReady",
+}) do
+    protocol.PROBE_EXCLUDED[event] = NOT_SUBSCRIBED
+end
 
 local PROBE_SET = {}
 for _, event in ipairs(protocol.PROBE_EVENTS) do
@@ -556,8 +562,9 @@ end
 -- Console commands that disable the plugin named as their first argument, or revoke one of its
 -- permissions, short and long forms. plugins_setenabled is refused whatever its true/false
 -- argument, since telling a re-enable from a disable is error-prone. Reloading (prl,
--- plugins_reload) is allowed: a plugin can reload itself from its own Logic callback
--- (docs/api-concepts.md), which is how the daemon side restarts the bridge.
+-- plugins_reload) is allowed: a plugin can reload itself from its own Logic callback, which is
+-- how the daemon side restarts the bridge. That is only known to be safe with the bridge's six
+-- load-time subscriptions (PROBE_EVENTS; docs/api-concepts.md).
 local DISABLING = {
     poff = true,
     plugins_disable = true,

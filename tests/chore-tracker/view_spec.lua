@@ -21,6 +21,32 @@ describe("chore-tracker view", function()
         return s
     end
 
+    it("groups chores by period in display order, omitting an empty period", function()
+        ---@param groups table[]
+        ---@return table[]
+        local function summary(groups)
+            local out = {}
+            for i, group in ipairs(groups) do
+                local ids = {}
+                for j, chore in ipairs(group.chores) do
+                    ids[j] = chore.id
+                end
+                out[i] = { group.period, group.title, ids }
+            end
+            return out
+        end
+        assert.are.same({
+            { "daily", "Daily", { "d1", "d2", "dshop" } },
+            { "weekly", "Weekly", { "w1", "wshop" } },
+            { "monthly", "Monthly", { "m1" } },
+        }, summary(view.byPeriod(chores)))
+        assert.are.same(
+            { { "daily", "Daily", { "d1" } }, { "monthly", "Monthly", { "m1" } } },
+            summary(view.byPeriod({ chores[6], chores[1] }))
+        )
+        assert.are.same({}, view.byPeriod({}))
+    end)
+
     it("shows nothing when nothing is selected", function()
         assert.are.same({}, view.view(state.new(), chores, 0))
     end)

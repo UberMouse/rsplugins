@@ -123,4 +123,18 @@ describe("chore-tracker window", function()
         assert.matches("%[CHORES%] collapsed at", h:output())
         assert.matches("%[CHORES%] expanded from", h:output())
     end)
+
+    it("leaves no collapsed panel behind after two collapses and expands in one tick", function()
+        local h = loaded()
+        for _ = 1, 2 do
+            assert.is_true(
+                h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+            )
+            assert.is_true(
+                h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+            )
+        end
+        h:advance(20)
+        assert.are.same({}, h.ui:find("Panel"))
+    end)
 end)

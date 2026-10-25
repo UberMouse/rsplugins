@@ -78,4 +78,23 @@ describe("chore-tracker layout", function()
         local c = layout.clamp(layout.default(), 100, 100, 240, 160, 20)
         assert.are.same({ 0, 0, 240, 160 }, { c.x, c.y, c.width, c.height })
     end)
+
+    describe("windowForButton", function()
+        it("puts the window's button slot on the button", function()
+            local x, y = layout.windowForButton(500, 300, 320, 420, 1000, 800)
+            assert.are.same({ 500, 300 }, { x + 320 + layout.SLOT_X, y + layout.SLOT_Y })
+        end)
+
+        it("shifts the window in near the left edge", function()
+            assert.are.same({ 0, 293 }, { layout.windowForButton(100, 300, 320, 420, 1000, 800) })
+        end)
+
+        it("shifts the window up near the bottom edge", function()
+            assert.are.same({ 208, 380 }, { layout.windowForButton(500, 700, 320, 420, 1000, 800) })
+        end)
+
+        it("pins the window at 0 in a parent smaller than it", function()
+            assert.are.same({ 0, 0 }, { layout.windowForButton(900, 300, 320, 420, 200, 100) })
+        end)
+    end)
 end)

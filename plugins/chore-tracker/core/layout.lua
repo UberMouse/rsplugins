@@ -16,22 +16,24 @@ M.VERSION = 1
 ---@field buttonX integer the collapsed button's position in the plugin layer
 ---@field buttonY integer
 
--- PrettyUI's close X sits 28 px left of the window's right edge and 7 px down; the hamburger
--- takes that slot, so an open window's button is there.
+-- PrettyUI's close X is 20 px square and sits 28 px left of the window's right edge and 7 px
+-- down; the hamburger takes that slot, so an open window's button is there.
+M.BUTTON_SIZE = 20
 M.SLOT_X, M.SLOT_Y = -28, 7
+
+local DEFAULT_X, DEFAULT_Y, DEFAULT_WIDTH, DEFAULT_HEIGHT = 600, 300, 320, 420
 
 -- Where the window first opens: open, with its button in its slot.
 ---@return ChoreLayout
 function M.default()
-    local x, y, width, height = 600, 300, 320, 420
     return {
-        x = x,
-        y = y,
-        width = width,
-        height = height,
+        x = DEFAULT_X,
+        y = DEFAULT_Y,
+        width = DEFAULT_WIDTH,
+        height = DEFAULT_HEIGHT,
         collapsed = false,
-        buttonX = x + width + M.SLOT_X,
-        buttonY = y + M.SLOT_Y,
+        buttonX = DEFAULT_X + DEFAULT_WIDTH + M.SLOT_X,
+        buttonY = DEFAULT_Y + M.SLOT_Y,
     }
 end
 
@@ -107,6 +109,23 @@ function M.clamp(layout, parentWidth, parentHeight, minWidth, minHeight, buttonS
         buttonX = clamp(layout.buttonX, 0, math.max(0, parentWidth - buttonSize)),
         buttonY = clamp(layout.buttonY, 0, math.max(0, parentHeight - buttonSize)),
     }
+end
+
+-- Where a `width` x `height` window goes so its button's slot lands on (`buttonX`,
+-- `buttonY`), kept inside a `parentWidth` x `parentHeight` parent: near an edge it shifts,
+-- off the button's spot. A parent smaller than the window pins it at 0.
+---@param buttonX integer
+---@param buttonY integer
+---@param width integer
+---@param height integer
+---@param parentWidth integer
+---@param parentHeight integer
+---@return integer x
+---@return integer y
+function M.windowForButton(buttonX, buttonY, width, height, parentWidth, parentHeight)
+    local x = clamp(buttonX - (width + M.SLOT_X), 0, math.max(0, parentWidth - width))
+    local y = clamp(buttonY - M.SLOT_Y, 0, math.max(0, parentHeight - height))
+    return x, y
 end
 
 return M

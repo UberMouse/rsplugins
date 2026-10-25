@@ -5,8 +5,10 @@
 
 local M = {}
 
+---@alias ChorePeriod "daily"|"weekly"|"monthly"
+
 -- The periods in display order.
-M.PERIODS = { "daily", "weekly", "monthly" }
+M.PERIODS = { "daily", "weekly", "monthly" } ---@type ChorePeriod[]
 
 local MINUTES_PER_DAY = 1440
 
@@ -28,7 +30,7 @@ end
 
 -- The epoch minute when the `period` containing `minutes` began. A period starts at its own
 -- reset minute, so a Wednesday 00:00 is the start of a new week.
----@param period "daily"|"weekly"|"monthly"
+---@param period ChorePeriod
 ---@param minutes integer epoch minutes
 ---@return integer
 function M.periodStart(period, minutes)

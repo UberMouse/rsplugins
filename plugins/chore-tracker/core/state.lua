@@ -18,7 +18,7 @@ M.VERSION = 1
 ---@class Chore
 ---@field id string dailyscape's key
 ---@field name string
----@field period "daily"|"weekly"|"monthly"
+---@field period ChorePeriod
 ---@field shop boolean
 ---@field url string
 ---@field desc string plain text; `<br>` is its only markup
@@ -34,18 +34,27 @@ function M.new()
     return { selected = {}, done = {} }
 end
 
+---@param selected string[]
+---@return string[]
+local function copySelected(selected)
+    return table.move(selected, 1, #selected, 1, {})
+end
+
+---@param done table<string, integer>
+---@return table<string, integer>
+local function copyDone(done)
+    local out = {}
+    for id, minute in pairs(done) do
+        out[id] = minute
+    end
+    return out
+end
+
 -- A copy of `state`, so callers can change it without touching the original.
 ---@param state ChoreState
 ---@return ChoreState
 local function copy(state)
-    local selected, done = {}, {}
-    for i, id in ipairs(state.selected) do
-        selected[i] = id
-    end
-    for id, minute in pairs(state.done) do
-        done[id] = minute
-    end
-    return { selected = selected, done = done }
+    return { selected = copySelected(state.selected), done = copyDone(state.done) }
 end
 
 -- The chore with this id, or nil if the list has none.
@@ -88,11 +97,10 @@ end
 ---@return ChoreState
 function M.select(state, chores, id)
     if not M.find(chores, id) or M.isSelected(state, id) then return state end
-    local out = copy(state)
-    out.selected = inListOrder(chores, function(c)
+    local selected = inListOrder(chores, function(c)
         return c == id or M.isSelected(state, c)
     end)
-    return out
+    return { selected = selected, done = copyDone(state.done) }
 end
 
 -- `state` without `id` selected. Its completion is kept, so re-selecting it within the same
@@ -102,12 +110,11 @@ end
 ---@return ChoreState
 function M.deselect(state, id)
     if not M.isSelected(state, id) then return state end
-    local out = copy(state)
-    out.selected = {}
-    for _, selected in ipairs(state.selected) do
-        if selected ~= id then out.selected[#out.selected + 1] = selected end
+    local selected = {}
+    for _, other in ipairs(state.selected) do
+        if other ~= id then selected[#selected + 1] = other end
     end
-    return out
+    return { selected = selected, done = copyDone(state.done) }
 end
 
 -- `state` with `id` marked done at `now` (epoch minutes).
@@ -151,7 +158,7 @@ function M.serialise(state)
     for id, minute in pairs(state.done) do
         done[id] = math.tointeger(minute)
     end
-    return { version = M.VERSION, selected = copy(state).selected, done = done }
+    return { version = M.VERSION, selected = copySelected(state.selected), done = done }
 end
 
 -- A state from a stored value. Anything malformed (not a table, a missing or unknown

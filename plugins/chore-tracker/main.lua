@@ -32,7 +32,6 @@
 
 local chores = require("data/chores")
 local layout = require("core/layout")
-local period = require("core/period")
 local state = require("core/state")
 local view = require("core/view")
 local store = require("shell/store")
@@ -42,8 +41,7 @@ local function say(...)
     log("[CHORES]", ...)
 end
 
--- PrettyUI's close X is 20 px; the hamburger takes its slot (layout.SLOT_X, SLOT_Y).
-local BUTTON_SIZE = 20
+local BUTTON_SIZE = layout.BUTTON_SIZE
 
 -- The smallest the window can be resized to.
 local MIN_WIDTH, MIN_HEIGHT = 240, 160
@@ -75,9 +73,11 @@ assert(parent, "the plugin layer should exist once a plugin runs")
 -- their picks and ticks.
 local character = nil ---@type string?
 local tracker = state.new()
--- What the window shows: "loggedOut", "waiting" (for the game clock) or "ready".
-local phase = nil ---@type string?
-local mode = "list" -- or "settings"
+-- What the window shows: logged out, waiting for the game clock, or ready.
+---@alias ChorePhase "loggedOut"|"waiting"|"ready"
+---@alias ChoreMode "list"|"settings"
+local phase = nil ---@type ChorePhase?
+local mode = "list" ---@type ChoreMode
 local win = nil ---@type prettyui.Window?
 local openButton = nil ---@type prettyui.SpriteButton? the hamburger in the window
 local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
@@ -89,7 +89,7 @@ local headings = {} ---@type table<string, ui.Text>
 -- Work left for the next Logic tick. A button's action mustn't destroy the button while
 -- PrettyUI is still handling its click, so a view switch (which rebuilds the window) and
 -- removing the collapsed panel after expanding wait a tick.
-local pendingMode = nil ---@type string?
+local pendingMode = nil ---@type ChoreMode?
 local retiring = nil ---@type prettyui.Panel?
 -- The layout the store holds, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
@@ -117,14 +117,6 @@ end
 ---------------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------------
-
----@param v number
----@param lo number
----@param hi number
----@return number
-local function clamp(v, lo, hi)
-    return math.max(lo, math.min(hi, v))
-end
 
 -- A component's on-screen position relative to the plugin layer, in whole pixels.
 ---@param component ui.Component
@@ -240,7 +232,8 @@ local function buildList(w, openSettings)
                 { choice },
                 { onChange = onTick, colour = DONE_COLOUR, y = normal.root.y }
             )
-            -- Both start unticked and shown; showDone settles which one stays.
+            -- Both start unticked, normal shown and dimmed hidden; showDone swaps them for a
+            -- done row.
             dimmed.root.hidden = true
             rowWidgets[row.id] =
                 { normal = normal, dimmed = dimmed, tooltip = tooltip, done = false }
@@ -272,22 +265,18 @@ end
 ---@param openList fun()
 local function buildSettings(w, openList)
     w:AddSpriteButton("BACK", openList, { size = BUTTON_SIZE, tooltip = "Back to the list" })
-    for _, p in ipairs(period.PERIODS) do
+    for _, group in ipairs(view.byPeriod(chores)) do
         local choices = {}
-        for _, chore in ipairs(chores) do
-            if chore.period == p then
-                choices[#choices + 1] = {
-                    text = chore.shop and chore.name .. " (shop)" or chore.name,
-                    value = chore.id,
-                    selected = state.isSelected(tracker, chore.id),
-                    tooltip = tooltipFor(chore),
-                }
-            end
+        for _, chore in ipairs(group.chores) do
+            choices[#choices + 1] = {
+                text = chore.shop and chore.name .. " (shop)" or chore.name,
+                value = chore.id,
+                selected = state.isSelected(tracker, chore.id),
+                tooltip = tooltipFor(chore),
+            }
         end
-        if #choices > 0 then
-            w:AddTitle(view.TITLES[p])
-            w:AddCheckboxButton(choices, { onChange = onPick })
-        end
+        w:AddTitle(group.title)
+        w:AddCheckboxButton(choices, { onChange = onPick })
     end
 end
 
@@ -341,7 +330,7 @@ local function rebuild()
     assert(win, "the window exists from load to shutdown")
     local r = win.root
     buildWindow({ x = r.x, y = r.y, width = r.width, height = r.height })
-    if collapsed and win then win:Close() end
+    if collapsed then win:Close() end
 end
 
 local expand
@@ -383,14 +372,14 @@ expand = function()
     assert(win and collapsed and collapsedButton, "the collapsed button only exists collapsed")
     local x, y = screenPos(collapsedButton.root)
     local r = win.root
-    -- Kept inside the plugin layer: near an edge the window shifts, off the button's spot.
-    local wx = clamp(x - (r.width + layout.SLOT_X), 0, parent.width - r.width)
-    local wy = clamp(y - layout.SLOT_Y, 0, parent.height - r.height)
+    local wx, wy = layout.windowForButton(x, y, r.width, r.height, parent.width, parent.height)
     -- A bare SetPos is snapped back by PrettyUI; SetSize after it makes the spot stick.
     r:SetPos(wx, wy)
     win:SetSize(r.width, r.height)
     win:Show()
     collapsed.root.hidden = true
+    -- An earlier panel still waiting for the tick is past its click, so it can go now.
+    if retiring then retiring:Destroy() end
     retiring, collapsed, collapsedButton = collapsed, nil, nil
     say("expanded from", x, y)
 end
@@ -433,12 +422,13 @@ end
 local function sync(clockTicked)
     local name = currentName()
     local now = clockNow()
+    ---@type ChorePhase
     local nextPhase = name == nil and "loggedOut" or now == nil and "waiting" or "ready"
     local switched = name ~= character
     if switched then
         character = name
         if name then
-            tracker = store.loadState(name)
+            tracker = store.loadState(name, chores)
             say("showing the logged-in character's chores")
         else
             tracker = state.new()

@@ -38,7 +38,7 @@ M.MINUTES = {
     ["2028-03-01"] = 30591360,
 }
 
--- A small chore list: one plain and one shop chore per period except monthly.
+-- A small chore list: daily two plain and a shop, weekly a plain and a shop, monthly a plain.
 ---@return table[]
 function M.chores()
     ---@param id string

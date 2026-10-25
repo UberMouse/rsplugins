@@ -2,7 +2,6 @@
 -- character's display name, and one global entry for the window's layout. Each write
 -- happens only when the caller has a change to save.
 
-local chores = require("data/chores")
 local layout = require("core/layout")
 local state = require("core/state")
 
@@ -18,8 +17,9 @@ local function stateKey(name)
 end
 
 ---@param name string
+---@param chores Chore[] the list to keep stored ids from
 ---@return ChoreState
-function M.loadState(name)
+function M.loadState(name, chores)
     return state.deserialise(PersistentDB:Get(stateKey(name)), chores)
 end
 

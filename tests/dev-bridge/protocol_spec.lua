@@ -489,6 +489,27 @@ describe("protocol Log and Emit entries", function()
         assert.are.same({ tag = "n" }, dkjson.decode(protocol.emitEntry(5, "n", nil)).payload)
     end)
 
+    it("writes the same Emit as encoding the whole event", function()
+        for _, value in ipairs({ { a = 1, b = { "x\n", false } }, 'q"uote', 0.5, false, {} }) do
+            local whole = protocol.eventEntry(2, "Emit", { tag = "t", value = value })
+            assert.are.same(dkjson.decode(whole), dkjson.decode(protocol.emitEntry(2, "t", value)))
+        end
+    end)
+
+    it("encodes the value once, for the size check and the entry", function()
+        local json = require("dev/json")
+        local encode, calls = json.encode, 0
+        local value = { list = { 1, 2, 3 } }
+        json.encode = function(v)
+            if rawequal(v, value) then calls = calls + 1 end
+            return encode(v)
+        end
+        local ok, err = pcall(protocol.emitEntry, 1, "t", value)
+        json.encode = encode
+        assert(ok, err)
+        assert.are.equal(1, calls)
+    end)
+
     it("leaves out a value past valueBytes and says truncated", function()
         withLimit("valueBytes", 10, function()
             local e = dkjson.decode(protocol.emitEntry(1, "big", string.rep("x", 20)))

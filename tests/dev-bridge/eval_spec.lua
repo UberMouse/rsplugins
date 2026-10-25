@@ -235,6 +235,23 @@ describe("dev-bridge eval", function()
         probe({ logicTick = 1 }) -- as if the client delivered one more during teardown
     end)
 
+    it("removes the probes on shutdown even if the bridge's own unsubscribe raises", function()
+        local h = support.loadEval()
+        support.eval(h, counter("count"))
+        local env = h.instance.env
+        local real = env.Event
+        local logic = setmetatable({
+            Unsubscribe = function(name)
+                if name == "devBridgeLogic" then error("unsubscribe failed") end
+                return real.Logic.Unsubscribe(name)
+            end,
+        }, { __index = real.Logic })
+        env.Event = setmetatable({ Logic = logic }, { __index = real })
+        assert.is_false(pcall(h.unload, h))
+        env.Event = real
+        assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
+    end)
+
     it("starts a fresh scratch env after a reload", function()
         local h = support.loadEval()
         support.eval(h, "x = 1")

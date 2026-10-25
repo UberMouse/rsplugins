@@ -363,12 +363,13 @@ end
 
 -- Stop everything: no more callbacks, and any sync in flight is cancelled. Safe to call twice
 -- (an error stop, then PluginShutdown). Cancel runs under pcall so a raise can't skip the
--- "stopped after an error" message that follows the call.
+-- "stopped after an error" message that follows the call. Probes go first (evaluator.stop
+-- pcalls each), so they can't outlive the bridge if its own unsubscribe raises.
 local function teardown()
     if stopped then return end
     stopped = true
-    unsubscribeAll()
     evaluator.stop()
+    unsubscribeAll()
     if inFlight and inFlight.request then pcall(inFlight.request.Cancel, inFlight.request) end
     inFlight = nil
 end

@@ -377,20 +377,33 @@ function protocol.logEntry(t, level, text, source)
     })
 end
 
+-- `objectJson` (an encoded, non-empty object) with `key` added, its value the already-encoded
+-- `valueJson`.
+---@param objectJson string
+---@param key string
+---@param valueJson string
+---@return string
+local function withField(objectJson, key, valueJson)
+    return objectJson:sub(1, -2) .. "," .. json.encode(key) .. ":" .. valueJson .. "}"
+end
+
 -- An Emit event from a snippet's emit(tag, value). `value` is already serialised; past
--- valueBytes encoded it is left out and the payload says truncated.
+-- valueBytes encoded it is left out and the payload says truncated. The value is encoded
+-- once, for both the size check and the entry: a probe may emit a large table every tick,
+-- inside the client's 1000 ms limit on one call.
 ---@param t integer
 ---@param tag any
 ---@param value any
 ---@return string
 function protocol.emitEntry(t, tag, value)
     local payload = { tag = (capText(protocol.text(tag))) }
-    if #json.encode(value) > protocol.limits.valueBytes then
-        payload.truncated = true
-    else
-        payload.value = value
+    local encoded = value ~= nil and json.encode(value) or nil
+    if encoded and #encoded > protocol.limits.valueBytes then
+        payload.truncated, encoded = true, nil
     end
-    return protocol.eventEntry(t, "Emit", payload)
+    local payloadJson = json.encode(payload)
+    if encoded then payloadJson = withField(payloadJson, "value", encoded) end
+    return withField(json.encode({ t = t, name = "Emit" }), "payload", payloadJson)
 end
 
 -- A probe's subscription is registered under this prefix plus the name the snippet gave, so

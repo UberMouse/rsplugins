@@ -47,6 +47,11 @@ change.
 {"seq": 1, "tick": 12, "domain": "VarPlayer", "id": 5967, "name": "OPTION_TOGGLE1", "old": 40, "new": 48, "received": 1792446724.0}
 ```
 
+To find which var something you do in game moves, run
+`python3 -I scripts/var-dump-changes.py --last-session` and note its `last seq`, do it, then
+rerun with `--after <seq>`. It prints each change in order with the VarBits it moved (an update
+can name the base var rather than the VarBit); `--match <regex>` narrows it.
+
 Config-typed values (NPC, Obj, ...) are written as `{"config": NAME, "id": n}`. Other game types
 (e.g. CoordGrid) are written as their text form. If a value couldn't be read, there's an
 `error` field instead of `value`.

@@ -20,22 +20,27 @@
 --       - Shop runs: any purchase at any of a chore's shops (data/shops.lua, where the ones
 --         not yet seen in the client are marked unproven) marks it done for the period. A
 --         shop is an inventory the client gets only while that shop is open, and its stock
---         is the player's own, so a line whose count drops is the player buying. A chore
+--         is the player's own, so a line whose count drops is the player buying. A shop
+--         with a before- and an after-quest inventory counts a purchase in either. A chore
 --         with more than one shop shows how many were bought from this period, as "Feather
 --         Shop Run (1/4)", and its tooltip lists each shop as bought or not yet.
---       - Dell Monti: his apples and pineapples arrive as banknotes in the backpack, so his
---         chore ticks when those notes rise while the player is within 10 tiles of him.
---     Only the listed shops' inventories and the backpack are read. Each detection logs
---     "[CHORES] purchase <chore id> at <shop>" or "[CHORES] collected <chore id> near Dell
---     Monti" (grep: \[CHORES\] (purchase|collected)).
+--       - Collections (data/collections.lua): Dell Monti's apples and pineapples and the
+--         Weird Old Man's potato cacti (unproven) arrive as banknotes in the backpack, so
+--         such a chore ticks when its notes rise while the player is within 10 tiles of
+--         the giver, on the same plane.
+--     shell/detect.lua does this, reading only the listed shops' inventories, the backpack
+--     and the player's own tile. Each tick it makes logs "[CHORES] purchase <chore id> at
+--     <shop>" or "[CHORES] collected <chore id> near <giver>" (grep:
+--     \[CHORES\] (purchase|collected)).
 --   * Picks and ticks are saved per character (by display name) as they change. The window's
 --     position, size and collapsed state, and the collapsed button's spot, are saved for all
 --     characters. Logged out, the window says so; until the game clock reads, nothing can be
 --     ticked.
 --
 -- It reads only what the game already shows the player (an open shop's stock, their own
--- backpack and position): no permissions, nothing sent to the game, nothing about other players. Console lines carry
--- [CHORES] (grep: \[CHORES\]); the display name is never logged.
+-- backpack and position): no permissions, nothing sent to the game, nothing about other
+-- players. Console lines carry [CHORES] (grep: \[CHORES\]); the display name is never
+-- logged.
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -45,11 +50,12 @@
 -- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
 
 local chores = require("data/chores")
+local collections = require("data/collections")
 local shops = require("data/shops")
 local layout = require("core/layout")
-local shopCore = require("core/shops")
 local state = require("core/state")
 local view = require("core/view")
+local detect = require("shell/detect")
 local store = require("shell/store")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
@@ -99,7 +105,8 @@ local tracker = state.new()
 local phase = nil ---@type ChorePhase?
 local mode = "list" ---@type ChoreMode
 local win = nil ---@type prettyui.Window?
-local openButton = nil ---@type prettyui.SpriteButton? the title-bar slot: hamburger, or back in settings
+-- The title-bar slot's button: the hamburger, or back to the list in settings.
+local openButton = nil ---@type prettyui.SpriteButton?
 local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
 local collapsedButton = nil ---@type prettyui.SpriteButton?
 -- The list view's widgets, to update in place: chore id -> its two rows (with the text they
@@ -112,10 +119,6 @@ local headings = {} ---@type table<string, ui.Text>
 local pendingMode = nil ---@type ChoreMode?
 local pendingRebuild = false
 local retiring = nil ---@type prettyui.Panel?
--- Shop inventory name -> the chores it serves, and the slot counts of each listed shop
--- inventory the client holds now (one is held only while its shop is open).
-local SHOP_INDEX = shopCore.index(shops)
-local shopCounts = {} ---@type table<string, integer[]>
 -- The layout the store holds, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
 
@@ -483,83 +486,8 @@ local function saveLayoutIfChanged()
 end
 
 ---------------------------------------------------------------------------
--- Chores the plugin sees done: shop runs and Dell Monti
+-- Chores the plugin sees done (shell/detect.lua)
 ---------------------------------------------------------------------------
-
--- Dell Monti hands over his apples and pineapples as banknotes, with no shop open, so his
--- chore is those notes rising in the backpack while the player is near him. His spot is
--- the wiki's (runescape.wiki/w/Dell_Monti), as world tiles: !tele 0,43,49,11,50.
-local DELL_MONTI_CHORE = "dellmonti-pineapples"
-local DELL_MONTI = { x = 2763, z = 3186, level = 0 } ---@type ChoreTile
-local DELL_MONTI_RANGE = 10
-local DELL_MONTI_NOTES = { "CERT_COOKING_APPLE", "CERT_PINEAPPLE" }
--- The backpack's inventory config name.
-local BACKPACK = "INV"
--- How many of each of Dell Monti's notes the backpack held at its last update, or nil
--- while the client holds no backpack.
-local noteCounts = nil ---@type table<string, integer>?
-
--- An inventory the client holds, or nil.
----@param invType InvType
----@return Inv?
-local function findInv(invType)
-    -- Find returns an Inv, per game/inventory.html#findinvtype (the stub says Inv[]).
-    local inv = Inventory.Find(invType) --[[@as Inv?]]
-    -- isValid, per game/inventory.html#properties (the stub says `valid`).
-    ---@diagnostic disable-next-line: undefined-field
-    if inv and inv.isValid then return inv end
-    return nil
-end
-
--- The slot counts of a shop inventory, or nil if the client doesn't hold it.
----@param invType InvType
----@return integer[]?
-local function readCounts(invType)
-    local inv = findInv(invType)
-    local slots = inv and inv:GetSlots() -- "Returns nil on failure"
-    if not slots then return nil end
-    local counts = {}
-    for i, slot in ipairs(slots) do
-        counts[i] = slot.count
-    end
-    return counts
-end
-
--- How many of each of Dell Monti's notes the backpack holds, or nil without a backpack.
----@return table<string, integer>?
-local function readNotes()
-    local inv = findInv(config.Inv[BACKPACK] --[[@as InvType]])
-    if not inv then return nil end
-    local counts = {}
-    for _, name in ipairs(DELL_MONTI_NOTES) do
-        -- The cast drops config.Obj's FromID member from the type: `name` is an obj name.
-        counts[name] = inv:GetTotal(config.Obj[name] --[[@as ObjType]])
-    end
-    return counts
-end
-
--- The player's own tile, or nil when logged out or loading.
----@return ChoreTile?
-local function playerTile()
-    if not Player.IsAvailable() then return nil end
-    local entity = Player.GetEntity()
-    local at = entity and entity.coordGrid
-    if not at then return nil end
-    return { x = at.x, z = at.z, level = at.level }
-end
-
--- Take the counts of every listed shop the client holds now, and of Dell Monti's notes in
--- the backpack, dropping older ones. Done on each character switch, which includes the
--- load's first sync when logged in, so a plugin reloaded with a shop open still sees the
--- next purchase, and one character's counts are never compared with another's.
-local function scanInventories()
-    shopCounts = {}
-    for name in pairs(SHOP_INDEX) do
-        -- The cast drops config.Inv's FromID member from the type: `name` is an inv name.
-        shopCounts[name] = readCounts(config.Inv[name] --[[@as InvType]])
-    end
-    noteCounts = readNotes()
-end
 
 -- Keep a changed tracker: save it and show it. `changed` the same table as `tracker` means
 -- nothing changed, and nothing is written.
@@ -572,83 +500,19 @@ local function keep(changed)
     if phase == "ready" and mode == "list" then refreshList() end
 end
 
--- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
--- not, so picking one later shows the period's truth), and tick the chore if it isn't done
--- this period. Like a tick by hand, it's ignored without a character and a clock to mark
--- it against.
----@param name string
-local function onPurchase(name)
-    local now = clockNow()
-    if character == nil or now == nil then return end
-    local changed = tracker
-    for _, entry in ipairs(SHOP_INDEX[name]) do
-        local chore = state.find(chores, entry.chore)
-        assert(chore, "data/shops.lua names only chores in data/chores.lua")
-        changed = state.recordPurchase(changed, chore, name, now)
-        say("purchase", entry.chore, "at", entry.shop.name)
-    end
-    keep(changed)
-end
-
--- Dell Monti's notes rose in the backpack: if the player is near him, tick his chore (it
--- was ticked already this period, nothing is written). Ignored, as a purchase is, without
--- a character and a clock.
-local function onNotesRose()
-    local now = clockNow()
-    local at = playerTile()
-    if character == nil or now == nil or at == nil then return end
-    if not shopCore.near(at, DELL_MONTI, DELL_MONTI_RANGE) then return end
-    local chore = state.find(chores, DELL_MONTI_CHORE)
-    assert(chore, "Dell Monti's chore is in data/chores.lua")
-    say("collected", DELL_MONTI_CHORE, "near Dell Monti")
-    keep(state.autoMark(tracker, chore, now))
-end
-
--- The backpack changed: compare Dell Monti's notes with their last counts. Only a rise
--- reads the player's position.
-local function onBackpack()
-    local before, after = noteCounts, readNotes()
-    noteCounts = after
-    if before and after and shopCore.rose(before, after) then onNotesRose() end
-end
-
--- Inventory events for anything but a listed shop or the backpack (the bank, say) return
--- after reading the inventory's name, so their size costs nothing here.
-
----@param ev InventoryAddedEventPayload
-local function onInventoryAdded(ev)
-    local name = ev.inv.configName
-    if SHOP_INDEX[name] then
-        shopCounts[name] = readCounts(ev.inv)
-    elseif name == BACKPACK then
-        noteCounts = readNotes()
-    end
-end
-
--- A listed shop's stock changed: any line lower than before is a purchase. The new counts
--- become the baseline either way, so a restock or a sale (counts rising) only moves it.
----@param ev InventoryUpdatedEventPayload
-local function onInventoryUpdated(ev)
-    local name = ev.inv.configName
-    if name == BACKPACK then
-        onBackpack()
-        return
-    end
-    if not SHOP_INDEX[name] then return end
-    local before, after = shopCounts[name], readCounts(ev.inv)
-    shopCounts[name] = after
-    if before and after and shopCore.dropped(before, after) then onPurchase(name) end
-end
-
----@param ev InventoryRemovedEventPayload
-local function onInventoryRemoved(ev)
-    local name = ev.inv.configName
-    if name == BACKPACK then
-        noteCounts = nil
-    else
-        shopCounts[name] = nil
-    end
-end
+detect.init({
+    chores = chores,
+    shops = shops,
+    collections = collections,
+    say = say,
+    -- Like a tick by hand, a chore seen done is ignored without a character and a clock to
+    -- mark it against.
+    apply = function(change)
+        local now = clockNow()
+        if character == nil or now == nil then return end
+        keep(change(tracker, now))
+    end,
+})
 
 ---------------------------------------------------------------------------
 -- Following the game
@@ -674,7 +538,7 @@ local function sync(clockTicked)
             tracker = state.new()
             say("logged out")
         end
-        scanInventories()
+        detect.scan()
     end
     if switched or nextPhase ~= phase then
         if nextPhase == "waiting" and phase ~= "waiting" then say("waiting for the game clock") end
@@ -715,9 +579,9 @@ Event.VarTransmit.Subscribe("chore-tracker", function(ev)
     if ev.var.id == CLOCK_ID and ev.var.typeName == CLOCK_DOMAIN then sync(true) end
 end)
 
-Event.InventoryAdded.Subscribe("chore-tracker", onInventoryAdded)
-Event.InventoryUpdated.Subscribe("chore-tracker", onInventoryUpdated)
-Event.InventoryRemoved.Subscribe("chore-tracker", onInventoryRemoved)
+Event.InventoryAdded.Subscribe("chore-tracker", detect.onInventoryAdded)
+Event.InventoryUpdated.Subscribe("chore-tracker", detect.onInventoryUpdated)
+Event.InventoryRemoved.Subscribe("chore-tracker", detect.onInventoryRemoved)
 
 sync(false)
 -- The layout as stored, then fitted to the plugin layer. savedLayout keeps the stored one,

@@ -1,0 +1,226 @@
+-- Seeing chores done from what the client shows the player: purchases at the shops in
+-- data/shops.lua, and banknotes collected near the givers in data/collections.lua. It reads
+-- only those shops' inventories, the backpack, and the player's own tile; the pure tests
+-- are in core/shops.lua.
+--
+-- main.lua subscribes the inventory events to the handlers here and hands in an `apply`
+-- that changes the tracker, so this module keeps no chore state of its own: only the last
+-- counts it read, to compare the next ones with.
+
+local shopCore = require("core/shops")
+local state = require("core/state")
+
+local M = {}
+
+-- The backpack's inventory config name.
+local BACKPACK = "INV"
+
+---@alias ChoreChange fun(tracker: ChoreState, now: integer): ChoreState
+
+---@class ChoreDetectOptions
+---@field chores Chore[]
+---@field shops table<string, ChoreShop[]>
+---@field collections ChoreCollection[]
+---@field say fun(...: any)
+---Run `change` on the tracker at the clock's minute and keep what it returns (the same
+---table means nothing changed); skipped, `change` uncalled, without a character and a
+---clock.
+---@field apply fun(change: ChoreChange)
+
+local options = nil ---@type ChoreDetectOptions?
+-- Shop inventory name -> the chores and shops it serves.
+local shopIndex = {} ---@type table<string, ChoreShopEntry[]>
+-- Every collection's note names, once each.
+local noteNames = {} ---@type string[]
+-- The slot counts of each listed shop inventory the client holds now (one is held only
+-- while its shop is open), and the backpack's count of each note, nil without a backpack.
+local shopCounts = {} ---@type table<string, integer[]>
+local noteCounts = nil ---@type table<string, integer>?
+
+---@param o ChoreDetectOptions
+function M.init(o)
+    options = o
+    shopIndex = shopCore.index(o.shops)
+    noteNames = {}
+    local seen = {}
+    for _, collection in ipairs(o.collections) do
+        for _, name in ipairs(collection.notes) do
+            if not seen[name] then noteNames[#noteNames + 1] = name end
+            seen[name] = true
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- Reading the game
+---------------------------------------------------------------------------
+
+-- An inventory the client holds, or nil.
+---@param invType InvType
+---@return Inv?
+local function findInv(invType)
+    -- Find returns an Inv, per game/inventory.html#findinvtype (the stub says Inv[]).
+    local inv = Inventory.Find(invType) --[[@as Inv?]]
+    -- isValid, per game/inventory.html#properties (the stub says `valid`).
+    ---@diagnostic disable-next-line: undefined-field
+    if inv and inv.isValid then return inv end
+    return nil
+end
+
+-- The slot counts of a shop inventory, or nil if the client doesn't hold it.
+---@param invType InvType
+---@return integer[]?
+local function readCounts(invType)
+    local inv = findInv(invType)
+    local slots = inv and inv:GetSlots() -- "Returns nil on failure"
+    if not slots then return nil end
+    local counts = {}
+    for i, slot in ipairs(slots) do
+        counts[i] = slot.count
+    end
+    return counts
+end
+
+-- How many of each collection note the backpack holds, or nil without a backpack.
+---@return table<string, integer>?
+local function readNotes()
+    local inv = findInv(config.Inv[BACKPACK] --[[@as InvType]])
+    if not inv then return nil end
+    local counts = {}
+    for _, name in ipairs(noteNames) do
+        -- The cast drops config.Obj's FromID member from the type: `name` is an obj name.
+        counts[name] = inv:GetTotal(config.Obj[name] --[[@as ObjType]])
+    end
+    return counts
+end
+
+-- The player's own tile, or nil when logged out or loading.
+---@return ChoreTile?
+local function playerTile()
+    if not Player.IsAvailable() then return nil end
+    local entity = Player.GetEntity()
+    local at = entity and entity.coordGrid
+    if not at then return nil end
+    return { x = at.x, z = at.z, level = at.level }
+end
+
+-- Take the counts of every listed shop the client holds now, and of the notes in the
+-- backpack, dropping older ones. main.lua calls it on each character switch, which
+-- includes the load's first sync when logged in, so a plugin reloaded with a shop open
+-- still sees the next purchase, and one character's counts are never compared with
+-- another's.
+function M.scan()
+    shopCounts = {}
+    for name in pairs(shopIndex) do
+        -- The cast drops config.Inv's FromID member from the type: `name` is an inv name.
+        shopCounts[name] = readCounts(config.Inv[name] --[[@as InvType]])
+    end
+    noteCounts = readNotes()
+end
+
+---------------------------------------------------------------------------
+-- What counts as done
+---------------------------------------------------------------------------
+
+---@param id string
+---@return Chore
+local function chore(id)
+    assert(options, "init runs before any inventory event")
+    local found = state.find(options.chores, id)
+    assert(found, "data/shops.lua and data/collections.lua name only chores in data/chores.lua")
+    return found
+end
+
+-- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
+-- not, so picking one later shows the period's truth), and tick the chore if it isn't done
+-- this period. One log line per chore it is recorded for.
+---@param name string
+local function onPurchase(name)
+    assert(options, "init runs before any inventory event")
+    local say = options.say
+    options.apply(function(tracker, now)
+        for _, entry in ipairs(shopIndex[name]) do
+            tracker = state.recordPurchase(tracker, chore(entry.chore), name, now)
+            say("purchase", entry.chore, "at", entry.shop.name)
+        end
+        return tracker
+    end)
+end
+
+-- Some notes rose in the backpack: tick each collection they belong to whose giver the
+-- player stands near, if its chore isn't done this period, logging only a tick.
+---@param before table<string, integer>
+---@param after table<string, integer>
+local function onNotesRose(before, after)
+    assert(options, "init runs before any inventory event")
+    local say, at = options.say, playerTile()
+    if not at then return end
+    for _, collection in ipairs(options.collections) do
+        if
+            shopCore.rose(before, after, collection.notes)
+            and shopCore.near(at, collection.tile, collection.range)
+        then
+            options.apply(function(tracker, now)
+                local ticked = state.autoMark(tracker, chore(collection.chore), now)
+                if ticked ~= tracker then
+                    say("collected", collection.chore, "near", collection.npc)
+                end
+                return ticked
+            end)
+        end
+    end
+end
+
+-- The backpack changed: compare the notes with their last counts. Only a rise reads the
+-- player's tile.
+local function onBackpack()
+    local before, after = noteCounts, readNotes()
+    noteCounts = after
+    if before and after and shopCore.rose(before, after, noteNames) then
+        onNotesRose(before, after)
+    end
+end
+
+---------------------------------------------------------------------------
+-- Inventory events
+---------------------------------------------------------------------------
+
+-- Events for anything but a listed shop or the backpack (the bank, say) return after
+-- reading the inventory's name, so their size costs nothing here.
+
+---@param ev InventoryAddedEventPayload
+function M.onInventoryAdded(ev)
+    local name = ev.inv.configName
+    if shopIndex[name] then
+        shopCounts[name] = readCounts(ev.inv)
+    elseif name == BACKPACK then
+        noteCounts = readNotes()
+    end
+end
+
+-- A listed shop's stock changed: any line lower than before is a purchase. The new counts
+-- become the baseline either way, so a restock or a sale (counts rising) only moves it.
+---@param ev InventoryUpdatedEventPayload
+function M.onInventoryUpdated(ev)
+    local name = ev.inv.configName
+    if name == BACKPACK then
+        onBackpack()
+        return
+    end
+    if not shopIndex[name] then return end
+    local before, after = shopCounts[name], readCounts(ev.inv)
+    shopCounts[name] = after
+    if before and after and shopCore.dropped(before, after) then onPurchase(name) end
+end
+
+---@param ev InventoryRemovedEventPayload
+function M.onInventoryRemoved(ev)
+    local name = ev.inv.configName
+    if name == BACKPACK then
+        noteCounts = nil
+    else
+        shopCounts[name] = nil
+    end
+end
+
+return M

@@ -3,8 +3,8 @@
 A checklist for RuneScape's repeatable chores, the daily, weekly and monthly tasks such as the
 Daily Challenge, Soul Reaper or the Giant Oyster. Pick the ones you do, tick them off as you go,
 and they clear themselves when the game's reset comes round. A few chores also tick themselves:
-the shop runs, when you buy from one of their shops, and Dell Monti's, when his notes arrive. It
-only reads what the game already shows you, never does anything in game for you, and sends
+the shop runs, when you buy from one of their shops, and Dell Monti's and the Weird Old Man's,
+when their notes arrive. It only reads what the game already shows you, never does anything in game for you, and sends
 nothing anywhere.
 
 ## Using it
@@ -40,10 +40,13 @@ ticked until its reset, and unticking one by hand changes nothing below.
   alone: a line that goes down is you buying. A restock or something you sell to the shop
   doesn't count. A chore with more than one shop shows how many you have bought from this
   period, as "Feather Shop Run (1/4)", and its tooltip lists each shop as "bought" or "not
-  yet". When a count changes the window redraws, which scrolls it back to the top.
-- **Dell Monti.** His apples and pineapples arrive as banknotes in your backpack with no shop
-  open, so his chore ticks when his apple or pineapple notes go up in your backpack while you
-  are within 10 tiles of him, on his floor.
+  yet". A shop the game has in two versions, before and after a quest, counts once, bought
+  from either. When a count changes the window redraws, which scrolls it back to the top.
+- **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
+  your backpack with no shop open, so the chore ticks when those notes go up in your backpack
+  while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or
+  pineapple notes, or the Weird Old Man's potato cactus notes (outside the Kalphite Lair;
+  *unproven*, as nobody has checked his yet).
 
 The shops each chore watches. Those marked *unproven* were matched by name to the game's own
 list of shop inventories but no purchase there has been checked yet; they tick the same way.
@@ -55,13 +58,12 @@ list of shop inventories but no purchase there has been checked yet; they tick t
 | Yak Hide | Vanligga (Jatizso) |
 | Feathers of Ma'at | Feathers of Ma'at (Sophanem) |
 | Broad Arrowheads | Turael (Burthorpe), Sumona (Pollnivneach) |
-| Rune Shop Run | Aubury (Varrock), Betty (Port Sarim), Ali Morrisane (Al Kharid), Carwen Essencebinder, Void Knight Magic Store, Magic Guild (Yanille), Tutab (Ape Atoll), Lundail (Mage Arena), Rune store (Anachronia), the last five *unproven* |
+| Rune Shop Run | Aubury (Varrock), Betty (Port Sarim), Ali Morrisane (Al Kharid), Carwen Essencebinder, Void Knight Magic Store, Magic Guild (Yanille), Tutab (Ape Atoll), Lundail (Mage Arena), Rune store (Anachronia), Baba Yaga (Lunar Isle), Mage of Zamorak (Wilderness), the last five *unproven* |
 | Meat Packs | Chargurr (Oo'glog, *unproven*) |
 | Planks from Razmire | Razmire Keelgan (Mort'ton, *unproven*) |
 
-Not watched yet, so tick these by hand: Baba Yaga's and the Mage of Zamorak's rune shops (each
-has two versions in the game, before and after a quest, and which one you see isn't known),
-Bandit Duty Free (no match found), and the Weird Old Man (he isn't a shop).
+Not watched yet, so tick it by hand: Bandit Duty Free (no match for Noterazzo's shop was found
+in the game's list).
 
 ## When chores reset
 
@@ -104,24 +106,27 @@ Everything the plugin logs carries the tag `[CHORES]`: loading, collapsing and e
 character changes and waiting for the clock. It never logs your display name. Grep regex:
 `\[CHORES\]`.
 
-A chore it ticks for you logs one line per detection, `[CHORES] purchase <chore id> at <shop>`
-(such as `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`) or
-`[CHORES] collected dellmonti-pineapples near Dell Monti`. Grep regex:
+A purchase at a watched shop logs `[CHORES] purchase <chore id> at <shop>` (such as
+`[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`), and a collection that ticks its
+chore logs `[CHORES] collected <chore id> near <giver>` (such as
+`[CHORES] collected oldman-potato-cactus near the Weird Old Man`). Grep regex:
 `\[CHORES\] (purchase|collected)`.
 
 ## Files
 
 | File | What |
 |---|---|
-| `main.lua` | The window, its collapsed button, the two views, following the login and clock, and seeing shop runs and Dell Monti done |
+| `main.lua` | The window, its collapsed button, the two views, and following the login and clock |
+| `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
-| `core/shops.lua` | Spotting a purchase in a shop's counts, and Dell Monti's notes near him |
+| `core/shops.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/view.lua` | What the list shows, as plain data |
 | `core/layout.lua` | The saved window layout, read back and kept on screen |
 | `data/chores.lua` | The dailyscape chore list (generated) |
 | `data/shops.lua` | The shops each shop-run chore watches (hand-written) |
+| `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
 
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
 (`docs/testing.md`).

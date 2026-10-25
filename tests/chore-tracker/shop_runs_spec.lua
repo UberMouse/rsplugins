@@ -222,6 +222,36 @@ describe("chore-tracker shop runs", function()
         assert.is_nil(h.db["state:Zezima"])
     end)
 
+    it("writes nothing for another purchase at a shop bought from this period", function()
+        local h = loaded()
+        pick(h, { FEATHERS.id })
+        openShop(h, "FISHINGSHOP", 20)
+        setFeathers(h, "FISHINGSHOP", 19)
+        h:advance(20)
+        local win, writes = window(h), h.dbWrites
+        setFeathers(h, "FISHINGSHOP", 18)
+        setFeathers(h, "FISHINGSHOP", 10)
+        h:advance(20)
+        assert.are.equal(writes, h.dbWrites)
+        assert.are.equal(win, window(h))
+        assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
+    end)
+
+    it("counts a shop with two inventories as one, whichever is bought from", function()
+        local h = loaded()
+        pick(h, { "rune-shop-run" })
+        h.world:setInventory("LUNAR_RUNESHOP_COMPL", { { obj = "AIRRUNE", count = 7000 } })
+        h.world:setInventory("LUNAR_RUNESHOP_COMPL", { { obj = "AIRRUNE", count = 6000 } })
+        h.world:removeInventory("LUNAR_RUNESHOP_COMPL")
+        h.world:setInventory("LUNAR_RUNESHOP", { { obj = "AIRRUNE", count = 7000 } })
+        h.world:setInventory("LUNAR_RUNESHOP", { { obj = "AIRRUNE", count = 6000 } })
+        h:advance(20)
+        assert.are.equal("Rune Shop Run (1/11)", (rowShown(h, "Rune Shop Run")))
+        local _, tooltip = rowShown(h, "Rune Shop Run")
+        assert.matches("bought  Baba Yaga, Lunar Isle", tooltip)
+        assert.matches("purchase rune%-shop%-run at Baba Yaga, Lunar Isle", h:output())
+    end)
+
     it("ticks on a purchase at an unproven shop as at a proven one", function()
         local h = loaded()
         pick(h, { "meat-packs", "rune-shop-run" })
@@ -232,7 +262,7 @@ describe("chore-tracker shop runs", function()
         h:advance(20)
         assert.is_true(ticked(h, "Meat Packs"))
         assert.is_true(ticked(h, "Rune Shop Run"))
-        assert.are.equal("Rune Shop Run (1/9)", (rowShown(h, "Rune Shop Run")))
+        assert.are.equal("Rune Shop Run (1/11)", (rowShown(h, "Rune Shop Run")))
         assert.matches("%[CHORES%] purchase meat%-packs at Chargurr, Oo'glog", h:output())
         assert.matches("%[CHORES%] purchase rune%-shop%-run at Void Knight Magic Store", h:output())
     end)
@@ -257,6 +287,87 @@ describe("chore-tracker shop runs", function()
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
         assert.are.equal(2, h.db["state:Zezima"].value.version)
     end)
+end)
+
+-- Logged in at the tile given (the clock at `opts.clock`, logged out with `opts.login`
+-- false), with `notes` x10 in the backpack, the chore `id` picked.
+---@param id string
+---@param notes string
+---@param x integer
+---@param z integer
+---@param level integer?
+---@param opts table?
+---@return table
+local function collectorAt(id, notes, x, z, level, opts)
+    local h = helpers.loaded({ load = false })
+    h.world:setPosition(x, z, level)
+    h.world:setInventory("INV", {
+        { obj = notes, count = 10 },
+        { obj = "COINS", count = 500 },
+    }, 28)
+    h:load()
+    pick(h, { id })
+    if opts and opts.clock then setClock(h, opts.clock) end
+    if opts and opts.login == false then
+        h.world:logout()
+        h:advance(POLL_MS)
+    end
+    return h
+end
+
+-- The backpack's `notes` rise from 10 to 40.
+---@param h table
+---@param notes string
+local function gain(h, notes)
+    h.world:setInventory("INV", {
+        { obj = notes, count = 40 },
+        { obj = "COINS", count = 500 },
+    }, 28)
+end
+
+local COLLECTORS = {
+    {
+        chore = "dellmonti-pineapples",
+        name = "Pineapples and Apples from Dell Monti",
+        npc = "Dell Monti",
+        notes = "CERT_PINEAPPLE",
+        x = 2763,
+        z = 3186,
+    },
+    {
+        chore = "oldman-potato-cactus",
+        name = "Potato Cactus from Weird Old Man",
+        npc = "the Weird Old Man",
+        notes = "CERT_CACTUS_POTATO",
+        x = 3232,
+        z = 3108,
+    },
+}
+
+describe("chore-tracker collections", function()
+    for _, c in ipairs(COLLECTORS) do
+        it("ticks " .. c.chore .. " when its notes arrive near " .. c.npc, function()
+            local h = collectorAt(c.chore, c.notes, c.x - 10, c.z + 10)
+            local writes = h.dbWrites
+            gain(h, c.notes)
+            assert.is_true(ticked(h, c.name))
+            assert.are.equal(writes + 1, h.dbWrites)
+            assert.matches(
+                "%[CHORES%] collected " .. c.chore:gsub("%-", "%%-") .. " near " .. c.npc,
+                h:output()
+            )
+        end)
+
+        it("ignores " .. c.chore .. " without a clock or logged out", function()
+            for _, opts in ipairs({ { clock = 0 }, { login = false } }) do
+                local h = collectorAt(c.chore, c.notes, c.x, c.z, 0, opts)
+                local writes = h.dbWrites
+                gain(h, c.notes)
+                assert.are.equal(writes, h.dbWrites)
+                assert.is_nil(h:output():find("collected", 1, true))
+            end
+        end)
+    end
 end)
 
 describe("chore-tracker Dell Monti", function()
@@ -302,6 +413,9 @@ describe("chore-tracker Dell Monti", function()
         -- More notes the same week change nothing stored.
         h.world:setInventory("INV", { { obj = "CERT_PINEAPPLE", count = 99 } }, 28)
         assert.are.equal(writes + 1, h.dbWrites)
+        -- Nor are they logged: only a tick is.
+        local _, lines = h:output():gsub("collected", "")
+        assert.are.equal(1, lines)
     end)
 
     it("ignores his notes arriving further away or on another plane", function()

@@ -31,7 +31,8 @@ M.VERSION = 2
 ---@class ChoreState
 ---@field selected string[] picked chore ids, in chore-list order
 ---@field done table<string, integer> chore id -> epoch minute it was marked done
----@field shops table<string, table<string, integer>> chore id -> shop inv name -> epoch minute of the last purchase there
+---chore id -> shop inventory name -> epoch minute of the last purchase there
+---@field shops table<string, table<string, integer>>
 
 -- An empty state: nothing selected, nothing done, nothing bought.
 ---@return ChoreState
@@ -182,21 +183,24 @@ function M.autoMark(state, chore, now)
     return M.mark(state, chore.id, now)
 end
 
--- `state` after a purchase at shop `inv` for `chore` at `now`: the shop recorded as bought
--- at `now`, and the chore auto-marked.
+-- `state` after a purchase at shop inventory `inv` for `chore` at `now`: the inventory
+-- recorded as bought at `now`, and the chore auto-marked. When both already hold this
+-- period it gives back `state` itself: only period membership is ever read, so a later
+-- minute would change nothing shown, and the caller then writes nothing.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param inv string the shop inventory's config name
 ---@param now integer
 ---@return ChoreState
 function M.recordPurchase(state, chore, inv, now)
+    if M.isDone(state, chore, now) and M.shopBought(state, chore, inv, now) then return state end
     local out = copy(M.autoMark(state, chore, now))
     out.shops[chore.id] = out.shops[chore.id] or {}
     out.shops[chore.id][inv] = now
     return out
 end
 
--- Whether shop `inv` was bought from for `chore` in its current period at `now`.
+-- Whether shop inventory `inv` was bought from for `chore` in its current period at `now`.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param inv string

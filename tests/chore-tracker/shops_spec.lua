@@ -9,10 +9,14 @@ local shops = require("data/shops")
 
 describe("chore-tracker shops core", function()
     it("indexes shops by inventory, each with its chore", function()
-        local a = { name = "A", inv = "INV_A", proven = true }
-        local b = { name = "B", inv = "INV_B", proven = false }
-        local index = shopCore.index({ two = { a, b }, one = { b } })
+        local a = { name = "A", invs = { "INV_A" }, proven = true }
+        local b = { name = "B", invs = { "INV_B" }, proven = false }
+        local c = { name = "C", invs = { "INV_C1", "INV_C2" }, proven = false }
+        local index = shopCore.index({ two = { a, b }, one = { b }, three = { c } })
         assert.are.same({ { chore = "two", shop = a } }, index.INV_A)
+        -- Each of a shop's inventories leads to the same shop.
+        assert.are.same({ { chore = "three", shop = c } }, index.INV_C1)
+        assert.are.same({ { chore = "three", shop = c } }, index.INV_C2)
         -- Sorted by chore id, so the order purchases apply in is fixed.
         assert.are.same({ { chore = "one", shop = b }, { chore = "two", shop = b } }, index.INV_B)
     end)
@@ -28,9 +32,12 @@ describe("chore-tracker shops core", function()
     end)
 
     it("sees a rise in any named count", function()
-        assert.is_true(shopCore.rose({ A = 0, B = 5 }, { A = 30, B = 5 }))
-        assert.is_false(shopCore.rose({ A = 30, B = 5 }, { A = 0, B = 5 }))
-        assert.is_false(shopCore.rose({ A = 3 }, { A = 3, B = 9 }))
+        local both = { "A", "B" }
+        assert.is_true(shopCore.rose({ A = 0, B = 5 }, { A = 30, B = 5 }, both))
+        assert.is_false(shopCore.rose({ A = 30, B = 5 }, { A = 0, B = 5 }, both))
+        assert.is_false(shopCore.rose({ A = 3 }, { A = 3, B = 9 }, both))
+        -- Only the names asked about count.
+        assert.is_false(shopCore.rose({ A = 0, B = 5 }, { A = 30, B = 5 }, { "B" }))
     end)
 
     it("is near within the range on each axis, on the same plane only", function()
@@ -60,11 +67,17 @@ describe("chore-tracker shop list", function()
         for id, list in pairs(shops) do
             assert(#list > 0, id .. " has no shops")
             for _, shop in ipairs(list) do
-                assert(catalog.config("Inv", shop.inv), shop.inv .. " is not in docs/api/consts")
-                assert(type(shop.name) == "string" and shop.name ~= "", shop.inv .. " unnamed")
-                assert(type(shop.proven) == "boolean", shop.inv .. " has no proven flag")
-                assert(seen[shop.inv] == nil, shop.inv .. " is listed twice")
-                seen[shop.inv] = true
+                assert(
+                    type(shop.name) == "string" and shop.name ~= "",
+                    id .. " has an unnamed shop"
+                )
+                assert(type(shop.proven) == "boolean", shop.name .. " has no proven flag")
+                assert(#shop.invs > 0, shop.name .. " has no inventory")
+                for _, inv in ipairs(shop.invs) do
+                    assert(catalog.config("Inv", inv), inv .. " is not in docs/api/consts")
+                    assert(seen[inv] == nil, inv .. " is listed twice")
+                    seen[inv] = true
+                end
             end
         end
     end)
@@ -75,7 +88,7 @@ describe("chore-tracker shop list", function()
             for _, shop in ipairs(list) do
                 if shop.proven then
                     proven[id] = proven[id] or {}
-                    table.insert(proven[id], shop.inv)
+                    table.insert(proven[id], table.concat(shop.invs, "+"))
                 end
             end
         end
@@ -100,6 +113,8 @@ describe("chore-tracker shop list", function()
                 "MAGICSHOP",
                 "FEUD_MORRISANES",
                 "OMGE_RUNECRAFTING_SHOP",
+                "PEST_RUNE_STORE",
+                "MAGICGUILDSHOP",
             },
         }, proven)
     end)
@@ -114,7 +129,7 @@ describe("chore-tracker shop list", function()
                 else
                     seenUnproven = true
                     unproven[id] = unproven[id] or {}
-                    table.insert(unproven[id], shop.inv)
+                    table.insert(unproven[id], table.concat(shop.invs, "+"))
                 end
             end
         end
@@ -123,12 +138,34 @@ describe("chore-tracker shop list", function()
             ["vial-of-water-packs"] = { "PLAYER_FORT_BUILDINGS_BOTANISTS_SHOP" },
             ["razmire-planks"] = { "RAZMIREBUILDINGSTORE" },
             ["rune-shop-run"] = {
-                "PEST_RUNE_STORE",
-                "MAGICGUILDSHOP",
                 "MM_MAGIC_SHOP",
                 "MAGEARENA_RUNESHOP",
                 "DINO_BASE_CAMP_RUNE_SHOP",
+                "LUNAR_RUNESHOP+LUNAR_RUNESHOP_COMPL",
+                "DARKRUNESHOP_CRAP+DARKRUNESHOP_UBER",
             },
         }, unproven)
+    end)
+end)
+
+describe("chore-tracker collections list", function()
+    local collections = require("data/collections")
+
+    it("names chores in the chore list and banknotes the client has", function()
+        local byId = {}
+        for _, chore in ipairs(chores) do
+            byId[chore.id] = chore
+        end
+        local ids = {}
+        for _, c in ipairs(collections) do
+            assert(byId[c.chore], "no chore " .. c.chore)
+            assert(#c.notes > 0, c.chore .. " has no notes")
+            for _, name in ipairs(c.notes) do
+                assert(catalog.config("Obj", name), name .. " is not in docs/api/consts")
+            end
+            assert(type(c.proven) == "boolean", c.chore .. " has no proven flag")
+            ids[#ids + 1] = c.chore
+        end
+        assert.are.same({ "dellmonti-pineapples", "oldman-potato-cactus" }, ids)
     end)
 end)

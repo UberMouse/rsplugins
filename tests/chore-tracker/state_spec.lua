@@ -126,6 +126,18 @@ describe("chore-tracker state", function()
             assert.is_true(state.shopBought(s, byId.wshop, "SHOP_B", M["2026-10-28"]))
         end)
 
+        it("gives back the same state for a shop already bought from this period", function()
+            local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_A", now)
+            assert.are.equal(s, state.recordPurchase(s, byId.wshop, "SHOP_A", now + 5))
+            -- Not once the tick is gone, or for another shop.
+            local unticked = state.unmark(s, "wshop")
+            assert.are_not.equal(
+                unticked,
+                state.recordPurchase(unticked, byId.wshop, "SHOP_A", now)
+            )
+            assert.are_not.equal(s, state.recordPurchase(s, byId.wshop, "SHOP_B", now))
+        end)
+
         it("counts a shop as bought only within the chore's period", function()
             local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_A", M["2026-10-21"])
             assert.is_true(state.shopBought(s, byId.wshop, "SHOP_A", M["2026-10-27 23:59"]))

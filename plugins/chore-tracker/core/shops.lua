@@ -4,8 +4,8 @@
 -- character, so a line whose count drops is the player buying from it. Counts that rise (a
 -- restock, or the player selling) are not.
 --
--- Dell Monti is no shop: his apples and pineapples arrive as banknotes in the backpack, so
--- his chore is a rise in those notes while the player stands near him.
+-- Collections (data/collections.lua) are no shops: the goods arrive as banknotes in the
+-- backpack, so such a chore is a rise in those notes while the player stands near the giver.
 
 local M = {}
 
@@ -13,9 +13,9 @@ local M = {}
 ---@field chore string the chore id
 ---@field shop ChoreShop
 
--- The shop data turned round: shop inventory name -> the chores it serves, so an inventory
--- event is matched by one lookup. Entries keep the chore ids' sorted order, so the order a
--- purchase is applied in doesn't depend on table iteration.
+-- The shop data turned round: shop inventory name -> the chores and shops it serves, so an
+-- inventory event is matched by one lookup. Entries keep the chore ids' sorted order, so
+-- the order a purchase is applied in doesn't depend on table iteration.
 ---@param shops table<string, ChoreShop[]> chore id -> its shops
 ---@return table<string, ChoreShopEntry[]>
 function M.index(shops)
@@ -27,8 +27,10 @@ function M.index(shops)
     local out = {}
     for _, id in ipairs(ids) do
         for _, shop in ipairs(shops[id]) do
-            out[shop.inv] = out[shop.inv] or {}
-            table.insert(out[shop.inv], { chore = id, shop = shop })
+            for _, inv in ipairs(shop.invs) do
+                out[inv] = out[inv] or {}
+                table.insert(out[inv], { chore = id, shop = shop })
+            end
         end
     end
     return out
@@ -47,15 +49,16 @@ function M.dropped(before, after)
     return false
 end
 
--- Whether any count in `after` is higher than in `before` (both name -> count). A name
--- missing from `before` is not compared.
+-- Whether any of `names` has a higher count in `after` than in `before` (both name ->
+-- count). A name missing from either side is not compared.
 ---@param before table<string, integer>
 ---@param after table<string, integer>
+---@param names string[]
 ---@return boolean
-function M.rose(before, after)
-    for name, count in pairs(after) do
-        local was = before[name]
-        if was and count > was then return true end
+function M.rose(before, after, names)
+    for _, name in ipairs(names) do
+        local was, count = before[name], after[name]
+        if was and count and count > was then return true end
     end
     return false
 end

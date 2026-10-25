@@ -112,10 +112,10 @@ describe("chore-tracker view", function()
     describe("shops", function()
         local listed = {
             wshop = {
-                { name = "Shop A", inv = "SHOP_A", proven = true },
-                { name = "Shop B", inv = "SHOP_B", proven = true },
+                { name = "Shop A", invs = { "SHOP_A" }, proven = true },
+                { name = "Shop B", invs = { "SHOP_B", "SHOP_B2" }, proven = true },
             },
-            dshop = { { name = "Only Shop", inv = "SHOP_C", proven = true } },
+            dshop = { { name = "Only Shop", invs = { "SHOP_C" }, proven = true } },
         }
         local now = M["2026-10-25 01:43"]
 
@@ -128,6 +128,14 @@ describe("chore-tracker view", function()
             )
             assert.are.equal(1, row.bought)
             assert.is_true(row.done)
+        end)
+
+        it("counts a shop bought from in any of its inventories once", function()
+            local s = state.recordPurchase(selecting({ "wshop" }), chores[5], "SHOP_B2", now)
+            local row = view.view(s, chores, now, listed)[1].rows[1]
+            assert.are.equal(1, row.bought)
+            s = state.recordPurchase(s, chores[5], "SHOP_B", now)
+            assert.are.equal(1, view.view(s, chores, now, listed)[1].rows[1].bought)
         end)
 
         it("counts no shop bought after the reset or without a clock", function()

@@ -54,8 +54,8 @@ function M.byPeriod(chores)
     return groups
 end
 
--- A chore's listed shops and whether each was bought from this period (none without a
--- clock), and how many were.
+-- A chore's listed shops and whether each was bought from this period, in any of its
+-- inventories (none without a clock), and how many were.
 ---@param s ChoreState
 ---@param chore Chore
 ---@param listed ChoreShop[]
@@ -65,7 +65,10 @@ end
 local function shopLines(s, chore, listed, now)
     local lines, bought = {}, 0
     for i, shop in ipairs(listed) do
-        local yes = now ~= nil and state.shopBought(s, chore, shop.inv, now)
+        local yes = false
+        for _, inv in ipairs(shop.invs) do
+            yes = yes or (now ~= nil and state.shopBought(s, chore, inv, now))
+        end
         lines[i] = { name = shop.name, bought = yes }
         if yes then bought = bought + 1 end
     end

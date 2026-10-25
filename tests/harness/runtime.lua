@@ -2,9 +2,9 @@
 --
 --   * Time budget: the client aborts any Lua call that runs past 1000 ms with "Maximum
 --     function execution time of 1000 ms exceeded" (docs/api-concepts.md, "Runtime limits we've
---     hit"). A count hook checks the wall clock every few thousand VM instructions and raises
+--     hit"). A count hook checks the wall clock every HOOK_INTERVAL VM instructions and raises
 --     the same message, so a runaway loop fails fast instead of hanging the suite.
---   * Errors: the client logs a callback's error and carries on; a test should fail instead, so
+--   * Errors: the client logs a callback's error to its console; a test should fail instead, so
 --     the error is re-raised with `label` (e.g. "Event.Logic subscriber 'tick'") in front.
 --   * Swallowed faults: if the plugin pcall'd an API call and so hid a harness fault (an
 --     unmocked API, say), the fault is raised once the call returns.

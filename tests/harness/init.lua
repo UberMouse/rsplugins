@@ -142,8 +142,8 @@ function Harness:load()
     runtime.call(self.budgetMs, "main.lua", chunk)
 end
 
--- Disable the plugin: call its global PluginShutdown, if any (docs/plugin-anatomy.md), then
--- drop its subscriptions and pending HTTP callbacks.
+-- Disable the plugin: call its global PluginShutdown, if any (docs/plugin-anatomy.md). From
+-- then on its subscribers and pending HTTP callbacks are never called.
 function Harness:unload()
     local instance = self.instance
     assert(instance and instance.alive, "plugin not loaded")

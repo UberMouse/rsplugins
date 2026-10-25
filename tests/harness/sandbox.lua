@@ -8,8 +8,8 @@ local strict = require("tests.harness.strict")
 local M = {}
 
 -- Base functions and libraries plugins get. The client runs Lua 5.4.8; which stdlib parts it
--- exposes isn't documented. These are the ones plugins in this repo rely on (coroutine: an
--- earlier plugins/var-dump ran one in the client).
+-- exposes isn't documented, so this is the side-effect-free core of the stdlib (coroutine
+-- too: an earlier plugins/var-dump ran one in the client).
 local BASE = {
     "assert",
     "error",

@@ -2,8 +2,8 @@
 -- (var.VarPlayer.FromID(id)), reading `.value` from the world.
 --
 -- Names and IDs come from docs/vars/vars.csv. A name it lacks faults (a typo, or a var the API
--- doesn't expose). FromID returns nil for an ID it lacks: the catalog was built by asking
--- the client for every ID and keeping the non-nil ones (plugins/var-dump).
+-- doesn't expose). FromID returns nil for an ID it lacks: the catalog holds every var
+-- plugins/var-dump got back from FromID, though the client may raise rather than return nil.
 
 local catalog = require("tests.harness.catalog")
 local strict = require("tests.harness.strict")

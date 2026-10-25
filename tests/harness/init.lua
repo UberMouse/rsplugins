@@ -53,7 +53,8 @@ Builder.__index = Builder
 
 ---@param plugin string|table "name" for plugins/<name>, a path containing "/", or a table of
 ---  inline files { ["main.lua"] = "...", ["plugin.json"] = "..." }
----@param opts table? { grant = { perm... }, budgetMs = 1000, stdlib = { os = true }, echo = false }
+---@param opts table? { grant = { perm... }, budgetMs = 1000, stdlib = { os = true }, echo = false,
+---  absent = { "load", ... } }
 ---@return table h
 function M.new(plugin, opts)
     opts = opts or {}
@@ -67,6 +68,9 @@ function M.new(plugin, opts)
         chatLog = {}, -- { message, chatType, sender } as the chat window would show them
         chatQueue = {}, -- Chat.AddMessage text waiting for the next logic step
         requests = {}, -- HTTP requests, in the order they were started
+        consoleCommands = {}, -- ExecuteConsoleCommand arguments, in order
+        onConsoleCommand = nil, -- set by a test: called with each console command
+        absent = {}, -- globals that read nil, as in a client without them (opts.absent)
         db = {}, -- PersistentDB entries: key -> { type, value }
         dbWrites = 0, -- PersistentDB stores (Set and the typed setters) so far, across reloads
         varProxies = {},
@@ -98,6 +102,10 @@ function M.new(plugin, opts)
                 .. "use optionalPermissions (docs/plugin-anatomy.md)",
             2
         )
+    end
+
+    for _, name in ipairs(opts.absent or {}) do
+        h.absent[name] = true
     end
 
     h.world = setmetatable({ h = h, state = world.new(h.manifest) }, Builder)

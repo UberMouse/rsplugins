@@ -130,7 +130,8 @@ The dev bridge lets Claude (from Bash) drive the running client and watch it whi
 queue console commands for the client, and read the events a plugin forwards. It is a dev tool,
 never for submission. One host daemon, `scripts/rsdev.py`, serves it and also receives the dev
 recorder's batches ([Recordings](testing.md#recordings)). The `dev-bridge` plugin in the client
-polls the daemon over HTTP.
+polls the daemon over HTTP; [its README](../plugins/dev-bridge/README.md) has the console steps
+to enable it (`prf`, `pon dev-bridge`).
 
 ```
 scripts/rsdev.py start                       # detached; log dumps/rsdev/daemon.log, pid dumps/rsdev/daemon.pid

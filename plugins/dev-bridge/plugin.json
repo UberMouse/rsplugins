@@ -1,0 +1,7 @@
+{
+    "name": "Dev Bridge",
+    "version": "0.0.1",
+    "contactEmailAddress": "you@example.com",
+    "optionalPermissions": [ "httpAccess", "chatAccess" ],
+    "urls": { "rsdev": "http://127.0.0.1:8766" }
+}

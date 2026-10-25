@@ -57,6 +57,7 @@ local API_MODULES = {
     "tests.harness.api.player",
     "tests.harness.api.inventory",
     "tests.harness.api.chat",
+    "tests.harness.api.console",
     "tests.harness.api.ui",
 }
 
@@ -243,9 +244,14 @@ function M.build(h, instance)
     -- After the registry above: dependency globals are other plugins' exports, not API the
     -- stubs declare.
     installDependencies(h, env)
+    for name in pairs(h.absent) do
+        assert(env[name] == nil, "opts.absent names " .. name .. ", which the sandbox provides")
+    end
 
     return setmetatable(env, {
         __index = function(_, name)
+            -- A global the test models as missing from the client (opts.absent) reads nil.
+            if h.absent[name] then return nil end
             if WITHHELD[name] then
                 local why = OPT_IN[name] and "absent in the client; a test can opt in"
                     or "client availability unknown"

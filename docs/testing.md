@@ -78,7 +78,9 @@ end)
 
 `opts`: `grant = { "httpAccess", ... }` (permissions granted from the start, without an event),
 `budgetMs = 1000` (the per-call time budget), `stdlib = { os = true, io = true }` (opt in to
-withheld libraries), `echo = true` (also print the plugin's console output).
+withheld libraries), `echo = true` (also print the plugin's console output), `absent = { "load", ... }`
+(globals that read nil instead of faulting, modelling a client without them; for a plugin that
+reports what its environment has, like `plugins/dev-bridge`).
 
 ### The harness `h`
 
@@ -95,6 +97,8 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `h.console` | `{ kind = "print"|"log", text }` per call |
 | `h.chatLog` | `{ message, chatType, sender }` per chat-window message, after subscribers' edits |
 | `h.requests` | Started HTTP requests in order: `{ method, url, body, headers, request }` |
+| `h.consoleCommands` | Every `ExecuteConsoleCommand` argument, in order |
+| `h.onConsoleCommand` | Set by a test: called with each console command; raise in it to model a command that errors |
 | `h.db` | PersistentDB entries, `key -> { type, value }`; survives reload |
 | `h.dbWrites` | How many values the plugin has stored (`Set` and the typed setters), across reloads |
 | `h.tick` | Logic ticks so far (`ev.logicTick`) |
@@ -526,6 +530,8 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Replacing a subscription by name | Keeps its original position in the order |
 | Unsubscribing during a dispatch | The removed subscriber isn't called later in that dispatch |
 | Order within a logic step | HTTP deliveries, then queued chat, then `Logic`, then `ServerLogic` |
+| `ExecuteConsoleCommand` | Records the command (`h.consoleCommands`) and runs nothing: what a command does in the client (`ppe` granting a permission, `pon` enabling a plugin...) isn't modelled, so the test changes the world itself. No error unless the test raises one from `h.onConsoleCommand`. The signature is from core/index.html#executeconsolecommand |
+| `opts.absent` | Listed globals read nil, as in a client without them; whether the client has `load`, `loadstring` or `debug` is unknown (`plugins/dev-bridge` reports it). Naming a global the sandbox provides is an error |
 | HTTP | A response arrives on the step after the test answers it, and never on the step that started the request. `successful` is true for any status code. Progress callbacks are never called. `Cancel` means no callback. Without httpAccess, `new`/`Get`/`Post` fault. Timeouts happen only when the test responds with one |
 | Player getters while logged out | Fault (`IsAvailable` is the documented guard). `GetEntity` returns the same object until the next login |
 | A fresh object per call | `Player.GetEntity()` and `Inventory.Find()` give a new userdata on every call in the client (recording `20261025-144642-8f7250b863`); the harness hands out one object per login / per inventory. Whether the client's compare equal with `==` is unconfirmed |
@@ -564,7 +570,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
   (`NPCList`, `PlayerList`, `LocList`, `ObjStackList`), `Camera`, `audio`, `Keyboard`, `Mouse`,
   `MiniMenu`, `GrandExchange`, `ClientOptions`, `ScreenConvert`, `Shapes`, the `CoordGrid`
   global (its constructors and methods; a PlayerEntity's `coordGrid` is modelled), math
-  types (bar `xyGlobal`'s `x`/`y`), `formatStr`, `ExecuteConsoleCommand`, `id.*` beyond
+  types (bar `xyGlobal`'s `x`/`y`), `formatStr`, `id.*` beyond
   `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP`, `config.*` beyond `Inv` and `Obj`,
   `Plugin.resources`, `Player.GetTrackingID` / `GetRunEnergy` / `GetWeight` / `GetCombatLevel`,
   `PlayerEntity` beyond `displayName` and `coordGrid`, `InvType.stockCount`.

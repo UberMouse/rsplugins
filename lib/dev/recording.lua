@@ -235,13 +235,19 @@ function recording.take(buffer, maxBytes)
 end
 
 -- A batch's POST body: `meta` (schema, plugin, session...) plus the already-encoded entries,
--- spliced in as "entries": [...] so they aren't encoded twice.
+-- spliced in as "<key>": [...] (key "entries" unless given) so they aren't encoded twice.
 ---@param meta table
 ---@param entries string[]
+---@param key string?
 ---@return string
-function recording.batchBody(meta, entries)
+function recording.batchBody(meta, entries, key)
     local head = json.encode(meta) -- "{...}"; meta is never empty, so it's an object
-    return head:sub(1, -2) .. ',"entries":[' .. table.concat(entries, ",") .. "]}"
+    return head:sub(1, -2)
+        .. ',"'
+        .. (key or "entries")
+        .. '":['
+        .. table.concat(entries, ",")
+        .. "]}"
 end
 
 return recording

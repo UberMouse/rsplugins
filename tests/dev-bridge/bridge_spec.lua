@@ -254,6 +254,55 @@ describe("dev-bridge", function()
         assert.is_nil(entry.playerData)
     end)
 
+    -- Fires one selection through the shell and returns the forwarded entry.
+    local function forwardedEntry(entry)
+        local h = support.load()
+        h:step()
+        h:fire("MiniMenuEntrySelected", { entry = entry })
+        support.answer(h)
+        h:advance(20 * 10)
+        return support.last(h).events[1].payload.entry
+    end
+
+    it("forwards a Walk here entry with its text intact", function()
+        local entry = forwardedEntry({
+            verbText = "Walk here",
+            fullText = "Walk here",
+            actionEntryType = 0,
+            actionType = 23,
+        })
+        assert.are.equal("Walk here", entry.fullText)
+    end)
+
+    it("forwards an NPC entry with its text intact", function()
+        local entry = forwardedEntry({
+            verbText = "Talk-to",
+            subjectText = "Guard",
+            fullText = "Talk-to Guard",
+            actionEntryType = 4,
+            actionType = 9,
+            npcData = {},
+        })
+        assert.are.equal("Guard", entry.subjectText)
+        assert.are.equal("Talk-to Guard", entry.fullText)
+    end)
+
+    it("redacts an entry whose playerData cannot be read", function()
+        local entry = forwardedEntry(setmetatable({
+            verbText = "Cast",
+            subjectText = "Bob",
+            fullText = "Cast Bob",
+            actionEntryType = 1,
+            actionType = 57,
+        }, {
+            __index = function(_, key)
+                if key == "playerData" then error("unreadable") end
+            end,
+        }))
+        assert.are.equal("<player>", entry.subjectText)
+        assert.are.equal("<player>", entry.fullText)
+    end)
+
     it("drops the oldest events past the buffer cap and counts them", function()
         local h = support.load({ "chatAccess" }) -- no httpAccess yet, so nothing is sent
         h.env.require("protocol").limits.bufferBytes = 1000

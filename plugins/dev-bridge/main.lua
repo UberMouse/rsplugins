@@ -137,7 +137,10 @@ local function entryData(entry)
     local ok, hasPlayer = pcall(function()
         return entry.playerData ~= nil
     end)
-    return protocol.entryView(fields, ok and hasPlayer or nil)
+    -- `ok and hasPlayer or nil` would turn a readable "no player" (false) into nil, which
+    -- entryView treats as unreadable and redacts.
+    if not ok then hasPlayer = nil end
+    return protocol.entryView(fields, hasPlayer)
 end
 
 -- What to buffer for an event, or nil to drop it (other players' chat).

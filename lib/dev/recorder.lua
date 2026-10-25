@@ -629,7 +629,9 @@ local function flush()
         seq = seq,
         dropped = dropped,
     }, entries)
-    local request = realHTTP.new(url, PATH)
+    -- realHTTP is nil if the client only provides HTTPRequest once httpAccess is granted
+    -- (undocumented); the global is there by now.
+    local request = (realHTTP or HTTPRequest).new(url, PATH)
     request:AddHeader("Content-Type", "application/json")
     -- Keep the request and its body referenced until it finishes, in case the client
     -- doesn't copy the body (docs/api-concepts.md).

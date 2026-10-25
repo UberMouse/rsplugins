@@ -107,6 +107,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 |---|---|
 | `setVar(domain, nameOrId, value)` | `VarTransmit`, on every call |
 | `login(displayName)` / `logout()` | nothing |
+| `setPosition(x, z, level?)` | nothing. The player's world tile (`level` defaults to 0), read back as `Player.GetEntity().coordGrid`; it survives a logout |
 | `setSkill(skill, { level, xp, gameplay?, capped?, xpCapped? })` | nothing. The optional fields default to `level` / `xp` |
 | `defineObj(nameOrId, fields)` | nothing. Gives an `ObjType` the stub fields a test needs (`name`, `category`...) |
 | `setInventory(inv, { [slot] = { obj, count? } }, size?)` | `InventoryAdded` the first time, then `InventoryUpdated` with the changed slots (no event if nothing changed). A slot left out, or given as `{ obj = -1, count = 0 }`, is empty |
@@ -479,6 +480,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | `VarTransmit` fires on every update, changed or not, after the value is set, with `var`, `oldValue`, `newValue` | core/events.html#vartransmit |
 | `var.<Domain>.NAME` and `FromID(id)` give one VarType per var (`ev.var == var.VarPlayer.X`); VarBits report `isVarBit`, `baseVar`, `varBitMask`; `baseVar`/`varBitMask` are nil otherwise; properties are read-only | game/config/vartype.html, `docs/vars/vars.csv` |
 | `Player.IsAvailable` says whether player data can be read | game/player.html#isavailable |
+| `PlayerEntity.coordGrid` is the player's tile as a `CoordGrid` with `level`, `x`, `z` (world tiles), `mapSquareX`/`Z` (`x // 64`) and `localX`/`Z` (`x % 64`) | game/entity/playerentity.html#properties, game/coordgrid.html#properties; a map square is 64 tiles ([api-concepts.md](api-concepts.md#coordinates)) |
 | `Inventory.Find` returns an `Inv`; slots are 1-indexed; `GetSlot`/`GetSlots` return copies; an Inv goes invalid (`isValid`) when its inventory is removed, and re-adding it makes a new Inv | game/inventory.html |
 | `Inv:GetSlots()` is dense, one slot per index up to `slotCount`, with each empty slot as obj -1 (configName `UNKNOWN`) and count 0. A real obj with count 0 is not empty: a bought-out shop line stays in its shop inventory that way (GENERALSHOP1 slot 7, obj 590 x0) | `tests/fixtures/recorder-demo-shop.jsonl`, trimmed from recording `20261025-144642-8f7250b863` (recorder-demo in the beta client, 2026-10-25) |
 | `InventoryAdded`/`Updated` (`slotsUpdated`)/`Removed` carry the `InvType` | core/events.html#inventoryadded and below |
@@ -523,6 +525,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | HTTP | A response arrives on the step after the test answers it, and never on the step that started the request. `successful` is true for any status code. Progress callbacks are never called. `Cancel` means no callback. Without httpAccess, `new`/`Get`/`Post` fault. Timeouts happen only when the test responds with one |
 | Player getters while logged out | Fault (`IsAvailable` is the documented guard). `GetEntity` returns the same object until the next login |
 | A fresh object per call | `Player.GetEntity()` and `Inventory.Find()` give a new userdata on every call in the client (recording `20261025-144642-8f7250b863`); the harness hands out one object per login / per inventory. Whether the client's compare equal with `==` is unconfirmed |
+| `PlayerEntity.coordGrid` | A new CoordGrid on each read, holding the tile at that moment (whether the client's tracks the player afterwards is unconfirmed). Only `h.world:setPosition` sets it: reading it before then faults, replaying too, since recordings carry no position |
 | `Inventory.Find` for an inventory that isn't loaded | nil |
 | Reading an invalid Inv (anything but `isValid`) | Faults (the page says to check `isValid` first) |
 | `Inv:GetSlot` on an empty slot | nil. Unconfirmed: the client may give an obj -1 slot, as `GetSlots` does |
@@ -555,11 +558,12 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
   plugin would make itself, hooks, style sheets...), PrettyUI beyond the subset in
   [Testing a PrettyUI plugin](#testing-a-prettyui-plugin), `World`, entity lists
   (`NPCList`, `PlayerList`, `LocList`, `ObjStackList`), `Camera`, `audio`, `Keyboard`, `Mouse`,
-  `MiniMenu`, `GrandExchange`, `ClientOptions`, `ScreenConvert`, `Shapes`, `CoordGrid`, math
+  `MiniMenu`, `GrandExchange`, `ClientOptions`, `ScreenConvert`, `Shapes`, the `CoordGrid`
+  global (its constructors and methods; a PlayerEntity's `coordGrid` is modelled), math
   types (bar `xyGlobal`'s `x`/`y`), `formatStr`, `ExecuteConsoleCommand`, `id.*` beyond
   `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP`, `config.*` beyond `Inv` and `Obj`,
   `Plugin.resources`, `Player.GetTrackingID` / `GetRunEnergy` / `GetWeight` / `GetCombatLevel`,
-  `PlayerEntity` beyond `displayName`, `InvType.stockCount`.
+  `PlayerEntity` beyond `displayName` and `coordGrid`, `InvType.stockCount`.
 - **Vars**: VarBit packing (setting a base var doesn't change its VarBits, nor the reverse).
   VarTransmit naming one VarBit per base-var update, and BOOLEAN vars reading `true` (both
   unconfirmed, [api-concepts.md](api-concepts.md#runtime-limits-weve-hit)). The error logged for

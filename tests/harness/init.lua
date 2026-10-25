@@ -324,6 +324,14 @@ function Builder:logout()
     self:apply({ op = "logout" })
 end
 
+-- Put the player on world tile (x, z) of `level` (default 0); fires nothing.
+---@param x integer
+---@param z integer
+---@param level integer?
+function Builder:setPosition(x, z, level)
+    self:apply({ op = "setPosition", x = x, z = z, level = level or 0 })
+end
+
 -- Set a skill's level and XP. `levels` = { level, xp, gameplay?, capped?, xpCapped? }; the
 -- optional ones default to level / xp.
 ---@param skill integer a SkillType value (harness.enums.SkillType)

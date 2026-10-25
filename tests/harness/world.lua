@@ -37,7 +37,8 @@ function M.new(manifest)
     end
     return {
         vars = { VarPlayer = {}, VarClient = {} }, -- domain -> id -> value
-        player = { loggedIn = false, displayName = nil, login = 0, skills = {} },
+        -- tile: the player's { x, z, level } once a setPosition op gives one
+        player = { loggedIn = false, displayName = nil, login = 0, skills = {}, tile = nil },
         -- inv id -> { id, size, slots = { [i] = { obj = id, count = n } }, generation }, with
         -- only the non-empty slots in `slots`
         invs = {},
@@ -155,6 +156,20 @@ end
 
 function ops.logout(state)
     state.player.loggedIn = false
+    return {}
+end
+
+-- The player's tile, in world tile units as CoordGrid's x / z / level give them
+-- (game/coordgrid.html#properties: x and z 0-12799, level 0-3). It survives a logout.
+function ops.setPosition(state, op)
+    local function inRange(v, max)
+        return math.type(v) == "integer" and v >= 0 and v <= max
+    end
+    assert(
+        inRange(op.x, 12799) and inRange(op.z, 12799) and inRange(op.level, 3),
+        "setPosition needs integer x and z (0-12799) and level (0-3)"
+    )
+    state.player.tile = { x = op.x, z = op.z, level = op.level }
     return {}
 end
 

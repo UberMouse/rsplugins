@@ -23,6 +23,40 @@ describe("Player", function()
         assert.are.equal("Zezima", h.env.name)
     end)
 
+    it("serves the player's tile as a CoordGrid, read fresh each time", function()
+        local h = harness.new(plugin([[
+            function tile()
+                local c = Player.GetEntity().coordGrid
+                return { c.level, c.x, c.z, c.mapSquareX, c.mapSquareZ, c.localX, c.localZ }
+            end
+        ]]))
+        h.world:login("Zezima")
+        h:load()
+        -- Dell Monti's tile: !tele 0,43,49,11,50.
+        h.world:setPosition(2763, 3186)
+        assert.are.same({ 0, 2763, 3186, 43, 49, 11, 50 }, h.env.tile())
+        h.world:setPosition(2763, 3186, 1)
+        assert.are.equal(1, h.env.tile()[1])
+    end)
+
+    it("faults on the player's tile until a test sets one", function()
+        local h = harness.new(plugin("function tile() return Player.GetEntity().coordGrid end"))
+        h.world:login("Zezima")
+        h:load()
+        assert.matches(
+            "unmocked state: the player's position",
+            harness.errorOf(function()
+                h.env.tile()
+            end)
+        )
+        assert.matches(
+            "setPosition needs integer",
+            harness.errorOf(function()
+                h.world:setPosition(12800, 0)
+            end)
+        )
+    end)
+
     it("faults when a getter runs while logged out", function()
         assert.matches(
             "Player.GetEntity called while logged out",
@@ -72,10 +106,10 @@ describe("Player", function()
     end)
 
     it("leaves other PlayerEntity members unmocked", function()
-        local h = harness.new(plugin("local c = Player.GetEntity().coordGrid"))
+        local h = harness.new(plugin("local c = Player.GetEntity().route"))
         h.world:login("Zezima")
         assert.matches(
-            "unmocked API: PlayerEntity.coordGrid",
+            "unmocked API: PlayerEntity.route",
             harness.errorOf(function()
                 h:load()
             end)

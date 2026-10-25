@@ -1,5 +1,5 @@
--- Player: IsAvailable, GetEntity (displayName only) and the level / XP getters, read from
--- h.world.state.player.
+-- Player: IsAvailable, GetEntity (displayName and coordGrid) and the level / XP getters, read
+-- from h.world.state.player.
 --
 -- What the client does when a getter runs while logged out is undocumented; IsAvailable is
 -- documented as "whether Player data is available to access", so every other getter faults
@@ -24,10 +24,47 @@ for _, v in pairs(M.SkillType) do
     SKILLS[v] = true
 end
 
--- Only displayName is modelled; other PlayerEntity members fault as unmocked. A replayed login
--- may not know the name yet (h:recorded).
+-- A CoordGrid of world tile (x, z) on `level`, per game/coordgrid.html#properties: map
+-- squares are 64 tiles, so mapSquareX = x // 64 and localX = x % 64.
+local CoordGrid = strict.class("CoordGrid", {
+    fields = {
+        level = function(s)
+            return s.level
+        end,
+        x = function(s)
+            return s.x
+        end,
+        z = function(s)
+            return s.z
+        end,
+        mapSquareX = function(s)
+            return s.x // 64
+        end,
+        mapSquareZ = function(s)
+            return s.z // 64
+        end,
+        localX = function(s)
+            return s.x % 64
+        end,
+        localZ = function(s)
+            return s.z % 64
+        end,
+    },
+})
+
+-- Only displayName and coordGrid are modelled; other PlayerEntity members fault as
+-- unmocked. A replayed login may not know the name yet (h:recorded); a position comes only
+-- from h.world:setPosition, never from a recording.
 local PlayerEntity = strict.class("PlayerEntity", {
     fields = {
+        -- The tile at the time of the read, as a new CoordGrid each time.
+        coordGrid = function(s)
+            local tile = s.h.world.state.player.tile
+            if not tile then
+                strict.fault("unmocked state: the player's position (h.world:setPosition)")
+            end
+            return CoordGrid.new({ x = tile.x, z = tile.z, level = tile.level })
+        end,
         displayName = function(s)
             if s.displayName ~= nil then return s.displayName end
             return s.h:recorded(

@@ -20,8 +20,9 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
 - Moderation rejects unreadable code. Keep Lua lean and clearly commented, and write a plain-English
   description per plugin.
 - Every change must pass `scripts/check-lua.sh` (luac, manifest JSON, selene, stylua, LuaLS
-  against `docs/api/`, and the busted plugin tests in `tests/` via `scripts/test-lua.sh`, which run
-  plugins against the mock API harness described in `docs/testing.md`; run `stylua` first). When LuaLS flags an API name, member or argument, it is
+  against `docs/api/`, the busted plugin tests in `tests/` via `scripts/test-lua.sh`, which run
+  plugins against the mock API harness described in `docs/testing.md`, and the Python tests of the
+  recording sanitiser, `scripts/test_recording_sanitise.py`; run `stylua` first). When LuaLS flags an API name, member or argument, it is
   most likely an invented API: fix the code. Only if the official page proves the stub wrong,
   suppress that one line with `---@diagnostic disable-next-line: <code>` and a comment citing the
   page.

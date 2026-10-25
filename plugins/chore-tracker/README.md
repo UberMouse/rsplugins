@@ -4,8 +4,8 @@ A checklist for RuneScape's repeatable chores, the daily, weekly and monthly tas
 Daily Challenge, Soul Reaper or the Giant Oyster. Pick the ones you do, tick them off as you go,
 and they clear themselves when the game's reset comes round. A few chores also tick themselves:
 the shop runs, when you buy from one of their shops, and Dell Monti's and the Weird Old Man's,
-when their notes arrive. It only reads what the game already shows you, never does anything in game for you, and sends
-nothing anywhere.
+when their notes arrive. It only reads what the game already shows you, never does anything in
+game for you, and sends nothing anywhere.
 
 ## Using it
 
@@ -41,12 +41,13 @@ ticked until its reset, and unticking one by hand changes nothing below.
   doesn't count. A chore with more than one shop shows how many you have bought from this
   period, as "Feather Shop Run (1/4)", and its tooltip lists each shop as "bought" or "not
   yet". A shop the game has in two versions, before and after a quest, counts once, bought
-  from either. When a count changes the window redraws, which scrolls it back to the top.
+  from either. When a count changes the window redraws, keeping how far it is scrolled.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or
   pineapple notes, or the Weird Old Man's potato cactus notes (outside the Kalphite Lair;
-  *unproven*, as nobody has checked his yet).
+  *unproven*, as nobody has checked his yet). Any rise counts, wherever the notes came from:
+  taking some out of the bank, a trade or picking them up near the giver ticks the chore too.
 
 The shops each chore watches. Those marked *unproven* were matched by name to the game's own
 list of shop inventories but no purchase there has been checked yet; they tick the same way.

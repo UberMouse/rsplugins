@@ -28,10 +28,12 @@ local BACKPACK = "INV"
 ---@field apply fun(change: ChoreChange)
 
 local options = nil ---@type ChoreDetectOptions?
--- Shop inventory name -> the chores and shops it serves.
+-- Shop inventory name -> the chores and shops it serves, and its config.
 local shopIndex = {} ---@type table<string, ChoreShopEntry[]>
--- Every collection's note names, once each.
+local invTypes = {} ---@type table<string, InvType>
+-- Every collection's note names, once each, and their configs.
 local noteNames = {} ---@type string[]
+local objTypes = {} ---@type table<string, ObjType>
 -- The slot counts of each listed shop inventory the client holds now (one is held only
 -- while its shop is open), and the backpack's count of each note, nil without a backpack.
 local shopCounts = {} ---@type table<string, integer[]>
@@ -40,13 +42,31 @@ local noteCounts = nil ---@type table<string, integer>?
 ---@param o ChoreDetectOptions
 function M.init(o)
     options = o
-    shopIndex = shopCore.index(o.shops)
-    noteNames = {}
+    -- A listed name the client's config lacks (a game update renamed it, say) is said once
+    -- and left unwatched, so a nil config never reaches Inventory.Find or GetTotal. The
+    -- casts drop config.Inv's and config.Obj's FromID member from the type.
+    shopIndex, invTypes = {}, {}
+    for name, entries in pairs(shopCore.index(o.shops)) do
+        local invType = config.Inv[name] --[[@as InvType?]]
+        if invType then
+            shopIndex[name], invTypes[name] = entries, invType
+        else
+            o.say("unknown inventory", name .. "; not watched")
+        end
+    end
+    noteNames, objTypes = {}, {}
     local seen = {}
     for _, collection in ipairs(o.collections) do
         for _, name in ipairs(collection.notes) do
-            if not seen[name] then noteNames[#noteNames + 1] = name end
-            seen[name] = true
+            if not seen[name] then
+                seen[name] = true
+                local obj = config.Obj[name] --[[@as ObjType?]]
+                if obj then
+                    noteNames[#noteNames + 1], objTypes[name] = name, obj
+                else
+                    o.say("unknown obj", name .. "; not watched")
+                end
+            end
         end
     end
 end
@@ -88,8 +108,7 @@ local function readNotes()
     if not inv then return nil end
     local counts = {}
     for _, name in ipairs(noteNames) do
-        -- The cast drops config.Obj's FromID member from the type: `name` is an obj name.
-        counts[name] = inv:GetTotal(config.Obj[name] --[[@as ObjType]])
+        counts[name] = inv:GetTotal(objTypes[name])
     end
     return counts
 end
@@ -111,9 +130,8 @@ end
 -- another's.
 function M.scan()
     shopCounts = {}
-    for name in pairs(shopIndex) do
-        -- The cast drops config.Inv's FromID member from the type: `name` is an inv name.
-        shopCounts[name] = readCounts(config.Inv[name] --[[@as InvType]])
+    for name, invType in pairs(invTypes) do
+        shopCounts[name] = readCounts(invType)
     end
     noteCounts = readNotes()
 end
@@ -133,8 +151,8 @@ end
 
 -- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
 -- not, so picking one later shows the period's truth), and tick the chore if it isn't done
--- this period. A log line for each chore it changed: a repeat purchase at a shop already
--- bought from this period changes nothing, and logs nothing.
+-- this period. Each chore it changes is logged: a repeat purchase at a shop already bought
+-- from this period changes and logs nothing, unless the chore was unticked by hand since.
 ---@param name string
 local function onPurchase(name)
     assert(options, "init runs before any inventory event")
@@ -200,8 +218,9 @@ function M.onInventoryAdded(ev)
     end
 end
 
--- A listed shop's stock changed: any line lower than before is a purchase. The new counts
--- become the baseline either way, so a restock or a sale (counts rising) only moves it.
+-- In the backpack, a rise in notes may be a collection. In a listed shop, any line lower
+-- than before is a purchase; the new counts become the baseline either way, so a restock or
+-- a sale (counts rising) only moves it.
 ---@param ev InventoryUpdatedEventPayload
 function M.onInventoryUpdated(ev)
     local name = ev.inv.configName
@@ -220,7 +239,7 @@ function M.onInventoryRemoved(ev)
     local name = ev.inv.configName
     if name == BACKPACK then
         noteCounts = nil
-    else
+    elseif shopIndex[name] then
         shopCounts[name] = nil
     end
 end

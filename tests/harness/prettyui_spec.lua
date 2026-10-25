@@ -245,6 +245,33 @@ describe("prettyui Window", function()
         assert.are.equal(300 - 16 - 28, h.ui:layout(h.env.text).width)
     end)
 
+    it("clamps SetScrollPosition to its content, and reads it back from _scroll", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "t", x = 0, y = 0, width = 300, height = 200 })
+            w:AddTitle("Dailies")
+            w:AddCheckboxButton({ "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }, {})
+        ]])
+        local w = h.env.w
+        local function scrolledTo(position)
+            w:SetScrollPosition(position)
+            return w._scroll.scrollY
+        end
+        assert.are.equal(0, w._scroll.scrollY)
+        -- Content 282 (the boxes' bottom at 268, plus 14) in a 160 px viewport (200 - 32 - 8).
+        assert.are.equal(50, scrolledTo(50.7))
+        assert.are.equal(122, scrolledTo(1000))
+        assert.are.equal(0, scrolledTo(-5))
+        assert.are.equal(0, scrolledTo(nil))
+        -- A taller window re-clamps it; a row placed at a y grows the content too.
+        scrolledTo(122)
+        w:SetSize(300, 300)
+        assert.are.equal(22, w._scroll.scrollY)
+        w:AddCheckboxButton({ "low" }, { y = 400 })
+        assert.are.equal(436 - 260, scrolledTo(1000))
+        w:Destroy()
+        assert.is_nil(w._scroll)
+    end)
+
     it("lets the plugin set a text's content, and finds it by text", function()
         local h = load([[
             w = prettyui.Window.new(parent, { title = "Chores" })

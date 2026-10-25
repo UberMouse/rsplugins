@@ -44,7 +44,12 @@ function WindowModule.new(parent, options) end
 ---@class prettyui.Window
 ---@field root ui.Layer The window's own layer: read x/y/width/height for its position and size. A bare root:SetPos is snapped back unless SetSize follows. nil after Destroy()
 ---@field closeButton ui.Sprite The X at (width - 28, 7); clicking it calls Close()
+---@field _scroll { scrollY: number }? Internal, not API: the content's scroll controller, whose `scrollY` is the only way to read the scroll position. nil after Destroy()
 local Window = {}
+
+---Scroll the content to `position` px from its top, clamped to 0..(content height - viewport height).
+---@param position number?
+function Window:SetScrollPosition(position) end
 
 ---Resize, clamped to the window's min/max; also makes the current position stick.
 ---@param width number

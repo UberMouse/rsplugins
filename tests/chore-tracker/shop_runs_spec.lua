@@ -222,7 +222,7 @@ describe("chore-tracker shop runs", function()
         assert.is_nil(h.db["state:Zezima"])
     end)
 
-    it("writes nothing for another purchase at a shop bought from this period", function()
+    it("writes and logs nothing for another purchase at a shop bought from this period", function()
         local h = loaded()
         pick(h, { FEATHERS.id })
         openShop(h, "FISHINGSHOP", 20)
@@ -237,6 +237,25 @@ describe("chore-tracker shop runs", function()
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
         local _, lines = h:output():gsub("%[CHORES%] purchase", "")
         assert.are.equal(1, lines)
+    end)
+
+    it("keeps the scroll through a count change's rebuild, not a view switch", function()
+        local h = loaded()
+        pick(h, { DAILY.id, FEATHERS.id, YAK.id })
+        -- Short enough that the list overflows and can scroll.
+        h.ui:resize(window(h), 0, -260)
+        window(h):SetScrollPosition(40)
+        local win = window(h)
+        assert.are.equal(40, win._scroll.scrollY)
+        openShop(h, "FISHINGSHOP", 20)
+        setFeathers(h, "FISHINGSHOP", 0)
+        h:advance(20)
+        assert.are_not.equal(win, window(h))
+        assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
+        assert.are.equal(40, window(h)._scroll.scrollY)
+
+        helpers.openSettings(h)
+        assert.are.equal(0, window(h)._scroll.scrollY)
     end)
 
     it("counts a shop with two inventories as one, whichever is bought from", function()
@@ -385,10 +404,10 @@ end)
 
 describe("chore-tracker Dell Monti", function()
     local DELL = { name = "Pineapples and Apples from Dell Monti", id = "dellmonti-pineapples" }
-    -- His tile, per runescape.wiki/w/Dell_Monti.
+    -- Dell Monti's tile, per runescape.wiki/w/Dell_Monti.
     local X, Z = 2763, 3186
 
-    -- Logged in at the tile given, with some of his notes in the backpack, Dell Monti's
+    -- Logged in at the tile given, with some of Dell Monti's notes in the backpack and his
     -- chore picked.
     ---@param x integer
     ---@param z integer

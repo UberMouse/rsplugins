@@ -276,6 +276,9 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   (134 CheckboxButtons, two per row, each with a tooltip, plus headings) builds in one Lua call
   without hitting the 1000 ms limit (user-checked 2026-10-25). That is one machine, not a
   bound: a window with many times that would still need slicing across `Logic` ticks.
+- **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
+  not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
+  position is read only from the internal `window._scroll.scrollY`.
 
 The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
 types are in `types/prettyui.lua`.

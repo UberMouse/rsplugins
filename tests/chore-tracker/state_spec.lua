@@ -144,6 +144,18 @@ describe("chore-tracker state", function()
             assert.is_false(state.shopBought(s, byId.wshop, "SHOP_A", M["2026-10-28"]))
         end)
 
+        it(
+            "counts a shop as bought from any of its inventories, and none without a clock",
+            function()
+                local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_B", now)
+                assert.is_true(state.shopBoughtAny(s, byId.wshop, { "SHOP_A", "SHOP_B" }, now))
+                assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_A", "SHOP_C" }, now))
+                assert.is_false(state.shopBoughtAny(s, byId.wshop, {}, now))
+                assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_B" }, nil))
+                assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_B" }, M["2026-10-28"]))
+            end
+        )
+
         it("is not undone by unticking or unpicking, and never changes its input", function()
             local s = state.select(state.new(), chores, "wshop")
             local bought = state.recordPurchase(s, byId.wshop, "SHOP_A", now)

@@ -46,22 +46,28 @@ local function copySelected(selected)
     return table.move(selected, 1, #selected, 1, {})
 end
 
----@param done table<string, integer>
+-- A copy of a key -> epoch minute map (`done`, or one chore's shops), each minute passed
+-- through `convert` if given; a nil from it leaves that key out.
+---@param minutes table<string, integer>
+---@param convert (fun(minute: integer): integer?)?
 ---@return table<string, integer>
-local function copyDone(done)
+local function copyMinutes(minutes, convert)
     local out = {}
-    for id, minute in pairs(done) do
-        out[id] = minute
+    for key, minute in pairs(minutes) do
+        local kept = minute ---@type integer?
+        if convert then kept = convert(minute) end
+        out[key] = kept
     end
     return out
 end
 
 ---@param shops table<string, table<string, integer>>
+---@param convert (fun(minute: integer): integer?)?
 ---@return table<string, table<string, integer>>
-local function copyShops(shops)
+local function copyShops(shops, convert)
     local out = {}
     for id, minutes in pairs(shops) do
-        out[id] = copyDone(minutes)
+        out[id] = copyMinutes(minutes, convert)
     end
     return out
 end
@@ -72,7 +78,7 @@ end
 local function copy(state)
     return {
         selected = copySelected(state.selected),
-        done = copyDone(state.done),
+        done = copyMinutes(state.done),
         shops = copyShops(state.shops),
     }
 end
@@ -211,31 +217,32 @@ function M.shopBought(state, chore, inv, now)
     return minute ~= nil and minute >= period.periodStart(chore.period, now)
 end
 
+-- Whether any of `invs` (one shop's inventories, as data/shops.lua lists them) was bought
+-- from for `chore` in its current period at `now`. False without a clock (`now` nil).
+---@param state ChoreState
+---@param chore Chore
+---@param invs string[]
+---@param now integer?
+---@return boolean
+function M.shopBoughtAny(state, chore, invs, now)
+    if now == nil then return false end
+    for _, inv in ipairs(invs) do
+        if M.shopBought(state, chore, inv, now) then return true end
+    end
+    return false
+end
+
 -- The table to store in PersistentDB. It holds only strings, integers and tables, all types
 -- PersistentDB stores (it drops table fields of other types). A minute that isn't a whole
 -- number is left out rather than stored as a float.
----@param minutes table<string, integer>
----@return table<string, integer>
-local function wholeMinutes(minutes)
-    local out = {}
-    for key, minute in pairs(minutes) do
-        out[key] = math.tointeger(minute)
-    end
-    return out
-end
-
 ---@param state ChoreState
 ---@return table
 function M.serialise(state)
-    local shops = {}
-    for id, minutes in pairs(state.shops) do
-        shops[id] = wholeMinutes(minutes)
-    end
     return {
         version = M.VERSION,
         selected = copySelected(state.selected),
-        done = wholeMinutes(state.done),
-        shops = shops,
+        done = copyMinutes(state.done, math.tointeger),
+        shops = copyShops(state.shops, math.tointeger),
     }
 end
 

@@ -65,10 +65,7 @@ end
 local function shopLines(s, chore, listed, now)
     local lines, bought = {}, 0
     for i, shop in ipairs(listed) do
-        local yes = false
-        for _, inv in ipairs(shop.invs) do
-            yes = yes or (now ~= nil and state.shopBought(s, chore, inv, now))
-        end
+        local yes = state.shopBoughtAny(s, chore, shop.invs, now)
         lines[i] = { name = shop.name, bought = yes }
         if yes then bought = bought + 1 end
     end

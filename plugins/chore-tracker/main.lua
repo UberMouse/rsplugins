@@ -29,9 +29,9 @@
 --         such a chore ticks when its notes rise while the player is within 10 tiles of
 --         the giver, on the same plane.
 --     shell/detect.lua does this, reading only the listed shops' inventories, the backpack
---     and the player's own tile. Each tick it makes logs "[CHORES] purchase <chore id> at
---     <shop>" or "[CHORES] collected <chore id> near <giver>" (grep:
---     \[CHORES\] (purchase|collected)).
+--     and the player's own tile. Each chore it ticks (or shop it first records in a period)
+--     logs "[CHORES] purchase <chore id> at <shop>" or "[CHORES] collected <chore id> near
+--     <giver>" (grep: \[CHORES\] (purchase|collected)).
 --   * Picks and ticks are saved per character (by display name) as they change. The window's
 --     position, size and collapsed state, and the collapsed button's spot, are saved for all
 --     characters. Logged out, the window says so; until the game clock reads, nothing can be
@@ -400,11 +400,28 @@ local function buildWindow(at)
     end
 end
 
--- Rebuild the window where it is, staying closed if collapsed.
-local function rebuild()
+-- How far the window's content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
+-- can set it (SetScrollPosition) but has no getter, so this reads its internal
+-- `_scroll.scrollY`; a version without that field gives nil.
+---@return number?
+local function scrollPosition()
+    assert(win, "the window exists from load to shutdown")
+    local scroll = win._scroll
+    local y = scroll and scroll.scrollY
+    if type(y) == "number" then return y end
+    return nil
+end
+
+-- Rebuild the window where it is, staying closed if collapsed. With `keepScroll`, the new
+-- content is scrolled as far as the old (PrettyUI clamps it to the new content), so a row
+-- whose count changed doesn't jump the list to the top; a view switch starts at the top.
+---@param keepScroll boolean
+local function rebuild(keepScroll)
     assert(win, "the window exists from load to shutdown")
     local r = win.root
+    local scrollY = keepScroll and scrollPosition() or nil
     buildWindow({ x = r.x, y = r.y, width = r.width, height = r.height })
+    if scrollY then win:SetScrollPosition(scrollY) end
     if collapsed then win:Close() end
 end
 
@@ -547,7 +564,7 @@ local function sync(clockTicked)
         -- A view switch clicked in the old content is stale now (it would reopen settings
         -- after a logout).
         pendingMode = nil
-        if win then rebuild() end
+        if win then rebuild(true) end
     elseif clockTicked and phase == "ready" and mode == "list" then
         refreshList()
     end
@@ -565,9 +582,9 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     if pendingMode then
         mode = pendingMode
         pendingMode = nil
-        rebuild()
+        rebuild(false)
     elseif pendingRebuild then
-        rebuild()
+        rebuild(true)
     end
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)

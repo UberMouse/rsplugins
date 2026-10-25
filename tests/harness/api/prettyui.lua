@@ -6,9 +6,10 @@
 -- probe on 2026-10-25; docs/testing.md's fidelity ledger says which is which.
 --
 -- Modelled: Window (titled, resizable, close button, AddText/AddTitle/AddCheckboxButton/
--- AddDivider/AddSpriteButton), standalone Panel (AddSpriteButton, Alt-drag) and SpriteButton.
--- Any other library member, method or option faults as unmocked; extend the fake, with a
--- ledger row, when a plugin needs more.
+-- AddDivider/AddSpriteButton, SetScrollPosition and the `_scroll.scrollY` it sets),
+-- standalone Panel (AddSpriteButton, Alt-drag) and SpriteButton. Any other library member,
+-- method or option faults as unmocked; extend the fake, with a ledger row, when a plugin
+-- needs more.
 
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
@@ -148,6 +149,14 @@ local function flowRow(flow, height, gap, marginTop)
     flow.nextY = y + height + gap
     flow.hasItems = true
     return y
+end
+
+-- Grow the owner's content height to hold a row whose bottom is at `bottom`, plus the bottom
+-- padding, as 1.2.0 does for every placed row, in the flow or not.
+---@param flow table
+---@param bottom number
+local function grow(flow, bottom)
+    flow.contentHeight = math.max(flow.contentHeight, bottom + PADDING)
 end
 
 ---@param s table a Window or Panel state
@@ -414,6 +423,7 @@ local function addSpriteButton(s, spriteName, action, options)
     local height = options.height or options.size or SPRITE_BUTTON_SIZE
     placed.x = options.x or PADDING
     if options.y == nil then placed.y = flowRow(s.flow, height, ROW_GAP, 0) end
+    grow(s.flow, placed.y + height)
     return newSpriteButton(s.lib, s.contentState, spriteName, action, placed, s.tips)
 end
 
@@ -433,6 +443,7 @@ local function addText(lib, s, value, isTitle)
         or math.max(TEXT_HEIGHT, (breaks + 1) * LINE_HEIGHT + 6)
     local y =
         flowRow(s.flow, height, isTitle and TITLE_GAP or TEXT_GAP, isTitle and TITLE_MARGIN or 0)
+    grow(s.flow, y + height)
     local label, ls = ui.create("Text", s.contentState)
     label:SetPos(PADDING, y)
     label:SetSize(-PADDING * 2, height, 1.0)
@@ -472,6 +483,7 @@ local function addCheckbox(lib, s, choices, options)
     local height = #choices * CHECKBOX_ROW
     -- Given a y, 1.2.0 places it there (absolute) and the flow doesn't move.
     local y = options.y or flowRow(s.flow, height, ROW_GAP, 0)
+    grow(s.flow, y + height)
     cs.root, cs.rootState = ui.create("Layer", s.contentState)
     cs.root:SetPos(PADDING, y)
     cs.root:SetSize(-PADDING * 2, height, 1.0)
@@ -516,6 +528,7 @@ local function addDivider(lib, s, options)
     options = checkOptions("Divider", options)
     local ds = { kind = "Divider" }
     local y = flowRow(s.flow, DIVIDER_HEIGHT, ROW_GAP, 0)
+    grow(s.flow, y + DIVIDER_HEIGHT)
     ds.root, ds.rootState = ui.create("Sprite", s.contentState)
     ds.root:SetPos(0, y)
     ds.root:SetSize(0, DIVIDER_HEIGHT, 1.0)
@@ -525,8 +538,22 @@ local function addDivider(lib, s, options)
     return obj
 end
 
+-- Window:SetScrollPosition: the content's scroll, clamped to 0..(content height less the
+-- viewport's, the window inside its frame), as 1.2.0 does on every scroll and resize. Only
+-- the number is kept: the content doesn't move.
+---@param s table
+---@param position number?
+local function windowScrollTo(s, position)
+    if position ~= nil and type(position) ~= "number" then
+        strict.fault("prettyui Window:SetScrollPosition(position) needs a number")
+    end
+    local viewport = math.max(1, ui.height(s.rootState) - s.top - BORDER)
+    local most = math.max(0, s.flow.contentHeight - viewport)
+    s.scrollY = clamp(math.floor(position or 0), 0, most)
+end
+
 -- Window:SetSize, clamped to the window's min/max; it also makes the current position the
--- one a stray root:SetPos snaps back to.
+-- one a stray root:SetPos snaps back to, and re-clamps the scroll.
 ---@param s table
 ---@param width number
 ---@param height number
@@ -536,6 +563,7 @@ local function windowSetSize(s, width, height)
         clamp(math.floor(height), s.minHeight, s.maxHeight)
     )
     if s.bounded then remember(s) end
+    windowScrollTo(s, s.scrollY)
 end
 
 -- Hide (Close) or destroy (Destroy) every tooltip of a host's content context.
@@ -566,6 +594,11 @@ local Window = strict.class("prettyui.Window instance", {
         closeButton = function(s)
             return s.closeButton
         end,
+        -- 1.2.0's internal scroll controller; only its scrollY is modelled, as a snapshot.
+        _scroll = function(s)
+            if s.destroyed then return nil end
+            return { scrollY = s.scrollY }
+        end,
     },
     methods = {
         SetSize = function(s, width, height)
@@ -574,6 +607,10 @@ local Window = strict.class("prettyui.Window instance", {
                 strict.fault("prettyui Window:SetSize(width, height) needs numbers")
             end
             windowSetSize(s, width, height)
+        end,
+        SetScrollPosition = function(s, position)
+            live(s)
+            windowScrollTo(s, position)
         end,
         Show = function(s)
             live(s)
@@ -670,7 +707,7 @@ local WindowModule = module("Window", function(lib, parent, options)
         minHeight = options.minHeight or WINDOW_DEFAULTS.minHeight,
         maxWidth = options.maxWidth,
         maxHeight = options.maxHeight,
-        flow = { nextY = START_Y, hasItems = false },
+        flow = { nextY = START_Y, hasItems = false, contentHeight = 0 },
         destroyed = false,
     }
     s.root, s.rootState = ui.create("Layer", ps)
@@ -680,6 +717,7 @@ local WindowModule = module("Window", function(lib, parent, options)
         clamp(options.height or WINDOW_DEFAULTS.height, s.minHeight, s.maxHeight)
     )
     local top = s.title and TITLE_HEIGHT or BORDER
+    s.top, s.scrollY = top, 0
     local content
     content, s.contentState = ui.create("Layer", s.rootState)
     content:SetPos(BORDER, top)
@@ -709,7 +747,7 @@ local PanelModule = module("Panel", function(lib, parent, options)
         backgroundAlpha = options.backgroundAlpha,
         width = options.width or PANEL_DEFAULTS.width,
         height = options.height or PANEL_DEFAULTS.height,
-        flow = { nextY = START_Y, hasItems = false },
+        flow = { nextY = START_Y, hasItems = false, contentHeight = 0 },
         destroyed = false,
     }
     s.root, s.rootState = ui.create("Layer", ps)

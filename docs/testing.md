@@ -192,7 +192,7 @@ When `plugin.json` lists PrettyUI by its numeric mod.io ID in the object form
 `h:load()` exposes the fake under that key's global. Naming PrettyUI any other way
 (`["prettyui"]`, `["6398181"]`, `{ "prettyui": "6398181" }`) fails the load, since only that
 form is proven in the client; so does any other dependency, naming it. The fake models the
-part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`, with `root`, `closeButton`, `SetSize`, `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
+part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`, with `root`, `closeButton`, `SetSize`, `SetScrollPosition` (and the internal `_scroll.scrollY` it sets), `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
 `AddCheckboxButton` (with `SetOptionTooltip`), `AddDivider` and `AddSpriteButton`; `Panel.new`, with `root`, `width`,
 `height`, `SetSize`, `AddSpriteButton` and `Destroy`; and `SpriteButton.new`, with `SetTooltip`; and the tooltips of all of these. Any other member, method or option
 faults as unmocked: extend `api/prettyui.lua` and `types/prettyui.lua` together, with a ledger
@@ -506,6 +506,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | CheckboxButton: `GetSelectedValues` in choice order, `IsSelected`, `SetSelected(value, selected, notify?)` false for an unknown value; `onChange(group, values, value, selected)` only on a change; rows 22 px; a disabled choice ignores clicks | 1.2.0 source (`src/selection_button.lua`), https://prettyui.j3.gg |
 | CheckboxButton options `colour` (the choices' text colour, fixed once made) and `y` (placed at that content y, outside the flow: later rows don't move), and a per-choice `tooltip` | 1.2.0 source (`src/selection_button.lua`; `y` makes the placement absolute in `src/core/layout.lua`) |
 | `Window:AddSpriteButton(sprite, action, options)`: the next content row, 24 px by default, or at `options.y` outside the flow | 1.2.0 source (`src/core/content_methods.lua`, the `AddSpriteButton` entry, installed on Window) |
+| `Window:SetScrollPosition(position)` floors the position and clamps it to 0..(content height - viewport height), where the content height is the lowest row's bottom plus 14 px (flow rows and `y`-placed ones alike) and the viewport is the window less its title bar (32, or 8 untitled) and 8 px bottom border; `SetSize` and a resize re-clamp it. A Window's `_scroll.scrollY` reads the position (internal: 1.2.0 has no getter), and `_scroll` is nil after `Destroy()` | 1.2.0 source (`src/core/scroll.lua` `SetScrollPosition`, `_Layout` and `Scroll.install`; `src/core/layout.lua` `growContent`; `src/window.lua` `Destroy`) |
 | Panel option `scrollable` (false: no scrolling, no scrollbar) is accepted; the fake doesn't scroll either way | 1.2.0 source (`src/core/scroll.lua`, `src/panel.lua`) |
 | Tooltips: shown on the target's mouse-over, hidden only on its mouse-leave. A Window's or Panel's content tooltips (choices included) are drawn on the host's parent: `Close` hides them, `Destroy` destroys them. A `SpriteButton.new` button's tooltip is drawn inside the parent it was given. `SetTooltip` / `SetOptionTooltip` with a string retext an existing tooltip (a shown one stays shown); a table or nil destroys it and attaches a new, hidden one | 1.2.0 source (`src/tooltip.lua`, `src/window.lua`, `src/selection_button.lua`); https://prettyui.j3.gg lists both methods |
 
@@ -549,7 +550,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | PrettyUI text | Doesn't wrap: the fake can't measure fonts, so a body row is 24 px, or 18 px per `<br>`-separated line plus 6 |
 | PrettyUI clicks | `h.ui:click` hits a component's centre. Only a target's own window's title-bar drag layer can cover it; other windows' z-order isn't modelled |
 | A Window's title-bar drag layer position | Tracks the root's live position. In 1.2.0 it is a sibling of the root (`src/window.lua`, `titleDrag`), moved only at the end of a title drag, by the DragBounds callback and by `SetSize`, so between a bare `root:SetPos` and its snap-back the real layer can sit over the old spot and block clicks there instead (not modelled) |
-| PrettyUI scrolling and hover states | Not modelled: content that overflows doesn't scroll (the client's Panel does), and hover sprites don't change. Hover is only what `h.ui:hover` says |
+| PrettyUI scrolling and hover states | Not modelled beyond a Window's scroll position: scrolled content doesn't move (clicks and positions read as unscrolled), the mouse wheel and scrollbar don't scroll, and hover sprites don't change. Hover is only what `h.ui:hover` says |
 | A hovered target hidden or destroyed | Gets no mouse-leave, so its tooltip stays shown until replaced, its window closes or is destroyed. Assumed from the stuck tooltips the user saw (2026-10-25); whether the client sends a leave to a hidden component is unconfirmed. Showing a component under a still pointer fires no mouse-over |
 
 ### Not modelled

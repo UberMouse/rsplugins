@@ -18,8 +18,10 @@ the autonomous reviewers converge, and hand back reviewed commits on `main`.
 
 **Core principle:** a change is done not when it works, but when a reviewer that did not write
 it, reading the real committed tree, cannot find anything wrong with it. Here that bar has a hole
-no reviewer can fill: nobody in the loop can run the client. So the loop ends by telling the user
-exactly what to check in the beta client, never by claiming it works there.
+no reviewer can fill: no subagent can touch the client. The conductor can, through the dev bridge
+(*Prerequisites*), but only the user can play it. So the loop ends with in-client checks: the
+conductor runs the console half and reports what it saw, the user does the rest. It never claims
+the change works in game on the strength of the tests.
 
 **Announce at start:** "Using the sdd-loop skill — implementing this under subagent-driven
 development with autonomous review. I'll ask up front if anything's ambiguous, then run without
@@ -70,6 +72,14 @@ If mid-loop the work turns out to need genuine design work, do **not** silently 
 - **Stop a background process by its task id or PID, never `pkill -f <pattern>`**: the shell
   running that command has the pattern in its own command line, so it kills itself (exit 144).
 - Human input comes only through `AskUserQuestion`, so this loop works in a background job.
+- **The live client, through the dev bridge: conductor only.** When the user has the client open,
+  `scripts/rsdev.py status` says whether the `dev-bridge` plugin is connected
+  ([docs/dev-environment.md](../../../docs/dev-environment.md#dev-bridge)). If it is, the
+  conductor runs console commands (`exec "prl <plugin>"`), reads forwarded events (`events`) and
+  captures the window (`shot`, then Read the printed path). Implementers, fix agents and
+  reviewers never run `rsdev.py` (the templates say so). Two agents must not send console
+  commands to the user's client at once, and every action should show in the conversation the
+  user is watching.
 
 ## State you carry
 
@@ -483,7 +493,10 @@ After the final §4 passes, write `phase: "done"` to state.json, then give the *
 - **In-client checks**, as a numbered list the user can follow in the beta client: `prf` if a
   manifest or plugin was added, `prl <name>` (or `pon <name>`), each action from the criteria's
   in-client lines, the expected result, and the plugin's log tag with a grep regex for its lines
-  (`CLAUDE.md`: tagged debug logging comes with a regex).
+  (`CLAUDE.md`: tagged debug logging comes with a regex). **If the bridge is connected, run the
+  console half before reporting**: `rsdev.py exec "prf"` / `exec "prl <name>"`, then `shot` and
+  `events`. Say what you saw (the overlay is there, an error showed). Leave on the user's list
+  only the steps that need their hands, and run the console and capture side while they do them.
 - Any `**Assumption:**` you made, the moderation tier you placed the feature in, and anything you
   noticed but kept out of scope.
 

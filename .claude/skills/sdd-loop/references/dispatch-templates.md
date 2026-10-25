@@ -39,7 +39,8 @@ Agent(implementer, model=implModel):
   prompt:
     You are implementing ONE task, working directly on main in the repo root (cwd). Earlier
     tasks (if any) are ALREADY COMMITTED — build on them. The beta client loads plugins/ from
-    this checkout, so your edits are what the user will test.
+    this checkout, so your edits are what the user will test. Never run `scripts/rsdev.py`
+    (exec, events, shot): only the conductor drives the user's live client.
 
     ## Task
     <TASK>

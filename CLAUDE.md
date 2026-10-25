@@ -15,15 +15,23 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
 - Plugins must pass Jagex moderation (`docs/guidelines.md`). Never build features that automate
   actions, send inputs to the server, reveal hidden or future state, or export other players'
   info. If a feature is borderline, flag it.
-- You can't run the beta client, but the user can: treat them as the tool for it. Whenever an
-  answer depends on how the client behaves and the docs, stubs and recordings don't settle it
-  (does an API or dependency resolve, what a var holds, how a UI component behaves, does a change
-  work in game), don't guess or build on the assumption. Write a probe (a throwaway plugin, tagged
-  logging, or a session for the dev recorder in `lib/dev/`) and ask the user to run it. Give them
-  the exact console commands, what to do in game, and what to send back (console lines matching
-  a tag regex, or a recording's path). Record what it showed in `docs/api-concepts.md`. A probe
-  that sits in `plugins/` must keep `scripts/check-lua.sh` green, and is deleted once it has
-  answered.
+- You can't launch or play the beta client, but the user can: treat them as the tool for it.
+  Whenever an answer depends on how the client behaves and the docs, stubs and recordings don't
+  settle it (does an API or dependency resolve, what a var holds, how a UI component behaves, does
+  a change work in game), don't guess or build on the assumption. Write a probe (a throwaway
+  plugin, tagged logging, or a session for the dev recorder in `lib/dev/`) and get it run. Record
+  what it showed in `docs/api-concepts.md`. A probe that sits in `plugins/` must keep
+  `scripts/check-lua.sh` green, and is deleted once it has answered.
+- When the client is open, drive it yourself through the dev bridge
+  ([docs/dev-environment.md](docs/dev-environment.md#dev-bridge)). Run `scripts/rsdev.py status`
+  first. If the bridge is connected, run the console commands yourself (`rsdev.py exec "prf"`,
+  `exec "prl <plugin>"`), read what plugins forward with `events`, and look at the game and plugin
+  UI with `shot` (then Read the printed path). Ask the user only for what needs their hands:
+  starting the client, enabling the bridge (`pon dev-bridge`), and acting in game. If it isn't
+  connected, ask them for those steps, or fall back to giving them the exact console commands and
+  what to send back (console lines matching a tag regex, or a recording's path). Only the main
+  session uses rsdev, never a subagent. Two agents must not send console commands to the user's
+  client at once, and every action should show in the conversation they are watching.
 - Work and commit directly on `main`; don't create branches or worktrees unless asked or truly
   needed. Only one session edits this repo, and the beta client's `dev_plugins` symlink points at
   this checkout's `plugins/`, so a worktree's plugins would be invisible to the client.

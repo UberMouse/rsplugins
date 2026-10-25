@@ -128,7 +128,8 @@ delete the folder and re-enter the shell. After `prf`, `plist` should list both;
 ## Dev bridge
 
 The dev bridge lets Claude (from Bash) drive the running client and watch it while you play:
-queue console commands for the client, and read the events a plugin forwards. It is a dev tool,
+queue console commands for the client, read the events a plugin forwards, and capture the
+window (`shot`, below, which needs only the client, not the bridge). It is a dev tool,
 never for submission. One host daemon, `scripts/rsdev.py`, serves it and also receives the dev
 recorder's batches ([Recordings](testing.md#recordings)). The `dev-bridge` plugin in the client
 polls the daemon over HTTP; [its README](../plugins/dev-bridge/README.md) has the console steps

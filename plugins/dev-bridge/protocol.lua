@@ -1,8 +1,10 @@
 -- The dev bridge's pure core: the sync body the plugin POSTs, parsing the daemon's reply into
 -- commands, and deciding which commands the bridge refuses. It also holds the privacy filters
--- deciding which chat messages and menu entries may leave the client (chatView, entryView).
--- Nothing here calls the API or keeps state; main.lua (the shell) does both. The protocol is
--- documented in docs/dev-environment.md ("Dev bridge") and served by scripts/rsdev.py.
+-- deciding which chat messages and menu entries may leave the client (chatView, entryView),
+-- and the shape and caps of eval results and of the Log and Emit events.
+-- Nothing here calls the API or keeps state; main.lua and eval.lua (the shell) do both. The
+-- protocol is documented in docs/dev-environment.md ("Dev bridge") and served by
+-- scripts/rsdev.py.
 
 local json = require("dev/json")
 local recording = require("dev/recording")
@@ -18,11 +20,20 @@ protocol.limits = {
     retryTicks = 250, -- wait after a failed sync
     syncBytes = 256 * 1024, -- encoded events per sync
     bufferBytes = 1024 * 1024, -- encoded events kept while they can't be sent
+    -- Encoded results per sync, and the most one result takes (resultEntry). With syncBytes
+    -- of events, this keeps a sync under the daemon's 2 MB body cap (rsdev.py MAX_BODY): the
+    -- results of a refused sync would be resent, and refused, forever.
+    resultBytes = 1024 * 1024,
+    valueBytes = 64 * 1024, -- encoded values of one eval result, or one Emit's value
+    outputLines = 200, -- print/log lines one eval result keeps
+    lineBytes = 2 * 1024, -- one output line, Log text, error or Emit tag
 }
 
+-- Every console line from the bridge carries this tag, so it's easy to grep.
+protocol.TAG = "[BRIDGE]"
+
 -- Globals whose type() every sync reports in hello.env, so the host can see what this client
--- gives a plugin, e.g. whether `load` exists, which decides if the bridge could later run Lua
--- sent by the daemon.
+-- gives a plugin, e.g. whether `load` exists, which eval needs.
 protocol.ENV_NAMES = {
     "load",
     "loadstring",
@@ -216,21 +227,195 @@ function protocol.eventEntry(t, name, payload)
     return json.encode({ t = t, name = name, payload = payload })
 end
 
--- The POST body of one sync. `fields` holds session, seq, dropped, hello and results;
--- `events` are entries from eventEntry, spliced in so they aren't encoded twice.
+-- The POST body of one sync. `fields` holds session, seq, dropped and hello; `events` are
+-- entries from eventEntry and `results` entries from resultEntry, both spliced in so they
+-- aren't encoded twice.
 ---@param fields table
 ---@param events string[]
+---@param results string[]
 ---@return string
-function protocol.syncBody(fields, events)
-    return recording.batchBody({
+function protocol.syncBody(fields, events, results)
+    local body = recording.batchBody({
         schema = protocol.SCHEMA,
         plugin = protocol.PLUGIN,
         session = fields.session,
         seq = fields.seq,
         dropped = fields.dropped,
         hello = fields.hello,
-        results = fields.results,
     }, events, "events")
+    return body:sub(1, -2) .. ',"results":[' .. table.concat(results, ",") .. "]}"
+end
+
+-- The oldest results whose bytes fit in `maxBytes` (at least one, however big), and the rest.
+---@param results string[]
+---@param maxBytes integer
+---@return string[] taken
+---@return string[] rest
+function protocol.takeResults(results, maxBytes)
+    local taken, rest, bytes = {}, {}, 0
+    for _, result in ipairs(results) do
+        if #rest == 0 and (#taken == 0 or bytes + #result <= maxBytes) then
+            taken[#taken + 1] = result
+            bytes = bytes + #result
+        else
+            rest[#rest + 1] = result
+        end
+    end
+    return taken, rest
+end
+
+---------------------------------------------------------------------------
+-- Eval results and the Log and Emit events
+---------------------------------------------------------------------------
+
+-- Any value as text, never raising: tostring() can, through a bad __tostring.
+---@param v any
+---@return string
+function protocol.text(v)
+    if type(v) == "string" then return v end
+    local ok, text = pcall(tostring, v)
+    if ok then return text end
+    return "<a " .. type(v) .. " that tostring() fails on>"
+end
+
+-- print's and log's text: their arguments separated by a space (docs/api/generated/core.lua).
+---@return string
+function protocol.joinText(...)
+    local parts = table.pack(...)
+    for i = 1, parts.n do
+        parts[i] = protocol.text(parts[i])
+    end
+    return table.concat(parts, " ", 1, parts.n)
+end
+
+-- `text` cut to lineBytes, ending in "<+N bytes>" when cut, and whether it was.
+---@param text string
+---@return string
+---@return boolean
+local function capText(text)
+    local max = protocol.limits.lineBytes
+    if #text <= max then return text, false end
+    return text:sub(1, max) .. string.format("<+%d bytes>", #text - max), true
+end
+
+-- What one eval has printed so far: at most outputLines lines of at most lineBytes each.
+---@return { lines: string[], truncated: boolean }
+function protocol.newOutput()
+    return { lines = {}, truncated = false }
+end
+
+---@param output { lines: string[], truncated: boolean }
+---@param text string
+function protocol.addOutput(output, text)
+    if #output.lines >= protocol.limits.outputLines then
+        output.truncated = true
+        return
+    end
+    local max = protocol.limits.lineBytes
+    if #text > max then
+        text, output.truncated = text:sub(1, max), true
+    end
+    output.lines[#output.lines + 1] = text
+end
+
+-- One command's result, encoded for syncBody. `r.error` (any value) is set when `r.ok` is
+-- false. An eval adds `output`, and on success `values` (each already serialised, with
+-- `nvalues` of them, nils included). The values go as a JSON array of exactly nvalues
+-- elements, nils as null (dev/json would write a table with a nil hole as an object). Past
+-- valueBytes they are dropped; a result still over resultBytes loses its output; either sets
+-- truncated, as does a cut error or output line.
+---@param r { id: string, ok: boolean, error: any, values: any[]?, nvalues: integer?, output: { lines: string[], truncated: boolean }? }
+---@return string
+function protocol.resultEntry(r)
+    local meta = { id = r.id, ok = r.ok }
+    local truncated = r.output ~= nil and r.output.truncated
+    if not r.ok then
+        local cut
+        meta.error, cut = capText(protocol.text(r.error))
+        truncated = truncated or cut
+    end
+    meta.output = r.output and r.output.lines
+    local values = nil ---@type string[]?
+    if r.nvalues then
+        meta.nvalues = r.nvalues
+        local parts, bytes = {}, 0
+        for i = 1, r.nvalues do
+            parts[i] = json.encode((r.values or {})[i])
+            bytes = bytes + #parts[i] + 1
+        end
+        if bytes > protocol.limits.valueBytes then
+            parts, truncated = {}, true
+        end
+        values = parts
+    end
+    local function encode()
+        meta.truncated = truncated or nil
+        if not values then return json.encode(meta) end
+        return recording.batchBody(meta, values, "values")
+    end
+    local entry = encode()
+    if #entry > protocol.limits.resultBytes and meta.output then
+        meta.output, truncated = {}, true
+        entry = encode()
+    end
+    return entry
+end
+
+-- A Log event: a line the bridge logged, or (source "eval") one a probe printed or an error
+-- that stopped a probe. Its text is cut to lineBytes.
+---@param t integer the Logic tick
+---@param level "print"|"log"|"error"
+---@param text string
+---@param source string?
+---@return string
+function protocol.logEntry(t, level, text, source)
+    return protocol.eventEntry(t, "Log", {
+        plugin = protocol.PLUGIN,
+        level = level,
+        text = (capText(text)),
+        source = source,
+    })
+end
+
+-- An Emit event from a snippet's emit(tag, value). `value` is already serialised; past
+-- valueBytes encoded it is left out and the payload says truncated.
+---@param t integer
+---@param tag any
+---@param value any
+---@return string
+function protocol.emitEntry(t, tag, value)
+    local payload = { tag = (capText(protocol.text(tag))) }
+    if #json.encode(value) > protocol.limits.valueBytes then
+        payload.truncated = true
+    else
+        payload.value = value
+    end
+    return protocol.eventEntry(t, "Emit", payload)
+end
+
+-- A probe's subscription is registered under this prefix plus the name the snippet gave, so
+-- it can't replace the bridge's own subscriptions ("devBridge" plus an event name, and no
+-- event is named "Eval_...").
+protocol.PROBE_PREFIX = "devBridgeEval_"
+
+---@param name string the name the snippet subscribed with
+---@return string
+function protocol.probeName(name)
+    return protocol.PROBE_PREFIX .. name
+end
+
+-- The Log text for a probe stopped by its first error.
+---@param event string
+---@param name string the name the snippet subscribed with
+---@param err any
+---@return string
+function protocol.probeErrorText(event, name, err)
+    return string.format(
+        "probe Event.%s %q unsubscribed after an error: %s",
+        event,
+        name,
+        protocol.text(err)
+    )
 end
 
 -- The daemon escapes `\`, tab, newline and CR in an arg (rsdev.py escape_arg). Any other
@@ -290,16 +475,28 @@ function protocol.isSelfDisable(command)
     return DISABLING[word:lower()] == true and target:lower() == protocol.PLUGIN
 end
 
--- Why the bridge won't run `command`, or nil if it will: only `exec` of a console command
--- that doesn't disable the bridge is run.
----@param command { kind: string, arg: string }
+-- Why the bridge won't run console command `command`, sent by exec or from an eval snippet,
+-- or nil if it will.
+---@param command string
 ---@return string?
-function protocol.refusal(command)
-    if command.kind ~= "exec" then return "unknown kind " .. command.kind end
-    if protocol.isSelfDisable(command.arg) then
+function protocol.consoleRefusal(command)
+    if protocol.isSelfDisable(command) then
         return "refused: this would disable dev-bridge, cutting the only channel that could "
             .. "re-enable it; run it from the client console instead"
     end
+    return nil
+end
+
+local KINDS = { exec = true, eval = true, reset = true }
+
+-- Why the bridge won't run `command`, or nil if it will: an unknown kind, a self-disabling
+-- exec, or an eval without source (the daemon never sends one).
+---@param command { kind: string, arg: string }
+---@return string?
+function protocol.refusal(command)
+    if not KINDS[command.kind] then return "unknown kind " .. command.kind end
+    if command.kind == "exec" then return protocol.consoleRefusal(command.arg) end
+    if command.kind == "eval" and command.arg == "" then return "eval has no Lua source" end
     return nil
 end
 

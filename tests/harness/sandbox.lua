@@ -34,10 +34,15 @@ local BASE = {
 }
 local LIBS = { "string", "table", "math", "utf8", "coroutine" }
 
--- Withheld unless a test opts in (opts.stdlib = { os = true }): the client has neither
--- (recorder-demo's probe, 2026-10-25), so a plugin mustn't rely on them.
-local OPT_IN = { os = os, io = io }
--- Standard globals never provided, with a clearer message than "unmocked API".
+-- Why each opt-in global (OPT_IN, below) is withheld by default.
+local OPT_IN_WHY = {
+    -- recorder-demo's probe, 2026-10-25.
+    os = "absent in the client; a test can opt in",
+    io = "absent in the client; a test can opt in",
+    -- dev-bridge's hello, 2026-10-26. Only the dev bridge's eval should run Lua from text.
+    load = "present in the client, for dev tools only; a test can opt in",
+}
+-- Standard globals withheld, with a clearer message than "unmocked API".
 local WITHHELD = {
     debug = true,
     load = true,
@@ -146,6 +151,38 @@ local function copy(lib)
     return out
 end
 
+-- `load` for one sandbox, so a spec can't reach outside it: text chunks only (a binary chunk
+-- can corrupt the VM), and a chunk given no env argument gets the plugin's env, never the
+-- host's _G. An env argument given, even nil, is used, as in Lua 5.4.
+---@param env table
+---@return function
+local function sandboxedLoad(env)
+    return function(chunk, chunkname, mode, ...)
+        if type(chunk) ~= "string" then
+            strict.fault("load: the harness models string chunks only")
+        end
+        if mode ~= nil and mode ~= "t" then
+            strict.fault('load: the harness allows mode "t" only')
+        end
+        local chunkEnv = env
+        if select("#", ...) > 0 then chunkEnv = (...) end
+        -- selene: allow(incorrect_standard_library_use) -- its std has the pre-5.2 load
+        return load(chunk, chunkname, "t", chunkEnv)
+    end
+end
+
+-- Withheld unless a test opts in (opts.stdlib = { os = true, load = true }); each builds the
+-- global for one sandbox.
+local OPT_IN = {
+    os = function()
+        return copy(os)
+    end,
+    io = function()
+        return copy(io)
+    end,
+    load = sandboxedLoad,
+}
+
 -- The coroutine library, with every new thread under the time budget (runtime.watch).
 ---@return table
 local function budgetedCoroutine()
@@ -214,8 +251,8 @@ function M.build(h, instance)
     env.coroutine = budgetedCoroutine()
     for name, enabled in pairs(h.stdlib) do
         if enabled then
-            assert(OPT_IN[name], "stdlib opt-in only covers os and io, not " .. name)
-            env[name] = copy(OPT_IN[name])
+            assert(OPT_IN[name], "stdlib opt-in only covers os, io and load, not " .. name)
+            env[name] = OPT_IN[name](env)
         end
     end
     env._G = env
@@ -253,8 +290,7 @@ function M.build(h, instance)
             -- A global the test models as missing from the client (opts.absent) reads nil.
             if h.absent[name] then return nil end
             if WITHHELD[name] then
-                local why = OPT_IN[name] and "absent in the client; a test can opt in"
-                    or "client availability unknown"
+                local why = OPT_IN_WHY[name] or "client availability unknown"
                 strict.fault(
                     "not provided in the harness sandbox: " .. tostring(name) .. " (" .. why .. ")"
                 )

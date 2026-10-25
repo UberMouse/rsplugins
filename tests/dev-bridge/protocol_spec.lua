@@ -1,6 +1,6 @@
 -- The dev bridge's pure core (plugins/dev-bridge/protocol.lua): the sync body, parsing and
--- unescaping the daemon's reply, which commands are refused, and the chat and menu-entry
--- privacy filters.
+-- unescaping the daemon's reply, which commands are refused, the chat and menu-entry privacy
+-- filters, and the shape and caps of eval results and the Log and Emit events.
 
 local dkjson = require("dkjson")
 local support = require("tests.dev-bridge.support")
@@ -17,8 +17,7 @@ describe("protocol.syncBody", function()
             seq = 3,
             dropped = 2,
             hello = { version = "Lua 5.4", env = { load = "nil" } },
-            results = { { id = "c1", ok = false, error = "no" } },
-        }, events))
+        }, events, { protocol.resultEntry({ id = "c1", ok = false, error = "no" }) }))
         assert.are.same({
             schema = 1,
             plugin = "dev-bridge",
@@ -35,7 +34,7 @@ describe("protocol.syncBody", function()
     end)
 
     it("writes no events and no results as empty arrays", function()
-        local body = protocol.syncBody({ session = "s", seq = 1, dropped = 0, results = {} }, {})
+        local body = protocol.syncBody({ session = "s", seq = 1, dropped = 0 }, {}, {})
         assert.matches('"events":%[%]', body)
         assert.matches('"results":%[%]', body)
     end)
@@ -133,10 +132,23 @@ end)
 
 describe("protocol.refusal", function()
     it("refuses unknown kinds and self-disabling commands, and nothing else", function()
-        assert.are.equal("unknown kind eval", protocol.refusal({ kind = "eval", arg = "1" }))
+        assert.are.equal("unknown kind bogus", protocol.refusal({ kind = "bogus", arg = "1" }))
         assert.matches("console", protocol.refusal({ kind = "exec", arg = "poff dev-bridge" }))
         assert.is_nil(protocol.refusal({ kind = "exec", arg = "plist" }))
         assert.is_nil(protocol.refusal({ kind = "exec", arg = "prl dev-bridge" }))
+    end)
+
+    it("runs eval and reset, refusing an eval without source", function()
+        assert.is_nil(protocol.refusal({ kind = "eval", arg = "1 + 1" }))
+        -- Not a console command, so not checked as one.
+        assert.is_nil(protocol.refusal({ kind = "eval", arg = "poff dev-bridge" }))
+        assert.is_nil(protocol.refusal({ kind = "reset", arg = "" }))
+        assert.are.equal("eval has no Lua source", protocol.refusal({ kind = "eval", arg = "" }))
+    end)
+
+    it("shares the self-disable refusal with snippets' console commands", function()
+        assert.matches("would disable dev%-bridge", protocol.consoleRefusal("ppd dev-bridge x"))
+        assert.is_nil(protocol.consoleRefusal("prl dev-bridge"))
     end)
 end)
 
@@ -307,5 +319,198 @@ describe("protocol MiniMenu constants", function()
         local view = protocol.entryView({ verbText = "Trade with", extraText = "Bob" }, true)
         assert.are.equal("Trade with", view.verbText)
         assert.are.equal("<player>", view.extraText)
+    end)
+end)
+
+-- Runs `fn` with protocol.limits[key] = value, then restores it.
+local function withLimit(key, value, fn)
+    local saved = protocol.limits[key]
+    protocol.limits[key] = value
+    local ok, err = pcall(fn)
+    protocol.limits[key] = saved
+    if not ok then error(err, 0) end
+end
+
+describe("protocol.takeResults", function()
+    it("takes the oldest results that fit, at least one, and keeps the order", function()
+        local taken, rest = protocol.takeResults({ "aaaa", "bb", "cc", "d" }, 6)
+        assert.are.same({ "aaaa", "bb" }, taken)
+        assert.are.same({ "cc", "d" }, rest)
+        taken, rest = protocol.takeResults({ "aaaaaaaa", "b" }, 6)
+        assert.are.same({ { "aaaaaaaa" }, { "b" } }, { taken, rest })
+        assert.are.same({ {}, {} }, { protocol.takeResults({}, 6) })
+    end)
+end)
+
+describe("protocol text", function()
+    it("joins arguments with spaces, as print and log do, nils included", function()
+        assert.are.equal("a 1 nil true", protocol.joinText("a", 1, nil, true))
+        assert.are.equal("", protocol.joinText())
+    end)
+
+    it("never raises on a value whose tostring fails", function()
+        local bad = setmetatable({}, {
+            __tostring = function()
+                error("no")
+            end,
+        })
+        assert.are.equal("<a table that tostring() fails on>", protocol.text(bad))
+        assert.are.equal("x <a table that tostring() fails on>", protocol.joinText("x", bad))
+    end)
+end)
+
+describe("protocol.addOutput", function()
+    it("keeps outputLines lines of lineBytes each, flagging what it cuts", function()
+        withLimit("outputLines", 2, function()
+            withLimit("lineBytes", 4, function()
+                local out = protocol.newOutput()
+                protocol.addOutput(out, "abcd")
+                assert.is_false(out.truncated)
+                protocol.addOutput(out, "abcdef")
+                assert.are.same({ "abcd", "abcd" }, out.lines)
+                assert.is_true(out.truncated)
+                local full = protocol.newOutput()
+                protocol.addOutput(full, "1")
+                protocol.addOutput(full, "2")
+                protocol.addOutput(full, "3")
+                assert.are.same({ "1", "2" }, full.lines)
+                assert.is_true(full.truncated)
+            end)
+        end)
+    end)
+end)
+
+describe("protocol.resultEntry", function()
+    it("encodes an exec result as id, ok and error", function()
+        assert.are.same(
+            { id = "c1", ok = true },
+            dkjson.decode(protocol.resultEntry({ id = "c1", ok = true }))
+        )
+        assert.are.same(
+            { id = "c2", ok = false, error = "boom" },
+            dkjson.decode(protocol.resultEntry({ id = "c2", ok = false, error = "boom" }))
+        )
+    end)
+
+    it("writes exactly nvalues values, nils as null, with the output", function()
+        local entry = protocol.resultEntry({
+            id = "e1",
+            ok = true,
+            values = { nil, 1, nil },
+            nvalues = 4,
+            output = { lines = { "hi" }, truncated = false },
+        })
+        assert.matches('"values":%[null,1,null,null%]', entry)
+        local r = dkjson.decode(entry)
+        assert.are.same({ 4, { "hi" } }, { r.nvalues, r.output })
+        assert.is_nil(r.truncated)
+        assert.matches(
+            '"values":%[%]',
+            protocol.resultEntry({ id = "e", ok = true, values = {}, nvalues = 0 })
+        )
+    end)
+
+    it("drops values past valueBytes, keeping nvalues and ok", function()
+        withLimit("valueBytes", 10, function()
+            local r = dkjson.decode(protocol.resultEntry({
+                id = "e",
+                ok = true,
+                values = { string.rep("x", 20) },
+                nvalues = 1,
+                output = protocol.newOutput(),
+            }))
+            assert.are.same(
+                { id = "e", ok = true, values = {}, nvalues = 1, output = {}, truncated = true },
+                r
+            )
+        end)
+    end)
+
+    it("flags output the snippet's caps cut", function()
+        local r = dkjson.decode(protocol.resultEntry({
+            id = "e",
+            ok = true,
+            values = {},
+            nvalues = 0,
+            output = { lines = { "a" }, truncated = true },
+        }))
+        assert.is_true(r.truncated)
+    end)
+
+    it("tostrings a non-string error and cuts a long one", function()
+        local t = {}
+        local r = dkjson.decode(protocol.resultEntry({ id = "e", ok = false, error = t }))
+        assert.are.equal(tostring(t), r.error)
+        withLimit("lineBytes", 4, function()
+            r = dkjson.decode(protocol.resultEntry({ id = "e", ok = false, error = "abcdefgh" }))
+            assert.are.same({ "abcd<+4 bytes>", true }, { r.error, r.truncated })
+        end)
+    end)
+
+    it("drops the output of a result still over resultBytes", function()
+        withLimit("resultBytes", 100, function()
+            local lines = {}
+            for i = 1, 20 do
+                lines[i] = "line " .. i
+            end
+            local entry = protocol.resultEntry({
+                id = "e",
+                ok = false,
+                error = "x",
+                output = { lines = lines, truncated = false },
+            })
+            local r = dkjson.decode(entry)
+            assert.are.same({ {}, true }, { r.output, r.truncated })
+            assert.is_true(#entry <= 100)
+        end)
+    end)
+end)
+
+describe("protocol Log and Emit entries", function()
+    it("writes a Log event with the plugin, level, text and source", function()
+        assert.are.same({
+            t = 3,
+            name = "Log",
+            payload = { plugin = "dev-bridge", level = "print", text = "hi", source = "eval" },
+        }, dkjson.decode(protocol.logEntry(3, "print", "hi", "eval")))
+        local said = dkjson.decode(protocol.logEntry(4, "log", "enabled"))
+        assert.is_nil(said.payload.source)
+        withLimit("lineBytes", 2, function()
+            local cut = dkjson.decode(protocol.logEntry(1, "log", "abcd"))
+            assert.are.equal("ab<+2 bytes>", cut.payload.text)
+        end)
+    end)
+
+    it("writes an Emit event, the tag as text", function()
+        assert.are.same(
+            { t = 5, name = "Emit", payload = { tag = "7", value = { a = 1 } } },
+            dkjson.decode(protocol.emitEntry(5, 7, { a = 1 }))
+        )
+        assert.are.same({ tag = "n" }, dkjson.decode(protocol.emitEntry(5, "n", nil)).payload)
+    end)
+
+    it("leaves out a value past valueBytes and says truncated", function()
+        withLimit("valueBytes", 10, function()
+            local e = dkjson.decode(protocol.emitEntry(1, "big", string.rep("x", 20)))
+            assert.are.same({ tag = "big", truncated = true }, e.payload)
+        end)
+    end)
+end)
+
+describe("protocol probe names", function()
+    it("prefixes a probe's name so it can't be one of the bridge's own", function()
+        assert.are.equal("devBridgeEval_count", protocol.probeName("count"))
+        -- The bridge's own names are "devBridge" plus an event name; none starts with Eval_.
+        local stubs = require("tests.harness.stubs")
+        for event in pairs(stubs.fields("Event")) do
+            assert(not event:match("^Eval_"), event)
+        end
+    end)
+
+    it("names the event, the probe's own name and the error when one stops", function()
+        assert.are.equal(
+            'probe Event.Logic "count" unsubscribed after an error: eval:1: boom',
+            protocol.probeErrorText("Logic", "count", "eval:1: boom")
+        )
     end)
 end)

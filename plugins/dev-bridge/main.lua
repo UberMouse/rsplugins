@@ -1,26 +1,24 @@
--- Dev Bridge: a DEV TOOL, NEVER SUBMITTED. It runs whatever console commands the daemon on
--- this machine (scripts/rsdev.py) sends it, and ExecuteConsoleCommand and cheats only work on
--- dev worlds. It lets Claude, from a terminal, drive the client (`scripts/rsdev.py exec
--- "prl chore-tracker"`) and watch what happens (`scripts/rsdev.py events --follow`) while you
--- play. See README.md and docs/dev-environment.md ("Dev bridge").
+-- Dev Bridge: a DEV TOOL, NEVER SUBMITTED. It runs whatever console commands and Lua
+-- snippets the daemon on this machine (scripts/rsdev.py) sends it, and ExecuteConsoleCommand
+-- and cheats only work on dev worlds. It lets Claude, from a terminal, drive the client
+-- (`scripts/rsdev.py exec "prl chore-tracker"`), read game state and install probes
+-- (`scripts/rsdev.py eval ...`, eval.lua) and watch what happens (`scripts/rsdev.py events
+-- --follow`, `logs`) while you play. See README.md and docs/dev-environment.md ("Dev bridge").
 --
 -- Every Logic-paced sync POSTs the events seen since the last one and the results of the
--- commands run, and the reply carries new commands, which run one per Logic tick. Requests
--- start only from Logic, never from a completion callback (that crashed the client;
--- docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
+-- commands run, and the reply carries new commands (exec, eval, reset), which run one per
+-- Logic tick. Requests start only from Logic, never from a completion callback (that crashed
+-- the client; docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
 --
 -- Chat forwarding is limited to the player's own lines, system messages and senderless SPAM
--- (protocol.lua). System text is forwarded as-is, so it can still name other players.
+-- (protocol.lua). System text is forwarded as-is, so it can still name other players. These
+-- filters cover only the events forwarded here, not what an eval snippet returns or emits.
 
 local protocol = require("protocol")
 -- dev/ is a symlink to lib/dev (the dev recorder's modules); require gives nil without it.
 local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is missing")
 local payloads = assert(require("dev/payloads"), "dev/ (a link to lib/dev) is missing")
-
--- Every console line from this plugin carries this tag, so it's easy to grep.
-local function say(...)
-    log("[BRIDGE]", ...)
-end
+local eval = assert(require("eval"), "eval.lua is missing")
 
 local SYNC_PATH = "/bridge/sync"
 local LOGIC_NAME = "devBridgeLogic"
@@ -47,8 +45,8 @@ local nextSync = 0 -- the tick the next sync may start at
 local buffer = recording.newBuffer() -- encoded events waiting to be sent
 local dropped = 0 -- events lost so far: buffer full, or in a sync the daemon never got
 local queue = {} -- commands from the daemon not yet run, oldest first
-local results = {} -- results not yet sent: { id, ok, error? }
-local inFlight = nil ---@type { request: HTTPRequest?, body: string, count: integer, results: table[], done: boolean }?
+local results = {} -- results not yet sent, encoded (protocol.resultEntry)
+local inFlight = nil ---@type { request: HTTPRequest?, body: string, count: integer, results: string[], done: boolean }?
 local stopped = false
 
 -- So the console isn't flooded: each of these is logged once (failing, once per outage).
@@ -56,15 +54,40 @@ local warned = { waiting = false, dropped = false, forward = false }
 local failing = false
 local connected = false
 
+local say ---@type fun(...) -- defined below push: say and noteDropped call each other
+
 ---@param count integer
 ---@param why string
 local function noteDropped(count, why)
     dropped = dropped + count
+    -- Set before saying, since saying buffers a Log event that may itself drop one.
     if not warned.dropped then
         warned.dropped = true
         say("losing events (" .. why .. "); the daemon sees how many as `dropped`")
     end
 end
+
+-- Buffer an encoded event for the next sync. Once the bridge has stopped, nothing will send
+-- it, so it is dropped silently (a probe's Log or Emit during teardown, say).
+---@param entry string
+local function push(entry)
+    if stopped then return end
+    local lost = recording.push(buffer, entry, protocol.limits.bufferBytes)
+    if lost > 0 then noteDropped(lost, "buffer full") end
+end
+
+-- Log a tagged console line, and send it to the daemon as a Log event too.
+say = function(...)
+    log(protocol.TAG, ...)
+    push(protocol.logEntry(tick, "log", protocol.joinText(...)))
+end
+
+local evaluator = eval.new({
+    push = push,
+    tick = function()
+        return tick
+    end,
+})
 
 ---------------------------------------------------------------------------
 -- The client's Lua environment, reported in every sync's hello
@@ -158,9 +181,7 @@ end
 local function forward(name, payload)
     local data = eventData(name, payload)
     if data == nil and name == "ChatMessage" then return end -- filtered out, not lost
-    local entry = protocol.eventEntry(tick, name, data)
-    local lost = recording.push(buffer, entry, protocol.limits.bufferBytes)
-    if lost > 0 then noteDropped(lost, "buffer full") end
+    push(protocol.eventEntry(tick, name, data))
 end
 
 -- A subscriber that buffers `name` events. A failure loses that one event, counted as
@@ -187,22 +208,34 @@ end
 local function runOne()
     local command = table.remove(queue, 1)
     if not command then return end
-    local result = { id = command.id, ok = true }
+    local result = { ok = true }
     local refused = protocol.refusal(command)
     if refused then
         result.ok, result.error = false, refused
+    elseif command.kind == "reset" then
+        say("reset " .. command.id .. ": probes unsubscribed, fresh scratch env")
+        evaluator.reset()
     else
-        say("exec " .. command.id .. ": " .. command.arg)
-        local ok, err = pcall(ExecuteConsoleCommand, command.arg)
-        if not ok then
-            result.ok, result.error = false, tostring(err)
+        if command.kind == "eval" then
+            say("eval " .. command.id)
+            result = evaluator.run(command.arg)
+        else
+            say("exec " .. command.id .. ": " .. command.arg)
+            local ok, err = pcall(ExecuteConsoleCommand, command.arg)
+            if not ok then
+                result.ok, result.error = false, err
+            end
         end
-        -- A command like `prl dev-bridge` can run PluginShutdown before it returns; the new
-        -- session reports instead, so this result is never sent.
+        -- A command like `prl dev-bridge` (an exec, or ExecuteConsoleCommand in a snippet) can
+        -- run PluginShutdown before it returns; the new session reports instead, so this
+        -- result is never sent.
         if stopped then return end
     end
-    if not result.ok then say("command " .. command.id .. " failed: " .. result.error) end
-    results[#results + 1] = result
+    result.id = command.id
+    if not result.ok then
+        say("command " .. command.id .. " failed: " .. protocol.text(result.error))
+    end
+    results[#results + 1] = protocol.resultEntry(result)
 end
 
 ---------------------------------------------------------------------------
@@ -271,19 +304,18 @@ local function finishSync()
     nextSync = tick + protocol.limits.syncEveryTicks
 end
 
--- Start a sync: the oldest buffered events (up to syncBytes) and every result not yet sent.
+-- Start a sync: the oldest buffered events (up to syncBytes) and results (up to resultBytes).
 local function startSync()
     local events = recording.take(buffer, protocol.limits.syncBytes)
-    local sending = results
-    results = {}
+    local sending, rest = protocol.takeResults(results, protocol.limits.resultBytes)
+    results = rest
     seq = seq + 1
     local body = protocol.syncBody({
         session = session,
         seq = seq,
         dropped = dropped,
         hello = HELLO,
-        results = sending,
-    }, events)
+    }, events, sending)
     -- Kept referenced until the request finishes, body included, in case the client doesn't
     -- copy it (docs/api-concepts.md). The callback only marks it done; Logic handles it.
     local pending = { body = body, count = #events, results = sending, done = false }
@@ -336,6 +368,7 @@ local function teardown()
     if stopped then return end
     stopped = true
     unsubscribeAll()
+    evaluator.stop()
     if inFlight and inFlight.request then pcall(inFlight.request.Cancel, inFlight.request) end
     inFlight = nil
 end

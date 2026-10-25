@@ -142,6 +142,30 @@ describe("stdlib", function()
         assert.is_number(h.env.t)
     end)
 
+    it("withholds load unless a test opts in, then keeps chunks in the sandbox", function()
+        assert.matches(
+            "not provided in the harness sandbox: load %(present in the client",
+            harness.errorOf(function()
+                harness.load(plugin("local f = load('return 1')"))
+            end)
+        )
+        local h = harness.load(
+            plugin([[
+                inSandbox = load("return _G")() == _G
+                own = load("return y", "=c", "t", { y = 7 })()
+                noEnv = load("return _ENV", "=c", "t", nil)() == nil
+            ]]),
+            { stdlib = { load = true } }
+        )
+        assert.are.same({ true, 7, true }, { h.env.inSandbox, h.env.own, h.env.noEnv })
+        assert.matches(
+            "only",
+            harness.errorOf(function()
+                harness.load(plugin("load('return 1', 'c', 'b')"), { stdlib = { load = true } })
+            end)
+        )
+    end)
+
     it("withholds string.dump", function()
         local h = harness.load(plugin("hasDump = string.dump ~= nil"))
         assert.is_false(h.env.hasDump)

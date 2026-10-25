@@ -190,7 +190,8 @@ stderr, e.g. a Lua error, after any `output` lines the snippet printed before it
 delivered or daemon down; 3 delivered, no result in time). On success it prints one JSON object to stdout, indented by 2: `{"values": [...], "nvalues": n,
 "output": [...]}`, plus `"truncated": true` when the plugin cut something to fit its caps.
 `eval --reset` (no code allowed) queues a `reset` command and prints `ok (<id>)`. The daemon only
-queues and relays these; running the Lua and enforcing the caps is the plugin's job. The Lua is
+queues and relays these; running the Lua and enforcing the caps is the plugin's job (the
+scratch env, probes, `emit` and the caps are in [its README](../plugins/dev-bridge/README.md#eval)). The Lua is
 sent by the local daemon, so it has the same trust as `exec`.
 
 **`logs`** prints the `Log` events as `n [plugin] level: text` lines (a multi-line text continues on

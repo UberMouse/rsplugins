@@ -77,10 +77,12 @@ end)
 | `harness.errorOf(fn, ...)` | The error message `fn` raises; fails if it doesn't raise |
 
 `opts`: `grant = { "httpAccess", ... }` (permissions granted from the start, without an event),
-`budgetMs = 1000` (the per-call time budget), `stdlib = { os = true, io = true }` (opt in to
-withheld libraries), `echo = true` (also print the plugin's console output), `absent = { "load", ... }`
+`budgetMs = 1000` (the per-call time budget), `stdlib = { os = true, io = true, load = true }`
+(opt in to withheld globals; only these three can be opted in, and `load` is for dev-bridge's
+eval specs), `echo = true` (also print the plugin's console output), `absent = { "load", ... }`
 (globals that read nil instead of faulting, modelling a client without them; for a plugin that
-reports what its environment has, like `plugins/dev-bridge`).
+reports what its environment has, like `plugins/dev-bridge`). A global can't be both opted in
+and absent.
 
 ### The harness `h`
 
@@ -531,7 +533,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Unsubscribing during a dispatch | The removed subscriber isn't called later in that dispatch |
 | Order within a logic step | HTTP deliveries, then queued chat, then `Logic`, then `ServerLogic` |
 | `ExecuteConsoleCommand` | Records the command (`h.consoleCommands`) and runs nothing: what a command does in the client (`ppe` granting a permission, `pon` enabling a plugin...) isn't modelled, so the test changes the world itself. No error unless the test raises one from `h.onConsoleCommand`. The signature is from core/index.html#executeconsolecommand |
-| `load` in the sandbox | Withheld (faults), but the client has `load` (type `function`; `loadstring`, `debug`, `os` and `io` are nil there; dev-bridge, 2026-10-26). A known divergence, left as is: a plugin must not rely on `load` anyway |
+| `load` in the sandbox | Withheld (faults) unless a test opts in (`stdlib = { load = true }`), though the client has `load` (type `function`; `loadstring`, `debug`, `os` and `io` are nil there; dev-bridge, 2026-10-26): only dev-bridge's eval should use it. Opted in, it takes string chunks in text mode only (a function chunk or another mode faults; Lua's default is `"bt"`), and a chunk given no env argument runs in the plugin's sandbox env, never the host's `_G`; an env argument, even nil, is used as in Lua 5.4. Whether the client's `load` honours the mode and env arguments is unconfirmed: dev-bridge's eval relies on both (`load(chunk, "=eval", "t", scratchEnv)`) |
 | `opts.absent` | Listed globals read nil, as in a client without them; the client has `load` but not `loadstring`, `debug`, `os` or `io` (dev-bridge, 2026-10-26). Naming a global the sandbox provides is an error |
 | HTTP | A response arrives on the step after the test answers it, and never on the step that started the request. `successful` is true for any status code. Progress callbacks are never called. `Cancel` means no callback. Without httpAccess, `new`/`Get`/`Post` fault. Timeouts happen only when the test responds with one |
 | Player getters while logged out | Fault (`IsAvailable` is the documented guard). `GetEntity` returns the same object until the next login |
@@ -547,7 +549,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Replaying: a permission check or PersistentDB key nothing accounts for | Faults `unrecorded: ...` instead of answering the scripted default (not granted, unset). `IterateEntries` visits only the keys the store holds (seeded, stored during the replay, or put in `h.db`), since the recorder logs only its count |
 | Replaying a recording with `dropped` entries | Refused unless the test passes `{ allowDropped = true }` |
 | Replaying, `ServerLogic` | Only the recorded ones while the recording lasts, if it has any; the harness clock's otherwise |
-| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), and `debug`, `load*`, `dofile`, `package`, `collectgarbage` |
+| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), `load` (opt-in, see its row), and `debug`, `loadfile`, `dofile`, `package`, `collectgarbage` |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
 | `ui.Interfaces:GetComponent` | Only the plugin layer; any other ID, or the 2- and 4-argument forms, faults. The same root object comes back on every call of one load (the client may hand out a fresh one). Moving, resizing or destroying it faults |

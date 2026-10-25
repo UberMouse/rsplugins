@@ -15,6 +15,8 @@ M.SYNC_URL = "http://127.0.0.1:8766/bridge/sync"
 -- The globals the bridge reports in hello.env that the sandbox doesn't provide. Whether the
 -- client has them is what the report is for; these specs model a client without them.
 M.ABSENT = { "load", "loadstring", "debug", "os", "io" }
+-- The same for the eval specs, which opt in to the sandbox's `load`, as the client has it.
+M.ABSENT_WITH_LOAD = { "loadstring", "debug", "os", "io" }
 
 -- plugins/dev-bridge, not yet loaded, with `grant` (default both of its permissions).
 ---@param grant string[]?
@@ -35,6 +37,58 @@ function M.load(grant)
     return h
 end
 
+-- plugins/dev-bridge with `load` (opts.stdlib), loaded, with the first sync started.
+---@return table h
+function M.loadEval()
+    local h = harness.new("dev-bridge", {
+        grant = { "httpAccess", "chatAccess" },
+        absent = M.ABSENT_WITH_LOAD,
+        stdlib = { load = true },
+    })
+    h:load()
+    h:step()
+    return h
+end
+
+-- Answer the open sync with `commands` ({ id, kind, arg } each, at most 10, which run one per
+-- tick), run until the next sync starts and return its results by id, and its body.
+---@param h table
+---@param commands string[][]
+---@return table<string, table> results
+---@return table body
+function M.run(h, commands)
+    local reply = ""
+    for _, c in ipairs(commands) do
+        reply = reply .. M.line(c[1], c[2], c[3])
+    end
+    M.answer(h, { status = 200, body = reply })
+    h:advance(20 * 10)
+    local body = M.last(h)
+    local byId = {}
+    for _, result in ipairs(body.results) do
+        byId[result.id] = result
+    end
+    return byId, body
+end
+
+-- M.run with one eval of `source`, returning its result.
+---@param h table
+---@param source string
+---@return table result
+---@return table body
+function M.eval(h, source)
+    local results, body = M.run(h, { { "e", "eval", source } })
+    return assert(results.e, "no result for the eval"), body
+end
+
+-- The raw JSON of the latest sync, for what decoding loses (a null inside an array).
+---@param h table
+---@return string
+function M.lastRaw(h)
+    local all = M.syncs(h)
+    return assert(all[#all], "no sync started").body
+end
+
 -- The bridge's sync requests, in order.
 ---@param h table
 ---@return table[]
@@ -46,13 +100,13 @@ function M.syncs(h)
     return out
 end
 
--- The sync requests not yet answered.
+-- The sync requests neither answered nor cancelled.
 ---@param h table
 ---@return table[]
 function M.open(h)
     local out = {}
     for _, record in ipairs(M.syncs(h)) do
-        if not record.response then out[#out + 1] = record end
+        if not (record.response or record.state.fields.cancelled) then out[#out + 1] = record end
     end
     return out
 end
@@ -91,6 +145,30 @@ end
 function M.line(id, kind, arg)
     local escaped = arg:gsub("\\", "\\\\"):gsub("\t", "\\t"):gsub("\n", "\\n"):gsub("\r", "\\r")
     return id .. "\t" .. kind .. "\t" .. escaped .. "\n"
+end
+
+-- A sync body's events other than Log (the bridge's own lines), so specs of forwarding can
+-- ignore the bridge talking about itself.
+---@param body table
+---@return table[]
+function M.forwarded(body)
+    local out = {}
+    for _, e in ipairs(body.events) do
+        if e.name ~= "Log" then out[#out + 1] = e end
+    end
+    return out
+end
+
+-- The payloads of a sync body's events named `name`.
+---@param body table
+---@param name string
+---@return table[]
+function M.payloads(body, name)
+    local out = {}
+    for _, e in ipairs(body.events) do
+        if e.name == name then out[#out + 1] = e.payload end
+    end
+    return out
 end
 
 -- How many console lines contain `text`.

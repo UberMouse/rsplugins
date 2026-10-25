@@ -127,7 +127,7 @@ describe("dev-bridge", function()
             h:step()
             support.answer(h, {
                 status = 200,
-                body = support.line("k1", "eval", "1 + 1")
+                body = support.line("k1", "bogus", "1 + 1")
                     .. support.line("k2", "exec", "  POFF  dev-bridge")
                     .. support.line("k3", "exec", "plugins_setenabled dev-bridge true")
                     .. support.line("k4", "exec", "boom")
@@ -135,7 +135,7 @@ describe("dev-bridge", function()
             })
             h:advance(20 * 10)
             local results = support.last(h).results
-            assert.are.same({ id = "k1", ok = false, error = "unknown kind eval" }, results[1])
+            assert.are.same({ id = "k1", ok = false, error = "unknown kind bogus" }, results[1])
             assert.is_false(results[2].ok)
             assert.matches("client console", results[2].error)
             assert.is_false(results[3].ok)
@@ -195,7 +195,7 @@ describe("dev-bridge", function()
         support.answer(h)
         h:advance(20 * 10)
 
-        local events = support.last(h).events
+        local events = support.forwarded(support.last(h))
         local names = {}
         for i, e in ipairs(events) do
             names[i] = e.name
@@ -235,7 +235,7 @@ describe("dev-bridge", function()
         support.answer(h)
         h:advance(20 * 10)
         local texts = {}
-        for _, e in ipairs(support.last(h).events) do
+        for _, e in ipairs(support.forwarded(support.last(h))) do
             texts[#texts + 1] = e.payload.chatMessage
         end
         assert.are.same({ "a dwarf smith", "Test" }, texts)
@@ -249,7 +249,7 @@ describe("dev-bridge", function()
         h.world:chat("system", { chatType = 0 })
         support.answer(h)
         h:advance(20 * 10)
-        local events = support.last(h).events
+        local events = support.forwarded(support.last(h))
         assert.are.equal(1, #events)
         assert.are.equal("system", events[1].payload.chatMessage)
     end)
@@ -270,7 +270,7 @@ describe("dev-bridge", function()
         })
         support.answer(h)
         h:advance(20 * 10)
-        local entry = support.last(h).events[1].payload.entry
+        local entry = support.forwarded(support.last(h))[1].payload.entry
         assert.are.equal("Trade with", entry.verbText)
         assert.are.equal("<player>", entry.subjectText)
         assert.are.equal("<player>", entry.fullText)
@@ -284,7 +284,7 @@ describe("dev-bridge", function()
         h:fire("MiniMenuEntrySelected", { entry = entry })
         support.answer(h)
         h:advance(20 * 10)
-        return support.last(h).events[1].payload.entry
+        return support.forwarded(support.last(h))[1].payload.entry
     end
 
     it("forwards a Walk here entry with its text intact", function()
@@ -336,7 +336,8 @@ describe("dev-bridge", function()
         h:step()
         local body = support.last(h)
         assert.is_true(body.dropped > 0)
-        assert.are.equal(40, body.dropped + #body.events)
+        -- The 40 chat lines, and the bridge's "enabled" and "losing events" Log events.
+        assert.are.equal(42, body.dropped + #body.events)
         assert.are.equal("message 40", body.events[#body.events].payload.chatMessage)
         assert.are.equal(1, support.lines(h, "[BRIDGE] losing events"))
     end)
@@ -349,11 +350,12 @@ describe("dev-bridge", function()
         end
         h.world:grant("httpAccess")
         h:step()
-        local sent = #support.last(h).events
+        local sent = #support.forwarded(support.last(h))
         assert.is_true(sent >= 1 and sent < 6)
         support.answer(h)
         h:advance(20 * 10)
-        assert.are.equal("message " .. (sent + 1), support.last(h).events[1].payload.chatMessage)
+        local next = support.forwarded(support.last(h))[1]
+        assert.are.equal("message " .. (sent + 1), next.payload.chatMessage)
     end)
 
     it("backs off while the daemon is down, logging once, and resends results", function()
@@ -371,7 +373,9 @@ describe("dev-bridge", function()
         assert.are.equal(1, support.lines(h, "[BRIDGE] sync failed"))
         local body = support.last(h)
         assert.are.same({ { id = "r1", ok = true } }, body.results) -- still unsent, so again
-        assert.are.equal(1, body.dropped) -- the chat line, lost with the failed sync
+        -- The chat line, and the four Log events of the bridge's own lines that the two failed
+        -- syncs carried ("connected", "exec r1", "losing events", "sync failed").
+        assert.are.equal(5, body.dropped)
 
         support.answer(h)
         assert.are.equal(2, support.lines(h, "[BRIDGE] connected to rsdev"))

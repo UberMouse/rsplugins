@@ -145,3 +145,36 @@ Found in the beta client (2026-10-20), not in the official docs:
 - **BOOLEAN vars read mostly `true` (unconfirmed).** 133 of 148 were `true`, including
   implausible ones like `HOUSE_CURRENTLY_PEEKING`, so unset may come back as `true`. Check
   against a BOOLEAN you can toggle before trusting one.
+
+## Seen in the first recording (2026-10-25)
+
+From `plugins/recorder-demo` in the beta client: its probe line, and the dev recorder's
+recording `20261025-144642-8f7250b863` (bank, picking things up, pickpocketing, talking to NPCs,
+buying out a shop line). See [testing.md](testing.md#recordings) for recordings.
+
+- **No `os` or `io`.** Both globals are absent, so `os.time()`, `os.date()` and `os.clock()`
+  aren't available. `_VERSION` is `Lua 5.4`.
+- **A wall clock without permissions:** `var.VarPlayer.CLOCK_TIME_DATE_MINUTES.value` is minutes
+  since the Unix epoch (29881543 = 2026-10-25 01:43 UTC), and a VarTransmit fires as it ticks
+  over. `ChatMessage.timestamp` is unix seconds.
+- **Tick rates.** `Logic` runs at 50 Hz (about 3000 ticks per clock minute). `ServerLogic` came
+  30 Logic ticks apart two times in three, anywhere from 16 to 82, and twice two arrived in one
+  tick.
+- **`chatType` values seen**: `GENERAL` (0) for game messages such as "Your pickpocket target
+  becomes aware of your presence.", `PUBLIC` (2) for public chat, the only kind with a sender,
+  and `SPAM` (109, the filterable game messages) for "You pick the target's pocket." and the
+  money pouch lines. Game messages have an empty sender.
+- **A fresh object per call.** `Player.GetEntity()` and `Inventory.Find()` return a new
+  userdata every call, and `tostring()` includes its address
+  (`sol.jag::InventoryProxy: 0x591cbdbce258`). Don't key a table by one. Whether two of them
+  compare equal with `==` is unconfirmed.
+- **Inventories.** `Inv:GetSlots()` is dense: every slot up to `slotCount`, with an empty one as
+  obj -1 (configName `UNKNOWN`) and count 0, so `ipairs` walks them all. A bought-out shop line
+  stays in the shop inventory with count 0 (`GENERALSHOP1` slot 7 was obj 590 x0;
+  `GENERALSHOP1_FREEBIES` slot 4 too). Updates were seen for `INV` (93), `BANK` (95, 1920
+  slots), `LOOT` (773), `DROPLOG` (787), `MONEY_POUCH` (623, coins in slot 1),
+  `GENERALSHOP1` (3) and `GENERALSHOP1_FREEBIES` (553).
+- **VarTransmit values are integers** for BOOLEAN vars (0/1) and for config-typed ones
+  (`COORDGRID`, `INV`, `OBJ`, `ACHIEVEMENT`, `COMPONENT`...), whatever `.value` gives for them.
+- **Modules and symlinks.** A `require`d module shares `main.lua`'s globals, `Event` included,
+  and the client follows a directory symlink inside the plugin folder (the recorder's `dev/`).

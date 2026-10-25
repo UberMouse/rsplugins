@@ -1,10 +1,10 @@
 -- Round trip: plugins/recorder-demo recorded by the dev recorder in a scripted harness world,
 -- then that recording replayed into a fresh harness without the recorder. The replayed plugin
 -- must answer every read from the recording (an unanswerable one fails the test) and end in
--- the same observable state: console lines, chat window and PersistentDB.
+-- the same observable state: console lines, chat window and PersistentDB, and the same world
+-- as far as it read it (login, vars, backpack).
 
 local harness = require("tests.harness")
-local paths = require("tests.harness.paths")
 local support = require("tests.recorder.support")
 
 local ChatType = harness.enums.ChatType
@@ -54,12 +54,10 @@ describe("plugins/recorder-demo round trip", function()
         local entries = support.entries(recorded)
 
         -- Replayed: the same plugin without dev/, in a world the recording alone describes.
-        local files = {}
-        for _, name in ipairs({ "main.lua", "envprobe.lua", "plugin.json" }) do
-            files[name] = paths.read(paths.repo("plugins/recorder-demo/" .. name))
-        end
-        local replayed =
-            harness.new(files, { grant = { "chatAccess" }, stdlib = { os = true, io = true } })
+        local replayed = harness.new(
+            support.demoFiles(),
+            { grant = { "chatAccess" }, stdlib = { os = true, io = true } }
+        )
         replayed:useRecording(entries)
         replayed:load()
         replayed:playRecording()

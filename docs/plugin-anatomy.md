@@ -47,7 +47,8 @@ The current `PluginPermissions` values:
 
 - Check at runtime with `Plugin.HasPermission(PluginPermissions.httpAccess)`.
 - The `OptionalPermissionChanged` event fires when the user toggles an optional permission.
-- During dev, grant permissions with `ppe <plugin> <perm>`.
+- During dev, grant permissions with `ppr <plugin>` and then `ppe <plugin> <perm>`. Without the
+  `ppr` first, `ppe` silently does nothing (see [dev-environment.md](dev-environment.md)).
 - Moderators review **every** plugin that requests a permission more closely. Each permission
   must be justified in the Mod.io description, and the listing needs the matching tag.
 - The submission example also mentions "Screenshot" and "File I/O" permissions. Those aren't in

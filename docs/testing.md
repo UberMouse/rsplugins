@@ -26,6 +26,7 @@ client (`prl <plugin>`).
 | `tests/harness/*_spec.lua` | The harness's own tests |
 | `tests/<plugin>/*_spec.lua` | A plugin's tests |
 | `lib/dev/`, `scripts/dev-receiver.py` | The dev recorder and its receiver ([Recordings](#recordings)) |
+| `scripts/recording-sanitise.py`, `tests/fixtures/` | Recorded sessions made into committed fixtures ([Turning a session into a fixture](#turning-a-session-into-a-fixture)) |
 | `tests/recorder/` | The recorder's tests, with `plugins/recorder-demo` |
 
 ## Writing a plugin test
@@ -169,9 +170,10 @@ harness. `plugins/recorder-demo` is the worked example.
 
 1. Link the recorder in as the plugin's `dev/` folder, and commit the link:
    `ln -s ../../lib/dev plugins/<name>/dev`. It is a relative directory symlink, like the
-   client's `dev_plugins` link itself, so the helper modules come with it. If the client refuses
-   it, copy instead (`rm plugins/<name>/dev && cp -r lib/dev plugins/<name>/dev`), don't commit
-   the copy, and re-copy after changing `lib/dev/`.
+   client's `dev_plugins` link itself, so the helper modules come with it. The beta client
+   follows it (recorder-demo's probe said `recorder=true`, 2026-10-25). If a client ever
+   refuses it, copy instead (`rm plugins/<name>/dev && cp -r lib/dev plugins/<name>/dev`), don't
+   commit the copy, and re-copy after changing `lib/dev/`.
 2. Make these the first lines of `main.lua`, before any other `require`:
 
    ```lua
@@ -188,10 +190,10 @@ nothing. Without httpAccess it logs one line, records into its buffer and sends 
 starts sending once the permission is granted (no reload needed). If the recorder itself fails,
 it logs once and stops recording, and the plugin carries on.
 
-**Modules.** `install()` swaps the globals of the environment passed to it. In the harness every
-module shares `main.lua`'s environment. Whether the client's modules do is undocumented:
-recorder-demo's probe line reports it as `moduleSharesEnv`. If that is `false`, only
-`main.lua`'s own API use gets recorded.
+**Modules.** `install()` swaps the globals of the environment passed to it. Every module shares
+`main.lua`'s environment, in the harness and in the client (recorder-demo's probe said
+`moduleSharesEnv=true moduleSeesSameEvent=true`, 2026-10-25), so the recorder sees the API use
+of the plugin's other modules too.
 
 **Moderation.** The recorder and recorder-demo are dev tools, never for submission. A plugin
 for submission ships without `dev/`, without the two lines above, and without `urls.recorder`.
@@ -203,8 +205,9 @@ them local.
 
 1. From the repo root, run `scripts/dev-receiver.py` (`--port`, `--out`; it listens on
    127.0.0.1:8766 and writes to `dumps/recordings/`, which is gitignored).
-2. In the client: `prf`, `pon <name>`, then `ppe <name> httpAccess` (run `ppr <name>` first if
-   it says the plugin hasn't asked for it).
+2. In the client: `prf`, `pon <name>`, `ppr <name>`, then `ppe <name> httpAccess`. Always
+   `ppr` before `ppe`: `ppe` on a permission the plugin hasn't requested does nothing, and
+   says nothing either.
 3. Each enable is one session, written to `dumps/recordings/<name>/<time>-<session>.jsonl`. The
    receiver prints one line per batch.
 
@@ -340,6 +343,44 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
   `dropped` line, reads and the world may not match what the plugin saw (`timeline.dropped`
   counts the lost entries). The header's `schema` must be 1.
 
+### Turning a session into a fixture
+
+A fixture is a recorded session, sanitised and trimmed, committed under `tests/fixtures/` for a
+spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
+`tests/recorder/fixture_spec.lua`) was made this way.
+
+1. Record the session (above), and find the ticks worth keeping, e.g.
+   `jq -c 'select(.k == "event") | [.t, .name, .payload.inv.config]' <session>.jsonl`.
+2. Sanitise it:
+   `scripts/recording-sanitise.py dumps/recordings/<plugin>/<session>.jsonl
+   tests/fixtures/<name>.jsonl --from <t> --to <t>`. The script:
+   - replaces the player's display name, as the recording's own
+     `Player.GetEntity().displayName` reads give it, with a placeholder (`--placeholder`,
+     default `Fixture Player`) in every string: read values, chat sender fields, and inside
+     any other text. It matches case-insensitively, with a space, underscore, hyphen or
+     no-break space in the name matching any of them. It refuses a recording without that read,
+     and checks its output for the name before writing.
+   - redacts every chat message with a non-empty sender (one a player sent): its text and
+     sender fields become `<redacted>`.
+   - strips memory addresses from object text, as the recorder now does, and drops the reads
+     that then repeat.
+   - keeps only the entries with `--from <= t <= --to`, rebased so `--from` is `t = 0`. What
+     the plugin knew before the window comes in at `t = 0`: the latest read of each path, the
+     latest check of each permission, and one `Get` per PersistentDB key of the value it held
+     (a key stored before the window seeds the replay's store). Events before the window are
+     dropped, so the world starts empty and the replay serves what the plugin had read; an
+     inventory, say, is a [read-backed Inv](#replaying-a-recording) until its first update in
+     the window. The header gains `"window": [from, to]`.
+3. Check the result before committing: count the display name's matches in it (0 means
+   none), e.g. ``grep -ci "$(jq -r 'select(.path == "Player.GetEntity().displayName") | .v' <session>.jsonl | head -1)" <fixture>``,
+   and read what chat is left (`jq -c 'select(.name == "ChatMessage") | .payload.chatMessage'`).
+   The script only knows the player's own name and chat senders: a game message that names
+   another player, or a plugin that copies chat text into a read or the store, needs a look by
+   hand.
+4. Keep it small: a window of a minute or so is tens of KB. A bank update is about 40 KB on
+   its own (1920 slots), so leave bank changes out of the window unless the test needs one.
+5. Replay it in a spec with `h:useRecording("tests/fixtures/<name>.jsonl")`.
+
 ## Fidelity ledger
 
 ### Modelled, with its source
@@ -347,10 +388,11 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
 | Behaviour | Source |
 |---|---|
 | `require`: path from the plugin root, no extension; runs once per load and caches the result; nil for a missing file; circular requires are an error | [plugin-anatomy.md](plugin-anatomy.md#modules-require) |
+| A `require`d module runs in `main.lua`'s environment (same globals, same `Event`); a directory symlink inside the plugin folder is followed | recorder-demo's probe line in the beta client, 2026-10-25 |
 | A global `PluginShutdown` runs on disable/reload (a `local` one doesn't); reload = fresh env, PersistentDB kept | [plugin-anatomy.md](plugin-anatomy.md#lifecycle-hooks-global-functions), [dev-environment.md](dev-environment.md#plugin-management-commands) |
 | A manifest with `requiredPermissions` doesn't run, so the harness refuses it | [plugin-anatomy.md](plugin-anatomy.md#manifest-pluginjson) |
 | Subscribers run in subscription order; reusing a name replaces it for that event only; a payload edited by one subscriber is what the next sees (fields the stub doesn't mark "(Read-only)", such as `ChatMessage.chatMessage`, are writable) | [core/events.html#overview](https://developer.runescape.com/rs/core/events.html#overview), #event-payloads |
-| `Logic` at a fixed 50 Hz with `logicTick`; `ServerLogic` about every 600 ms with no payload | core/events.html#logic, #serverlogic |
+| `Logic` at a fixed 50 Hz with `logicTick`; `ServerLogic` about every 600 ms with no payload | core/events.html#logic, #serverlogic; recording `20261025-144642-8f7250b863`: about 3000 Logic ticks per `CLOCK_TIME_DATE_MINUTES` minute, and `ServerLogic` 30 ticks apart two times in three (16 to 82 seen). The harness's is exactly every 30 |
 | `VarTransmit` fires on every update, changed or not, after the value is set, with `var`, `oldValue`, `newValue` | core/events.html#vartransmit |
 | `var.<Domain>.NAME` and `FromID(id)` give one VarType per var (`ev.var == var.VarPlayer.X`); VarBits report `isVarBit`, `baseVar`, `varBitMask`; `baseVar`/`varBitMask` are nil otherwise; properties are read-only | game/config/vartype.html, `docs/vars/vars.csv` |
 | `Player.IsAvailable` says whether player data can be read | game/player.html#isavailable |
@@ -387,9 +429,9 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
 | `Inv:GetSlot` on an empty slot | nil. Unconfirmed: the client may give an obj -1 slot, as `GetSlots` does |
 | A count-0 slot (bought-out shop line) | Counts as used in `usedSlotCount` / `freeSlotCount` (unconfirmed) |
 | `Chat.AddMessage` without chatAccess | Faults |
-| `ChatMessage.timestamp` | A fixed epoch (2026-01-01) plus elapsed logic time |
+| `ChatMessage.timestamp` | A fixed epoch (2026-01-01) plus elapsed logic time. The client's is unix seconds (recording `20261025-144642-8f7250b863`); a replay delivers the recorded one |
 | PersistentDB | `IterateEntries` goes in key order. `Delete` returns true. Typed setters return nil on a type mismatch |
-| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in), and `debug`, `load*`, `dofile`, `package`, `collectgarbage` |
+| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), and `debug`, `load*`, `dofile`, `package`, `collectgarbage` |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
 
@@ -405,6 +447,11 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
   VarTransmit naming one VarBit per base-var update, and BOOLEAN vars reading `true` (both
   unconfirmed, [api-concepts.md](api-concepts.md#runtime-limits-weve-hit)). The error logged for
   unsupported ValueTypes. Config-typed values (OBJ, NPC, COORDGRID...): `setVar` refuses them.
+- **VarTransmit values of BOOLEAN and config-typed vars.** The client's `oldValue`/`newValue`
+  are plain integers for these (BOOLEAN 0/1, COORDGRID, INV, OBJ, ACHIEVEMENT, COMPONENT...;
+  recording `20261025-144642-8f7250b863`). The builder's `setVar` takes a boolean for a
+  BOOLEAN var and refuses config types, so a scripted VarTransmit can't show this; a replayed
+  one carries the recorded integers.
 - **Events the builder doesn't fire**: `SkillTransmit`, `RunEnergyTransmit`, `GameStateChanged`
   on login/logout, entity and loc events, keys, `Draw`. Use `h:fire`. Logging out doesn't clear
   inventories or vars.

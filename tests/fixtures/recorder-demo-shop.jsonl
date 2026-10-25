@@ -1,0 +1,378 @@
+{"k": "session", "schema": 1, "plugin": "recorder-demo", "session": "8f7250b863", "started": 1792892802.2184396, "window": [17250, 20430]}
+{"t": 0, "k": "read", "v": true, "path": "Player.IsAvailable()"}
+{"t": 0, "k": "read", "v": "sol.jag::EntityProxy<jag::PlayerEntity>", "path": "Player.GetEntity()"}
+{"t": 0, "k": "read", "v": "Fixture Player", "path": "Player.GetEntity().displayName"}
+{"t": 0, "k": "read", "v": 1, "path": "var.VarPlayer.QP.value"}
+{"t": 0, "k": "read", "v": 1, "path": "var.VarPlayer.OPTION_RUN.value"}
+{"t": 0, "k": "read", "v": "sol.jag::InventoryProxy", "path": "Inventory.Find(config.Inv.INV)"}
+{"t": 0, "k": "read", "v": true, "path": "Inventory.Find(config.Inv.INV).isValid"}
+{"t": 0, "k": "read", "v": "CLOCK_TIME_DATE_MINUTES", "path": "var.VarPlayer.CLOCK_TIME_DATE_MINUTES.configName"}
+{"t": 0, "k": "read", "v": "DOUBLEXP_PERM1", "path": "var.VarPlayer.DOUBLEXP_PERM1.configName"}
+{"t": 0, "k": "read", "v": "DNDTRACKER_MINS_TO_DAY_END", "path": "var.VarPlayer.DNDTRACKER_MINS_TO_DAY_END.configName"}
+{"t": 0, "k": "read", "v": "DNDTRACKER_SINKHOLES_START", "path": "var.VarPlayer.DNDTRACKER_SINKHOLES_START.configName"}
+{"t": 0, "k": "read", "v": "DNDTRACKER_FAMILIARIZATION_TIME", "path": "var.VarPlayer.DNDTRACKER_FAMILIARIZATION_TIME.configName"}
+{"t": 0, "k": "read", "v": "MUSICMULTI_23", "path": "var.VarPlayer.MUSICMULTI_23.configName"}
+{"t": 0, "k": "read", "v": "MUSIC_V3_TEMP", "path": "var.VarPlayer.MUSIC_V3_TEMP.configName"}
+{"t": 0, "k": "read", "v": "MUSIC_V3_TEMP2", "path": "var.VarPlayer.MUSIC_V3_TEMP2.configName"}
+{"t": 0, "k": "read", "v": "BANK_TEMP", "path": "var.VarPlayer.BANK_TEMP.configName"}
+{"t": 0, "k": "read", "v": "BANKPIN_EXTRA", "path": "var.VarPlayer.BANKPIN_EXTRA.configName"}
+{"t": 0, "k": "read", "v": "BANK_USED_SLOTS", "path": "var.VarPlayer.BANK_USED_SLOTS.configName"}
+{"t": 0, "k": "read", "v": "BANK_3", "path": "var.VarPlayer.BANK_3.configName"}
+{"t": 0, "k": "read", "v": "BANK_PLAYER_IS_MEMBER_NOW", "path": "var.VarClient.BANK_PLAYER_IS_MEMBER_NOW.configName"}
+{"t": 0, "k": "read", "v": "BANK_EMAILSTATUS", "path": "var.VarClient.BANK_EMAILSTATUS.configName"}
+{"t": 0, "k": "read", "v": "BANK_STEAMSTATUS", "path": "var.VarClient.BANK_STEAMSTATUS.configName"}
+{"t": 0, "k": "read", "v": "BANK_PREMSTATUS", "path": "var.VarClient.BANK_PREMSTATUS.configName"}
+{"t": 0, "k": "read", "v": "BANK_PLAYER_HAS_BOB", "path": "var.VarClient.BANK_PLAYER_HAS_BOB.configName"}
+{"t": 0, "k": "read", "v": "TOPLEVEL_V2_OPEN_PARENT_REQUEST", "path": "var.VarClient.TOPLEVEL_V2_OPEN_PARENT_REQUEST.configName"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[4].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[5].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[6].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[7].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[8].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[9].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[10].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[11].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[12].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[13].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[14].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[15].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[16].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[17].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[18].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[19].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[20].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[21].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[22].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[23].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[24].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[25].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[26].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[27].count"}
+{"t": 0, "k": "read", "v": 0, "path": "Inventory.Find(config.Inv.INV):GetSlots()[28].count"}
+{"t": 0, "k": "read", "v": "BONDS_COUNT_TOTAL_UNTRADABLE_ACROSS_ALL_INV", "path": "var.VarPlayer.BONDS_COUNT_TOTAL_UNTRADABLE_ACROSS_ALL_INV.configName"}
+{"t": 0, "k": "read", "v": "BONDS_COUNT_TOTAL_TRADABLE_ACROSS_ALL_INV", "path": "var.VarPlayer.BONDS_COUNT_TOTAL_TRADABLE_ACROSS_ALL_INV.configName"}
+{"t": 0, "k": "read", "v": "TASK_MATERIALS", "path": "var.VarPlayer.TASK_MATERIALS.configName"}
+{"t": 0, "k": "read", "v": "SHARE_PRESET_NAME_TEMP", "path": "var.VarPlayer.SHARE_PRESET_NAME_TEMP.configName"}
+{"t": 0, "k": "read", "v": "SHARE_PRESET_INFO1", "path": "var.VarPlayer.SHARE_PRESET_INFO1.configName"}
+{"t": 0, "k": "read", "v": "TASK_LIST_1", "path": "var.VarPlayer.TASK_LIST_1.configName"}
+{"t": 0, "k": "read", "v": "CAMERA_CONTROL_MODE", "path": "var.VarClient.CAMERA_CONTROL_MODE.configName"}
+{"t": 0, "k": "read", "v": "MTXMGT_TOTAL_TRADEABLE_BONDS", "path": "var.VarClient.MTXMGT_TOTAL_TRADEABLE_BONDS.configName"}
+{"t": 0, "k": "read", "v": "MTXMGT_TOTAL_UNTRADEABLE_BONDS", "path": "var.VarClient.MTXMGT_TOTAL_UNTRADEABLE_BONDS.configName"}
+{"t": 0, "k": "read", "v": "FARMING_CURRENT_PATCH", "path": "var.VarPlayer.FARMING_CURRENT_PATCH.configName"}
+{"t": 0, "k": "read", "v": "FARMING_VARP_11", "path": "var.VarPlayer.FARMING_VARP_11.configName"}
+{"t": 0, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[1].count"}
+{"t": 0, "k": "read", "v": "BANK_FIRST_FREESLOT", "path": "var.VarPlayer.BANK_FIRST_FREESLOT.configName"}
+{"t": 0, "k": "read", "v": "UITUTORIAL_GUIDANCE1", "path": "var.VarPlayer.UITUTORIAL_GUIDANCE1.configName"}
+{"t": 0, "k": "read", "v": "LOOT_PLAYER_COORD", "path": "var.VarPlayer.LOOT_PLAYER_COORD.configName"}
+{"t": 0, "k": "read", "v": [{"obj": {"config": "SHRIMP", "type": "Obj", "id": 315}, "count": 1}, {"obj": {"config": "BOWL_EMPTY", "type": "Obj", "id": 1923}, "count": 1}, {"obj": {"config": "MINDRUNE", "type": "Obj", "id": 558}, "count": 1}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}], "path": "Inventory.Find(config.Inv.INV):GetSlots()"}
+{"t": 0, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[2].count"}
+{"t": 0, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[3].count"}
+{"t": 0, "k": "read", "v": "LOOT_TEMP_BASE", "path": "var.VarPlayer.LOOT_TEMP_BASE.configName"}
+{"t": 0, "k": "read", "v": "TUT7", "path": "var.VarPlayer.TUT7.configName"}
+{"t": 0, "k": "read", "v": "DROPLOG_VALUE_VAR1", "path": "var.VarClient.DROPLOG_VALUE_VAR1.configName"}
+{"t": 0, "k": "read", "v": "TELEMETRY_READY", "path": "var.VarClient.TELEMETRY_READY.configName"}
+{"t": 0, "k": "read", "v": 3, "path": "Inventory.Find(config.Inv.INV).usedSlotCount"}
+{"t": 0, "k": "read", "v": "CHAT_V3_UPDATE_INTERFACE", "path": "var.VarPlayer.CHAT_V3_UPDATE_INTERFACE.configName"}
+{"t": 0, "k": "read", "v": "IF_HIGHLIGHT_MASTER_0", "path": "var.VarPlayer.IF_HIGHLIGHT_MASTER_0.configName"}
+{"t": 0, "k": "read", "v": "IF_HIGHLIGHT_STATIC_0", "path": "var.VarClient.IF_HIGHLIGHT_STATIC_0.configName"}
+{"t": 0, "k": "read", "v": "IF_HIGHLIGHT_CCID_0", "path": "var.VarClient.IF_HIGHLIGHT_CCID_0.configName"}
+{"t": 0, "k": "read", "v": "IF_HIGHLIGHT_STATIC_1", "path": "var.VarClient.IF_HIGHLIGHT_STATIC_1.configName"}
+{"t": 0, "k": "read", "v": "IF_HIGHLIGHT_CCID_1", "path": "var.VarClient.IF_HIGHLIGHT_CCID_1.configName"}
+{"t": 0, "k": "read", "v": "PAGEPOS", "path": "var.VarPlayer.PAGEPOS.configName"}
+{"t": 0, "k": "read", "v": 29881549, "path": "var.VarPlayer.CLOCK_TIME_DATE_MINUTES.value"}
+{"t": 0, "k": "db", "op": "GetInt", "key": "enables", "v": 1}
+{"t": 27, "k": "event", "name": "ChatMessage", "op": {"chatType": 2, "sender": "<redacted>", "op": "chat", "message": "<redacted>"}, "payload": {"senderNameFiltered": "<redacted>", "senderNameUnfiltered": "<redacted>", "chatType": 2, "chatMessage": "<redacted>", "timestamp": 1792892956, "senderNameSimple": "<redacted>"}}
+{"t": 27, "k": "event", "name": "ServerLogic"}
+{"t": 57, "k": "event", "name": "ServerLogic"}
+{"t": 86, "k": "event", "name": "ServerLogic"}
+{"t": 118, "k": "event", "name": "ServerLogic"}
+{"t": 146, "k": "event", "name": "ServerLogic"}
+{"t": 146, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarPlayer", "name": "DOUBLEXP_PERM1", "op": "setVar", "id": 89}, "payload": {"var": {"config": "DOUBLEXP_PERM1", "type": "VarPlayer", "id": 89}, "oldValue": 0, "newValue": 0}}
+{"t": 146, "k": "event", "name": "VarTransmit", "op": {"value": 1331, "domain": "VarPlayer", "name": "DNDTRACKER_MINS_TO_DAY_END", "op": "setVar", "id": -20737}, "payload": {"var": {"config": "DNDTRACKER_MINS_TO_DAY_END", "type": "VarPlayer", "id": -20737}, "oldValue": 1332, "newValue": 1331}}
+{"t": 146, "k": "event", "name": "VarTransmit", "op": {"value": 19, "domain": "VarPlayer", "name": "DNDTRACKER_SINKHOLES_START", "op": "setVar", "id": -20748}, "payload": {"var": {"config": "DNDTRACKER_SINKHOLES_START", "type": "VarPlayer", "id": -20748}, "oldValue": 18, "newValue": 19}}
+{"t": 146, "k": "event", "name": "VarTransmit", "op": {"value": 11, "domain": "VarPlayer", "name": "DNDTRACKER_FAMILIARIZATION_TIME", "op": "setVar", "id": -20750}, "payload": {"var": {"config": "DNDTRACKER_FAMILIARIZATION_TIME", "type": "VarPlayer", "id": -20750}, "oldValue": 12, "newValue": 11}}
+{"t": 177, "k": "event", "name": "ServerLogic"}
+{"t": 207, "k": "event", "name": "ServerLogic"}
+{"t": 237, "k": "event", "name": "ServerLogic"}
+{"t": 266, "k": "event", "name": "ServerLogic"}
+{"t": 297, "k": "event", "name": "ServerLogic"}
+{"t": 326, "k": "event", "name": "ServerLogic"}
+{"t": 356, "k": "event", "name": "ServerLogic"}
+{"t": 385, "k": "event", "name": "ServerLogic"}
+{"t": 417, "k": "event", "name": "ServerLogic"}
+{"t": 447, "k": "event", "name": "ServerLogic"}
+{"t": 477, "k": "event", "name": "ServerLogic"}
+{"t": 507, "k": "event", "name": "ServerLogic"}
+{"t": 536, "k": "event", "name": "ServerLogic"}
+{"t": 567, "k": "event", "name": "ServerLogic"}
+{"t": 598, "k": "event", "name": "ServerLogic"}
+{"t": 625, "k": "event", "name": "ServerLogic"}
+{"t": 655, "k": "event", "name": "ServerLogic"}
+{"t": 686, "k": "event", "name": "ServerLogic"}
+{"t": 716, "k": "event", "name": "ServerLogic"}
+{"t": 746, "k": "event", "name": "ServerLogic"}
+{"t": 775, "k": "event", "name": "ServerLogic"}
+{"t": 806, "k": "event", "name": "ServerLogic"}
+{"t": 835, "k": "event", "name": "ServerLogic"}
+{"t": 865, "k": "event", "name": "ServerLogic"}
+{"t": 897, "k": "event", "name": "ServerLogic"}
+{"t": 926, "k": "event", "name": "ServerLogic"}
+{"t": 957, "k": "event", "name": "ServerLogic"}
+{"t": 987, "k": "event", "name": "ServerLogic"}
+{"t": 1016, "k": "event", "name": "ServerLogic"}
+{"t": 1047, "k": "event", "name": "ServerLogic"}
+{"t": 1077, "k": "event", "name": "ServerLogic"}
+{"t": 1106, "k": "event", "name": "ServerLogic"}
+{"t": 1135, "k": "event", "name": "ServerLogic"}
+{"t": 1167, "k": "event", "name": "ServerLogic"}
+{"t": 1197, "k": "event", "name": "ServerLogic"}
+{"t": 1226, "k": "event", "name": "ServerLogic"}
+{"t": 1255, "k": "event", "name": "ServerLogic"}
+{"t": 1287, "k": "event", "name": "ServerLogic"}
+{"t": 1316, "k": "event", "name": "ServerLogic"}
+{"t": 1347, "k": "event", "name": "ServerLogic"}
+{"t": 1377, "k": "event", "name": "ServerLogic"}
+{"t": 1407, "k": "event", "name": "ServerLogic"}
+{"t": 1437, "k": "event", "name": "ServerLogic"}
+{"t": 1467, "k": "event", "name": "ServerLogic"}
+{"t": 1497, "k": "event", "name": "ServerLogic"}
+{"t": 1527, "k": "event", "name": "ServerLogic"}
+{"t": 1557, "k": "event", "name": "ServerLogic"}
+{"t": 1587, "k": "event", "name": "ServerLogic"}
+{"t": 1617, "k": "event", "name": "ServerLogic"}
+{"t": 1646, "k": "event", "name": "ServerLogic"}
+{"t": 1677, "k": "event", "name": "ChatMessage", "op": {"chatType": 0, "sender": "", "op": "chat", "message": "<col=FF6600>While skilling, you find your daily Horseclan confections."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 0, "chatMessage": "<col=FF6600>While skilling, you find your daily Horseclan confections.", "timestamp": 1792892989, "senderNameSimple": ""}}
+{"t": 1677, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "The following has been added to your currency pouch: 50 x Spooky tokens."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "The following has been added to your currency pouch: 50 x Spooky tokens.", "timestamp": 1792892989, "senderNameSimple": ""}}
+{"t": 1677, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 315, "count": 1}, {"obj": 1923, "count": 1}, {"obj": 558, "count": 1}, {"obj": 63948, "count": 1}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}], "size": 28, "op": "setInventory", "inv": 93}, "payload": {"slotsUpdated": [4], "inv": {"config": "INV", "type": "Inv", "id": 93}}}
+{"t": 1677, "k": "read", "v": [{"obj": {"config": "SHRIMP", "type": "Obj", "id": 315}, "count": 1}, {"obj": {"config": "BOWL_EMPTY", "type": "Obj", "id": 1923}, "count": 1}, {"obj": {"config": "MINDRUNE", "type": "Obj", "id": 558}, "count": 1}, {"obj": {"config": "HALLOWEEN_HUB_COMMUNITY_CANDY_2026", "type": "Obj", "id": 63948}, "count": 1}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}], "path": "Inventory.Find(config.Inv.INV):GetSlots()"}
+{"t": 1677, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[4].count"}
+{"t": 1677, "k": "event", "name": "ServerLogic"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 7806349, "domain": "VarPlayer", "name": "TRH_UNPROTECTED_1", "op": "setVar", "id": 6744}, "payload": {"var": {"config": "TRH_UNPROTECTED_1", "type": "VarPlayer", "id": 6744}, "oldValue": 0, "newValue": 7806349}}
+{"t": 1677, "k": "read", "v": "TRH_UNPROTECTED_1", "path": "var.VarPlayer.TRH_UNPROTECTED_1.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarPlayer", "name": "THIEVING_CONSECUTIVE_COUNT", "op": "setVar", "id": 12611}, "payload": {"var": {"config": "THIEVING_CONSECUTIVE_COUNT", "type": "VarPlayer", "id": 12611}, "oldValue": 0, "newValue": 1}}
+{"t": 1677, "k": "read", "v": "THIEVING_CONSECUTIVE_COUNT", "path": "var.VarPlayer.THIEVING_CONSECUTIVE_COUNT.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 22703, "domain": "VarPlayer", "name": "THIEVING_CONSECUTIVE_NPC_UID", "op": "setVar", "id": 12612}, "payload": {"var": {"config": "THIEVING_CONSECUTIVE_NPC_UID", "type": "VarPlayer", "id": 12612}, "oldValue": -1, "newValue": 22703}}
+{"t": 1677, "k": "read", "v": "THIEVING_CONSECUTIVE_NPC_UID", "path": "var.VarPlayer.THIEVING_CONSECUTIVE_NPC_UID.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 50, "domain": "VarPlayer", "name": "HALLOWEEN_HUB_PERM_1", "op": "setVar", "id": 11864}, "payload": {"var": {"config": "HALLOWEEN_HUB_PERM_1", "type": "VarPlayer", "id": 11864}, "oldValue": 0, "newValue": 50}}
+{"t": 1677, "k": "read", "v": "HALLOWEEN_HUB_PERM_1", "path": "var.VarPlayer.HALLOWEEN_HUB_PERM_1.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 2072954496, "domain": "VarPlayer", "name": "WOF_UNPROTECTED_1", "op": "setVar", "id": 1453}, "payload": {"var": {"config": "WOF_UNPROTECTED_1", "type": "VarPlayer", "id": 1453}, "oldValue": 2072953856, "newValue": 2072954496}}
+{"t": 1677, "k": "read", "v": "WOF_UNPROTECTED_1", "path": "var.VarPlayer.WOF_UNPROTECTED_1.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 31225396, "domain": "VarPlayer", "name": "WOFREF_BASE1", "op": "setVar", "id": 1457}, "payload": {"var": {"config": "WOFREF_BASE1", "type": "VarPlayer", "id": 1457}, "oldValue": 31225372, "newValue": 31225396}}
+{"t": 1677, "k": "read", "v": "WOFREF_BASE1", "path": "var.VarPlayer.WOFREF_BASE1.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "op": "setVar", "id": -59671}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "type": "VarPlayer", "id": -59671}, "oldValue": 0, "newValue": 1}}
+{"t": 1677, "k": "read", "v": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "path": "var.VarPlayer.LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "op": "setVar", "id": -59673}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "type": "VarPlayer", "id": -59673}, "oldValue": 0, "newValue": 1}}
+{"t": 1677, "k": "read", "v": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "path": "var.VarPlayer.LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 496557, "domain": "VarPlayer", "name": "XPDISPLAY_ISBONUS_MAP_CLOCK", "op": "setVar", "id": 3513}, "payload": {"var": {"config": "XPDISPLAY_ISBONUS_MAP_CLOCK", "type": "VarPlayer", "id": 3513}, "oldValue": 0, "newValue": 496557}}
+{"t": 1677, "k": "read", "v": "XPDISPLAY_ISBONUS_MAP_CLOCK", "path": "var.VarPlayer.XPDISPLAY_ISBONUS_MAP_CLOCK.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 295108608, "domain": "VarPlayer", "name": "HALLOWEEN26_PERM_1", "op": "setVar", "id": 13700}, "payload": {"var": {"config": "HALLOWEEN26_PERM_1", "type": "VarPlayer", "id": 13700}, "oldValue": 0, "newValue": 295108608}}
+{"t": 1677, "k": "read", "v": "HALLOWEEN26_PERM_1", "path": "var.VarPlayer.HALLOWEEN26_PERM_1.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 32, "domain": "VarPlayer", "name": "HALLOWEEN26_PERM_2", "op": "setVar", "id": 13701}, "payload": {"var": {"config": "HALLOWEEN26_PERM_2", "type": "VarPlayer", "id": 13701}, "oldValue": 0, "newValue": 32}}
+{"t": 1677, "k": "read", "v": "HALLOWEEN26_PERM_2", "path": "var.VarPlayer.HALLOWEEN26_PERM_2.configName"}
+{"t": 1677, "k": "event", "name": "VarTransmit", "op": {"value": 2560, "domain": "VarPlayer", "name": "GAMEAREA_MASTER", "op": "setVar", "id": 1776}, "payload": {"var": {"config": "GAMEAREA_MASTER", "type": "VarPlayer", "id": 1776}, "oldValue": 0, "newValue": 2560}}
+{"t": 1677, "k": "read", "v": "GAMEAREA_MASTER", "path": "var.VarPlayer.GAMEAREA_MASTER.configName"}
+{"t": 1707, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "You pick the target's pocket."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "You pick the target's pocket.", "timestamp": 1792892990, "senderNameSimple": ""}}
+{"t": 1707, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "3 coins have been added to your money pouch."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "3 coins have been added to your money pouch.", "timestamp": 1792892990, "senderNameSimple": ""}}
+{"t": 1707, "k": "event", "name": "ChatMessage", "op": {"chatType": 0, "sender": "", "op": "chat", "message": "<col=FFFF00>Your pickpocket target becomes aware of your presence."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 0, "chatMessage": "<col=FFFF00>Your pickpocket target becomes aware of your presence.", "timestamp": 1792892990, "senderNameSimple": ""}}
+{"t": 1707, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 315, "count": 1}, {"obj": 1923, "count": 1}, {"obj": 558, "count": 1}, {"obj": 63948, "count": 1}, {"obj": 18645, "count": 1}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}], "size": 28, "op": "setInventory", "inv": 93}, "payload": {"slotsUpdated": [5], "inv": {"config": "INV", "type": "Inv", "id": 93}}}
+{"t": 1707, "k": "read", "v": [{"obj": {"config": "SHRIMP", "type": "Obj", "id": 315}, "count": 1}, {"obj": {"config": "BOWL_EMPTY", "type": "Obj", "id": 1923}, "count": 1}, {"obj": {"config": "MINDRUNE", "type": "Obj", "id": 558}, "count": 1}, {"obj": {"config": "HALLOWEEN_HUB_COMMUNITY_CANDY_2026", "type": "Obj", "id": 63948}, "count": 1}, {"obj": {"config": "THIGUI_FLYER", "type": "Obj", "id": 18645}, "count": 1}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}], "path": "Inventory.Find(config.Inv.INV):GetSlots()"}
+{"t": 1707, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[5].count"}
+{"t": 1707, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 995, "count": 3}, {"obj": -1, "count": 0}], "size": 2, "op": "setInventory", "inv": 623}, "payload": {"slotsUpdated": [1], "inv": {"config": "MONEY_POUCH", "type": "Inv", "id": 623}}}
+{"t": 1707, "k": "event", "name": "ServerLogic"}
+{"t": 1707, "k": "event", "name": "VarTransmit", "op": {"value": 1193281664, "domain": "VarPlayer", "name": "TASK_OMGE_FASTTRACK", "op": "setVar", "id": 1264}, "payload": {"var": {"config": "TASK_OMGE_FASTTRACK", "type": "VarPlayer", "id": 1264}, "oldValue": 1193281536, "newValue": 1193281664}}
+{"t": 1707, "k": "read", "v": "TASK_OMGE_FASTTRACK", "path": "var.VarPlayer.TASK_OMGE_FASTTRACK.configName"}
+{"t": 1707, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarClient", "name": "TELEMETRY_READY", "op": "setVar", "id": 5153}, "payload": {"var": {"config": "TELEMETRY_READY", "type": "VarClient", "id": 5153}, "oldValue": 1, "newValue": 1}}
+{"t": 1737, "k": "event", "name": "ServerLogic"}
+{"t": 1767, "k": "event", "name": "ServerLogic"}
+{"t": 1767, "k": "event", "name": "VarTransmit", "op": {"value": 2, "domain": "VarPlayer", "name": "THIEVING_CONSECUTIVE_COUNT", "op": "setVar", "id": 12611}, "payload": {"var": {"config": "THIEVING_CONSECUTIVE_COUNT", "type": "VarPlayer", "id": 12611}, "oldValue": 1, "newValue": 2}}
+{"t": 1767, "k": "event", "name": "VarTransmit", "op": {"value": 2, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "op": "setVar", "id": -59671}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "type": "VarPlayer", "id": -59671}, "oldValue": 1, "newValue": 2}}
+{"t": 1767, "k": "event", "name": "VarTransmit", "op": {"value": 2, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "op": "setVar", "id": -59673}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "type": "VarPlayer", "id": -59673}, "oldValue": 1, "newValue": 2}}
+{"t": 1767, "k": "event", "name": "VarTransmit", "op": {"value": 496560, "domain": "VarPlayer", "name": "XPDISPLAY_ISBONUS_MAP_CLOCK", "op": "setVar", "id": 3513}, "payload": {"var": {"config": "XPDISPLAY_ISBONUS_MAP_CLOCK", "type": "VarPlayer", "id": 3513}, "oldValue": 496557, "newValue": 496560}}
+{"t": 1796, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "You pick the target's pocket."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "You pick the target's pocket.", "timestamp": 1792892992, "senderNameSimple": ""}}
+{"t": 1796, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "3 coins have been added to your money pouch."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "3 coins have been added to your money pouch.", "timestamp": 1792892992, "senderNameSimple": ""}}
+{"t": 1796, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 995, "count": 6}, {"obj": -1, "count": 0}], "size": 2, "op": "setInventory", "inv": 623}, "payload": {"slotsUpdated": [1], "inv": {"config": "MONEY_POUCH", "type": "Inv", "id": 623}}}
+{"t": 1796, "k": "event", "name": "ServerLogic"}
+{"t": 1796, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarClient", "name": "TELEMETRY_READY", "op": "setVar", "id": 5153}, "payload": {"var": {"config": "TELEMETRY_READY", "type": "VarClient", "id": 5153}, "oldValue": 1, "newValue": 1}}
+{"t": 1826, "k": "event", "name": "ServerLogic"}
+{"t": 1856, "k": "event", "name": "ServerLogic"}
+{"t": 1856, "k": "event", "name": "VarTransmit", "op": {"value": 3, "domain": "VarPlayer", "name": "THIEVING_CONSECUTIVE_COUNT", "op": "setVar", "id": 12611}, "payload": {"var": {"config": "THIEVING_CONSECUTIVE_COUNT", "type": "VarPlayer", "id": 12611}, "oldValue": 2, "newValue": 3}}
+{"t": 1856, "k": "event", "name": "VarTransmit", "op": {"value": 3, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "op": "setVar", "id": -59671}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "type": "VarPlayer", "id": -59671}, "oldValue": 2, "newValue": 3}}
+{"t": 1856, "k": "event", "name": "VarTransmit", "op": {"value": 3, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "op": "setVar", "id": -59673}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "type": "VarPlayer", "id": -59673}, "oldValue": 2, "newValue": 3}}
+{"t": 1856, "k": "event", "name": "VarTransmit", "op": {"value": 496563, "domain": "VarPlayer", "name": "XPDISPLAY_ISBONUS_MAP_CLOCK", "op": "setVar", "id": 3513}, "payload": {"var": {"config": "XPDISPLAY_ISBONUS_MAP_CLOCK", "type": "VarPlayer", "id": 3513}, "oldValue": 496560, "newValue": 496563}}
+{"t": 1887, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "You pick the target's pocket."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "You pick the target's pocket.", "timestamp": 1792892993, "senderNameSimple": ""}}
+{"t": 1887, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "3 coins have been added to your money pouch."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "3 coins have been added to your money pouch.", "timestamp": 1792892993, "senderNameSimple": ""}}
+{"t": 1887, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 995, "count": 9}, {"obj": -1, "count": 0}], "size": 2, "op": "setInventory", "inv": 623}, "payload": {"slotsUpdated": [1], "inv": {"config": "MONEY_POUCH", "type": "Inv", "id": 623}}}
+{"t": 1887, "k": "event", "name": "ServerLogic"}
+{"t": 1887, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarClient", "name": "TELEMETRY_READY", "op": "setVar", "id": 5153}, "payload": {"var": {"config": "TELEMETRY_READY", "type": "VarClient", "id": 5153}, "oldValue": 1, "newValue": 1}}
+{"t": 1917, "k": "event", "name": "ServerLogic"}
+{"t": 1947, "k": "event", "name": "ServerLogic"}
+{"t": 1947, "k": "read", "v": 5, "path": "Inventory.Find(config.Inv.INV).usedSlotCount"}
+{"t": 1947, "k": "event", "name": "VarTransmit", "op": {"value": 4, "domain": "VarPlayer", "name": "THIEVING_CONSECUTIVE_COUNT", "op": "setVar", "id": 12611}, "payload": {"var": {"config": "THIEVING_CONSECUTIVE_COUNT", "type": "VarPlayer", "id": 12611}, "oldValue": 3, "newValue": 4}}
+{"t": 1947, "k": "event", "name": "VarTransmit", "op": {"value": 4, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "op": "setVar", "id": -59671}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_MAN", "type": "VarPlayer", "id": -59671}, "oldValue": 3, "newValue": 4}}
+{"t": 1947, "k": "event", "name": "VarTransmit", "op": {"value": 4, "domain": "VarPlayer", "name": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "op": "setVar", "id": -59673}, "payload": {"var": {"config": "LEAGUE_TASK_PROGRESS_PICKPOCKET_ANY", "type": "VarPlayer", "id": -59673}, "oldValue": 3, "newValue": 4}}
+{"t": 1947, "k": "event", "name": "VarTransmit", "op": {"value": 496566, "domain": "VarPlayer", "name": "XPDISPLAY_ISBONUS_MAP_CLOCK", "op": "setVar", "id": 3513}, "payload": {"var": {"config": "XPDISPLAY_ISBONUS_MAP_CLOCK", "type": "VarPlayer", "id": 3513}, "oldValue": 496563, "newValue": 496566}}
+{"t": 1977, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "You pick the target's pocket."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "You pick the target's pocket.", "timestamp": 1792892995, "senderNameSimple": ""}}
+{"t": 1977, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "3 coins have been added to your money pouch."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "3 coins have been added to your money pouch.", "timestamp": 1792892995, "senderNameSimple": ""}}
+{"t": 1977, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 995, "count": 12}, {"obj": -1, "count": 0}], "size": 2, "op": "setInventory", "inv": 623}, "payload": {"slotsUpdated": [1], "inv": {"config": "MONEY_POUCH", "type": "Inv", "id": 623}}}
+{"t": 1977, "k": "event", "name": "ServerLogic"}
+{"t": 1977, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarClient", "name": "TELEMETRY_READY", "op": "setVar", "id": 5153}, "payload": {"var": {"config": "TELEMETRY_READY", "type": "VarClient", "id": 5153}, "oldValue": 1, "newValue": 1}}
+{"t": 2007, "k": "event", "name": "ServerLogic"}
+{"t": 2037, "k": "event", "name": "ServerLogic"}
+{"t": 2037, "k": "event", "name": "VarTransmit", "op": {"value": 5, "domain": "VarPlayer", "name": "THIEVING_CONSECUTIVE_COUNT", "op": "setVar", "id": 12611}, "payload": {"var": {"config": "THIEVING_CONSECUTIVE_COUNT", "type": "VarPlayer", "id": 12611}, "oldValue": 4, "newValue": 5}}
+{"t": 2068, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "You fail to steal from the target."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "You fail to steal from the target.", "timestamp": 1792892997, "senderNameSimple": ""}}
+{"t": 2068, "k": "event", "name": "ServerLogic"}
+{"t": 2098, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "You've been stunned."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "You've been stunned.", "timestamp": 1792892998, "senderNameSimple": ""}}
+{"t": 2098, "k": "event", "name": "ServerLogic"}
+{"t": 2098, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarPlayer", "name": "THIEVING_CONSECUTIVE_COUNT", "op": "setVar", "id": 12611}, "payload": {"var": {"config": "THIEVING_CONSECUTIVE_COUNT", "type": "VarPlayer", "id": 12611}, "oldValue": 5, "newValue": 0}}
+{"t": 2098, "k": "event", "name": "VarTransmit", "op": {"value": -2147483648, "domain": "VarPlayer", "name": "RAND_TITLES_VAR_1", "op": "setVar", "id": 1074}, "payload": {"var": {"config": "RAND_TITLES_VAR_1", "type": "VarPlayer", "id": 1074}, "oldValue": 0, "newValue": -2147483648}}
+{"t": 2098, "k": "read", "v": "RAND_TITLES_VAR_1", "path": "var.VarPlayer.RAND_TITLES_VAR_1.configName"}
+{"t": 2098, "k": "event", "name": "VarTransmit", "op": {"value": 262144, "domain": "VarPlayer", "name": "RAND_TITLES_VAR_2", "op": "setVar", "id": 1075}, "payload": {"var": {"config": "RAND_TITLES_VAR_2", "type": "VarPlayer", "id": 1075}, "oldValue": 0, "newValue": 262144}}
+{"t": 2098, "k": "read", "v": "RAND_TITLES_VAR_2", "path": "var.VarPlayer.RAND_TITLES_VAR_2.configName"}
+{"t": 2098, "k": "event", "name": "VarTransmit", "op": {"value": 960, "domain": "VarPlayer", "name": "LIFEPOINTS", "op": "setVar", "id": 13655}, "payload": {"var": {"config": "LIFEPOINTS", "type": "VarPlayer", "id": 13655}, "oldValue": 1000, "newValue": 960}}
+{"t": 2098, "k": "read", "v": "LIFEPOINTS", "path": "var.VarPlayer.LIFEPOINTS.configName"}
+{"t": 2127, "k": "event", "name": "ServerLogic"}
+{"t": 2158, "k": "event", "name": "ServerLogic"}
+{"t": 2186, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "You're stunned."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "You're stunned.", "timestamp": 1792892999, "senderNameSimple": ""}}
+{"t": 2186, "k": "event", "name": "ServerLogic"}
+{"t": 2186, "k": "event", "name": "VarTransmit", "op": {"value": 961, "domain": "VarPlayer", "name": "LIFEPOINTS", "op": "setVar", "id": 13655}, "payload": {"var": {"config": "LIFEPOINTS", "type": "VarPlayer", "id": 13655}, "oldValue": 960, "newValue": 961}}
+{"t": 2218, "k": "event", "name": "ServerLogic"}
+{"t": 2218, "k": "event", "name": "VarTransmit", "op": {"value": 29881550, "domain": "VarPlayer", "name": "CLOCK_TIME_DATE_MINUTES", "op": "setVar", "id": 11489}, "payload": {"var": {"config": "CLOCK_TIME_DATE_MINUTES", "type": "VarPlayer", "id": 11489}, "oldValue": 29881549, "newValue": 29881550}}
+{"t": 2218, "k": "read", "v": 29881550, "path": "var.VarPlayer.CLOCK_TIME_DATE_MINUTES.value"}
+{"t": 2248, "k": "event", "name": "ServerLogic"}
+{"t": 2277, "k": "event", "name": "ServerLogic"}
+{"t": 2307, "k": "event", "name": "ServerLogic"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarPlayer", "name": "COMBATV2_ABILITY_AVAILABILITY_UPDATE", "op": "setVar", "id": 11315}, "payload": {"var": {"config": "COMBATV2_ABILITY_AVAILABILITY_UPDATE", "type": "VarPlayer", "id": 11315}, "oldValue": 0, "newValue": 1}}
+{"t": 2338, "k": "read", "v": "COMBATV2_ABILITY_AVAILABILITY_UPDATE", "path": "var.VarPlayer.COMBATV2_ABILITY_AVAILABILITY_UPDATE.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarPlayer", "name": "COMBATV2_PLAYER_PUNCTURE_DAMAGE", "op": "setVar", "id": 12678}, "payload": {"var": {"config": "COMBATV2_PLAYER_PUNCTURE_DAMAGE", "type": "VarPlayer", "id": 12678}, "oldValue": 0, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_PLAYER_PUNCTURE_DAMAGE", "path": "var.VarPlayer.COMBATV2_PLAYER_PUNCTURE_DAMAGE.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarPlayer", "name": "COMBATV2_PLAYER_PUNCTURE_COUNT", "op": "setVar", "id": 12679}, "payload": {"var": {"config": "COMBATV2_PLAYER_PUNCTURE_COUNT", "type": "VarPlayer", "id": 12679}, "oldValue": 0, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_PLAYER_PUNCTURE_COUNT", "path": "var.VarPlayer.COMBATV2_PLAYER_PUNCTURE_COUNT.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarPlayer", "name": "COMBATV2_PLAYER_PUNCTURE_END_TIME", "op": "setVar", "id": 12681}, "payload": {"var": {"config": "COMBATV2_PLAYER_PUNCTURE_END_TIME", "type": "VarPlayer", "id": 12681}, "oldValue": 0, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_PLAYER_PUNCTURE_END_TIME", "path": "var.VarPlayer.COMBATV2_PLAYER_PUNCTURE_END_TIME.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarClient", "name": "SWORLDS_REWARD_KURADEL_INSTA_RESPAWN_COOLDOWN", "op": "setVar", "id": 6032}, "payload": {"var": {"config": "SWORLDS_REWARD_KURADEL_INSTA_RESPAWN_COOLDOWN", "type": "VarClient", "id": 6032}, "oldValue": -1, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "SWORLDS_REWARD_KURADEL_INSTA_RESPAWN_COOLDOWN", "path": "var.VarClient.SWORLDS_REWARD_KURADEL_INSTA_RESPAWN_COOLDOWN.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarClient", "name": "COMBATV2_MENAPHOS_LIMITLESS_END_EFFECT_CLIENT", "op": "setVar", "id": 6614}, "payload": {"var": {"config": "COMBATV2_MENAPHOS_LIMITLESS_END_EFFECT_CLIENT", "type": "VarClient", "id": 6614}, "oldValue": -1, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_MENAPHOS_LIMITLESS_END_EFFECT_CLIENT", "path": "var.VarClient.COMBATV2_MENAPHOS_LIMITLESS_END_EFFECT_CLIENT.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarClient", "name": "COMBATV2_MENAPHOS_UNSULLIED_END_EFFECT_CLIENT", "op": "setVar", "id": 6615}, "payload": {"var": {"config": "COMBATV2_MENAPHOS_UNSULLIED_END_EFFECT_CLIENT", "type": "VarClient", "id": 6615}, "oldValue": -1, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_MENAPHOS_UNSULLIED_END_EFFECT_CLIENT", "path": "var.VarClient.COMBATV2_MENAPHOS_UNSULLIED_END_EFFECT_CLIENT.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarClient", "name": "COMBATV2_INGENUITY_OF_THE_HUMANS_END_EFFECT_CLIENT", "op": "setVar", "id": 6616}, "payload": {"var": {"config": "COMBATV2_INGENUITY_OF_THE_HUMANS_END_EFFECT_CLIENT", "type": "VarClient", "id": 6616}, "oldValue": -1, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_INGENUITY_OF_THE_HUMANS_END_EFFECT_CLIENT", "path": "var.VarClient.COMBATV2_INGENUITY_OF_THE_HUMANS_END_EFFECT_CLIENT.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarClient", "name": "COMBATV2_DUNGEON_ULTHVEN_UNDEAD_SLAYER_END_EFFECT_CLIENT", "op": "setVar", "id": 6617}, "payload": {"var": {"config": "COMBATV2_DUNGEON_ULTHVEN_UNDEAD_SLAYER_END_EFFECT_CLIENT", "type": "VarClient", "id": 6617}, "oldValue": -1, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_DUNGEON_ULTHVEN_UNDEAD_SLAYER_END_EFFECT_CLIENT", "path": "var.VarClient.COMBATV2_DUNGEON_ULTHVEN_UNDEAD_SLAYER_END_EFFECT_CLIENT.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarClient", "name": "COMBATV2_DUNGEON_ULTHVEN_DEMON_SLAYER_END_EFFECT_CLIENT", "op": "setVar", "id": 6618}, "payload": {"var": {"config": "COMBATV2_DUNGEON_ULTHVEN_DEMON_SLAYER_END_EFFECT_CLIENT", "type": "VarClient", "id": 6618}, "oldValue": -1, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_DUNGEON_ULTHVEN_DEMON_SLAYER_END_EFFECT_CLIENT", "path": "var.VarClient.COMBATV2_DUNGEON_ULTHVEN_DEMON_SLAYER_END_EFFECT_CLIENT.configName"}
+{"t": 2338, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarClient", "name": "COMBATV2_DUNGEON_ULTHVEN_DRAGON_SLAYER_END_EFFECT_CLIENT", "op": "setVar", "id": 6619}, "payload": {"var": {"config": "COMBATV2_DUNGEON_ULTHVEN_DRAGON_SLAYER_END_EFFECT_CLIENT", "type": "VarClient", "id": 6619}, "oldValue": -1, "newValue": 0}}
+{"t": 2338, "k": "read", "v": "COMBATV2_DUNGEON_ULTHVEN_DRAGON_SLAYER_END_EFFECT_CLIENT", "path": "var.VarClient.COMBATV2_DUNGEON_ULTHVEN_DRAGON_SLAYER_END_EFFECT_CLIENT.configName"}
+{"t": 2339, "k": "event", "name": "ServerLogic"}
+{"t": 2368, "k": "event", "name": "ServerLogic"}
+{"t": 2397, "k": "event", "name": "ServerLogic"}
+{"t": 2427, "k": "event", "name": "ServerLogic"}
+{"t": 2456, "k": "event", "name": "ServerLogic"}
+{"t": 2486, "k": "event", "name": "ServerLogic"}
+{"t": 2486, "k": "event", "name": "VarTransmit", "op": {"value": 962, "domain": "VarPlayer", "name": "LIFEPOINTS", "op": "setVar", "id": 13655}, "payload": {"var": {"config": "LIFEPOINTS", "type": "VarPlayer", "id": 13655}, "oldValue": 961, "newValue": 962}}
+{"t": 2516, "k": "event", "name": "ServerLogic"}
+{"t": 2548, "k": "event", "name": "ServerLogic"}
+{"t": 2577, "k": "event", "name": "ChatMessage", "op": {"chatType": 0, "sender": "", "op": "chat", "message": "Congratulations! You have completed: 'Window Shopping' - Browse Lumbridge's general store."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 0, "chatMessage": "Congratulations! You have completed: 'Window Shopping' - Browse Lumbridge's general store.", "timestamp": 1792893007, "senderNameSimple": ""}}
+{"t": 2577, "k": "event", "name": "ChatMessage", "op": {"chatType": 0, "sender": "", "op": "chat", "message": "<col=00FF00>You've just completed your first achievement in the following area task set: Beginner Lumbridge"}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 0, "chatMessage": "<col=00FF00>You've just completed your first achievement in the following area task set: Beginner Lumbridge", "timestamp": 1792893007, "senderNameSimple": ""}}
+{"t": 2577, "k": "event", "name": "ChatMessage", "op": {"chatType": 0, "sender": "", "op": "chat", "message": "<col=00FF00>Go to the 'Area Task Sets' tab of the 'Achievements' interface to find out about the other tasks in the set and the rewards for completing them."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 0, "chatMessage": "<col=00FF00>Go to the 'Area Task Sets' tab of the 'Achievements' interface to find out about the other tasks in the set and the rewards for completing them.", "timestamp": 1792893007, "senderNameSimple": ""}}
+{"t": 2577, "k": "event", "name": "ServerLogic"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 64, "domain": "VarPlayer", "name": "ATLUM_TASK1", "op": "setVar", "id": 3075}, "payload": {"var": {"config": "ATLUM_TASK1", "type": "VarPlayer", "id": 3075}, "oldValue": 0, "newValue": 64}}
+{"t": 2577, "k": "read", "v": "ATLUM_TASK1", "path": "var.VarPlayer.ATLUM_TASK1.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 4210688, "domain": "VarPlayer", "name": "INTERN_NOTES_PERM_1", "op": "setVar", "id": 9434}, "payload": {"var": {"config": "INTERN_NOTES_PERM_1", "type": "VarPlayer", "id": 9434}, "oldValue": 4194304, "newValue": 4210688}}
+{"t": 2577, "k": "read", "v": "INTERN_NOTES_PERM_1", "path": "var.VarPlayer.INTERN_NOTES_PERM_1.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": -1, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_SLOT", "op": "setVar", "id": 301}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_SLOT", "type": "VarPlayer", "id": 301}, "oldValue": 0, "newValue": -1}}
+{"t": 2577, "k": "read", "v": "SHOP_LAST_VIEWED_SLOT", "path": "var.VarPlayer.SHOP_LAST_VIEWED_SLOT.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_BUYAMT", "op": "setVar", "id": 302}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_BUYAMT", "type": "VarPlayer", "id": 302}, "oldValue": 0, "newValue": 1}}
+{"t": 2577, "k": "read", "v": "SHOP_LAST_VIEWED_BUYAMT", "path": "var.VarPlayer.SHOP_LAST_VIEWED_BUYAMT.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 3, "domain": "VarPlayer", "name": "SHOP", "op": "setVar", "id": 304}, "payload": {"var": {"config": "SHOP", "type": "VarPlayer", "id": 304}, "oldValue": -1, "newValue": 3}}
+{"t": 2577, "k": "read", "v": "SHOP", "path": "var.VarPlayer.SHOP.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 553, "domain": "VarPlayer", "name": "SHOPFREEBIE", "op": "setVar", "id": 305}, "payload": {"var": {"config": "SHOPFREEBIE", "type": "VarPlayer", "id": 305}, "oldValue": -1, "newValue": 553}}
+{"t": 2577, "k": "read", "v": "SHOPFREEBIE", "path": "var.VarPlayer.SHOPFREEBIE.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarPlayer", "name": "CURRENCY", "op": "setVar", "id": 306}, "payload": {"var": {"config": "CURRENCY", "type": "VarPlayer", "id": 306}, "oldValue": 0, "newValue": 0}}
+{"t": 2577, "k": "read", "v": "CURRENCY", "path": "var.VarPlayer.CURRENCY.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 787, "domain": "VarPlayer", "name": "CHEEVO_RECENT_COMPLETE_1", "op": "setVar", "id": 9612}, "payload": {"var": {"config": "CHEEVO_RECENT_COMPLETE_1", "type": "VarPlayer", "id": 9612}, "oldValue": 5088, "newValue": 787}}
+{"t": 2577, "k": "read", "v": "CHEEVO_RECENT_COMPLETE_1", "path": "var.VarPlayer.CHEEVO_RECENT_COMPLETE_1.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 5088, "domain": "VarPlayer", "name": "CHEEVO_RECENT_COMPLETE_2", "op": "setVar", "id": 9613}, "payload": {"var": {"config": "CHEEVO_RECENT_COMPLETE_2", "type": "VarPlayer", "id": 9613}, "oldValue": -1, "newValue": 5088}}
+{"t": 2577, "k": "read", "v": "CHEEVO_RECENT_COMPLETE_2", "path": "var.VarPlayer.CHEEVO_RECENT_COMPLETE_2.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": -1, "domain": "VarClient", "name": "TOPLEVEL_V2_ACTIVE_MODAL_ID", "op": "setVar", "id": 3678}, "payload": {"var": {"config": "TOPLEVEL_V2_ACTIVE_MODAL_ID", "type": "VarClient", "id": 3678}, "oldValue": -1, "newValue": -1}}
+{"t": 2577, "k": "read", "v": "TOPLEVEL_V2_ACTIVE_MODAL_ID", "path": "var.VarClient.TOPLEVEL_V2_ACTIVE_MODAL_ID.configName"}
+{"t": 2577, "k": "event", "name": "VarTransmit", "op": {"value": 7, "domain": "VarClient", "name": "SHOP_INVENTORY_SELL_STATUS", "op": "setVar", "id": 1879}, "payload": {"var": {"config": "SHOP_INVENTORY_SELL_STATUS", "type": "VarClient", "id": 1879}, "oldValue": -1, "newValue": 7}}
+{"t": 2577, "k": "read", "v": "SHOP_INVENTORY_SELL_STATUS", "path": "var.VarClient.SHOP_INVENTORY_SELL_STATUS.configName"}
+{"t": 2607, "k": "event", "name": "ServerLogic"}
+{"t": 2637, "k": "event", "name": "ServerLogic"}
+{"t": 2665, "k": "event", "name": "ServerLogic"}
+{"t": 2697, "k": "event", "name": "ServerLogic"}
+{"t": 2727, "k": "event", "name": "ServerLogic"}
+{"t": 2757, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 590, "count": 1}, {"obj": 2347, "count": 1}, {"obj": 1205, "count": 1}, {"obj": 25692, "count": 0}], "size": 4, "op": "setInventory", "inv": 553}, "payload": {"slotsUpdated": [4], "inv": {"config": "GENERALSHOP1_FREEBIES", "type": "Inv", "id": 553}}}
+{"t": 2757, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 315, "count": 1}, {"obj": 1923, "count": 1}, {"obj": 558, "count": 1}, {"obj": 63948, "count": 1}, {"obj": 18645, "count": 1}, {"obj": 25692, "count": 1}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}], "size": 28, "op": "setInventory", "inv": 93}, "payload": {"slotsUpdated": [6], "inv": {"config": "INV", "type": "Inv", "id": 93}}}
+{"t": 2757, "k": "read", "v": [{"obj": {"config": "SHRIMP", "type": "Obj", "id": 315}, "count": 1}, {"obj": {"config": "BOWL_EMPTY", "type": "Obj", "id": 1923}, "count": 1}, {"obj": {"config": "MINDRUNE", "type": "Obj", "id": 558}, "count": 1}, {"obj": {"config": "HALLOWEEN_HUB_COMMUNITY_CANDY_2026", "type": "Obj", "id": 63948}, "count": 1}, {"obj": {"config": "THIGUI_FLYER", "type": "Obj", "id": 18645}, "count": 1}, {"obj": {"config": "BRONZE_DAGGER_O", "type": "Obj", "id": 25692}, "count": 1}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}], "path": "Inventory.Find(config.Inv.INV):GetSlots()"}
+{"t": 2757, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[6].count"}
+{"t": 2757, "k": "event", "name": "ServerLogic"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 553, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_INVENTORY", "op": "setVar", "id": 299}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_INVENTORY", "type": "VarPlayer", "id": 299}, "oldValue": -1, "newValue": 553}}
+{"t": 2757, "k": "read", "v": "SHOP_LAST_VIEWED_INVENTORY", "path": "var.VarPlayer.SHOP_LAST_VIEWED_INVENTORY.configName"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 25692, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_ITEM", "op": "setVar", "id": 300}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_ITEM", "type": "VarPlayer", "id": 300}, "oldValue": -1, "newValue": 25692}}
+{"t": 2757, "k": "read", "v": "SHOP_LAST_VIEWED_ITEM", "path": "var.VarPlayer.SHOP_LAST_VIEWED_ITEM.configName"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 3, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_SLOT", "op": "setVar", "id": 301}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_SLOT", "type": "VarPlayer", "id": 301}, "oldValue": -1, "newValue": 3}}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_BUYAMT", "op": "setVar", "id": 302}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_BUYAMT", "type": "VarPlayer", "id": 302}, "oldValue": 1, "newValue": 1}}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 17, "domain": "VarClient", "name": "SHOP_ITEM_INFO", "op": "setVar", "id": 1876}, "payload": {"var": {"config": "SHOP_ITEM_INFO", "type": "VarClient", "id": 1876}, "oldValue": -1, "newValue": 17}}
+{"t": 2757, "k": "read", "v": "SHOP_ITEM_INFO", "path": "var.VarClient.SHOP_ITEM_INFO.configName"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 10, "domain": "VarClient", "name": "SHOP_ITEM_INFO_WEIGHT", "op": "setVar", "id": 1878}, "payload": {"var": {"config": "SHOP_ITEM_INFO_WEIGHT", "type": "VarClient", "id": 1878}, "oldValue": -1, "newValue": 10}}
+{"t": 2757, "k": "read", "v": "SHOP_ITEM_INFO_WEIGHT", "path": "var.VarClient.SHOP_ITEM_INFO_WEIGHT.configName"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": "A bronze off hand dagger.", "domain": "VarClient", "name": "SHOP_ITEM_DESCRIPTION", "op": "setVar", "id": 2361}, "payload": {"var": {"config": "SHOP_ITEM_DESCRIPTION", "type": "VarClient", "id": 2361}, "oldValue": "", "newValue": "A bronze off hand dagger."}}
+{"t": 2757, "k": "read", "v": "SHOP_ITEM_DESCRIPTION", "path": "var.VarClient.SHOP_ITEM_DESCRIPTION.configName"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": "<br>Wielded in left hand, requiring:<br><col=00ff00>Level 1 Attack", "domain": "VarClient", "name": "OBJREQ_WEARABLE", "op": "setVar", "id": 2355}, "payload": {"var": {"config": "OBJREQ_WEARABLE", "type": "VarClient", "id": 2355}, "oldValue": "", "newValue": "<br>Wielded in left hand, requiring:<br><col=00ff00>Level 1 Attack"}}
+{"t": 2757, "k": "read", "v": "OBJREQ_WEARABLE", "path": "var.VarClient.OBJREQ_WEARABLE.configName"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": "", "domain": "VarClient", "name": "OBJREQ_USEABLE", "op": "setVar", "id": 2356}, "payload": {"var": {"config": "OBJREQ_USEABLE", "type": "VarClient", "id": 2356}, "oldValue": "", "newValue": ""}}
+{"t": 2757, "k": "read", "v": "OBJREQ_USEABLE", "path": "var.VarClient.OBJREQ_USEABLE.configName"}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 39, "domain": "VarClient", "name": "SHOP_INVENTORY_SELL_STATUS", "op": "setVar", "id": 1879}, "payload": {"var": {"config": "SHOP_INVENTORY_SELL_STATUS", "type": "VarClient", "id": 1879}, "oldValue": 7, "newValue": 39}}
+{"t": 2757, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarClient", "name": "TELEMETRY_READY", "op": "setVar", "id": 5153}, "payload": {"var": {"config": "TELEMETRY_READY", "type": "VarClient", "id": 5153}, "oldValue": 1, "newValue": 1}}
+{"t": 2787, "k": "event", "name": "ServerLogic"}
+{"t": 2787, "k": "event", "name": "VarTransmit", "op": {"value": 963, "domain": "VarPlayer", "name": "LIFEPOINTS", "op": "setVar", "id": 13655}, "payload": {"var": {"config": "LIFEPOINTS", "type": "VarPlayer", "id": 13655}, "oldValue": 962, "newValue": 963}}
+{"t": 2816, "k": "event", "name": "ServerLogic"}
+{"t": 2847, "k": "event", "name": "ServerLogic"}
+{"t": 2847, "k": "read", "v": 6, "path": "Inventory.Find(config.Inv.INV).usedSlotCount"}
+{"t": 2877, "k": "event", "name": "ServerLogic"}
+{"t": 2907, "k": "event", "name": "ServerLogic"}
+{"t": 2937, "k": "event", "name": "ServerLogic"}
+{"t": 2966, "k": "event", "name": "ServerLogic"}
+{"t": 2997, "k": "event", "name": "ServerLogic"}
+{"t": 3027, "k": "event", "name": "ServerLogic"}
+{"t": 3057, "k": "event", "name": "ServerLogic"}
+{"t": 3087, "k": "event", "name": "ServerLogic"}
+{"t": 3087, "k": "event", "name": "VarTransmit", "op": {"value": 964, "domain": "VarPlayer", "name": "LIFEPOINTS", "op": "setVar", "id": 13655}, "payload": {"var": {"config": "LIFEPOINTS", "type": "VarPlayer", "id": 13655}, "oldValue": 963, "newValue": 964}}
+{"t": 3116, "k": "event", "name": "ServerLogic"}
+{"t": 3147, "k": "event", "name": "ServerLogic"}
+{"t": 3147, "k": "event", "name": "VarTransmit", "op": {"value": 1330, "domain": "VarPlayer", "name": "DNDTRACKER_MINS_TO_DAY_END", "op": "setVar", "id": -20737}, "payload": {"var": {"config": "DNDTRACKER_MINS_TO_DAY_END", "type": "VarPlayer", "id": -20737}, "oldValue": 1331, "newValue": 1330}}
+{"t": 3147, "k": "event", "name": "VarTransmit", "op": {"value": 20, "domain": "VarPlayer", "name": "DNDTRACKER_SINKHOLES_START", "op": "setVar", "id": -20748}, "payload": {"var": {"config": "DNDTRACKER_SINKHOLES_START", "type": "VarPlayer", "id": -20748}, "oldValue": 19, "newValue": 20}}
+{"t": 3147, "k": "event", "name": "VarTransmit", "op": {"value": 10, "domain": "VarPlayer", "name": "DNDTRACKER_FAMILIARIZATION_TIME", "op": "setVar", "id": -20750}, "payload": {"var": {"config": "DNDTRACKER_FAMILIARIZATION_TIME", "type": "VarPlayer", "id": -20750}, "oldValue": 11, "newValue": 10}}
+{"t": 3176, "k": "event", "name": "ChatMessage", "op": {"chatType": 109, "sender": "", "op": "chat", "message": "10 coins have been removed from your money pouch."}, "payload": {"senderNameFiltered": "", "senderNameUnfiltered": "", "chatType": 109, "chatMessage": "10 coins have been removed from your money pouch.", "timestamp": 1792893019, "senderNameSimple": ""}}
+{"t": 3176, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 1931, "count": 30}, {"obj": 1935, "count": 10}, {"obj": 1735, "count": 10}, {"obj": 1925, "count": 30}, {"obj": 1923, "count": 10}, {"obj": 1887, "count": 10}, {"obj": 590, "count": 0}, {"obj": 1755, "count": 10}, {"obj": 2347, "count": 10}, {"obj": 10006, "count": 10}, {"obj": 10008, "count": 10}, {"obj": 550, "count": 10}, {"obj": 9003, "count": 10}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}], "size": 40, "op": "setInventory", "inv": 3}, "payload": {"slotsUpdated": [7], "inv": {"config": "GENERALSHOP1", "type": "Inv", "id": 3}}}
+{"t": 3176, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 315, "count": 1}, {"obj": 1923, "count": 1}, {"obj": 558, "count": 1}, {"obj": 63948, "count": 1}, {"obj": 18645, "count": 1}, {"obj": 25692, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": 590, "count": 1}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}, {"obj": -1, "count": 0}], "size": 28, "op": "setInventory", "inv": 93}, "payload": {"slotsUpdated": [7, 8, 9, 10, 11, 12, 13, 14, 15, 16], "inv": {"config": "INV", "type": "Inv", "id": 93}}}
+{"t": 3176, "k": "read", "v": [{"obj": {"config": "SHRIMP", "type": "Obj", "id": 315}, "count": 1}, {"obj": {"config": "BOWL_EMPTY", "type": "Obj", "id": 1923}, "count": 1}, {"obj": {"config": "MINDRUNE", "type": "Obj", "id": 558}, "count": 1}, {"obj": {"config": "HALLOWEEN_HUB_COMMUNITY_CANDY_2026", "type": "Obj", "id": 63948}, "count": 1}, {"obj": {"config": "THIGUI_FLYER", "type": "Obj", "id": 18645}, "count": 1}, {"obj": {"config": "BRONZE_DAGGER_O", "type": "Obj", "id": 25692}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "TINDERBOX", "type": "Obj", "id": 590}, "count": 1}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}, {"obj": {"config": "UNKNOWN", "type": "Obj", "id": -1}, "count": 0}], "path": "Inventory.Find(config.Inv.INV):GetSlots()"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[7].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[8].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[9].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[10].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[11].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[12].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[13].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[14].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[15].count"}
+{"t": 3176, "k": "read", "v": 1, "path": "Inventory.Find(config.Inv.INV):GetSlots()[16].count"}
+{"t": 3176, "k": "event", "name": "InventoryUpdated", "op": {"slots": [{"obj": 995, "count": 2}, {"obj": -1, "count": 0}], "size": 2, "op": "setInventory", "inv": 623}, "payload": {"slotsUpdated": [1], "inv": {"config": "MONEY_POUCH", "type": "Inv", "id": 623}}}
+{"t": 3176, "k": "event", "name": "ServerLogic"}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 3, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_INVENTORY", "op": "setVar", "id": 299}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_INVENTORY", "type": "VarPlayer", "id": 299}, "oldValue": 553, "newValue": 3}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 590, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_ITEM", "op": "setVar", "id": 300}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_ITEM", "type": "VarPlayer", "id": 300}, "oldValue": 25692, "newValue": 590}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 6, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_SLOT", "op": "setVar", "id": 301}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_SLOT", "type": "VarPlayer", "id": 301}, "oldValue": 3, "newValue": 6}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 10, "domain": "VarPlayer", "name": "SHOP_LAST_VIEWED_BUYAMT", "op": "setVar", "id": 302}, "payload": {"var": {"config": "SHOP_LAST_VIEWED_BUYAMT", "type": "VarPlayer", "id": 302}, "oldValue": 1, "newValue": 10}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 100000, "domain": "VarPlayer", "name": "SHOP_WARNING_LIMIT_BUY", "op": "setVar", "id": 4879}, "payload": {"var": {"config": "SHOP_WARNING_LIMIT_BUY", "type": "VarPlayer", "id": 4879}, "oldValue": 0, "newValue": 100000}}
+{"t": 3176, "k": "read", "v": "SHOP_WARNING_LIMIT_BUY", "path": "var.VarPlayer.SHOP_WARNING_LIMIT_BUY.configName"}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 0, "domain": "VarPlayer", "name": "RAND_TEMP_INT_26", "op": "setVar", "id": 1995}, "payload": {"var": {"config": "RAND_TEMP_INT_26", "type": "VarPlayer", "id": 1995}, "oldValue": 0, "newValue": 0}}
+{"t": 3176, "k": "read", "v": "RAND_TEMP_INT_26", "path": "var.VarPlayer.RAND_TEMP_INT_26.configName"}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 31, "domain": "VarClient", "name": "SHOP_ITEM_INFO", "op": "setVar", "id": 1876}, "payload": {"var": {"config": "SHOP_ITEM_INFO", "type": "VarClient", "id": 1876}, "oldValue": 17, "newValue": 31}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 35, "domain": "VarClient", "name": "SHOP_ITEM_INFO_WEIGHT", "op": "setVar", "id": 1878}, "payload": {"var": {"config": "SHOP_ITEM_INFO_WEIGHT", "type": "VarClient", "id": 1878}, "oldValue": 10, "newValue": 35}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": "Useful for lighting a fire.", "domain": "VarClient", "name": "SHOP_ITEM_DESCRIPTION", "op": "setVar", "id": 2361}, "payload": {"var": {"config": "SHOP_ITEM_DESCRIPTION", "type": "VarClient", "id": 2361}, "oldValue": "A bronze off hand dagger.", "newValue": "Useful for lighting a fire."}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": "", "domain": "VarClient", "name": "OBJREQ_WEARABLE", "op": "setVar", "id": 2355}, "payload": {"var": {"config": "OBJREQ_WEARABLE", "type": "VarClient", "id": 2355}, "oldValue": "<br>Wielded in left hand, requiring:<br><col=00ff00>Level 1 Attack", "newValue": ""}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": "", "domain": "VarClient", "name": "OBJREQ_USEABLE", "op": "setVar", "id": 2356}, "payload": {"var": {"config": "OBJREQ_USEABLE", "type": "VarClient", "id": 2356}, "oldValue": "", "newValue": ""}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 65511, "domain": "VarClient", "name": "SHOP_INVENTORY_SELL_STATUS", "op": "setVar", "id": 1879}, "payload": {"var": {"config": "SHOP_INVENTORY_SELL_STATUS", "type": "VarClient", "id": 1879}, "oldValue": 39, "newValue": 65511}}
+{"t": 3176, "k": "event", "name": "VarTransmit", "op": {"value": 1, "domain": "VarClient", "name": "TELEMETRY_READY", "op": "setVar", "id": 5153}, "payload": {"var": {"config": "TELEMETRY_READY", "type": "VarClient", "id": 5153}, "oldValue": 1, "newValue": 1}}

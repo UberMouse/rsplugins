@@ -149,7 +149,8 @@ describe("plugins/recorder-demo with the recorder", function()
         local h = support.demo({ "chatAccess" })
         assert.are.equal(1, support.lines(h, "[RECORDER]"))
         assert.matches(
-            "%[RECORDER%] waiting for httpAccess %(`ppe recorder%-demo httpAccess`%)",
+            "%[RECORDER%] waiting for httpAccess %(`ppr recorder%-demo`, then "
+                .. "`ppe recorder%-demo httpAccess`%)",
             h:output()
         )
         assert.matches("%[RECDEMO%] enabled 1 times", h:output())

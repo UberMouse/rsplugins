@@ -51,6 +51,16 @@ function M.demo(grant)
     return h
 end
 
+-- plugins/recorder-demo without dev/, so it runs unrecorded: for replaying its recordings.
+---@return table # inline files for harness.new
+function M.demoFiles()
+    local files = {}
+    for _, name in ipairs({ "main.lua", "envprobe.lua", "plugin.json" }) do
+        files[name] = assert(paths.read(paths.repo("plugins/recorder-demo/" .. name)))
+    end
+    return files
+end
+
 -- The recorder's requests, in order.
 ---@param h table
 ---@return table[]

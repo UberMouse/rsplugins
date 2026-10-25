@@ -16,9 +16,10 @@ what a plugin's other modules do.
 ## Use
 
 1. From the repo root: `scripts/dev-receiver.py` (writes to `dumps/recordings/`, gitignored).
-2. In the client console: `prf`, `pon recorder-demo`, then `ppe recorder-demo httpAccess` (if it
-   says the plugin hasn't requested it, run `ppr recorder-demo` first). For chat lines in the
-   recording, also `ppe recorder-demo chatAccess`. Be logged in.
+2. In the client console: `prf`, `pon recorder-demo`, `ppr recorder-demo`, then
+   `ppe recorder-demo httpAccess`, and for chat lines in the recording
+   `ppe recorder-demo chatAccess`. Always `ppr` before `ppe`: `ppe` on a permission the plugin
+   hasn't requested does nothing, silently. Be logged in.
 3. Open the bank, or walk about. `dumps/recordings/recorder-demo/<time>-<session>.jsonl` grows,
    and the receiver prints a line per batch (about one a second).
 

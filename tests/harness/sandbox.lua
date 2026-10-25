@@ -33,8 +33,8 @@ local BASE = {
 }
 local LIBS = { "string", "table", "math", "utf8", "coroutine" }
 
--- Withheld unless a test opts in (opts.stdlib = { os = true }): whether the client has them
--- is unknown, so a plugin shouldn't rely on them by accident.
+-- Withheld unless a test opts in (opts.stdlib = { os = true }): the client has neither
+-- (recorder-demo's probe, 2026-10-25), so a plugin mustn't rely on them.
 local OPT_IN = { os = os, io = io }
 -- Standard globals never provided, with a clearer message than "unmocked API".
 local WITHHELD = {
@@ -167,10 +167,10 @@ function M.build(h, instance)
     return setmetatable(env, {
         __index = function(_, name)
             if WITHHELD[name] then
+                local why = OPT_IN[name] and "absent in the client; a test can opt in"
+                    or "client availability unknown"
                 strict.fault(
-                    "not provided in the harness sandbox: "
-                        .. tostring(name)
-                        .. " (client availability unknown; os and io can be opted in)"
+                    "not provided in the harness sandbox: " .. tostring(name) .. " (" .. why .. ")"
                 )
             end
             strict.fault("unmocked API: " .. tostring(name))

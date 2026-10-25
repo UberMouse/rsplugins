@@ -707,10 +707,14 @@ function recorder.install(env, plugin)
     session = (tostring({}):match("(%x+)$") or ""):sub(-6)
         .. string.format("%04x", math.random(0, 0xffff))
     if not realPlugin.HasPermission(PluginPermissions.httpAccess) then
+        -- ppr first: ppe on a permission the plugin hasn't requested silently does nothing.
         say(
-            "waiting for httpAccess (`ppe "
-                .. plugin
-                .. " httpAccess`); recording into a buffer until then"
+            string.format(
+                "waiting for httpAccess (`ppr %s`, then `ppe %s httpAccess`); "
+                    .. "recording into a buffer until then",
+                plugin,
+                plugin
+            )
         )
     end
     realEvent.Logic.Subscribe("devRecorderFlush", onLogic)

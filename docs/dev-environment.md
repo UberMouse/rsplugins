@@ -72,6 +72,9 @@ There's no in-game plugin management UI yet, so you manage plugins from the cons
 | `plugins_permissions_enable <name> <perm>` | `ppe` | Grant a permission (`httpAccess`, `chatAccess`, `trackingAccess`) |
 | `plugins_permissions_disable <name> <perm>` | `ppd` | Revoke a permission |
 
+Always run `ppr <name>` before `ppe <name> <perm>`. `ppe` on a permission the plugin hasn't
+requested is a silent no-op: no error, and no permission.
+
 You can enable, disable and reload plugins without restarting the client.
 
 ### Other useful console commands

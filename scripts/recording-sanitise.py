@@ -28,8 +28,9 @@ there too ("Turning a session into a fixture").
 - A `dropped` line (entries the recorder lost) at or before TO is refused unless
   --allow-dropped: in the window it is a gap in the replay, and before it the carried state
   may be wrong. Allowed, the window's are kept and the earlier ones become one at t = 0, so
-  the replay must allow them too.
+  the replay must allow them too. One without a tick is always refused.
 
+OUT must not be SESSION: the script never writes to or deletes the private recording.
 Nothing here prints the display name. The output is checked for it, as text and as every
 string it decodes to, before it is written and again as read back from disk; if the name is
 found, the script exits non-zero and leaves none of its output on disk.
@@ -104,16 +105,68 @@ def leaks(pattern, text):
     return found
 
 
+def unanchored(pattern):
+    """Why the compiled-OK regex `pattern` is not anchored as one whole, or None. It must
+    start with ^ and end with $, with no other ^ or $, and no | outside a group: a top-level
+    | splits it into branches each anchored at one end only (`^You pick|.*$` is `^You pick`
+    or `.*$`). Escapes, character classes and (?#...) comments are skipped."""
+    depth, i, n, ends = 0, 0, len(pattern), False
+    while i < n:
+        c = pattern[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "[":
+            i += 1
+            if pattern.startswith("^", i):
+                i += 1
+            if pattern.startswith("]", i):  # first in the class, ] is a literal
+                i += 1
+            while i < n and pattern[i] != "]":
+                i += 2 if pattern[i] == "\\" else 1
+            i += 1
+            continue
+        if pattern.startswith("(?#", i):
+            # re reads \) in a comment as an escape, so the comment ends at the first bare ).
+            i += 3
+            while i < n and pattern[i] != ")":
+                i += 2 if pattern[i] == "\\" else 1
+            i += 1
+            continue
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth < 0:
+                return "a ) this check can't pair with its ("
+        elif c == "|" and depth == 0:
+            return "a | outside a group leaves a branch unanchored; put the choices in (?:...)"
+        elif c in "^$":
+            if depth or i != (0 if c == "^" else n - 1):
+                return f"a {c} other than the leading ^ and the trailing $"
+            ends = c == "$"
+        i += 1
+    if not (pattern.startswith("^") and ends):
+        return "a pattern must start with ^ and end with $"
+    return None
+
+
 def load_allowlist(path):
     """The game-chat patterns in `path`: one regex per line, `#` comments and blank lines
-    skipped. Each must be anchored with ^ and $, so it can only match a whole message."""
+    skipped. Each must be anchored as a whole (unanchored), so it can only match a whole
+    message."""
     patterns = []
     for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip() or line.startswith("#"):
             continue
-        if not (line.startswith("^") and line.endswith("$")):
-            raise Refused(f"{path}:{n}: a pattern must start with ^ and end with $")
-        patterns.append(re.compile(line))
+        try:
+            pattern = re.compile(line)
+        except re.error as e:
+            raise Refused(f"{path}:{n}: not a regex: {e}") from None
+        why = unanchored(line)
+        if why:
+            raise Refused(f"{path}:{n}: {why}")
+        patterns.append(pattern)
     return patterns
 
 
@@ -211,8 +264,11 @@ def sanitise(lines, start, end, placeholder, allowlist, allow_dropped=False,
                       "--short-name-ok")
     pattern = name_pattern(names)
 
-    timed = [e for e in entries if isinstance(e.get("t"), int)]
-    drops = [e for e in timed if e.get("k") == "dropped" and e["t"] <= end]
+    drops = [e for e in entries if e.get("k") == "dropped"]
+    if any(not isinstance(e.get("t"), int) for e in drops):
+        raise Refused("a dropped line has no integer t, so its gap can't be placed against "
+                      "the window")
+    drops = [e for e in drops if e["t"] <= end]
     if drops and not allow_dropped:
         raise Refused(f"the recorder lost {sum(e.get('n') or 0 for e in drops)} entries in "
                       f"{len(drops)} gap(s) at or before --to (first at t={drops[0]['t']}); "
@@ -256,6 +312,10 @@ def main():
     args = parser.parse_args()
     if args.end < args.start:
         sys.exit("--to is before --from")
+    # Writing the output, or deleting it after a leak, would destroy the private recording.
+    if args.out.resolve() == args.session.resolve() or (
+            args.out.exists() and args.session.exists() and args.out.samefile(args.session)):
+        sys.exit("the output is the session file; give a different output path")
 
     lines = [json.loads(line) for line in args.session.read_text(encoding="utf-8").splitlines()
              if line.strip()]

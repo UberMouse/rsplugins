@@ -6,7 +6,8 @@
 # name, since game messages name players ("Bob has logged in."). So no free-form slots (.*,
 # \w+, [A-Za-z ]+): only fixed text, numbers ([0-9,]+), colour tags (<col=[0-9A-Fa-f]{6}>) and
 # alternations of known names (tracks, achievements, areas). Each line is a Python regex
-# anchored with ^ and $; blank lines and lines starting with # are skipped.
+# anchored as a whole: ^ first, $ last, no other ^ or $, and any | inside a group, as in
+# (?:a|b). Blank lines and lines starting with # are skipped.
 
 # Thieving: pickpocketing
 ^You pick the target's pocket\.$

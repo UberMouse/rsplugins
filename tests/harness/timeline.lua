@@ -101,6 +101,10 @@ function M.build(entries)
                 )
             end
         elseif k == "dropped" then
+            assert(
+                math.type(t) == "integer",
+                "recording entry " .. i .. " (dropped) has no integer t"
+            )
             tl.dropped = tl.dropped + (entry.n or 0)
             tl.gaps[#tl.gaps + 1] = { t = t, n = entry.n }
         else

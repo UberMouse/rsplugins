@@ -377,11 +377,12 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
      characters (which would match inside other words) without `--short-name-ok`. It looks
      for the name in its output, as text and in every string the text decodes to, before
      writing and again in the file read back; if it is there, it exits non-zero and leaves
-     none of its output on disk.
+     none of its output on disk. It refuses an output path that is the session file.
    - redacts every chat message with a non-empty sender (one a player sent): its text and
      sender fields become `<redacted>`.
    - keeps game chat (no sender) only if the whole text matches a line of
-     `scripts/recording-chat-allowlist.txt`, a list of anchored regexes. Any other game text
+     `scripts/recording-chat-allowlist.txt`, a list of regexes each anchored as a whole (`^`
+     first, `$` last, any `|` inside a group, which the script checks). Any other game text
      becomes `<redacted:N chars>`, N its length in characters, keeping its `chatType`, so a
      game message naming another player ("Bob has logged in.") never reaches a fixture.
      Adding a pattern is a review step: it must not be able to match a player's name, so no
@@ -399,7 +400,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
    - refuses a `dropped` line at or before `--to` unless `--allow-dropped`: in the window it is
      a gap, and before it the state carried in at `t = 0` may be wrong. Allowed, the window's
      are kept and the earlier ones become one at `t = 0`, so the spec must pass `allowDropped`
-     too.
+     too. A `dropped` line without a tick is always refused, here and by the harness.
 3. Check the result before committing: count the display name's matches in it (0 means
    none), e.g. ``grep -ci "$(jq -r 'select(.path == "Player.GetEntity().displayName") | .v' <session>.jsonl | head -1)" <fixture>``,
    and read what chat is left (`jq -c 'select(.name == "ChatMessage") | .payload.chatMessage'`).

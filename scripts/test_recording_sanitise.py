@@ -7,6 +7,7 @@ space as RS display names have) and sanitises it."""
 
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -162,6 +163,47 @@ class SanitiseTest(unittest.TestCase):
         entries = self.entries(text)
         self.assertEqual([6, 7], entries[0]["window"])
         self.assertEqual([0, 0, 0, 0, 1, 1], [e["t"] for e in entries[1:]])
+
+    def load(self, *patterns):
+        """load_allowlist on a file of `patterns`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "allowlist.txt")
+            path.write_text("".join(p + "\n" for p in patterns), encoding="utf-8")
+            return sanitiser.load_allowlist(path)
+
+    def test_refuses_an_allowlist_pattern_not_anchored_as_a_whole(self):
+        # ^You pick|.*$ is "^You pick" or ".*$", and the second matches any message.
+        for pattern in ("^a|b$", "^You pick|.*$", "^(?:a)|b$", "^a$|^b$", "^a(?:^b)$",
+                        "^a\\$", "a$", "^a", "^(?#\\))|.*$"):
+            with self.subTest(pattern), self.assertRaises(sanitiser.Refused):
+                self.load(pattern)
+
+    def test_accepts_alternations_inside_a_group_and_escaped_or_in_a_class(self):
+        for pattern in ("^a(?:b|c)$", "^[|]$", "^a\\|b$", "^[]|$^]$", "^[^]|]$",
+                        "^a(?#x|y\\))$", "^[\\]|]$"):
+            with self.subTest(pattern):
+                self.assertEqual(1, len(self.load(pattern)))
+
+    def test_refuses_a_dropped_line_without_a_tick(self):
+        code, text, err = self.run_script(session({"k": "dropped", "n": 4}), "--allow-dropped")
+        self.assertNotEqual(0, code)
+        self.assertIsNone(text)
+        self.assertIn("a dropped line has no integer t", err)
+
+    def test_refuses_to_write_over_the_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp, "in.jsonl")
+            original = "".join(json.dumps(e) + "\n" for e in session())
+            src.write_text(original, encoding="utf-8")
+            link = Path(tmp, "link.jsonl")
+            os.link(src, link)
+            for out in (src, Path(tmp, ".", "in.jsonl"), link):
+                argv = ["sanitise", str(src), str(out), "--from", "0", "--to", "100"]
+                with mock.patch.object(sys, "argv", argv), redirect_stdout(StringIO()), \
+                        self.assertRaises(SystemExit) as caught:
+                    sanitiser.main()
+                self.assertIn("the output is the session file", str(caught.exception.code))
+                self.assertEqual(original, src.read_text(encoding="utf-8"))
 
     def test_no_allowlist_pattern_matches_a_message_naming_a_player(self):
         for pattern in sanitiser.load_allowlist(sanitiser.ALLOWLIST):

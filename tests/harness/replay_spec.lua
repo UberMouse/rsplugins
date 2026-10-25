@@ -233,6 +233,27 @@ describe("replaying a recording", function()
         assert.are.equal("0 false", harness.load(plugin(main)):output())
     end)
 
+    it("decides a permission from a recorded OptionalPermissionChanged before firing it", function()
+        local h = harness.new(plugin([[
+            Event.OptionalPermissionChanged.Subscribe("p", function(ev)
+                say(ev.permissionName, ev.enabled, Plugin.HasPermission(PluginPermissions.httpAccess))
+            end)
+        ]]))
+        -- No perm entry or grant before it: only the event's op can have decided httpAccess.
+        h:useRecording({
+            {
+                t = 2,
+                k = "event",
+                name = "OptionalPermissionChanged",
+                payload = { permissionName = "httpAccess", enabled = true },
+                op = { op = "setPermission", permission = "httpAccess", enabled = true },
+            },
+        })
+        h:load()
+        h:playRecording()
+        assert.are.equal("2 httpAccess true true", h:output())
+    end)
+
     it("faults a PersistentDB read of a key neither recorded nor set in the replay", function()
         local h = harness.new(plugin('say(PersistentDB:GetInt("n"))'))
         h:useRecording({ { t = 0, k = "db", op = "GetInt", key = "other", v = 1 } })
@@ -288,6 +309,18 @@ describe("replaying a recording", function()
         )
         h:useRecording(lossy(), { allowDropped = true })
         assert.are.same({ { t = 4, n = 7 } }, h.replay.dropped)
+    end)
+
+    it("refuses a dropped line without a tick, which can't be placed in the replay", function()
+        assert.matches(
+            "recording entry 2 %(dropped%) has no integer t",
+            harness.errorOf(function()
+                timeline.build({
+                    { t = 1, k = "read", path = "var.VarPlayer.QP.value", v = 1 },
+                    { k = "dropped", n = 7 },
+                })
+            end)
+        )
     end)
 
     it("leaves ServerLogic to the harness clock when the recording has none", function()

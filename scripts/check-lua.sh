@@ -18,7 +18,9 @@
 #                     scripts/test_rsdev.py (the dev daemon and CLI), always
 #
 # Usage: scripts/check-lua.sh [path ...]
-#   Paths default to plugins/, lib/ and tests/ (those that exist). Exit 0 = all checks passed;
+#   Paths default to plugins/, lib/ and tests/ (those that exist). Any folder holding a
+#   .flake-source marker (the flake shellHook's copies of third-party plugins, not our code) is
+#   skipped. Exit 0 = all checks passed;
 #   non-zero = at least one failed, with each failing check's output above the summary.
 set -uo pipefail
 
@@ -38,8 +40,13 @@ if [[ ${#paths[@]} -eq 0 ]]; then
     done
 fi
 
-mapfile -t lua_files < <(find "${paths[@]}" -name '*.lua' -type f | sort)
-mapfile -t manifests < <(find "${paths[@]}" -name plugin.json -type f | sort)
+# Prune folders carrying the marker so neither the checks nor the tests see them.
+prune=()
+while IFS= read -r dir; do
+    prune+=(-path "$dir" -prune -o)
+done < <(find "${paths[@]}" -name .flake-source -type f -exec dirname {} \;)
+mapfile -t lua_files < <(find "${paths[@]}" "${prune[@]}" -name '*.lua' -type f -print | sort)
+mapfile -t manifests < <(find "${paths[@]}" "${prune[@]}" -name plugin.json -type f -print | sort)
 # tests/ has its own selene and LuaLS config; everything else is plugin-side code.
 test_files=()
 plugin_files=()

@@ -10,7 +10,7 @@
       url = "github:FriendlyDevelopment/runescape-api-stubs";
       flake = false;
     };
-    # Third-party dev plugins for the beta client, linked into plugins/ by the shellHook. Pinned
+    # Third-party dev plugins for the beta client, copied into plugins/ by the shellHook. Pinned
     # rather than vendored: debug-plugin has no licence, and neither is ours to submit.
     # Bump with `nix flake update debug-plugin dev-kit`.
     debug-plugin = {
@@ -85,18 +85,38 @@
                 ln -sfn ${api-stubs} "$root/docs/api"
               fi
 
-              # Same rule for the third-party dev plugins: plugins/<name> is what the client's
-              # dev_plugins symlink exposes, and the folder name is the plugin's console name.
-              # dev-kit keeps its plugin in a dev-kit/ subfolder of the repo.
-              # A link whose target has no main.lua means upstream moved its plugin folder: warn,
-              # since the link would otherwise dangle silently.
-              if [ -n "$root" ] && { [ -L "$root/plugins/debug-plugin" ] || [ ! -e "$root/plugins/debug-plugin" ]; }; then
-                ln -sfn ${debug-plugin} "$root/plugins/debug-plugin"
-                [ -f ${debug-plugin}/main.lua ] || echo "warning: debug-plugin input has no main.lua" >&2
-              fi
-              if [ -n "$root" ] && { [ -L "$root/plugins/dev-kit" ] || [ ! -e "$root/plugins/dev-kit" ]; }; then
-                ln -sfn ${dev-kit}/dev-kit "$root/plugins/dev-kit"
-                [ -f ${dev-kit}/dev-kit/main.lua ] || echo "warning: dev-kit input has no dev-kit/main.lua" >&2
+              # Third-party dev plugins: COPIED (not linked) into plugins/<name>, which the client's
+              # dev_plugins symlink exposes; the folder name is the plugin's console name. The
+              # client skips symlinked plugin folders inside dev_plugins (probe 2026-10-26: a real
+              # folder was listed, a symlink to a real folder was not), so a link would be invisible.
+              # .flake-source in each copy records the store path it came from: a copy is refreshed
+              # only when that differs from the pinned input, and a folder without the marker is
+              # someone's own work and is never touched.
+              sync_plugin() { # <name> <store path holding main.lua>
+                dest="$root/plugins/$1"
+                src=$2
+                [ -f "$src/main.lua" ] || echo "warning: $1 input has no main.lua (upstream moved it?)" >&2
+                if [ -d "$dest" ] && [ ! -L "$dest" ]; then
+                  if [ ! -f "$dest/.flake-source" ]; then
+                    echo "warning: plugins/$1 is a real directory without .flake-source; leaving it alone" >&2
+                    return
+                  fi
+                  [ "$(cat "$dest/.flake-source")" = "$src" ] && return
+                fi
+                # Copy aside first so a failed copy never leaves a half-written plugin folder.
+                # Store files are read-only, so make the copy user-writable (portable to darwin cp).
+                tmp=$(mktemp -d "$root/plugins/.$1.XXXXXX") &&
+                  chmod 755 "$tmp" &&
+                  cp -R "$src/." "$tmp" &&
+                  chmod -R u+w "$tmp" &&
+                  echo "$src" > "$tmp/.flake-source" &&
+                  rm -rf "$dest" &&
+                  mv "$tmp" "$dest" ||
+                  { rm -rf "$tmp"; echo "warning: could not copy $1 into plugins/" >&2; }
+              }
+              if [ -n "$root" ]; then
+                sync_plugin debug-plugin ${debug-plugin}
+                sync_plugin dev-kit ${dev-kit}/dev-kit
               fi
 
               echo "rsplugins dev shell"
@@ -106,7 +126,7 @@
               echo "  scripts/check-lua.sh          the gate: luac -p, manifests, selene, stylua, LuaLS, tests"
               echo "  scripts/test-lua.sh           run the plugin tests (busted, tests/**/*_spec.lua)"
               echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
-              echo "  plugins/debug-plugin, plugins/dev-kit  third-party dev plugins (flake inputs, gitignored links)"
+              echo "  plugins/debug-plugin, plugins/dev-kit  third-party dev plugins (flake inputs, gitignored copies)"
               echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
               echo "  scripts/rsdev.py              dev daemon + CLI: recorder receiver, dev bridge"
             '';

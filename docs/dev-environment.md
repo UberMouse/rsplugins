@@ -99,21 +99,30 @@ event subscriptions (see [api-concepts.md](api-concepts.md#events)).
 ## Third-party dev plugins
 
 Two community dev tools are pinned in `flake.nix` (as `flake = false` inputs, not vendored) and
-linked into `plugins/` by the dev shell's `shellHook`, so the client's `dev_plugins` symlink picks
-them up. The links are gitignored, and `.luarc.json` skips them (`workspace.ignoreDir`); `scripts/check-lua.sh`
-(so selene, stylua and LuaLS) and the tests never reach them, because its `find` doesn't follow
-symlinked folders. Neither is ours: they are never submitted, and they are not held to
-this repo's code rules.
+copied into `plugins/` as real directories by the dev shell's `shellHook`, so the client's
+`dev_plugins` symlink picks them up. They are copies because the client skips a symlinked plugin
+folder inside `dev_plugins` (probe 2026-10-26; see [Runtime limits](api-concepts.md#runtime-limits-weve-hit)).
+The copies are gitignored, `.luarc.json` skips them (`workspace.ignoreDir`), and
+`scripts/check-lua.sh` skips any `plugins/*` folder holding a `.flake-source` marker, so selene,
+stylua, LuaLS and the tests never reach them. Neither is ours: they are never submitted, and they
+are not held to this repo's code rules.
 
 | Folder | Source | What it is |
 |---|---|---|
 | `plugins/debug-plugin` | [FriendlyDevelopment/debug-plugin](https://github.com/FriendlyDevelopment/debug-plugin) (no licence) | Debugging UI with a ribbon icon and settings. Needs **PrettyUI** installed in the client. Self-grants permissions with `ppr debug-plugin`. |
 | `plugins/dev-kit` | the `dev-kit/` subfolder of [wildrabbet/dev-kit](https://github.com/wildrabbet/dev-kit) (MIT) | Dev window. It runs cheat commands, so use it on dev worlds only. |
 
-The folder names matter: they are the plugins' names for console commands. The hook replaces only
-an existing symlink or nothing, never a real directory. Bump both with
-`nix flake update debug-plugin dev-kit`, then re-enter the shell. After `prf`, `plist` should list
-both; enable with `pon debug-plugin` / `pon dev-kit`.
+The folder names matter: they are the plugins' names for console commands. Each copy holds a
+`.flake-source` file with the store path it was copied from. On entering the shell the hook:
+
+- creates the copy if the folder is absent (or replaces an old symlink from the previous design);
+- re-copies only when the marker's store path differs from the pinned input, so a bump updates it
+  and ordinary entries are cheap. Edits inside a copy are overwritten on that refresh;
+- never touches a real directory without the marker; it prints a warning instead.
+
+Bump both with `nix flake update debug-plugin dev-kit`, then re-enter the shell. To force a refresh,
+delete the folder and re-enter the shell. After `prf`, `plist` should list both; enable with
+`pon debug-plugin` / `pon dev-kit`.
 
 ## Dev bridge
 

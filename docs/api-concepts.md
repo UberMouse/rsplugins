@@ -123,6 +123,11 @@ work in the dev environment, so use this for dev tooling only. A shipped plugin 
 
 Found in the beta client (2026-10-20), not in the official docs:
 
+- **A symlinked plugin folder inside `dev_plugins` is not loaded**, wherever it points, although
+  `dev_plugins` itself may be a symlink to this repo's `plugins/` (ours is). Probe 2026-10-26:
+  after `prf` + `plist`, a real folder `plugins/linkprobe-real` was listed and
+  `plugins/linkprobe-link` (a symlink to a real folder) was not. So plugins from elsewhere must be
+  copied into `plugins/`, as the flake shellHook does for the third-party dev plugins.
 - **Each Lua call can run for at most 1000 ms.** The client then aborts it with
   `Maximum function execution time of 1000 ms exceeded`. Spread big jobs across `Logic` ticks
   (see `plugins/var-dump`).

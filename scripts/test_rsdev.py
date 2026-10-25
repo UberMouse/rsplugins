@@ -877,6 +877,34 @@ class ShotTests(unittest.TestCase):
         self.assertIn("magick broke", str(err))
         self.assertEqual([p for p in Path(self.tmp.name).rglob("*") if p.is_file()], [])
 
+    def test_interrupt_leaves_no_files(self):
+        for tool in ("maim", "magick"):
+            inner = fake_x({"0x20": RS_CLASS}, active="0x20")
+
+            def run(argv, inner=inner, tool=tool):
+                res = inner(argv)  # the tool has written its (partial) output when Ctrl-C lands
+                if argv[0] == tool:
+                    raise KeyboardInterrupt
+                return res
+
+            with self.subTest(tool), mock.patch.object(rsdev, "run_tool", run), mock.patch(
+                "shutil.which", return_value="/bin/x"
+            ), mock.patch("sys.stderr", self.err), redirect_stdout(StringIO()):
+                self.assertEqual(rsdev.cmd_shot(shot_opts(self.tmp.name)), 130)
+            self.assertEqual([p for p in Path(self.tmp.name).rglob("*") if p.is_file()], [])
+
+    def test_unknown_window_exits_2(self):
+        def run(argv):
+            if argv[0] == "xwininfo":
+                err = "xwininfo: Bad Drawable\n  X Error: 9\nxwininfo: error: No such window 0xdeadbee"
+                return SimpleNamespace(returncode=1, stdout="", stderr=err)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        _, err = self.shoot(run, window="0xdeadbee")
+        self.assertEqual(err.code, 2)
+        self.assertIn("0xdeadbee not found", str(err))
+        self.assertIn("No such window", str(err))
+
     def test_max_zero_does_not_need_magick(self):
         with mock.patch("shutil.which", lambda t: None if t == "magick" else "/bin/x"):
             run = fake_x({"0x20": RS_CLASS}, active="0x20")

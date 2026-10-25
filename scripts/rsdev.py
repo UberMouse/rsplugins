@@ -804,7 +804,12 @@ def workspace_hint(win):
 
 def check_visible(win):
     """Refuse a window that isn't viewable; warn if something else has focus (and may cover it)."""
-    if not is_viewable(tool_text(["xwininfo", "-id", win])):
+    res = run_tool(["xwininfo", "-id", win])
+    if res.returncode != 0:  # a --window id that names nothing fails here
+        lines = [ln.strip() for ln in res.stderr.splitlines() if ln.strip()]
+        why = next((ln for ln in lines if "No such window" in ln), lines[0] if lines else "no output")
+        raise ShotError(2, f"window {win} not found (xwininfo: {why})")
+    if not is_viewable(res.stdout):
         raise ShotError(
             2, f"client window {win} is not visible: {workspace_hint(win)}. Switch to it yourself and retry."
         )
@@ -818,8 +823,10 @@ def check_visible(win):
 
 def capture_one(win, dest, region, max_px):
     """Write one shot to `dest`: maim a PNG, then shrink it to a JPEG (unless max_px is 0).
-    `dest` only ever appears complete: maim writes a temp PNG, which is renamed or converted."""
+    `dest` only ever appears complete, even on Ctrl-C: both tools write temp files next to it,
+    which are renamed into place on success and always removed."""
     png = dest.with_name(dest.stem + ".tmp.png")
+    jpg = dest.with_name(dest.stem + ".tmp.jpg")
     cmd = ["maim", "-u", "-i", win]
     if region:
         cmd += ["-g", region]
@@ -828,16 +835,15 @@ def capture_one(win, dest, region, max_px):
         if res.returncode != 0:
             raise ShotError(1, f"maim failed: {res.stderr.strip()}")
         if max_px:
-            res = run_tool(convert_args(png, dest, max_px))
+            res = run_tool(convert_args(png, jpg, max_px))
             if res.returncode != 0:
                 raise ShotError(1, f"magick failed: {res.stderr.strip()}")
+            jpg.replace(dest)
         else:
             png.replace(dest)
-    except ShotError:
-        dest.unlink(missing_ok=True)  # magick may have left a partial file
-        raise
     finally:
         png.unlink(missing_ok=True)
+        jpg.unlink(missing_ok=True)
 
 
 def take_shots(opts):

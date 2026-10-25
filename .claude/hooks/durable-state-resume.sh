@@ -16,9 +16,24 @@ cwd=$(jq -r '.cwd // ""' <<<"$hook_input" 2>/dev/null) || exit 0
 [[ -n "$cwd" ]] || exit 0
 
 # A compacting subagent fires SessionStart with the parent's session id, and this text is the
-# conductor's. The payload has no `agent_id` today, so this guard is inert until it does.
+# conductor's: an implementer that got it was told to resume the run as conductor. The hooks docs
+# don't say which fields mark a subagent's SessionStart. `agent_id` marks one on other events,
+# and SessionStart's `agent_type` is otherwise set only for `claude --agent` sessions, which don't
+# conduct runs here. So either one means "not the conductor".
 agent_id=$(jq -r '.agent_id // ""' <<<"$hook_input" 2>/dev/null)
-[[ -z "$agent_id" ]] || exit 0
+agent_type=$(jq -r '.agent_type // ""' <<<"$hook_input" 2>/dev/null)
+
+# Debug evidence for that guard: which fields a SessionStart actually carries, one tagged line per
+# firing in a checkout that keeps durable state (grep: \[DSHOOK\]). Delete this once a subagent's
+# compaction has been logged and the guard confirmed.
+if [[ -d "$cwd/.durable-state" ]]; then
+  printf '[DSHOOK] %s source=%s agent_id=%s agent_type=%s keys=%s\n' \
+    "$(date -u +%FT%TZ)" "$(jq -r '.source // ""' <<<"$hook_input" 2>/dev/null)" \
+    "$agent_id" "$agent_type" "$(jq -c 'keys' <<<"$hook_input" 2>/dev/null)" \
+    >>"$cwd/.durable-state/hook-payloads.log" 2>/dev/null || true
+fi
+
+[[ -z "$agent_id" && -z "$agent_type" ]] || exit 0
 
 state="$cwd/.durable-state/state.json"
 [[ -f "$state" ]] || exit 0

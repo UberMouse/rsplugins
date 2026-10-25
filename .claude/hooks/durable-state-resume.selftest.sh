@@ -69,6 +69,25 @@ row "garbage state -> says so, no crash" "$BAD" sess-a compact 'did not parse'
 row "path-like skill -> generic skill pointer" "$ODD" sess-a compact 'Read \.claude/skills/durable-state/SKILL\.md' 'etc'
 row "newline in a value cannot forge a line" "$FORGE" sess-a compact 'goal: line one +next task: FORGED' '^  next task: FORGED'
 
+# A subagent compacting inside the run must not get the conductor's summary.
+# subagent_row <name> <extra payload field> <value>
+subagent_row() {
+  local out
+  out=$(jq -n --arg cwd "$SDD" --arg k "$2" --arg v "$3" \
+    '{cwd: $cwd, session_id: "sess-a", source: "compact"} + {($k): $v}' | bash "$HOOK")
+  if [[ -z "$out" ]]; then
+    echo "ok   $1"
+  else
+    failures=$((failures + 1))
+    printf 'FAIL %s\n---- output ----\n%s\n----------------\n' "$1" "$out"
+  fi
+}
+subagent_row "subagent compact (agent_id) -> silent" agent_id agent-xyz
+subagent_row "subagent compact (agent_type) -> silent" agent_type implementer
+grep -q '^\[DSHOOK\] .*agent_type=implementer' "$SDD/.durable-state/hook-payloads.log" &&
+  echo "ok   payload fields are logged for the guard" ||
+  { failures=$((failures + 1)); echo "FAIL payload fields are logged for the guard"; }
+
 if ((failures)); then
   echo "$failures row(s) failed"
   exit 1

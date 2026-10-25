@@ -566,9 +566,14 @@ class EventsTests(DaemonCase):
 
         args = SimpleNamespace(port=1, since=0, follow=True, name=None)
         out = StringIO()
-        with mock.patch.object(rsdev, "call", fake_call), mock.patch("sys.stderr", StringIO()), redirect_stdout(out):
+        with (
+            mock.patch.object(rsdev, "call", fake_call),
+            mock.patch("sys.stderr", StringIO()),
+            redirect_stdout(out),
+        ):
             rsdev.cmd_events(args)
-        self.assertEqual([json.loads(ln)["n"] for ln in out.getvalue().splitlines()], [5, 1])
+        printed = [json.loads(ln)["n"] for ln in out.getvalue().splitlines()]
+        self.assertEqual(printed, [5, 1])
 
     def test_non_follow_exits_2_when_the_daemon_is_down(self):
         self.server.shutdown()
@@ -576,7 +581,6 @@ class EventsTests(DaemonCase):
         args = SimpleNamespace(port=self.port, since=0, follow=False, name=None)
         with mock.patch("sys.stderr", StringIO()):
             self.assertEqual(rsdev.cmd_events(args), 2)
-
 
 
 
@@ -616,23 +620,43 @@ class FollowRestartTests(unittest.TestCase):
             args = SimpleNamespace(port=port, since=0, follow=True, name=None)
             out, err = StringIO(), StringIO()
             result = []
-            with mock.patch("sys.stderr", err), redirect_stdout(out):
+            stop = threading.Event()
+            real_call = rsdev.call
+
+            def call_until_stopped(*a, **kw):
+                if stop.is_set():
+                    raise KeyboardInterrupt  # the follower's clean exit
+                return real_call(*a, **kw)
+
+            with (
+                mock.patch("sys.stderr", err),
+                mock.patch.object(rsdev, "call", call_until_stopped),
+                redirect_stdout(out),
+            ):
                 t = threading.Thread(target=lambda: result.append(rsdev.cmd_events(args)), daemon=True)
                 t.start()
                 self.wait_for(lambda: len(out.getvalue().splitlines()) >= 1)
                 first.terminate()
                 first.wait()
                 self.wait_for(lambda: "retrying" in err.getvalue())
-                self.start_daemon(port, out_dir)
+                second = self.start_daemon(port, out_dir)
                 post(port, "/bridge/sync", sync_body(session="b2", events=[{"t": 9, "name": "NEW", "payload": 9}]))
                 self.wait_for(lambda: len(out.getvalue().splitlines()) >= 2)
                 time.sleep(0.5)  # a duplicate would show up by now
+                self.assertEqual(result, [])  # still following; the daemon thread dies with the process
+                # Killing the daemon drops the long poll; the next call then stops the follower
+                # before the patches are undone, so it cannot write to the real stderr.
+                logged = err.getvalue()  # the shutdown below adds a second "retrying"
+                stop.set()
+                second.kill()
+                t.join(timeout=10)
+                self.assertFalse(t.is_alive(), "follower did not exit")
             lines = [json.loads(ln) for ln in out.getvalue().splitlines()]
             self.assertEqual([(e["n"], e["name"]) for e in lines], [(1, "OLD"), (1, "NEW")])
-            self.assertEqual(err.getvalue().count("daemon not reachable; retrying"), 1)
-            self.assertIn("daemon reachable again", err.getvalue())
-            self.assertIn("daemon restarted; numbering restarted", err.getvalue())
-            self.assertEqual(result, [])  # still following; the daemon thread dies with the process
+            self.assertEqual(logged.count("daemon not reachable; retrying"), 1)
+            self.assertIn("daemon reachable again", logged)
+            self.assertIn("daemon restarted; numbering restarted", logged)
+            self.assertEqual(result, [0])
 
 
 class EscapeTests(unittest.TestCase):

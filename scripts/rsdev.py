@@ -541,9 +541,8 @@ def cmd_stop(args):
         return 0
     # The pid the daemon reports about itself is the proof. Without a pid file (a foreground
     # `daemon`), the reported pid is all there is to go on.
-    # kill(0) signals our process group and kill(-1) every process we may signal, so a squatter's
-    # or a corrupt file's pid must be a real process id before it reaches os.kill; `type` rules out
-    # bool (True == 1).
+    # kill(0) signals our process group and kill(-1) every process we may signal, so only a real
+    # int > 1 from the pid file or a reply reaches os.kill (`type` also rejects floats like 1.5).
     for label, pid, optional in (("daemon", daemon_pid, False), ("pid file", file_pid, True)):
         if not (optional and pid is None) and not (type(pid) is int and pid > 1):
             print(f"{label} pid {pid!r} is not a usable process id; not signalling", file=sys.stderr)

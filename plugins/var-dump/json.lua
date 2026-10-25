@@ -28,21 +28,31 @@ local function encodeNumber(n)
     return string.format("%.17g", n)
 end
 
--- True if the table's keys are exactly 1..n (an empty table counts as an array).
-local function isArray(t)
+-- n if the table's keys are exactly 1..n (an empty table counts, with n = 0), else nil.
+-- `#t` can't decide it: on a table with holes it may return any border, so a gapped table
+-- would pass as a shorter array and lose entries.
+---@param t table
+---@return integer?
+local function arrayLength(t)
     local count = 0
     for _ in pairs(t) do
         count = count + 1
     end
-    return count == #t
+    for i = 1, count do
+        if t[i] == nil then return nil end
+    end
+    return count
 end
 
 local encodeValue
 
+---@param t table
+---@return string
 local function encodeTable(t)
     local parts = {}
-    if isArray(t) then
-        for i = 1, #t do
+    local n = arrayLength(t)
+    if n then
+        for i = 1, n do
             parts[i] = encodeValue(t[i])
         end
         return "[" .. table.concat(parts, ",") .. "]"

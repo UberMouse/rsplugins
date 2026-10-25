@@ -408,9 +408,9 @@ describe("prettyui Panel", function()
 end)
 
 describe("the probe's collapse and expand", function()
-    -- plugins/chore-tracker's planned UI, as the round-3 probe ran it in the client: the MENU
-    -- button in the X's slot collapses the window to a panel holding a second MENU button at
-    -- the same screen spot, and that one re-opens the window over it.
+    -- The layout the beta client was probed with and Chore Tracker uses: a MENU button in the
+    -- X's slot collapses the window into a panel holding a second MENU button at the same
+    -- screen spot, which reopens the window over it.
     local MAIN = [[
         win = prettyui.Window.new(parent, { title = "Chores", x = 600, y = 300, width = 300,
             height = 200, resizable = true })

@@ -179,7 +179,7 @@ class Parser:
             return self.obj()
         if c == "[":
             return self.array()
-        if c in "\"'":
+        if c in ("\"", "'"):
             return self.string()
         m = NUMBER.match(self.text, self.pos)
         if m:
@@ -194,7 +194,7 @@ class Parser:
 
     def key(self):
         c = self.peek()
-        if c in "\"'":
+        if c in ("\"", "'"):
             return self.string()
         # Bare keys can be numbers too (outputs_max maps item ids to quantities).
         m = IDENT.match(self.text, self.pos) or re.compile(r"\d+").match(self.text, self.pos)

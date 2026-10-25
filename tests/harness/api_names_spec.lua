@@ -33,8 +33,8 @@ local function inStubs(index, owner, member, kind)
             if line ~= nil and line:find(fn .. ":", 1, true) ~= nil then return true end
         elseif kind == "field" then
             if fields[member] ~= nil then return true end
-        -- EventSubscription declares Subscribe/Unsubscribe as fun-typed fields, not functions.
         elseif kind == "method" then
+            -- EventSubscription declares Subscribe/Unsubscribe as fun-typed fields, not functions.
             if (index.methods[class] or {})[member] ~= nil or fields[member] ~= nil then
                 return true
             end

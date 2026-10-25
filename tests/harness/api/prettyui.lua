@@ -171,14 +171,14 @@ end
 -- Library objects
 ---------------------------------------------------------------------------
 
--- Each object's record, so the driver can find it: { kind, obj, s }.
--- Destroyed itself, or its root went with a destroyed parent.
+-- Whether the object was destroyed itself, or its root went with a destroyed parent.
 ---@param r table a record
 ---@return boolean
 local function gone(r)
     return r.s.destroyed or (r.s.rootState ~= nil and r.s.rootState.destroyed)
 end
 
+-- Record the object as { kind, obj, s } so the driver can find it.
 ---@param lib table
 ---@param kind string
 ---@param obj any
@@ -190,13 +190,10 @@ local function track(lib, kind, obj, s)
 end
 
 ---------------------------------------------------------------------------
--- Tooltips, as 1.2.0 attaches them (src/tooltip.lua). A tooltip shows on its target's
--- mouse-over and hides only on that same target's mouse-leave, so hiding the target (or an
--- ancestor) leaves a shown tooltip up. A Window's or Panel's content tooltips (the content's
--- tooltip context, CheckboxButton choices included) are drawn on the host's parent, outside
--- the host: Window:Close hides them and Destroy destroys them. A SpriteButton made with
--- SpriteButton.new on any other component draws its tooltip inside that component, so it is
--- out of sight only while that component is.
+-- Tooltips as 1.2.0 attaches them (src/tooltip.lua): shown on the target's mouse-over, hidden
+-- only on that target's mouse-leave, so hiding the target leaves it up. A Window/Panel's
+-- content tooltips are drawn on the host's parent (Close hides, Destroy destroys them); a
+-- SpriteButton made on another component draws inside it.
 ---------------------------------------------------------------------------
 
 -- A new, hidden tooltip, or nil for no tooltip.

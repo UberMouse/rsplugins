@@ -1,7 +1,8 @@
 -- Seeing chores done from the player's own game vars (data/vars.lua): a chore ticks when a
--- watched var changes and its rule, false on the values read before, holds on the new ones
--- (and the var it names as `rises`, if any, went up). It reads only the VarPlayer vars those
--- rules name; the rules are worked out by core/vars.lua.
+-- watched var changes and its rule, false on the values read before, holds on the new ones,
+-- or, for a rule naming a `rises` var, that var went up and the rule holds on the new values.
+-- It reads only the VarPlayer vars those rules name; the rules are worked out by
+-- core/vars.lua.
 --
 -- A var with no value when last read (not a whole number) has no baseline yet: its first
 -- value only becomes the baseline, so a chore already done when its var first reads never

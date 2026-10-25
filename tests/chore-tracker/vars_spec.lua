@@ -40,42 +40,41 @@ describe("chore-tracker vars core", function()
         local rule = {
             chore = "x",
             done = {
-                { "A", ">=", { nonZero = { "S1", "S2" } } },
-                { { nonZero = { "S1", "S2" } }, ">", 0 },
+                { "A", ">=", 2 },
+                { 0, ">", "S1" },
                 { "B", "==", "A" },
                 { "C", "==", { runeDay = true } },
             },
             proven = false,
         }
-        assert.are.same({ "A", "S1", "S2", "B", "C" }, varCore.names(rule))
+        assert.are.same({ "A", "S1", "B", "C" }, varCore.names(rule))
     end)
 
-    it("compares a var with a number, another var, a count or the RuneDay", function()
+    it("compares a var with a number, another var or the RuneDay", function()
         local rule = {
             chore = "x",
             done = {
                 { "A", "==", 1 },
                 { "B", ">=", "C" },
-                { "D", ">", { nonZero = { "S1", "S2" } } },
+                { "D", ">", 1 },
                 { "E", "==", { runeDay = true } },
             },
             proven = false,
         }
-        local values = { A = 1, B = 4, C = 4, D = 2, S1 = 7, S2 = 0, E = 9006 }
+        local values = { A = 1, B = 4, C = 4, D = 2, E = 9006 }
         assert.is_true(varCore.holds(rule, values, 9006))
         assert.is_false(varCore.holds(rule, values, 9007))
         -- Without a clock, a rule needing the RuneDay doesn't hold.
         assert.is_false(varCore.holds(rule, values, nil))
-        values.S2 = 3
+        values.C = 5
         assert.is_false(varCore.holds(rule, values, 9006))
     end)
 
     it("doesn't hold with a var missing", function()
-        local rule =
-            { chore = "x", done = { { "A", ">=", { nonZero = { "S1" } } } }, proven = true }
+        local rule = { chore = "x", done = { { "A", ">=", "B" } }, proven = true }
         assert.is_false(varCore.holds(rule, { A = 3 }, 1))
-        assert.is_false(varCore.holds(rule, { S1 = 0 }, 1))
-        assert.is_true(varCore.holds(rule, { A = 0, S1 = 0 }, 1))
+        assert.is_false(varCore.holds(rule, { B = 0 }, 1))
+        assert.is_true(varCore.holds(rule, { A = 0, B = 0 }, 1))
     end)
 
     it("ticks on a change from false to true, with every var read before", function()
@@ -88,44 +87,50 @@ describe("chore-tracker vars core", function()
         assert.is_false(varCore.ticks(rule, { B = 0 }, { A = 1, B = 0 }, nil))
     end)
 
-    it("ticks a rule with a rises var only when that var went up", function()
-        local rule = {
-            chore = "x",
-            done = { { "N", ">=", "S" }, { "S", ">", 0 } },
-            rises = "N",
-            proven = true,
-        }
-        assert.are.same({ "N", "S" }, varCore.names(rule))
-        assert.is_true(varCore.ticks(rule, { N = 2, S = 3 }, { N = 3, S = 3 }, nil))
-        -- True again on S refilling, but N stayed put or fell.
-        assert.is_false(varCore.ticks(rule, { N = 3, S = 0 }, { N = 3, S = 3 }, nil))
-        assert.is_false(varCore.ticks(rule, { N = 5, S = 0 }, { N = 4, S = 3 }, nil))
-        -- A rises var not otherwise read is still named.
-        local only = { chore = "x", done = { { "S", ">", 0 } }, rises = "N", proven = true }
-        assert.are.same({ "S", "N" }, varCore.names(only))
+    it("ticks a rule with only a rises var on a rise", function()
+        local rule = { chore = "x", done = {}, rises = "N", proven = true }
+        assert.are.same({ "N" }, varCore.names(rule))
+        assert.is_true(varCore.ticks(rule, { N = 0 }, { N = 1 }, nil))
+        assert.is_true(varCore.ticks(rule, { N = 500 }, { N = 501 }, nil))
+        -- Again on a later rise: whether its chore is already done is the caller's concern.
+        assert.is_true(varCore.ticks(rule, { N = 1 }, { N = 3 }, nil))
+        assert.is_false(varCore.ticks(rule, { N = 3 }, { N = 3 }, nil))
+        assert.is_false(varCore.ticks(rule, { N = 3 }, { N = 0 }, nil))
+        -- A first read (no value before) only sets the baseline.
+        assert.is_false(varCore.ticks(rule, {}, { N = 1 }, nil))
     end)
 
-    it("holds no rule on all-zero vars but Advance Time's", function()
+    it("ticks a rises rule with conditions on a rise while they hold after", function()
+        local rule = { chore = "x", done = { { "S", ">", 0 } }, rises = "N", proven = true }
+        assert.are.same({ "S", "N" }, varCore.names(rule))
+        -- The conditions needn't have been false before.
+        assert.is_true(varCore.ticks(rule, { N = 2, S = 1 }, { N = 3, S = 1 }, nil))
+        assert.is_true(varCore.ticks(rule, { N = 2, S = 0 }, { N = 3, S = 1 }, nil))
+        assert.is_false(varCore.ticks(rule, { N = 2, S = 1 }, { N = 3, S = 0 }, nil))
+        -- The conditions turning true without a rise don't tick it.
+        assert.is_false(varCore.ticks(rule, { N = 3, S = 0 }, { N = 3, S = 1 }, nil))
+        -- A condition var read for the first time only sets the baseline.
+        assert.is_false(varCore.ticks(rule, { N = 2 }, { N = 3, S = 1 }, nil))
+    end)
+
+    -- A rule without conditions holds on any values, so it's checked to have a rises var
+    -- instead: only a rise ticks it, never all-zero values as such.
+    it("holds no rule with conditions on all-zero vars but Advance Time's", function()
         for _, rule in ipairs(rules) do
-            local holds = varCore.holds(rule, zeros(rule), 9006)
-            assert.are.equal(rule.chore == "advance-time", holds, rule.chore)
+            if #rule.done == 0 then
+                assert(rule.rises, rule.chore .. " has neither conditions nor a rises var")
+            else
+                local holds = varCore.holds(rule, zeros(rule), 9006)
+                assert.are.equal(rule.chore == "advance-time", holds, rule.chore)
+            end
         end
     end)
 
-    it("holds the Daily Challenge when every filled slot is finished", function()
+    it("ticks the Daily Challenge when the claimed count rises", function()
         local rule = ruleFor("daily-challenge")
-        local values = zeros(rule)
-        values.OMGE_CHALLENGE_CURRENT_ID_1 = 2
-        values.OMGE_CHALLENGE_CURRENT_ID_2 = 2
-        values.OMGE_CHALLENGE_CURRENT_ID_3 = 3
-        values.INTERN_NOTES_DAILY_CHALLENGES_COMPLETE = 2
-        assert.is_false(varCore.holds(rule, values, nil))
-        values.INTERN_NOTES_DAILY_CHALLENGES_COMPLETE = 3
-        assert.is_true(varCore.holds(rule, values, nil))
-        values.OMGE_CHALLENGE_CURRENT_ID_4 = 5
-        assert.is_false(varCore.holds(rule, values, nil))
-        values.INTERN_NOTES_DAILY_CHALLENGES_COMPLETE = 4
-        assert.is_true(varCore.holds(rule, values, nil))
+        assert.are.same({ "CHALLENGE_TOTAL_COMPLETED" }, varCore.names(rule))
+        local before = { CHALLENGE_TOTAL_COMPLETED = 0 }
+        assert.is_true(varCore.ticks(rule, before, { CHALLENGE_TOTAL_COMPLETED = 2 }, nil))
     end)
 
     it("holds a freebie on its flag, and Divine Locations on a reached limit", function()

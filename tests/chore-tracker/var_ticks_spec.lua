@@ -160,58 +160,65 @@ describe("chore-tracker var ticks", function()
         end
     end)
 
-    it("ticks the Daily Challenge when every filled slot is finished", function()
-        local h = settled({
-            OMGE_CHALLENGE_CURRENT_ID_1 = 2,
-            OMGE_CHALLENGE_CURRENT_ID_2 = 2,
-            OMGE_CHALLENGE_CURRENT_ID_3 = 3,
-        })
+    it("ticks the Daily Challenge when a challenge's reward is claimed", function()
+        local h = settled()
         pick(h, { CHALLENGE.id })
-        set(h, "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE", 1)
-        set(h, "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE", 2)
-        assert.is_nil(doneAt(h, CHALLENGE.id))
-        set(h, "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE", 3)
+        set(h, "CHALLENGE_TOTAL_COMPLETED", 1)
         assert.are.equal(helpers.NOW, doneAt(h, CHALLENGE.id))
         assert.matches(
-            "%[CHORES%] seen daily%-challenge done %(INTERN_NOTES_DAILY_CHALLENGES_COMPLETE%)",
+            "%[CHORES%] seen daily%-challenge done %(CHALLENGE_TOTAL_COMPLETED%)",
             h:output()
         )
         h:advance(20)
         assert.is_true(ticked(h, CHALLENGE.name))
     end)
 
-    it("doesn't tick the Daily Challenge when the slots refill with the count unchanged", function()
-        local slots = { 2, 2, 3 }
-        local h = settled({
-            OMGE_CHALLENGE_CURRENT_ID_1 = slots[1],
-            OMGE_CHALLENGE_CURRENT_ID_2 = slots[2],
-            OMGE_CHALLENGE_CURRENT_ID_3 = slots[3],
-            INTERN_NOTES_DAILY_CHALLENGES_COMPLETE = 3,
-        })
-        -- Yesterday's count still 3 while the reset clears and refills the slots: the rule
-        -- goes false with no slot filled, then true again on the first refill.
-        for n = 1, 3 do
-            set(h, "OMGE_CHALLENGE_CURRENT_ID_" .. n, 0)
-        end
-        for n, id in ipairs(slots) do
-            set(h, "OMGE_CHALLENGE_CURRENT_ID_" .. n, id)
-        end
+    it("ticks the Daily Challenge on a rise from a large total at load", function()
+        local h = settled({ CHALLENGE_TOTAL_COMPLETED = 500 })
+        -- Another field of CHALLENGE_BI_1 changing re-reads the total, still 500.
+        set(h, "OGE_COMBAT_COMPLETE", 1)
+        assert.is_nil(doneAt(h, CHALLENGE.id))
+        assert.are.equal(0, seenLines(h))
+        set(h, "CHALLENGE_TOTAL_COMPLETED", 501)
+        assert.are.equal(helpers.NOW, doneAt(h, CHALLENGE.id))
+    end)
+
+    it("doesn't tick the Daily Challenge on a claim within the settle window", function()
+        local h = loaded()
+        h:advance(SETTLE_MS - 100)
+        set(h, "CHALLENGE_TOTAL_COMPLETED", 1)
+        h:advance(200)
         assert.is_nil(doneAt(h, CHALLENGE.id))
         assert.are.equal(0, seenLines(h))
     end)
 
-    it("needs one more finished challenge when a fourth slot is filled", function()
-        local h = settled({
-            OMGE_CHALLENGE_CURRENT_ID_1 = 2,
-            OMGE_CHALLENGE_CURRENT_ID_2 = 2,
-            OMGE_CHALLENGE_CURRENT_ID_3 = 3,
-            INTERN_NOTES_DAILY_CHALLENGES_COMPLETE = 2,
-        })
-        set(h, "OMGE_CHALLENGE_CURRENT_ID_4", 5)
+    it("doesn't tick the Daily Challenge on a total unchanged or falling", function()
+        local h = settled({ CHALLENGE_TOTAL_COMPLETED = 3 })
+        set(h, "CHALLENGE_TOTAL_COMPLETED", 3)
+        set(h, "CHALLENGE_TOTAL_COMPLETED", 0)
+        assert.is_nil(doneAt(h, CHALLENGE.id))
+        assert.are.equal(0, seenLines(h))
+    end)
+
+    it("doesn't tick the Daily Challenge when a challenge is finished", function()
+        local h = settled()
+        -- The count of finished but unclaimed challenges.
+        set(h, "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE", 1)
         set(h, "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE", 3)
         assert.is_nil(doneAt(h, CHALLENGE.id))
-        set(h, "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE", 4)
+        assert.are.equal(0, seenLines(h))
+    end)
+
+    it("logs the Daily Challenge once when a second claim follows", function()
+        local h = settled()
+        set(h, "CHALLENGE_TOTAL_COMPLETED", 1)
         assert.are.equal(helpers.NOW, doneAt(h, CHALLENGE.id))
+        h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", helpers.NOW + 30)
+        local writes = h.dbWrites
+        set(h, "CHALLENGE_TOTAL_COMPLETED", 2)
+        assert.are.equal(writes, h.dbWrites)
+        assert.are.equal(helpers.NOW, doneAt(h, CHALLENGE.id))
+        assert.are.equal(1, seenLines(h))
     end)
 
     it("ticks Advance Time on its last charge, only after the baseline", function()

@@ -152,10 +152,26 @@ Found in the beta client (2026-10-20), not in the official docs:
   `HANDSAND_BUCKETS_CLAIMED_TODAY` (bit 1 of `HANDSAND_BUCKETS`, Bert's sand),
   `ATSEER_REWARD_FLAX_GIVEN_TODAY` (bit 30 of `ATSEER_TASK4`, Geoffrey's flax), `ATAR_ESS_USED`
   (bit 22 of `ATAR_TASKS_4`, Cromperty's essence) and `ATELF_DAILY_LOGS_CLAIMED` (bit 14 of
-  `ATELF_MAIN4`, Coeden's logs). `INTERN_NOTES_DAILY_CHALLENGES_COMPLETE` counted 0 -> 1 -> 2 as
-  daily challenges finished, while `OMGE_CHALLENGE_CURRENT_ID_1..3` held 2, 2, 3 (a finished
-  slot kept its id) and slots 4-5 held 0. Whether a flag clears at the daily reset or only on
-  the next claim is unconfirmed. Chore Tracker's `data/vars.lua` is built on these.
+  `ATELF_MAIN4`, Coeden's logs). Whether a flag clears at the daily reset or only on the next
+  claim is unconfirmed. Chore Tracker's `data/vars.lua` is built on these.
+- **A daily challenge counts as claimed, not finished, in `CHALLENGE_TOTAL_COMPLETED`**
+  (var-dump change logs, 2026-10-25). Finishing a challenge raises
+  `INTERN_NOTES_DAILY_CHALLENGES_COMPLETE` (bits 0-2 of `INTERN_NOTES_TEMP_1`), which counts
+  finished but unclaimed challenges. Claiming all three at once in the challenge window (ticks
+  2221-2222):
+  - the unclaimed count fell 3 -> 1 -> 0;
+  - `CHALLENGE_TOTAL_COMPLETED` (bits 0-13 of `CHALLENGE_BI_1`) went 0 -> 2 -> 3;
+  - `CHEEVO_DAILY_CHALLENGE_COUNTER` (bits 19-22 of `CHEEVO_MISC_DATA_PERM15`) went 0 -> 1 (the
+    user reads it as the streak);
+  - `CHEEVO_DAILY_CHALLENGE_LAST_RUNEDAY` (bits 16-31 of `CHEEVO_MISC_DATA_PERM17`) became
+    today's RuneDay, 9006;
+  - all three `CHALLENGE_CURRENT_n` slots cleared and were refilled at once with a new set
+    (`CHALLENGE_SHUFFLE_DONE` 0 -> 2 -> 3).
+
+  Whether `CHALLENGE_TOTAL_COMPLETED` resets daily or is a lifetime total is unknown. A
+  challenge's reward can be claimed as soon as that one challenge is finished (the user,
+  2026-10-25). Chore Tracker ticks the Daily Challenge on any rise of
+  `CHALLENGE_TOTAL_COMPLETED`.
 - **`SHOP_MULTIPURPOSE` wasn't sent during a purchase at Arhein's shop** (2026-10-25, with
   `SHOP` = 47, `ARHEINSTORE`), so its `SHOP_SEAWEED_BOUGHT` / `SHOP_PINEAPPLES_BOUGHT` counters
   can't be seen to move on a purchase; the shop's inventory can.

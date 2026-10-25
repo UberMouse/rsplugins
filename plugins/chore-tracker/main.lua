@@ -31,7 +31,9 @@
 --         listed shops' inventories, the backpack and the player's own tile.
 --       - Game vars (data/vars.lua): Bert's, Geoffrey's, Cromperty's and Coeden's freebies,
 --         the Daily Challenge, Advance Time and Divine Locations tick when one of the
---         player's own VarPlayer vars changes so that the chore's rule turns true. A rule
+--         player's own VarPlayer vars changes so that the chore's rule turns true (the
+--         Daily Challenge's when its count of claimed challenges rises, so any claim of a
+--         challenge's reward ticks it). A rule
 --         already true when first read never ticks, nor does one turning true within 10
 --         seconds of loading or a character switch (the login's burst of vars), so a chore
 --         done while the plugin was off is left to tick by hand. shell/vars.lua does this,

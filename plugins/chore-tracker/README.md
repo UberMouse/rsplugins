@@ -62,6 +62,22 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Daily Challenge | you claim a challenge's reward in the challenge window: any claim ticks it for the day, even before you've claimed all three |
   | Advance Time (*unproven*) | the spell's last charge of the week is used |
   | Divine Locations (*unproven*) | you have gathered the day's limit from divine locations |
+  | Crystal Tree Blossom (*unproven*) | the game records today as the day you last took blossoms |
+  | Sinkholes (*unproven*) | you have played two sinkholes today |
+  | Big Chinchompa (*unproven*) | the game marks today's Big Chinchompa game played |
+  | Fixate Charges (*unproven*) | you have used three fixate charges today |
+  | Runesphere (*unproven*) | the game marks today's dust handed in |
+  | Soul Reaper (*unproven*) | the game marks the week's Soul Reaper cap reached |
+  | Thalmund's Wares (*unproven*) | you have bought every one of Thalmund's four slots up to its limit |
+  | Tears of Guthix (*unproven*) | the game marks the week's tears collected (the game may not send this one, so it may never tick) |
+  | Herby Werby (*unproven*) | the game marks the week's Herby Werby completed |
+  | Wisps of the Grove (*unproven*) | the game marks the week's Wisps of the Grove completed |
+  | Shattered Worlds (*unproven*) | the game marks all three of the week's reward challenges (bronze, silver and gold) complete |
+  | Aquarium Treasure Chest (*unproven*) | the game marks your aquarium's treasure chest used |
+  | Agoroth (*unproven*) | you have defeated Agoroth twice this week |
+  | Replay Broken Home (*unproven*) | the game marks the week's Broken Home replay completed |
+  | Soul Supplies (*unproven*) | the game marks Lupe's supplies claimed |
+  | Effigy Incubator (*unproven*) | the game marks the month's Effigy Incubator completed |
 
   *Unproven* ones haven't been checked in game yet. The four free collections keep the
   weekly reset the list gives them, although the game lets you claim each daily.

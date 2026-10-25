@@ -141,10 +141,47 @@ describe("chore-tracker vars core", function()
         assert.is_true(varCore.holds(div, { DIV_GATHER_LIMIT = 20, DIV_GATHERED = 20 }, nil))
         assert.is_true(varCore.holds(div, { DIV_GATHER_LIMIT = 20, DIV_GATHERED = 25 }, nil))
     end)
+
+    it("holds the Crystal Tree Blossom on today's RuneDay only", function()
+        local rule = ruleFor("crystal-tree-blossom")
+        local values = { ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE = 9006 }
+        assert.is_true(varCore.holds(rule, values, 9006))
+        assert.is_false(varCore.holds(rule, values, 9007))
+        assert.is_false(varCore.holds(rule, values, nil))
+    end)
+
+    it("holds Thalmund's Wares with every slot bought up to a limit above 0", function()
+        local rule = ruleFor("thalmunds-wares")
+        local values = {}
+        for n = 1, 4 do
+            values["NECRO_HUB_THALMUND_SLOT_" .. n .. "_MAX"] = 5
+            values["NECRO_HUB_THALMUND_SLOT_" .. n .. "_BOUGHT"] = 5
+        end
+        assert.is_true(varCore.holds(rule, values, nil))
+        values.NECRO_HUB_THALMUND_SLOT_3_BOUGHT = 4
+        assert.is_false(varCore.holds(rule, values, nil))
+        values.NECRO_HUB_THALMUND_SLOT_3_BOUGHT = 5
+        -- A slot with no limit isn't bought out at 0 >= 0.
+        values.NECRO_HUB_THALMUND_SLOT_2_MAX = 0
+        values.NECRO_HUB_THALMUND_SLOT_2_BOUGHT = 0
+        assert.is_false(varCore.holds(rule, values, nil))
+    end)
+
+    it("holds Shattered Worlds only with all three reward challenges", function()
+        local rule = ruleFor("shattered-worlds")
+        local values = {
+            SWORLDS_REWARD_CHALLENGE_BRONZE_COMPLETE = 1,
+            SWORLDS_REWARD_CHALLENGE_SILVER_COMPLETE = 1,
+            SWORLDS_REWARD_CHALLENGE_GOLD_COMPLETE = 0,
+        }
+        assert.is_false(varCore.holds(rule, values, nil))
+        values.SWORLDS_REWARD_CHALLENGE_GOLD_COMPLETE = 1
+        assert.is_true(varCore.holds(rule, values, nil))
+    end)
 end)
 
 describe("chore-tracker var list", function()
-    it("lists exactly the stage-1 chores, each in the chore list", function()
+    it("lists exactly the var chores, each in the chore list", function()
         local ids, byId = {}, {}
         for _, chore in ipairs(chores) do
             byId[chore.id] = chore
@@ -162,6 +199,22 @@ describe("chore-tracker var list", function()
             "daily-challenge",
             "advance-time (unproven)",
             "divine-locations (unproven)",
+            "crystal-tree-blossom (unproven)",
+            "sinkholes (unproven)",
+            "big-chinchompa (unproven)",
+            "fixate (unproven)",
+            "runesphere (unproven)",
+            "soul-reaper (unproven)",
+            "thalmunds-wares (unproven)",
+            "tears-of-guthix (unproven)",
+            "herby-werby (unproven)",
+            "wisps-of-the-grove (unproven)",
+            "shattered-worlds (unproven)",
+            "aquarium-treasure-chest (unproven)",
+            "agoroth (unproven)",
+            "broken-home (unproven)",
+            "lupe (unproven)",
+            "effigy-incubator (unproven)",
         }, ids)
     end)
 

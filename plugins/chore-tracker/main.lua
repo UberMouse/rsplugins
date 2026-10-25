@@ -30,7 +30,8 @@
 --         the giver, on the same plane. shell/detect.lua does these two, reading only the
 --         listed shops' inventories, the backpack and the player's own tile.
 --       - Game vars (data/vars.lua): Bert's, Geoffrey's, Cromperty's and Coeden's freebies,
---         the Daily Challenge, Advance Time and Divine Locations tick when one of the
+--         the Daily Challenge, Advance Time, Divine Locations and 16 more daily, weekly and
+--         monthly chores (marked unproven there) tick when one of the
 --         player's own VarPlayer vars changes so that the chore's rule turns true (the
 --         Daily Challenge's when its count of claimed challenges rises, so any claim of a
 --         challenge's reward ticks it). A rule

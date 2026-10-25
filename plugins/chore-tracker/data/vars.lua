@@ -53,4 +53,100 @@ return {
         },
         proven = false,
     },
+
+    -- The rules below come from what each var's name states; none was seen to move in the
+    -- client yet.
+
+    -- The date blossoms were last taken (bits 5-20 of ELFCITY_PERM36), read as a RuneDay:
+    -- its unit is assumed from the name, not checked.
+    {
+        chore = "crystal-tree-blossom",
+        done = { { "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE", "==", { runeDay = true } } },
+        proven = false,
+    },
+    -- Games played today. The chore list counts two a day as the chore.
+    {
+        chore = "sinkholes",
+        done = { { "RAND_DND_DAILY_GAMES", ">=", 2 } },
+        proven = false,
+    },
+    {
+        chore = "big-chinchompa",
+        done = { { "DNDTRACKER_BIGCHINCHOMPA_GAME_PLAYED", "==", 1 } },
+        proven = false,
+    },
+    -- Fixate charges used today. The chore list counts three a day as the chore.
+    {
+        chore = "fixate",
+        done = { { "ARCH_EXCAVATION_FIXATE_DAILY", ">=", 3 } },
+        proven = false,
+    },
+    {
+        chore = "runesphere",
+        done = { { "RCSIPHONXP_DAILY_DUST_HAND_IN", "==", 1 } },
+        proven = false,
+    },
+    {
+        chore = "soul-reaper",
+        done = { { "BSLAY_REACHED_WEEKLY_CAP", "==", 1 } },
+        proven = false,
+    },
+    -- Every one of Thalmund's four slots bought up to its limit. A slot's limit must be
+    -- above 0: one with no limit would otherwise read 0 >= 0 as bought out.
+    {
+        chore = "thalmunds-wares",
+        done = {
+            { "NECRO_HUB_THALMUND_SLOT_1_MAX", ">", 0 },
+            { "NECRO_HUB_THALMUND_SLOT_1_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_1_MAX" },
+            { "NECRO_HUB_THALMUND_SLOT_2_MAX", ">", 0 },
+            { "NECRO_HUB_THALMUND_SLOT_2_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_2_MAX" },
+            { "NECRO_HUB_THALMUND_SLOT_3_MAX", ">", 0 },
+            { "NECRO_HUB_THALMUND_SLOT_3_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_3_MAX" },
+            { "NECRO_HUB_THALMUND_SLOT_4_MAX", ">", 0 },
+            { "NECRO_HUB_THALMUND_SLOT_4_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_4_MAX" },
+        },
+        proven = false,
+    },
+    -- Its base var, SHOP_MULTIPURPOSE, wasn't sent during an Arhein purchase
+    -- (docs/api-concepts.md), so this may never fire.
+    { chore = "tears-of-guthix", done = { { "TOG_TEARS_COMPLETE", "==", 1 } }, proven = false },
+    {
+        chore = "herby-werby",
+        done = { { "DINO_HERBLORE_DND_COMPLETED", "==", 1 } },
+        proven = false,
+    },
+    {
+        chore = "wisps-of-the-grove",
+        done = { { "NATURE_BEINGS_DND_COMPLETED", "==", 1 } },
+        proven = false,
+    },
+    -- All three of the week's reward challenges.
+    {
+        chore = "shattered-worlds",
+        done = {
+            { "SWORLDS_REWARD_CHALLENGE_BRONZE_COMPLETE", "==", 1 },
+            { "SWORLDS_REWARD_CHALLENGE_SILVER_COMPLETE", "==", 1 },
+            { "SWORLDS_REWARD_CHALLENGE_GOLD_COMPLETE", "==", 1 },
+        },
+        proven = false,
+    },
+    {
+        chore = "aquarium-treasure-chest",
+        done = { { "POH_AQUA_TREASURE_CHEST_USED", "==", 1 } },
+        proven = false,
+    },
+    -- Defeats this week. The chore list counts two a week as the chore, so a week with one
+    -- defeat is left to tick by hand rather than ticked half done.
+    { chore = "agoroth", done = { { "ASH1_REPLAY_DEFEATED", ">=", 2 } }, proven = false },
+    { chore = "broken-home", done = { { "HOUSE_DND_REPLAY_COMPLETED", "==", 1 } }, proven = false },
+    {
+        chore = "lupe",
+        done = { { "ATUM_REWARD_LUPE_DAILY_SUPPLIES_CLAIMED", "==", 1 } },
+        proven = false,
+    },
+    {
+        chore = "effigy-incubator",
+        done = { { "KERAPAC_DND_MONTHLY_COMPLETE", "==", 1 } },
+        proven = false,
+    },
 }

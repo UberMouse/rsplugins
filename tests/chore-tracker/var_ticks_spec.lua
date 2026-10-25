@@ -249,6 +249,36 @@ describe("chore-tracker var ticks", function()
         set(h, "DIV_GATHERED", 20)
         assert.are.equal(helpers.NOW, doneAt(h, "divine-locations"))
     end)
+
+    it("ticks Thalmund's Wares when the last slot is bought out", function()
+        local before = {}
+        for n = 1, 4 do
+            before["NECRO_HUB_THALMUND_SLOT_" .. n .. "_MAX"] = 10
+            before["NECRO_HUB_THALMUND_SLOT_" .. n .. "_BOUGHT"] = n < 4 and 10 or 8
+        end
+        local h = settled(before)
+        set(h, "NECRO_HUB_THALMUND_SLOT_4_BOUGHT", 9)
+        assert.is_nil(doneAt(h, "thalmunds-wares"))
+        set(h, "NECRO_HUB_THALMUND_SLOT_4_BOUGHT", 10)
+        assert.are.equal(helpers.NOW, doneAt(h, "thalmunds-wares"))
+        assert.matches(
+            "%[CHORES%] seen thalmunds%-wares done %(NECRO_HUB_THALMUND_SLOT_4_BOUGHT%)",
+            h:output()
+        )
+    end)
+
+    it("ticks the Crystal Tree Blossom when taken on the clock's RuneDay", function()
+        -- The harness clock, NOW, is 2026-10-25: RuneDay 9006.
+        local h = settled({ ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE = 9004 })
+        set(h, "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE", 9005)
+        assert.is_nil(doneAt(h, "crystal-tree-blossom"))
+        set(h, "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE", 9006)
+        assert.are.equal(helpers.NOW, doneAt(h, "crystal-tree-blossom"))
+        assert.matches(
+            "%[CHORES%] seen crystal%-tree%-blossom done %(ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE%)",
+            h:output()
+        )
+    end)
 end)
 
 describe("chore-tracker Arhein", function()

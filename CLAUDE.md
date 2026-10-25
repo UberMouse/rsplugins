@@ -15,6 +15,15 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
 - Plugins must pass Jagex moderation (`docs/guidelines.md`). Never build features that automate
   actions, send inputs to the server, reveal hidden or future state, or export other players'
   info. If a feature is borderline, flag it.
+- You can't run the beta client, but the user can: treat them as the tool for it. Whenever an
+  answer depends on how the client behaves and the docs, stubs and recordings don't settle it
+  (does an API or dependency resolve, what a var holds, how a UI component behaves, does a change
+  work in game), don't guess or build on the assumption. Write a probe (a throwaway plugin, tagged
+  logging, or a session for the dev recorder in `lib/dev/`) and ask the user to run it. Give them
+  the exact console commands, what to do in game, and what to send back (console lines matching
+  a tag regex, or a recording's path). Record what it showed in `docs/api-concepts.md`. A probe
+  that sits in `plugins/` must keep `scripts/check-lua.sh` green, and is deleted once it has
+  answered.
 - Work and commit directly on `main`; don't create branches or worktrees unless asked or truly
   needed. Only one session edits this repo, and the beta client's `dev_plugins` symlink points at
   this checkout's `plugins/`, so a worktree's plugins would be invisible to the client.

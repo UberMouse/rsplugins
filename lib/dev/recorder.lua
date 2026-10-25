@@ -718,10 +718,7 @@ function recorder.install(env, plugin)
         return
     end
     pluginName = plugin
-    -- Tells this enable's batches apart from another's: a fresh table's address differs
-    -- between runs even if math.random is seeded the same.
-    session = (tostring({}):match("(%x+)$") or ""):sub(-6)
-        .. string.format("%04x", math.random(0, 0xffff))
+    session = recording.newSession()
     if not realPlugin.HasPermission(PluginPermissions.httpAccess) then
         -- ppr first: ppe on a permission the plugin hasn't requested silently does nothing.
         say(

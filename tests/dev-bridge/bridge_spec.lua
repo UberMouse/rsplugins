@@ -147,6 +147,29 @@ describe("dev-bridge", function()
         end
     )
 
+    it("starts nothing once a command has shut the plugin down", function()
+        local h = support.load()
+        h.onConsoleCommand = function(command)
+            -- A self-reload runs PluginShutdown before the command returns.
+            if command == "prl dev-bridge" then h.instance.env.PluginShutdown() end
+        end
+        h:step()
+        -- Ten fillers put the reload on the tick the next sync is due.
+        local body = ""
+        for i = 1, 10 do
+            body = body .. support.line("f" .. i, "exec", "plist")
+        end
+        support.answer(
+            h,
+            { status = 200, body = body .. support.line("r1", "exec", "prl dev-bridge") }
+        )
+        local requests = #h.requests
+        h:advance(20 * 30)
+        assert.are.equal(1, #support.syncs(h))
+        assert.are.equal(requests, #h.requests)
+        assert.are.same({}, h.instance.subs.Logic)
+    end)
+
     it("skips malformed reply lines, logging them once per sync", function()
         local h = support.load()
         h:step()

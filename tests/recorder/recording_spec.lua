@@ -8,6 +8,17 @@ local function object(v)
     return "object:" .. type(v)
 end
 
+describe("recording.newSession", function()
+    it("is ten hex digits, a valid daemon session id", function()
+        for _ = 1, 50 do
+            local id = recording.newSession()
+            assert.is_not_nil(id:match("^%x+$"))
+            assert.is_true(#id >= 4 and #id <= 10)
+            assert.is_not_nil(id:match("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
+        end
+    end)
+end)
+
 describe("recording.serialise", function()
     it("copies plain data and hands anything else to objectForm", function()
         assert.are.same({ 1, "a", true }, recording.serialise({ 1, "a", true }, object))

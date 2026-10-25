@@ -1,5 +1,6 @@
 -- The dev bridge's pure core (plugins/dev-bridge/protocol.lua): the sync body, parsing and
--- unescaping the daemon's reply, and which commands are refused.
+-- unescaping the daemon's reply, which commands are refused, and the chat and menu-entry
+-- privacy filters.
 
 local dkjson = require("dkjson")
 local support = require("tests.dev-bridge.support")
@@ -85,6 +86,13 @@ describe("protocol.unescape", function()
         assert.are.equal("\\x and a trailing \\", protocol.unescape("\\x and a trailing \\"))
         -- An escaped backslash before a t is a backslash then a t, not a tab.
         assert.are.equal("\\t", protocol.unescape("\\\\t"))
+    end)
+
+    it("undoes the escaping rsdev.py's escape_arg produces for a fixed vector", function()
+        -- The same vector is asserted against escape_arg in scripts/test_rsdev.py.
+        local raw = "say a\tb\nc\\d\re \\t"
+        local escaped = "say a\\tb\\nc\\\\d\\re \\\\t"
+        assert.are.equal(raw, protocol.unescape(escaped))
     end)
 end)
 

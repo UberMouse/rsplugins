@@ -1,7 +1,8 @@
 -- The dev bridge's pure core: the sync body the plugin POSTs, parsing the daemon's reply into
--- commands, and deciding which commands the bridge refuses. Nothing here calls the API or
--- keeps state; main.lua (the shell) does both. The protocol is documented in
--- docs/dev-environment.md ("Dev bridge") and served by scripts/rsdev.py.
+-- commands, and deciding which commands the bridge refuses. It also holds the privacy filters
+-- deciding which chat messages and menu entries may leave the client (chatView, entryView).
+-- Nothing here calls the API or keeps state; main.lua (the shell) does both. The protocol is
+-- documented in docs/dev-environment.md ("Dev bridge") and served by scripts/rsdev.py.
 
 local json = require("dev/json")
 local recording = require("dev/recording")
@@ -20,7 +21,8 @@ protocol.limits = {
 }
 
 -- Globals whose type() every sync reports in hello.env, so the host can see what this client
--- gives a plugin (stage 2 of the bridge needs to know whether `load` exists).
+-- gives a plugin, e.g. whether `load` exists, which decides if the bridge could later run Lua
+-- sent by the daemon.
 protocol.ENV_NAMES = {
     "load",
     "loadstring",
@@ -159,17 +161,28 @@ protocol.ENTRY_FIELDS = {
     "subjectHash",
 }
 
--- Text fields that hold a targeted player's name.
--- fullText is verb + subject + extra, so extraText may carry the name of a player-targeting
--- entry too. verbText is left alone: it is the action word ("Trade with").
+-- Text fields that hold a targeted player's name. fullText is verb + subject + extra, so
+-- extraText may carry the name of a player-targeting entry too. verbText is left alone: it is
+-- the action word ("Trade with").
 local ENTRY_NAME_FIELDS = { "subjectText", "extraText", "fullText", "overrideText" }
-protocol.ENTRY_TYPE_PLAYER = 7 -- MiniMenuEntryType.PLAYER
+
+-- MiniMenuEntryType.PLAYER (docs/api/generated/game/minimenu.lua).
+protocol.ENTRY_TYPE_PLAYER = 7
+
+-- MiniMenuActionType values that target a player (docs/api/generated/game/minimenu.lua):
+-- TGT_PLAYER, OP_PLAYER1..10, and the low-priority twins of OP_PLAYER1..10.
+local ACTION_TGT_PLAYER = 15
+local ACTION_OP_PLAYER_FIRST, ACTION_OP_PLAYER_LAST = 44, 53
+local ACTION_OP_PLAYER_LOW_FIRST, ACTION_OP_PLAYER_LOW_LAST = 2044, 2053
+
 -- Whether a MiniMenuActionType is TGT_PLAYER, OP_PLAYER1..10 or their low-priority twins.
 ---@param action any
 ---@return boolean
 function protocol.playerAction(action)
     if type(action) ~= "number" then return false end
-    return action == 15 or (action >= 44 and action <= 53) or (action >= 2044 and action <= 2053)
+    return action == ACTION_TGT_PLAYER
+        or (action >= ACTION_OP_PLAYER_FIRST and action <= ACTION_OP_PLAYER_LAST)
+        or (action >= ACTION_OP_PLAYER_LOW_FIRST and action <= ACTION_OP_PLAYER_LOW_LAST)
 end
 
 -- The entry's fields with a targeted player's name blanked. It counts as targeting a player
@@ -256,10 +269,9 @@ end
 
 -- Console commands that disable the plugin named as their first argument, or revoke one of its
 -- permissions, short and long forms. plugins_setenabled is refused whatever its true/false
--- argument: telling a re-enable from a disable isn't worth the risk of getting it wrong.
--- Reloading (prl, plugins_reload) is deliberately absent: probed 2026-10-26, a plugin can reload
--- itself from its own Logic callback (docs/api-concepts.md), which is how the conductor restarts
--- the bridge.
+-- argument, since telling a re-enable from a disable is error-prone. Reloading (prl,
+-- plugins_reload) is allowed: a plugin can reload itself from its own Logic callback
+-- (docs/api-concepts.md), which is how the daemon side restarts the bridge.
 local DISABLING = {
     poff = true,
     plugins_disable = true,
@@ -278,8 +290,8 @@ function protocol.isSelfDisable(command)
     return DISABLING[word:lower()] == true and target:lower() == protocol.PLUGIN
 end
 
--- Why the bridge won't run `command`, or nil if it will (an `exec` of any other console
--- command; the user allowed every command but these).
+-- Why the bridge won't run `command`, or nil if it will: only `exec` of a console command
+-- that doesn't disable the bridge is run.
 ---@param command { kind: string, arg: string }
 ---@return string?
 function protocol.refusal(command)

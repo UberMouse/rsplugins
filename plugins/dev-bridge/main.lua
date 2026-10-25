@@ -9,10 +9,8 @@
 -- start only from Logic, never from a completion callback (that crashed the client;
 -- docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
 --
--- Chat forwarding is limited to the player's own lines and system messages (protocol.lua);
--- system text is forwarded as-is, so it can still name other players. Other players' chat is
--- dropped here. rsdev writes the events it receives to
--- dumps/rsdev/events/.
+-- Chat forwarding is limited to the player's own lines, system messages and senderless SPAM
+-- (protocol.lua). System text is forwarded as-is, so it can still name other players.
 
 local protocol = require("protocol")
 -- dev/ is a symlink to lib/dev (the dev recorder's modules); require gives nil without it.
@@ -40,10 +38,8 @@ local FORWARDED = {
 ---------------------------------------------------------------------------
 
 local url = Plugin.urls.rsdev
--- Tells this enable's syncs apart from another's: a fresh table's address differs between
--- runs even if math.random is seeded the same (the dev recorder does the same).
-local session = (tostring({}):match("(%x+)$") or ""):sub(-6)
-    .. string.format("%04x", math.random(0, 0xffff))
+-- Tells this enable's syncs apart from another's.
+local session = recording.newSession()
 
 local tick = 0 -- the last Logic tick seen; events are stamped with it
 local seq = 0 -- syncs started
@@ -201,6 +197,9 @@ local function runOne()
         if not ok then
             result.ok, result.error = false, tostring(err)
         end
+        -- A command like `prl dev-bridge` can run PluginShutdown before it returns; the new
+        -- session reports instead, so this result is never sent.
+        if stopped then return end
     end
     if not result.ok then say("command " .. command.id .. " failed: " .. result.error) end
     results[#results + 1] = result
@@ -307,6 +306,7 @@ local function onLogic(ev)
     tick = ev.logicTick
     if inFlight and inFlight.done then finishSync() end
     runOne()
+    if stopped then return end
     if inFlight or tick < nextSync then return end
     if not Plugin.HasPermission(PluginPermissions.httpAccess) then
         if not warned.waiting then

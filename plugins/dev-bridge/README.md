@@ -49,15 +49,20 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
 - It refuses any command that would disable it or revoke one of its permissions (`poff`,
   `plugins_disable`, `plugins_setenabled` with any argument, `ppd`, `plugins_permissions_disable`
   naming `dev-bridge`): that would cut the only channel that could re-enable it. Run those from
-  the client console. The check needs the plugin name as the second word, so a bare `prl` or
-  `poff` with no argument is not refused (whether the client treats that as "all plugins" is
-  unknown): don't send one.
+  the client console. The guard is best-effort: it matches only the first two
+  whitespace-separated words, so a quoted target, an extra leading word, an alias not listed
+  above, or a bare `prl` or `poff` with no argument (whether the client treats that as "all
+  plugins" is unknown) would pass: don't send one.
 - `prl dev-bridge` (or `plugins_reload dev-bridge`) is allowed: probed in the client, a plugin
   reloads itself cleanly from its own `Logic` callback. The reloaded bridge is a new session, so
   that command's result is never reported. The daemon resolves it as "bridge restarted before
   reporting" as soon as the new session syncs, so `rsdev.py exec "prl dev-bridge"` exits 1
   (`error: bridge restarted before reporting`), or 3 (outcome unknown) if the new session hasn't
   synced within `--timeout`. That is the expected result of a successful reload, not a failure.
+- If a sync reply carrying commands is lost (the plugin's request fails after the daemon
+  answered), those commands are never run and never re-sent, and `rsdev.py exec` reports
+  "delivered but no result" (exit 3). That is safe for non-idempotent commands, but exit 3
+  means "unknown": check the client.
 - Disabling it (`poff dev-bridge`) unsubscribes everything and cancels any sync in flight.
 
 ## Why it isn't for submission

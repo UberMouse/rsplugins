@@ -179,6 +179,16 @@ function recording.eventOp(name, p, contents)
     return nil
 end
 
+-- An id telling one enable's batches apart from another's: six hex digits of a fresh table's
+-- address (differs between runs even if math.random is seeded the same) then four random ones.
+-- The random part is always there, so the id is never empty and is hex only, which the
+-- daemon's session pattern accepts.
+---@return string
+function recording.newSession()
+    return (tostring({}):match("(%x+)$") or ""):sub(-6)
+        .. string.format("%04x", math.random(0, 0xffff))
+end
+
 ---------------------------------------------------------------------------
 -- The entry buffer: encoded entries waiting to be sent, oldest first
 ---------------------------------------------------------------------------

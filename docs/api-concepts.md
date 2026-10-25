@@ -249,6 +249,20 @@ From `plugins/dev-bridge` in the beta client.
   `senderNameUnfiltered` `<img=11>UberMouse894`, `senderNameFiltered`
   `<img=11> <col=6d6d75>Ironman</col> UberMouse894`.
 
+## Seen with rsdev shot (2026-10-26)
+
+From probing the client's window on X11 (i3, one 3840x2160 VMware monitor).
+
+- **The game window** has `WM_CLASS` `"rs2client", "RuneScape"` and `_NET_WM_NAME` "RuneScape". It
+  belongs to a child `rs2client` process; the `rs3linux` launcher only has 10x10 leader windows.
+- **`maim -u -i <window>` captures real GL pixels** under VMware (about 1.2 s, 3836x2121, a 4-6 MB
+  PNG). `-g` together with `-i` is window-local.
+- **A window on a hidden i3 workspace** reports `Map State: IsUnviewable` (`WM_STATE` Withdrawn),
+  and maim then exits 0 having captured whatever is on screen in that rectangle: a silent wrong
+  shot, so `shot` checks the map state first.
+- **Windows above the client appear in the capture** (a floating scratchpad terminal did).
+- **`_NET_DESKTOP_NAMES`** holds names like "1: web" and "3: dev"; `_NET_WM_DESKTOP` is the index.
+
 ## Shops in the client
 
 Found by a throwaway probe in the beta client (2026-10-25): a purchase at each of 17 shops,

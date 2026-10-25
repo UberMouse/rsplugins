@@ -139,6 +139,7 @@ scripts/rsdev.py start                       # detached; log dumps/rsdev/daemon.
 scripts/rsdev.py status                      # daemon up?, bridge connected?, session, seq, env facts, queue, events, dropped
 scripts/rsdev.py exec <console command...> [--timeout 10]
 scripts/rsdev.py events [--since N] [--follow] [--name X]
+scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S] [--window 0x...]
 scripts/rsdev.py stop                        # asks the daemon for its pid; signals only if it matches the pid file
 ```
 
@@ -173,6 +174,29 @@ printing each new event once. Without `--follow`, a down daemon exits 2. `--sinc
 after `n`; `--name` keeps one event name; `--follow` keeps printing until interrupted. The last
 10,000 are kept in memory; every event is also appended to `dumps/rsdev/events/<session>.jsonl`. A
 growth in a sync's `dropped` count appears as an event `{"name": "dropped", "n_lost": ...}`.
+
+**`shot`** captures the client's X11 window (`maim -u -i <window>`) so Claude can see the game and
+plugin UI while checking a change; it needs no daemon. It prints each file's path on stdout, in
+`dumps/rsdev/shots/<YYYYmmdd-HHMMSS>[-NN].<ext>` (`-NN` only for a `--count` series). The window is
+found through the window manager's client list by `WM_CLASS` `"rs2client", "RuneScape"`, never by
+title; `--window 0x...` names one instead. By default the shot is shrunk with ImageMagick to fit
+`--max 1600` px (never enlarged) and written as a JPEG; `--max 0` keeps the full-size PNG.
+`--region WxH+X+Y` is relative to the window. `--count N` (1-100) takes a series, starting a
+capture every `--every S` seconds (default 1; an overrunning capture makes the next start at once),
+after `--delay S`. `exec ... --shot [--shot-delay 1.0]` captures once the command has a result (ok
+or a plugin error; not if it was never delivered), and takes `--region`/`--max`/`--window`; exec's
+exit code stands, and a failed shot makes it exit 4 only if the command itself returned 0.
+
+`shot` exits 0 ok; 1 the capture or conversion failed (the tool's stderr is shown); 2 it could not
+try: no window found or several (it lists them; pick with `--window`), the window is not visible, or a
+tool is missing (enter the dev shell: `direnv`). A client on another workspace is refused, naming
+that workspace, because maim would silently capture whatever is on screen there; `shot` never
+switches workspaces, focuses or raises anything. If another window has focus it warns, since
+windows on top (floating ones) appear in the capture. X11 only.
+
+Privacy: a shot shows whatever is on screen, including other players' names and chat. Shots stay in
+the gitignored `dumps/`, and Claude views them whenever useful (approved by the user); delete them
+when done, nothing prunes them.
 
 ### Protocol (schema 1)
 

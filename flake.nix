@@ -74,6 +74,11 @@
               # Tests for the .claude/workflows/ review workflow; jq for the durable-state hook.
               pkgs.nodejs
               pkgs.jq
+              # scripts/rsdev.py shot: capture the client window (X11 only).
+              pkgs.maim
+              pkgs.xprop
+              pkgs.xwininfo
+              pkgs.imagemagick
             ];
 
             shellHook = ''
@@ -169,7 +174,7 @@
               echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
               echo "  plugins/debug-plugin, plugins/dev-kit  third-party dev plugins (flake inputs, gitignored copies)"
               echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
-              echo "  scripts/rsdev.py              dev daemon + CLI: recorder receiver, dev bridge"
+              echo "  scripts/rsdev.py              dev daemon + CLI: recorder receiver, dev bridge; shot = client screenshot"
             '';
           };
         }

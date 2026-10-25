@@ -5,6 +5,8 @@ Usage: scripts/rsdev.py daemon [--port 8766] [--out dumps]     run the daemon in
        scripts/rsdev.py start | stop | status                  manage a detached daemon
        scripts/rsdev.py exec <console command...> [--timeout 10]
        scripts/rsdev.py events [--since N] [--follow] [--name X]
+       scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S]
+       scripts/rsdev.py exec <console command...> --shot [--shot-delay 1.0]
 
 The daemon listens on 127.0.0.1 only, port 8766 (the plugins' "recorder" and "rsdev" URLs).
 
@@ -26,9 +28,11 @@ Every console command queued through `exec` is logged with its id: the audit tra
 
 import argparse
 import json
+import math
 import os
 import re
 import secrets
+import shutil
 import signal
 import subprocess
 import sys
@@ -40,6 +44,7 @@ import urllib.request
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8766
@@ -52,6 +57,11 @@ MAX_BODY = 2 * 1024 * 1024
 MAX_EVENTS = 10_000  # events kept in memory; every one is also on disk
 CONNECTED_WITHIN = 2.0  # seconds since the last sync that still counts as connected
 MAX_WAIT = 120.0  # cap on how long one /cli request may block a thread
+# The game window's WM_CLASS (instance, class). The title is never matched: a browser tab called
+# "RuneScape - Vivaldi" has the same words in it.
+CLIENT_WM_CLASS = ["rs2client", "RuneScape"]
+SHOT_TOOLS = ("maim", "xprop", "xwininfo")  # all from the dev shell (flake.nix)
+MAX_SHOT_COUNT = 100
 
 
 def is_int(v):
@@ -622,7 +632,7 @@ def cmd_status(args):
     return 0
 
 
-def cmd_exec(args):
+def exec_command(args):
     text = " ".join(args.command)
     # The daemon waits `timeout` itself; the extra seconds are for the reply to arrive.
     try:
@@ -645,6 +655,205 @@ def cmd_exec(args):
         return 2
     print(f"delivered but no result in {args.timeout}s: outcome unknown ({reply['id']})", file=sys.stderr)
     return 3
+
+
+def cmd_exec(args):
+    code = exec_command(args)
+    # Shoot once the command has a result (ok or plugin error), not if it never reached the bridge.
+    if not args.shot or code not in (0, 1):
+        return code
+    shot = SimpleNamespace(
+        window=args.window, region=args.region, max=args.max, out=args.out, count=1, every=1, delay=args.shot_delay
+    )
+    shot_code = cmd_shot(shot)
+    return code or (4 if shot_code else 0)  # exec's own failure code stands
+
+
+# ---- shot: capture the client window (host side; reads pixels, sends nothing to the client) ----
+
+
+class ShotError(Exception):
+    """A shot that cannot be taken; `code` is the exit status (1 capture failed, 2 can't try)."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def region_arg(text):
+    """argparse type for --region: window-relative WxH+X+Y, as maim -g takes it."""
+    m = re.fullmatch(r"(\d+)x(\d+)\+(\d+)\+(\d+)", text)
+    if not m or int(m[1]) == 0 or int(m[2]) == 0:
+        raise argparse.ArgumentTypeError(f"{text!r} is not WxH+X+Y with W and H above 0")
+    return text
+
+
+def window_arg(text):
+    """argparse type for --window: an X window id such as 0x5a0002d."""
+    if not re.fullmatch(r"0x[0-9a-fA-F]+", text):
+        raise argparse.ArgumentTypeError(f"{text!r} is not a window id like 0x5a0002d")
+    return text
+
+
+def number_arg(low, high, what, kind=float, low_open=False):
+    """argparse type: a finite number from `low` to `high` (`low` itself excluded if low_open)."""
+
+    def parse(text):
+        try:
+            value = kind(text)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+        ok = math.isfinite(value) and (value > low if low_open else value >= low) and value <= high
+        if not ok:
+            raise argparse.ArgumentTypeError(f"{what} must be {'above' if low_open else 'from'} {low:g} to {high:g}")
+        return value
+
+    return parse
+
+
+def parse_window_ids(text):
+    """The ids in `xprop -root _NET_CLIENT_LIST` output."""
+    return re.findall(r"0x[0-9a-fA-F]+", text.partition("#")[2])
+
+
+def is_client_class(text):
+    """True if `xprop WM_CLASS` output is exactly the game's class pair."""
+    return re.findall(r'"([^"]*)"', text.partition("=")[2]) == CLIENT_WM_CLASS
+
+
+def parse_cardinal(text):
+    """The number in `xprop ... = 3` output, or None."""
+    m = re.search(r"=\s*(-?\d+)\s*$", text.strip())
+    return int(m[1]) if m else None
+
+
+def parse_strings(text):
+    """The quoted strings in `xprop _NET_DESKTOP_NAMES` output."""
+    return re.findall(r'"((?:[^"\\]|\\.)*)"', text)
+
+
+def is_viewable(wininfo):
+    """True if `xwininfo` says the window is mapped and visible. An IsUnviewable window (on
+    another workspace) would make maim silently capture whatever is on screen there."""
+    return re.search(r"Map State:\s*IsViewable\b", wininfo) is not None
+
+
+def window_number(win):
+    return int(win, 16)
+
+
+def convert_args(src, dest, max_px):
+    """The ImageMagick argv for the downscaled JPEG; the trailing > shrinks and never enlarges."""
+    return ["magick", str(src), "-resize", f"{max_px}x{max_px}>", "-quality", "85", str(dest)]
+
+
+def shot_paths(shots_dir, stamp, count, max_px):
+    """The file for each shot of a series: <stamp>[-NN].<ext>, with NN only for a series."""
+    ext = "png" if max_px == 0 else "jpg"
+    if count == 1:
+        return [shots_dir / f"{stamp}.{ext}"]
+    width = max(2, len(str(count)))
+    return [shots_dir / f"{stamp}-{i:0{width}d}.{ext}" for i in range(1, count + 1)]
+
+
+def run_tool(argv):
+    """Run an X or ImageMagick tool: the one place shot touches subprocess (tests replace it)."""
+    return subprocess.run(argv, capture_output=True, text=True)
+
+
+def tool_text(argv):
+    """A tool's stdout, or ShotError(1) showing its stderr."""
+    res = run_tool(argv)
+    if res.returncode != 0:
+        raise ShotError(1, f"{argv[0]} failed: {res.stderr.strip()}")
+    return res.stdout
+
+
+def find_client_window():
+    """The client's window id, found through the window manager's client list by WM_CLASS."""
+    listing = tool_text(["xprop", "-root", "_NET_CLIENT_LIST"])
+    found = [w for w in parse_window_ids(listing) if is_client_class(tool_text(["xprop", "-id", w, "WM_CLASS"]))]
+    if not found:
+        raise ShotError(2, "client window not found (is the RS3 client running?)")
+    if len(found) > 1:
+        raise ShotError(2, f"several client windows found: {', '.join(found)}; pick one with --window")
+    return found[0]
+
+
+def workspace_hint(win):
+    """Where a hidden window lives, for the refusal message."""
+    index = parse_cardinal(tool_text(["xprop", "-id", win, "_NET_WM_DESKTOP"]))
+    if index is None:
+        return "its workspace is unknown"
+    names = parse_strings(tool_text(["xprop", "-root", "_NET_DESKTOP_NAMES"]))
+    name = f'"{names[index]}"' if 0 <= index < len(names) else f"number {index}"
+    return f"it is on workspace {name}"
+
+
+def check_visible(win):
+    """Refuse a window that isn't viewable; warn if something else has focus (and may cover it)."""
+    if not is_viewable(tool_text(["xwininfo", "-id", win])):
+        raise ShotError(
+            2, f"client window {win} is not visible: {workspace_hint(win)}. Switch to it yourself and retry."
+        )
+    active = re.findall(r"0x[0-9a-fA-F]+", tool_text(["xprop", "-root", "_NET_ACTIVE_WINDOW"]))
+    if active and window_number(active[0]) != window_number(win):
+        print(
+            "rsdev: the client is not the active window; other windows may cover it (floating ones are captured)",
+            file=sys.stderr,
+        )
+
+
+def capture_one(win, dest, region, max_px):
+    """Write one shot to `dest`: maim a PNG, then (unless max_px is 0) shrink it to a JPEG."""
+    png = dest if max_px == 0 else dest.with_name(dest.stem + ".tmp.png")
+    cmd = ["maim", "-u", "-i", win]
+    if region:
+        cmd += ["-g", region]
+    try:
+        res = run_tool(cmd + [str(png)])
+        if res.returncode != 0:
+            raise ShotError(1, f"maim failed: {res.stderr.strip()}")
+        if max_px:
+            res = run_tool(convert_args(png, dest, max_px))
+            if res.returncode != 0:
+                raise ShotError(1, f"magick failed: {res.stderr.strip()}")
+    finally:
+        if max_px:
+            png.unlink(missing_ok=True)
+
+
+def take_shots(opts):
+    """Take the shots `opts` asks for, printing each path as it is written; raises ShotError."""
+    needed = SHOT_TOOLS + (("magick",) if opts.max else ())
+    for tool in needed:
+        if shutil.which(tool) is None:
+            raise ShotError(2, f"{tool} not found: enter the dev shell (direnv)")
+    win = opts.window or find_client_window()
+    check_visible(win)
+    shots_dir = opts.out / "rsdev" / "shots"
+    shots_dir.mkdir(parents=True, exist_ok=True)
+    paths = shot_paths(shots_dir, time.strftime("%Y%m%d-%H%M%S"), opts.count, opts.max)
+    if opts.delay:
+        time.sleep(opts.delay)
+    started = None
+    for path in paths:
+        if started is not None:  # `every` runs start to start; an overrun makes the next one immediate
+            wait = started + opts.every - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+        started = time.monotonic()
+        capture_one(win, path, opts.region, opts.max)
+        print(path, flush=True)
+
+
+def cmd_shot(args):
+    try:
+        take_shots(args)
+    except ShotError as err:
+        print(f"rsdev: {err}", file=sys.stderr)
+        return err.code
+    return 0
 
 
 def cmd_events(args):
@@ -696,20 +905,36 @@ def main(argv=None):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--port", type=int, default=DEFAULT_PORT)
     common.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    shot_opts = argparse.ArgumentParser(add_help=False)
+    shot_opts.add_argument("--window", type=window_arg, help="X window id; skips the lookup by WM_CLASS")
+    shot_opts.add_argument("--region", type=region_arg, help="WxH+X+Y inside the window")
+    shot_opts.add_argument(
+        "--max",
+        type=number_arg(0, 100_000, "--max", int),
+        default=1600,
+        help="shrink to fit this many pixels and write a JPEG; 0 keeps the full-size PNG",
+    )
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("daemon", parents=[common]).set_defaults(run=run_daemon)
     for name, fn in (("start", cmd_start), ("stop", cmd_stop), ("status", cmd_status)):
         sub.add_parser(name, parents=[common]).set_defaults(run=fn)
-    p = sub.add_parser("exec", parents=[common])
+    p = sub.add_parser("exec", parents=[common, shot_opts])
     p.add_argument("command", nargs="+")
     p.add_argument("--timeout", type=positive_timeout, default=10.0)
+    p.add_argument("--shot", action="store_true", help="capture the client once the command has a result")
+    p.add_argument("--shot-delay", type=number_arg(0, 60, "--shot-delay"), default=1.0)
     p.set_defaults(run=cmd_exec)
     p = sub.add_parser("events", parents=[common])
     p.add_argument("--since", type=int, default=0)
     p.add_argument("--follow", action="store_true")
     p.add_argument("--name")
     p.set_defaults(run=cmd_events)
+    p = sub.add_parser("shot", parents=[common, shot_opts], help="capture the client window to an image")
+    p.add_argument("--count", type=number_arg(1, MAX_SHOT_COUNT, "--count", int), default=1)
+    p.add_argument("--every", type=number_arg(0, 3600, "--every", low_open=True), default=1.0)
+    p.add_argument("--delay", type=number_arg(0, 3600, "--delay"), default=0.0)
+    p.set_defaults(run=cmd_shot)
     args = parser.parse_args(argv)
     return args.run(args) or 0
 

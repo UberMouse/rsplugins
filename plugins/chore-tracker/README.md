@@ -59,7 +59,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Flax from Geoffrey | the game marks Geoffrey's flax given |
   | Pure Essence from Wizard Cromperty | the game marks Cromperty's essence claimed |
   | Logs from Coeden | the game marks Coeden's logs claimed |
-  | Daily Challenge | you have finished as many challenges as you have challenge slots filled |
+  | Daily Challenge | you finish the last challenge you were given: your count of finished challenges rises to the number of challenge slots filled |
   | Advance Time (*unproven*) | the spell's last charge of the week is used |
   | Divine Locations (*unproven*) | you have gathered the day's limit from divine locations |
 

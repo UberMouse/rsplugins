@@ -1,7 +1,11 @@
 -- Seeing chores done from the player's own game vars (data/vars.lua): a chore ticks when a
--- watched var changes and its rule, false on the values read before, holds on the new ones.
--- It reads only the VarPlayer vars those rules name; the rules are worked out by
--- core/vars.lua.
+-- watched var changes and its rule, false on the values read before, holds on the new ones
+-- (and the var it names as `rises`, if any, went up). It reads only the VarPlayer vars those
+-- rules name; the rules are worked out by core/vars.lua.
+--
+-- A var with no value when last read (not a whole number) has no baseline yet: its first
+-- value only becomes the baseline, so a chore already done when its var first reads never
+-- ticks.
 --
 -- Only a change seen while the plugin runs ticks anything. A baseline is read on each
 -- character switch (main.lua's sync, which includes the load's first one when logged in),
@@ -121,7 +125,8 @@ local function firstChanged(names, changed)
 end
 
 -- Watched vars changed from `before` to `after`: tick each chore whose rule reads one of
--- them and turned true, if it isn't done this period, logging only a tick.
+-- them and whose change ticks it (core/vars.lua's ticks), if it isn't done this period,
+-- logging only a tick.
 ---@param before table<string, integer>
 ---@param after table<string, integer>
 ---@param changed table<string, true>
@@ -132,11 +137,7 @@ local function onChanged(before, after, changed)
         local day = varCore.runeDay(now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)
-            if
-                cause
-                and not varCore.holds(entry.rule, before, day)
-                and varCore.holds(entry.rule, after, day)
-            then
+            if cause and varCore.ticks(entry.rule, before, after, day) then
                 local chore = state.find(chores, entry.rule.chore)
                 assert(chore, "data/vars.lua names only chores in data/chores.lua")
                 local ticked = state.autoMark(tracker, chore, now)

@@ -78,6 +78,33 @@ describe("chore-tracker vars core", function()
         assert.is_true(varCore.holds(rule, { A = 0, S1 = 0 }, 1))
     end)
 
+    it("ticks on a change from false to true, with every var read before", function()
+        local rule = { chore = "x", done = { { "A", "==", 1 }, { "B", "==", 0 } }, proven = true }
+        assert.is_true(varCore.ticks(rule, { A = 0, B = 0 }, { A = 1, B = 0 }, nil))
+        -- Already true before, or still false after.
+        assert.is_false(varCore.ticks(rule, { A = 1, B = 0 }, { A = 1, B = 0 }, nil))
+        assert.is_false(varCore.ticks(rule, { A = 0, B = 0 }, { A = 2, B = 0 }, nil))
+        -- A first read (no value before) only sets the baseline.
+        assert.is_false(varCore.ticks(rule, { B = 0 }, { A = 1, B = 0 }, nil))
+    end)
+
+    it("ticks a rule with a rises var only when that var went up", function()
+        local rule = {
+            chore = "x",
+            done = { { "N", ">=", "S" }, { "S", ">", 0 } },
+            rises = "N",
+            proven = true,
+        }
+        assert.are.same({ "N", "S" }, varCore.names(rule))
+        assert.is_true(varCore.ticks(rule, { N = 2, S = 3 }, { N = 3, S = 3 }, nil))
+        -- True again on S refilling, but N stayed put or fell.
+        assert.is_false(varCore.ticks(rule, { N = 3, S = 0 }, { N = 3, S = 3 }, nil))
+        assert.is_false(varCore.ticks(rule, { N = 5, S = 0 }, { N = 4, S = 3 }, nil))
+        -- A rises var not otherwise read is still named.
+        local only = { chore = "x", done = { { "S", ">", 0 } }, rises = "N", proven = true }
+        assert.are.same({ "S", "N" }, varCore.names(only))
+    end)
+
     it("holds no rule on all-zero vars but Advance Time's", function()
         for _, rule in ipairs(rules) do
             local holds = varCore.holds(rule, zeros(rule), 9006)

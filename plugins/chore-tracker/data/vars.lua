@@ -39,13 +39,17 @@ return {
     { chore = "coeden-logs", done = { { "ATELF_DAILY_LOGS_CLAIMED", "==", 1 } }, proven = true },
     -- Done when as many challenges are finished as there are filled slots. The count was seen
     -- going 0 -> 1 -> 2 as challenges finished, with three slots filled; reaching the full
-    -- count wasn't seen.
+    -- count wasn't seen. The count must rise in the change: at the daily reset the game
+    -- refills the slots and resets the count in an order nobody has seen, and slots clearing
+    -- and refilling while the count still holds yesterday's total would turn the rule true
+    -- with no challenge finished.
     {
         chore = "daily-challenge",
         done = {
             { "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE", ">=", { nonZero = CHALLENGE_SLOTS } },
             { { nonZero = CHALLENGE_SLOTS }, ">", 0 },
         },
+        rises = "INTERN_NOTES_DAILY_CHALLENGES_COMPLETE",
         proven = true,
     },
     -- Every charge of the week used. It read 3 at login; a cast wasn't checked.

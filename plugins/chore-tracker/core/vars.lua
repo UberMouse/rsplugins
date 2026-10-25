@@ -6,7 +6,8 @@
 -- with "==", ">" or ">=". An operand is a var's name (its value), a number, `{ nonZero =
 -- { names } }` (how many of those vars are not 0), or `{ runeDay = true }` (today's RuneDay,
 -- the game's day number). A condition with an operand it can't work out (a var with no
--- value, or the RuneDay without a clock) doesn't hold.
+-- value, or the RuneDay without a clock) doesn't hold. A rule may also name, as `rises`, a
+-- var that must have gone up in a change for that change to tick its chore.
 
 local M = {}
 
@@ -23,6 +24,7 @@ local M = {}
 ---@class ChoreVarRule
 ---@field chore string the chore id
 ---@field done ChoreVarCondition[] all must hold for the chore to be done
+---@field rises string? a var that must rise in a change for it to tick the chore
 ---@field proven boolean
 
 local MINUTES_PER_DAY = 1440
@@ -37,7 +39,8 @@ function M.runeDay(minutes)
     return minutes // MINUTES_PER_DAY - RUNEDAY_EPOCH
 end
 
--- The var names a rule reads, each once, in the order it names them.
+-- The var names a rule reads, each once, in the order its conditions name them, then its
+-- `rises` var.
 ---@param rule ChoreVarRule
 ---@return string[]
 function M.names(rule)
@@ -60,6 +63,7 @@ function M.names(rule)
             end
         end
     end
+    if rule.rises then add(rule.rises) end
     return out
 end
 
@@ -105,6 +109,26 @@ function M.holds(rule, values, day)
         if a == nil or b == nil or not compares(a, condition[2], b) then return false end
     end
     return true
+end
+
+-- Whether a change of var values from `before` to `after` ticks the rule's chore: the rule
+-- turned from false to true, its `rises` var (if any) went up, and every var it reads had a
+-- value before. A var with none before is read for the first time, which is a baseline, not
+-- a change.
+---@param rule ChoreVarRule
+---@param before table<string, integer>
+---@param after table<string, integer>
+---@param day integer?
+---@return boolean
+function M.ticks(rule, before, after, day)
+    for _, name in ipairs(M.names(rule)) do
+        if before[name] == nil then return false end
+    end
+    if rule.rises then
+        local new = after[rule.rises]
+        if new == nil or new <= before[rule.rises] then return false end
+    end
+    return not M.holds(rule, before, day) and M.holds(rule, after, day)
 end
 
 return M

@@ -180,6 +180,26 @@ describe("chore-tracker var ticks", function()
         assert.is_true(ticked(h, CHALLENGE.name))
     end)
 
+    it("doesn't tick the Daily Challenge when the slots refill with the count unchanged", function()
+        local slots = { 2, 2, 3 }
+        local h = settled({
+            OMGE_CHALLENGE_CURRENT_ID_1 = slots[1],
+            OMGE_CHALLENGE_CURRENT_ID_2 = slots[2],
+            OMGE_CHALLENGE_CURRENT_ID_3 = slots[3],
+            INTERN_NOTES_DAILY_CHALLENGES_COMPLETE = 3,
+        })
+        -- Yesterday's count still 3 while the reset clears and refills the slots: the rule
+        -- goes false with no slot filled, then true again on the first refill.
+        for n = 1, 3 do
+            set(h, "OMGE_CHALLENGE_CURRENT_ID_" .. n, 0)
+        end
+        for n, id in ipairs(slots) do
+            set(h, "OMGE_CHALLENGE_CURRENT_ID_" .. n, id)
+        end
+        assert.is_nil(doneAt(h, CHALLENGE.id))
+        assert.are.equal(0, seenLines(h))
+    end)
+
     it("needs one more finished challenge when a fourth slot is filled", function()
         local h = settled({
             OMGE_CHALLENGE_CURRENT_ID_1 = 2,

@@ -25,8 +25,9 @@ M.NEXT_MONTH = 29891520 -- 2026-11-01 00:00, a monthly reset
 
 -- A harness with the clock at `opts.clock` (default NOW; 0 for not ready) and logged in as
 -- `opts.login` (default "Zezima"; false for logged out), loaded unless `opts.load` is false.
--- Every var data/vars.lua watches starts at 0 (the harness faults on reading an unset one);
--- set one before loading to start it elsewhere.
+-- Every var data/vars.lua watches starts at 0, because the harness faults on reading an
+-- unset one (detect_spec.lua covers a var with no value, with stand-in globals); set one
+-- before loading to start it elsewhere.
 ---@param opts table?
 ---@return table h
 function M.loaded(opts)

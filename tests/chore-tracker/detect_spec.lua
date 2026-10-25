@@ -149,6 +149,24 @@ describe("chore-tracker var detect", function()
         assert.are.equal(1, applied)
     end)
 
+    it("takes a var with no value at load as unread until it has one", function()
+        flag.value = nil
+        varDetect.scan()
+        for _ = 1, 500 do
+            varDetect.tick()
+        end
+        -- Its first value, already true, is the baseline: no tick.
+        flag.value = 1
+        varDetect.onVarTransmit({ var = flag })
+        assert.are.same({ "unknown var GONE; not watched" }, said)
+        -- A later change from that first value ticks as usual.
+        flag.value = 0
+        varDetect.onVarTransmit({ var = flag })
+        flag.value = 1
+        varDetect.onVarTransmit({ var = flag })
+        assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
+    end)
+
     it("matches a base by id and domain, not by object", function()
         flag.value = 1
         varDetect.onVarTransmit({ var = varType("BASE", 10, 1) })

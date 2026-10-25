@@ -70,7 +70,9 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   "delivered but no result" (exit 3). That is safe for non-idempotent commands, but exit 3
   means "unknown": check the client.
 - Disabling it (`poff dev-bridge`) unsubscribes everything, eval probes included, and cancels
-  any sync in flight.
+  any sync in flight. Nothing else unsubscribes: an internal error stops the bridge by making
+  its handlers and probes do nothing (and cancels the sync in flight), since unsubscribing
+  from inside a callback aborts the client.
 - Every `[BRIDGE]` console line is also sent to the daemon as a `Log` event
   (`{plugin: "dev-bridge", level: "log", text}`), so `rsdev.py logs` shows it.
 
@@ -95,16 +97,32 @@ Logic tick, one command per tick, like `exec`.
   like the result's values). Read them with `rsdev.py events --name Emit`.
 - `Event.<Name>.Subscribe(name, callback)` in a snippet installs a probe. It is registered under
   `devBridgeEval_<name>`, so it runs beside the bridge's own subscriptions and can't replace
-  them, and `Event.<Name>.Unsubscribe(name)` takes the same name. A probe whose callback raises
-  is unsubscribed after its first error, which is reported once as a `Log` event (level
+  them. (Subscribing from inside the bridge's `Logic` callback, where snippets run, was seen to
+  work for `VarTransmit`; for `Logic` itself it is unconfirmed.)
+- **Probes can't be removed while the bridge runs.** `Event.<X>.Unsubscribe` from inside an
+  event callback aborts the client (SIGABRT, not a catchable Lua error; docs/api-concepts.md),
+  and snippets run inside `Logic`. So `Event.<Name>.Unsubscribe(name)` in a snippet only
+  disarms the probe: it stays subscribed but does nothing. A probe whose callback raises is
+  disarmed the same way after its first error, which is reported once as a `Log` event (level
   `error`, naming the event, the probe's name and the error) and on the console. Other probes
-  keep running.
+  keep running. Subscribing the same name again re-arms it with the new callback, without a
+  second real subscription.
+- A session holds at most 32 probes (distinct event and name pairs, disarmed ones included). A
+  `Subscribe` past that raises a Lua error in the snippet (`ok=false`) saying so;
+  `rsdev.py eval --reset` clears them.
 - `ExecuteConsoleCommand` in a snippet refuses what `exec` refuses: a self-disable raises a Lua
   error, so the eval fails with that message. `prl dev-bridge` is allowed, and as with `exec`,
   the reload means that eval's result is never reported.
-- `rsdev.py eval --reset` (kind `reset`) unsubscribes every probe and starts a fresh scratch
-  env. Disabling or reloading the bridge does the same: the scratch env lives for one session
-  and is never saved.
+- `rsdev.py eval --reset` (kind `reset`) disarms every probe at once and answers ok, then
+  **reloads the bridge** (`prl dev-bridge`, on a later tick than the sync that delivered that
+  ok, so the CLI has its answer first). The reload's `PluginShutdown` unsubscribes the probes,
+  and a new session follows: a new HELLO (`rsdev.py status` shows the new session id) and a
+  fresh scratch env. If the sync carrying the ok fails, it is retried as any result is and the
+  reload waits. Commands that arrive while the reload is pending are not run: each gets
+  `ok=false`, "not run: the bridge is reloading for reset <id>; send it again once it
+  reconnects", and the reload waits until those results are sent too. Disabling or reloading
+  the bridge also clears the probes and the scratch env, which lives for one session and is
+  never saved.
 - Caps keep a sync under the daemon's 2 MB body limit. Values over 64 KB encoded are dropped
   (`nvalues` stays the true count), `output` keeps 200 lines of up to 2 KB each, and a result
   over 1 MB encoded loses its output. Each cut sets `truncated: true`, and `ok` is unchanged.
@@ -114,10 +132,9 @@ Logic tick, one command per tick, like `exec`.
   docs/api-concepts.md). It runs inside the bridge's own Logic callback, so that takes the
   bridge down with it, and only `pon dev-bridge` from the console brings it back. Nothing guards
   against this: keep snippets short, and spread long work across ticks with a probe.
-- Unconfirmed in the client: eval compiles with `load(chunk, "=eval", "t", scratchEnv)`. The
-  client has a global `load` (`hello.env` says `function`), but whether it honours the mode and
-  env arguments isn't checked yet. If it ignored the env, a snippet's globals would land in the
-  bridge's own. Without `load`, every eval fails with "this client has no load()".
+- Eval compiles with `load(chunk, "=eval", "t", scratchEnv)`; the client honours the mode and
+  env arguments (seen 2026-10-26: a snippet's `x = 1` stayed in the scratch env). Without
+  `load`, every eval fails with "this client has no load()".
 
 ## Why it isn't for submission
 

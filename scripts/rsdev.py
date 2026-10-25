@@ -350,6 +350,8 @@ class State:
             return {
                 "up": True,
                 "pid": os.getpid(),  # lets `stop` confirm which process answers on the port
+                # Lets the CLI refuse a kind an older daemon would queue as a console command.
+                "kinds": list(KINDS),
                 "bridge": None
                 if b is None
                 else {
@@ -719,9 +721,37 @@ def cmd_status(args):
     return 0
 
 
+def daemon_lacks(args, kind):
+    """Exit code 2 (printed why) if the daemon is unreachable or doesn't list `kind` in its
+    status, else None. A daemon from before eval ignores `kind` and queues the source as an
+    exec, so the bridge would run Lua as console input."""
+    try:
+        kinds = call(args, "/cli/status").get("kinds", [])
+    except DaemonRefused as err:
+        print(f"rsdev: {err}", file=sys.stderr)
+        return 2
+    except (OSError, ValueError, AttributeError) as err:
+        print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
+        return 2
+    if kind in kinds:
+        return None
+    what = "eval --reset" if kind == "reset" else kind
+    print(
+        f"rsdev: the daemon on port {args.port} predates `rsdev.py {what}` (no {kind!r} in its "
+        "status kinds); restart it: scripts/rsdev.py stop && scripts/rsdev.py start",
+        file=sys.stderr,
+    )
+    return 2
+
+
 def send_command(args, kind, text):
     """Queue a command and wait for its result. Returns (exit code, reply); the reply is the
     daemon's result dict when the code is 0, else None. Failures are already printed."""
+    # exec is the one kind every daemon queues as itself, so only the others are checked.
+    if kind != "exec":
+        code = daemon_lacks(args, kind)
+        if code is not None:
+            return code, None
     # The daemon waits `timeout` itself; the extra seconds are for the reply to arrive.
     payload = {"kind": kind, "command": text, "timeout": args.timeout}
     try:

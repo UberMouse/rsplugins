@@ -189,7 +189,13 @@ like `exec` and exits with the same codes (0 ok; 1 the plugin reported an error,
 stderr, e.g. a Lua error, after any `output` lines the snippet printed before it; 2 never
 delivered or daemon down; 3 delivered, no result in time). On success it prints one JSON object to stdout, indented by 2: `{"values": [...], "nvalues": n,
 "output": [...]}`, plus `"truncated": true` when the plugin cut something to fit its caps.
-`eval --reset` (no code allowed) queues a `reset` command and prints `ok (<id>)`. The daemon only
+`eval --reset` (no code allowed) queues a `reset` command and prints `ok (<id>)`; the bridge then
+reloads itself (`prl dev-bridge`), so the next session has no probes and a fresh scratch env
+(`status` shows the new session once it syncs). Before queueing, `eval` and `eval --reset` check
+that the daemon's `GET /cli/status` lists the kind in `kinds`. A daemon started before the eval
+kinds existed ignores `kind` and would queue the Lua as a console command, so then the CLI exits
+2 without queueing and says to restart it (`scripts/rsdev.py stop && scripts/rsdev.py start`);
+`exec` doesn't check. The daemon only
 queues and relays these; running the Lua and enforcing the caps is the plugin's job (the
 scratch env, probes, `emit` and the caps are in [its README](../plugins/dev-bridge/README.md#eval)). The Lua is
 sent by the local daemon, so it has the same trust as `exec`.
@@ -267,7 +273,8 @@ A sync from a new `session` is logged, and any command delivered to the previous
 a result is resolved as failed with "bridge restarted before reporting". `status` calls the bridge
 connected if its last sync was under 2 s ago.
 
-The CLI talks to the same port under `/cli/` (`GET /cli/status`, `POST /cli/exec`,
+The CLI talks to the same port under `/cli/` (`GET /cli/status`, which includes
+`"kinds": ["exec", "eval", "reset"]`, `POST /cli/exec`,
 `GET /cli/events?since=&wait=&name=`); these are not for plugins. `POST /cli/exec` takes
 `{"kind": "exec"|"eval"|"reset", "command": "...", "timeout": s}`; `kind` defaults to `exec`,
 and `command` is empty for `reset` and non-empty otherwise.

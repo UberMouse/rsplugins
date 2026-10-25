@@ -151,7 +151,7 @@ describe("dev-bridge", function()
         local h = support.load()
         h.onConsoleCommand = function(command)
             -- A self-reload runs PluginShutdown before the command returns.
-            if command == "prl dev-bridge" then h.instance.env.PluginShutdown() end
+            if command == "prl dev-bridge" then h:unload() end
         end
         h:step()
         -- Ten fillers put the reload on the tick the next sync is due.
@@ -409,6 +409,15 @@ describe("dev-bridge", function()
         h:step()
         assert.is_true(open[1].state.fields.cancelled)
         assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        -- Stopped from inside Logic, so disarmed, not unsubscribed (the harness faults on an
+        -- Unsubscribe there): still subscribed, and doing nothing.
+        assert.are.same("devBridgeLogic", h.instance.subs.Logic[1].name)
+        local requests = #h.requests
+        h.world:chat("ignored")
+        h:advance(20 * 300)
+        assert.are.equal(requests, #h.requests)
+        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        h:unload()
         assert.are.same({}, h.instance.subs.Logic)
     end)
 

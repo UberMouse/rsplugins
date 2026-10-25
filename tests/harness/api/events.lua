@@ -4,6 +4,11 @@
 -- https://developer.runescape.com/rs/core/events.html#overview: subscribers run in the order
 -- they subscribed; re-using a name replaces that subscription (for that event only); a payload
 -- edited by one subscriber is what the next one sees.
+--
+-- Unsubscribe while an Event dispatch is running (inside any subscriber, or anything it calls)
+-- faults: in the client it aborts rs2client with SIGABRT, which pcall can't catch (dev-bridge,
+-- 2026-10-26; docs/testing.md fidelity ledger). Once the plugin is dead (PluginShutdown during
+-- h:unload, even one a subscriber triggered) it is allowed again.
 
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
@@ -28,6 +33,15 @@ local Subscription = strict.class("EventSubscription", {
             list[#list + 1] = { name = name, fn = callback }
         end,
         Unsubscribe = function(s, name)
+            local instance = s.instance
+            if instance.alive and instance.dispatching > 0 then
+                strict.fault(
+                    "Event."
+                        .. s.event
+                        .. ".Unsubscribe inside an event callback: the client aborts (SIGABRT),"
+                        .. " see docs/testing.md fidelity ledger"
+                )
+            end
             local list = s.subs[s.event]
             for i, entry in ipairs(list) do
                 if entry.name == name then
@@ -110,14 +124,21 @@ end
 function M.dispatch(h, event, payload)
     local instance = h.instance
     if not (instance and instance.alive) then return end
-    -- Copy first: a subscriber may unsubscribe itself or others while we iterate.
+    -- Copy first: a subscriber may unsubscribe others while we iterate (once dead, say).
     local list = { table.unpack(instance.subs[event]) }
-    for _, entry in ipairs(list) do
-        if not entry.removed then
-            local label = string.format("Event.%s subscriber '%s'", event, entry.name)
-            runtime.call(h.budgetMs, label, entry.fn, payload)
+    -- Counted so Unsubscribe can fault inside a dispatch; nested dispatches (a subscriber
+    -- firing chat, say) nest the count. Restored even when a subscriber's error fails the call.
+    instance.dispatching = instance.dispatching + 1
+    local ok, err = pcall(function()
+        for _, entry in ipairs(list) do
+            if not entry.removed then
+                local label = string.format("Event.%s subscriber '%s'", event, entry.name)
+                runtime.call(h.budgetMs, label, entry.fn, payload)
+            end
         end
-    end
+    end)
+    instance.dispatching = instance.dispatching - 1
+    if not ok then error(err, 0) end
 end
 
 -- The `Event` global for one plugin instance.
@@ -125,9 +146,11 @@ end
 ---@return table
 function M.namespace(instance)
     local proxies = {}
+    instance.dispatching = 0
     for event in pairs(EVENT_NAMES) do
         instance.subs[event] = {}
-        proxies[event] = Subscription.new({ event = event, subs = instance.subs })
+        proxies[event] =
+            Subscription.new({ event = event, subs = instance.subs, instance = instance })
     end
     return EventNamespace.new({ proxies = proxies })
 end

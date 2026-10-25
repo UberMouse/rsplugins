@@ -9,6 +9,9 @@
 -- commands run, and the reply carries new commands (exec, eval, reset), which run one per
 -- Logic tick. Requests start only from Logic, never from a completion callback (that crashed
 -- the client; docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
+-- Nothing is unsubscribed outside PluginShutdown: Unsubscribe from inside an event callback
+-- aborts the client (docs/api-concepts.md). An internal error stops the bridge by making its
+-- handlers and probes no-ops, and a reset reloads it once the daemon has the reset's result.
 --
 -- Chat forwarding is limited to the player's own lines, system messages and senderless SPAM
 -- (protocol.lua). System text is forwarded as-is, so it can still name other players. These
@@ -47,7 +50,13 @@ local dropped = 0 -- events lost so far: buffer full, or in a sync the daemon ne
 local queue = {} -- commands from the daemon not yet run, oldest first
 local results = {} -- results not yet sent, encoded (protocol.resultEntry)
 local inFlight = nil ---@type { request: HTTPRequest?, body: string, count: integer, results: string[], done: boolean }?
+-- Set by stop(): every handler of ours, and every probe, does nothing from then on. Stopping
+-- never unsubscribes, since Unsubscribe from inside an event callback aborts the client
+-- (docs/api-concepts.md); only PluginShutdown does that.
 local stopped = false
+-- A reset in progress: its result, encoded, waits to reach the daemon, then the bridge
+-- reloads itself (`prl dev-bridge`), whose PluginShutdown unsubscribes the probes.
+local reloading = nil ---@type { id: string, entry: string?, synced: boolean, issued: boolean }?
 
 -- So the console isn't flooded: each of these is logged once (failing, once per outage).
 local warned = { waiting = false, dropped = false, forward = false }
@@ -190,6 +199,7 @@ end
 ---@return fun(payload: any)
 local function forwarder(name)
     return function(payload)
+        if stopped then return end
         local ok, err = pcall(forward, name, payload)
         if ok then return end
         noteDropped(1, "an event could not be serialised")
@@ -209,12 +219,15 @@ local function runOne()
     local command = table.remove(queue, 1)
     if not command then return end
     local result = { ok = true }
-    local refused = protocol.refusal(command)
+    local refused = reloading and protocol.reloadingError(reloading.id) or protocol.refusal(command)
     if refused then
         result.ok, result.error = false, refused
     elseif command.kind == "reset" then
-        say("reset " .. command.id .. ": probes unsubscribed, fresh scratch env")
-        evaluator.reset()
+        -- Probes can't be unsubscribed from here (inside Logic), so they are disarmed now and
+        -- the reload, once the daemon has this result, removes them and the scratch env.
+        say("reset " .. command.id .. ": probes disarmed; reloading once the daemon has this")
+        evaluator.disarmAll()
+        reloading = { id = command.id, synced = false, issued = false }
     else
         if command.kind == "eval" then
             say("eval " .. command.id)
@@ -236,11 +249,36 @@ local function runOne()
         say("command " .. command.id .. " failed: " .. protocol.text(result.error))
     end
     results[#results + 1] = protocol.resultEntry(result)
+    if reloading and command.kind == "reset" and not refused then
+        reloading.entry = results[#results]
+    end
+end
+
+-- Reload the bridge to finish a reset (a plugin reloading itself from its own Logic callback
+-- is safe: docs/api-concepts.md). If the command raises, the reset stays pending: probes stay
+-- disarmed and commands keep being turned away until `prl dev-bridge` from the console.
+local function reload()
+    local pending = assert(reloading, "reload() runs only for a pending reset")
+    pending.issued = true
+    say("reset " .. pending.id .. " reported; reloading")
+    local ok, err = pcall(ExecuteConsoleCommand, "prl " .. protocol.PLUGIN)
+    if not ok then
+        say("reload for reset " .. pending.id .. " failed (`prl dev-bridge` finishes it):", err)
+    end
 end
 
 ---------------------------------------------------------------------------
 -- Syncing with the daemon
 ---------------------------------------------------------------------------
+
+-- The daemon has taken a sync's results: if one was a pending reset's, its reload may go.
+---@param sent table
+local function resultsDelivered(sent)
+    if not (reloading and reloading.entry) then return end
+    for _, entry in ipairs(sent.results) do
+        if entry == reloading.entry then reloading.synced = true end
+    end
+end
 
 -- A sync that failed. Unless the daemon took it (`delivered`: a 200 with an unreadable
 -- reply), its events count as dropped and its results go back to be sent again.
@@ -248,7 +286,9 @@ end
 ---@param why string
 ---@param delivered boolean
 local function syncFailed(sent, why, delivered)
-    if not delivered then
+    if delivered then
+        resultsDelivered(sent)
+    else
         if sent.count > 0 then noteDropped(sent.count, "sync failed") end
         local again = sent.results
         for _, result in ipairs(results) do
@@ -299,6 +339,7 @@ local function finishSync()
     for _, command in ipairs(commands) do
         queue[#queue + 1] = command
     end
+    resultsDelivered(sent)
     if failing or not connected then say("connected to rsdev, session " .. session) end
     failing, connected = false, true
     nextSync = tick + protocol.limits.syncEveryTicks
@@ -336,6 +377,20 @@ end
 
 local function onLogic(ev)
     tick = ev.logicTick
+    -- Checked before this tick's sync is handled, so the reload comes on a later tick than
+    -- the sync that delivered the reset's result.
+    if
+        reloading
+        and not reloading.issued
+        and protocol.reloadDue({
+            resetSynced = reloading.synced,
+            queued = #queue,
+            unsent = #results,
+            inFlight = inFlight ~= nil,
+        })
+    then
+        return reload()
+    end
     if inFlight and inFlight.done then finishSync() end
     runOne()
     if stopped then return end
@@ -354,22 +409,14 @@ end
 -- Start and stop
 ---------------------------------------------------------------------------
 
-local function unsubscribeAll()
-    Event.Logic.Unsubscribe(LOGIC_NAME)
-    for _, name in ipairs(FORWARDED) do
-        Event[name].Unsubscribe("devBridge" .. name)
-    end
-end
-
--- Stop everything: no more callbacks, and any sync in flight is cancelled. Safe to call twice
--- (an error stop, then PluginShutdown). Cancel runs under pcall so a raise can't skip the
--- "stopped after an error" message that follows the call. Probes go first (evaluator.stop
--- pcalls each), so they can't outlive the bridge if its own unsubscribe raises.
-local function teardown()
+-- Stop everything from inside a callback: our handlers and every probe become no-ops, and
+-- any sync in flight is cancelled. Nothing is unsubscribed (that aborts the client from inside
+-- a callback); PluginShutdown does it. Safe to call twice (an error stop, then shutdown).
+-- Cancel runs under pcall so a raise can't skip the "stopped after an error" message.
+local function stop()
     if stopped then return end
     stopped = true
-    evaluator.stop()
-    unsubscribeAll()
+    evaluator.disarmAll()
     if inFlight and inFlight.request then pcall(inFlight.request.Cancel, inFlight.request) end
     inFlight = nil
 end
@@ -380,7 +427,7 @@ local function guardedLogic(ev)
     if stopped then return end
     local ok, err = pcall(onLogic, ev)
     if ok then return end
-    teardown()
+    stop()
     say("stopped after an error (`prl dev-bridge` from the console restarts it):", err)
 end
 
@@ -401,6 +448,13 @@ for _, name in ipairs(FORWARDED) do
 end
 say("enabled, session " .. session)
 
+-- The only place anything is unsubscribed: probes first, then our own handlers, each under
+-- pcall so one raising can't leave the rest subscribed.
 function PluginShutdown()
-    teardown()
+    stop()
+    evaluator.unsubscribeAll()
+    pcall(Event.Logic.Unsubscribe, LOGIC_NAME)
+    for _, name in ipairs(FORWARDED) do
+        pcall(Event[name].Unsubscribe, "devBridge" .. name)
+    end
 end

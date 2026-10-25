@@ -706,6 +706,46 @@ class EvalTests(CliCase):
         return t, result
 
 
+class StaleDaemonTests(DaemonCase):
+    def test_status_lists_the_command_kinds(self):
+        args = SimpleNamespace(port=self.port)
+        self.assertEqual(rsdev.call(args, "/cli/status")["kinds"], ["exec", "eval", "reset"])
+
+    def cli_against(self, status, *argv):
+        """Run the CLI against a fake daemon whose status is `status`; (code, stderr, paths)."""
+        paths = []
+
+        def fake_call(args, path, payload=None, timeout=5.0):
+            paths.append(path)
+            if path == "/cli/status":
+                return status
+            return {"outcome": "ok", "id": "c1-abc"}
+
+        err = StringIO()
+        with mock.patch.object(rsdev, "call", fake_call), mock.patch("sys.stderr", err):
+            with redirect_stdout(StringIO()):
+                code = rsdev.main([*argv, "--port", "1"])
+        return code, err.getvalue(), paths
+
+    def test_eval_and_reset_refuse_a_daemon_from_before_the_eval_kinds(self):
+        old = {"up": True, "pid": 1234}  # what a daemon from before eval reports: no kinds
+        for argv, what in ((["eval", "1 + 1"], "eval"), (["eval", "--reset"], "eval --reset")):
+            with self.subTest(argv):
+                code, err, paths = self.cli_against(old, *argv)
+                self.assertEqual(code, 2)
+                self.assertEqual(paths, ["/cli/status"])  # nothing queued
+                self.assertIn(f"predates `rsdev.py {what}`", err)
+                self.assertIn("scripts/rsdev.py stop && scripts/rsdev.py start", err)
+
+    def test_eval_goes_ahead_when_the_daemon_lists_its_kind(self):
+        code, _, paths = self.cli_against({"kinds": ["exec", "eval", "reset"]}, "eval", "1")
+        self.assertEqual((code, paths), (0, ["/cli/status", "/cli/exec"]))
+
+    def test_exec_does_not_check_the_kinds(self):
+        code, _, paths = self.cli_against({"up": True}, "exec", "plist")
+        self.assertEqual((code, paths), (0, ["/cli/exec"]))
+
+
 class TeeTests(DaemonCase):
     def events(self, query=""):
         return get(self.port, "/cli/events" + query)["events"]

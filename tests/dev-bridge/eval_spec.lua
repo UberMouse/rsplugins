@@ -163,27 +163,68 @@ describe("dev-bridge eval", function()
         assert.is_true(support.lines(h, "server 1") >= 1)
     end)
 
-    it("unsubscribes a probe by the name the snippet gave it", function()
+    it("disarms a probe on Unsubscribe, keeping its one real subscription", function()
         local h = support.loadEval()
         support.eval(h, counter("count"))
-        support.eval(h, "Event.Logic.Unsubscribe('count')")
-        assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
+        support.eval(h, "Event.Logic.Unsubscribe('count') Event.Logic.Unsubscribe('nope')")
+        assert.are.same({ "devBridgeLogic", "devBridgeEval_count" }, subNames(h, "Logic"))
+        support.answer(h)
+        h:advance(20 * 10)
+        assert.are.same({}, support.payloads(support.last(h), "Emit"))
+        assert.is_nil(h.instance.subs.Logic[2].fn({ logicTick = 1 })) -- a no-op, returning nothing
     end)
 
-    it("unsubscribes only the probe that raised, logging its first error once", function()
+    it("disarms only the probe that raised, logging its first error once", function()
         local h = support.loadEval()
         support.eval(h, counter("good"))
         local _, body =
             support.eval(h, "Event.Logic.Subscribe('bad', function() error('kaput') end)")
-        assert.are.same({ "devBridgeLogic", "devBridgeEval_good" }, subNames(h, "Logic"))
+        assert.are.same(
+            { "devBridgeLogic", "devBridgeEval_good", "devBridgeEval_bad" },
+            subNames(h, "Logic")
+        )
         local errors = {}
         for _, p in ipairs(evalLogs(body)) do
             if p.level == "error" then errors[#errors + 1] = p.text end
         end
         assert.are.equal(1, #errors)
-        assert.matches('Event.Logic "bad" unsubscribed after an error: eval:1: kaput', errors[1])
-        assert.are.equal(1, support.lines(h, '[BRIDGE] probe Event.Logic "bad"'))
+        assert.matches('Event.Logic "bad" disarmed after an error: eval:1: kaput', errors[1])
         assert.is_true(#support.payloads(body, "Emit") > 0) -- good kept running
+        h:advance(20 * 100) -- later ticks call bad's wrapper, which does nothing
+        assert.are.equal(1, support.lines(h, '[BRIDGE] probe Event.Logic "bad"'))
+    end)
+
+    it("re-arms a disarmed probe on re-subscribe, without a second real Subscribe", function()
+        local h = support.loadEval()
+        local env = h.instance.env
+        local real = env.Event
+        local subscribes = 0
+        local logic = setmetatable({
+            Subscribe = function(name, fn)
+                subscribes = subscribes + 1
+                return real.Logic.Subscribe(name, fn)
+            end,
+        }, { __index = real.Logic })
+        env.Event = setmetatable({ Logic = logic }, { __index = real })
+        support.eval(h, "Event.Logic.Subscribe('p', function() error('first') end)")
+        local _, body = support.eval(h, "Event.Logic.Subscribe('p', function() emit('p', 2) end)")
+        assert.are.equal(1, subscribes)
+        assert.are.same({ "devBridgeLogic", "devBridgeEval_p" }, subNames(h, "Logic"))
+        assert.are.same({ tag = "p", value = 2 }, support.payloads(body, "Emit")[1])
+    end)
+
+    it("refuses a probe past the per-session cap, naming it and eval --reset", function()
+        local h = support.loadEval()
+        h.env.require("protocol").limits.probes = 2
+        support.eval(h, "Event.Logic.Subscribe('a', function() end)")
+        support.eval(h, "Event.ServerLogic.Subscribe('a', function() end)") -- another pair
+        support.eval(h, "Event.Logic.Unsubscribe('a')") -- disarmed still counts
+        local r = support.eval(h, "Event.Logic.Subscribe('b', function() end)")
+        assert.is_false(r.ok)
+        assert.matches("at most 2 probes per bridge session", r.error)
+        assert.matches("eval %-%-reset", r.error)
+        -- Re-arming an existing pair is no new probe.
+        assert.is_true(support.eval(h, "Event.Logic.Subscribe('a', function() end)").ok)
     end)
 
     it("refuses a self-disabling console command from a snippet as exec does", function()
@@ -198,7 +239,7 @@ describe("dev-bridge eval", function()
     it("lets a snippet reload the bridge, whose shutdown removes its probes", function()
         local h = support.loadEval()
         h.onConsoleCommand = function(command)
-            if command == "prl dev-bridge" then h.instance.env.PluginShutdown() end
+            if command == "prl dev-bridge" then h:unload() end
         end
         support.eval(h, counter("count"))
         support.answer(h, {
@@ -211,27 +252,108 @@ describe("dev-bridge eval", function()
         assert.are.equal(0, #support.open(h)) -- stopped: no result, no further sync
     end)
 
-    it("resets: probes unsubscribed, a fresh scratch env, ok with no values", function()
+    it("stops a probe when an internal error stops the bridge, without unsubscribing", function()
         local h = support.loadEval()
-        support.eval(h, "x = 1")
-        support.eval(h, counter("a"))
-        support.eval(h, "Event.ServerLogic.Subscribe('b', function() end)")
-        local results = support.run(h, { { "r1", "reset", "" }, { "r2", "reset", "" } })
-        assert.are.same({ id = "r1", ok = true }, results.r1)
-        assert.are.same({ id = "r2", ok = true }, results.r2) -- with no probes left
-        assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
-        assert.are.same({}, subNames(h, "ServerLogic"))
-        local after = support.eval(h, "rawget(_G, 'x')")
-        assert.are.same({ 1, {} }, { after.nvalues, after.values })
-        assert.matches('"values":%[null%]', support.lastRaw(h))
+        local hits = 0
+        -- A bridge global, which the scratch env reads through to.
+        h.instance.env.hit = function()
+            hits = hits + 1
+        end
+        support.eval(h, "Event.Logic.Subscribe('count', function() hit() end)")
+        h.env.require("protocol").refusal = function()
+            error("boom")
+        end
+        support.answer(h, { status = 200, body = support.line("c", "exec", "plist") })
+        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        assert.are.same({ "devBridgeLogic", "devBridgeEval_count" }, subNames(h, "Logic"))
+        local before = hits
+        h:advance(20 * 10)
+        assert.are.equal(before, hits)
+        h:unload()
+        assert.are.same({}, subNames(h, "Logic"))
     end)
 
-    it("unsubscribes the probes on shutdown, and a later probe call is harmless", function()
+    it("resets: ok, then once that result has synced, reloads the bridge", function()
+        local h = support.loadEval()
+        h.onConsoleCommand = function(command)
+            if command == "prl dev-bridge" then h:reload() end
+        end
+        local first = h.instance
+        support.eval(h, "x = 1")
+        support.eval(h, counter("a"))
+        support.answer(h, { status = 200, body = support.line("r1", "reset", "") })
+        h:advance(20 * 10) -- the reset ran; the sync carrying its result starts
+        assert.are.same({ { id = "r1", ok = true } }, support.last(h).results)
+        assert.are.same({}, support.ran(h)) -- not before that sync succeeded
+        support.answer(h) -- it succeeds on this tick...
+        assert.are.same({}, support.ran(h))
+        assert.are.equal(first, h.instance)
+        h:step() -- ...and the reload comes on the next
+        assert.are.same({ "prl dev-bridge" }, { h.consoleCommands[4] })
+        assert.are_not.equal(first, h.instance)
+        assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
+        h:step()
+        local after = support.eval(h, "rawget(_G, 'x')")
+        assert.are.same({ 1, {} }, { after.nvalues, after.values })
+    end)
+
+    it("disarms the probes at once on reset", function()
+        local h = support.loadEval()
+        support.eval(h, counter("a"))
+        support.answer(h, { status = 200, body = support.line("r1", "reset", "") })
+        h:advance(20 * 10)
+        support.answer(h) -- the sync that carried the reset's result, and earlier emits
+        h:advance(20 * 10)
+        assert.are.same({}, support.payloads(support.last(h), "Emit"))
+    end)
+
+    it("waits for a failed sync carrying the reset's result to be retried", function()
+        local h = support.loadEval()
+        support.answer(h, { status = 200, body = support.line("r1", "reset", "") })
+        h:advance(20 * 10)
+        support.answer(h, { status = 500 })
+        h:advance(20 * 100)
+        assert.are.same({}, support.ran(h))
+        h:advance(20 * 150) -- the retry, with the result again
+        assert.are.same({ { id = "r1", ok = true } }, support.last(h).results)
+        support.answer(h)
+        h:step()
+        assert.are.same({ "prl dev-bridge" }, support.ran(h))
+    end)
+
+    it("turns away commands that arrive while a reset's reload is pending", function()
+        local h = support.loadEval()
+        support.answer(h, {
+            status = 200,
+            body = support.line("r1", "reset", "") .. support.line("e1", "eval", "1"),
+        })
+        h:advance(20 * 10)
+        local results = support.last(h).results
+        assert.are.same({ id = "r1", ok = true }, results[1])
+        assert.are.same({
+            id = "e1",
+            ok = false,
+            error = "not run: the bridge is reloading for reset r1; send it again once it reconnects",
+        }, results[2])
+        -- One more arrives with the sync that delivers the reset: its result goes first.
+        support.answer(h, { status = 200, body = support.line("x1", "exec", "plist") })
+        h:advance(20 * 10)
+        assert.are.same({}, support.ran(h))
+        assert.are.equal("x1", support.last(h).results[1].id)
+        support.answer(h)
+        h:step()
+        assert.are.same({ "prl dev-bridge" }, support.ran(h))
+    end)
+
+    it("unsubscribes every real probe subscription on shutdown, disarmed ones too", function()
         local h = support.loadEval()
         support.eval(h, counter("count"))
+        support.eval(h, "Event.ServerLogic.Subscribe('s', function() end)")
+        support.eval(h, "Event.Logic.Unsubscribe('count')")
         local probe = h.instance.subs.Logic[2].fn
         h:unload()
         assert.are.same({}, subNames(h, "Logic"))
+        assert.are.same({}, subNames(h, "ServerLogic"))
         probe({ logicTick = 1 }) -- as if the client delivered one more during teardown
     end)
 
@@ -247,9 +369,10 @@ describe("dev-bridge eval", function()
             end,
         }, { __index = real.Logic })
         env.Event = setmetatable({ Logic = logic }, { __index = real })
-        assert.is_false(pcall(h.unload, h))
+        h:unload()
         env.Event = real
         assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
+        assert.are.same({}, subNames(h, "VarTransmit")) -- the rest still went
     end)
 
     it("starts a fresh scratch env after a reload", function()

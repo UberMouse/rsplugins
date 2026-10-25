@@ -530,8 +530,33 @@ describe("protocol probe names", function()
 
     it("names the event, the probe's own name and the error when one stops", function()
         assert.are.equal(
-            'probe Event.Logic "count" unsubscribed after an error: eval:1: boom',
+            'probe Event.Logic "count" disarmed after an error: eval:1: boom',
             protocol.probeErrorText("Logic", "count", "eval:1: boom")
         )
     end)
+end)
+
+describe("protocol probe cap and reset reload", function()
+    it("allows probes up to the cap, then names it and eval --reset", function()
+        assert.is_nil(protocol.probeCapError(protocol.limits.probes - 1))
+        local err = protocol.probeCapError(protocol.limits.probes)
+        assert.matches("at most 32 probes per bridge session", err)
+        assert.matches("eval %-%-reset", err)
+    end)
+
+    it(
+        "reloads only once the reset's result synced and nothing is queued, unsent or in flight",
+        function()
+            local ready = { resetSynced = true, queued = 0, unsent = 0, inFlight = false }
+            assert.is_true(protocol.reloadDue(ready))
+            for key, value in pairs({ resetSynced = false, queued = 1, unsent = 1, inFlight = true }) do
+                local state = {}
+                for k, v in pairs(ready) do
+                    state[k] = v
+                end
+                state[key] = value
+                assert(protocol.reloadDue(state) == false, key)
+            end
+        end
+    )
 end)

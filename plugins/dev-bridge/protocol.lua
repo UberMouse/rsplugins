@@ -27,6 +27,9 @@ protocol.limits = {
     valueBytes = 64 * 1024, -- encoded values of one eval result, or one Emit's value
     outputLines = 200, -- print/log lines one eval result keeps
     lineBytes = 2 * 1024, -- one output line, Log text, error or Emit tag
+    -- Distinct probe (event, name) pairs per session. Probes can't be unsubscribed while the
+    -- bridge runs (eval.lua), only disarmed, so each one stays subscribed until the reload.
+    probes = 32,
 }
 
 -- Every console line from the bridge carries this tag, so it's easy to grep.
@@ -417,6 +420,19 @@ function protocol.probeName(name)
     return protocol.PROBE_PREFIX .. name
 end
 
+-- The error for a snippet subscribing a new probe when `count` probes already exist, or nil
+-- if there is room.
+---@param count integer
+---@return string?
+function protocol.probeCapError(count)
+    if count < protocol.limits.probes then return nil end
+    return string.format(
+        "at most %d probes per bridge session (they can't be unsubscribed while it runs); "
+            .. "`rsdev.py eval --reset` clears them",
+        protocol.limits.probes
+    )
+end
+
 -- The Log text for a probe stopped by its first error.
 ---@param event string
 ---@param name string the name the snippet subscribed with
@@ -424,7 +440,7 @@ end
 ---@return string
 function protocol.probeErrorText(event, name, err)
     return string.format(
-        "probe Event.%s %q unsubscribed after an error: %s",
+        "probe Event.%s %q disarmed after an error: %s",
         event,
         name,
         protocol.text(err)
@@ -498,6 +514,25 @@ function protocol.consoleRefusal(command)
             .. "re-enable it; run it from the client console instead"
     end
     return nil
+end
+
+-- A reset reloads the bridge (`prl dev-bridge`) rather than unsubscribing its probes, but
+-- only once the daemon has its result, and when nothing else would be lost by reloading:
+-- no commands still queued, no results unsent, no sync in flight.
+---@param state { resetSynced: boolean, queued: integer, unsent: integer, inFlight: boolean }
+---@return boolean
+function protocol.reloadDue(state)
+    return state.resetSynced and state.queued == 0 and state.unsent == 0 and not state.inFlight
+end
+
+-- The error for a command that arrives while a reset's reload is pending: running it would
+-- lose its result (or its effect) in the reload.
+---@param resetId string
+---@return string
+function protocol.reloadingError(resetId)
+    return "not run: the bridge is reloading for reset "
+        .. resetId
+        .. "; send it again once it reconnects"
 end
 
 local KINDS = { exec = true, eval = true, reset = true }

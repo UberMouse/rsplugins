@@ -73,7 +73,9 @@ The official reference annotates Lua with pseudo-types:
 ## Events
 
 - `Event.<Name>.Subscribe("uniqueName", callback)` and `Event.<Name>.Unsubscribe("uniqueName")`.
-  The name identifies the subscription so you can replace or remove it.
+  The name identifies the subscription so you can replace or remove it. **Never call
+  `Unsubscribe` from inside an event callback**: it aborts the client (see "Runtime limits we've
+  hit"). `PluginShutdown` is a safe place.
 - The callback gets a **payload** table, whose fields depend on the event.
 - Useful events: `ServerLogic` (after each server packet, about once per 0.6 s tick, no
   payload), `Logic` (fixed 50 Hz client tick, `ev.logicTick`), `Draw` (every rendered frame,
@@ -136,6 +138,16 @@ Found in the beta client (2026-10-20), not in the official docs:
   response, the next request either arrived with an empty body or never arrived. The cause isn't
   confirmed. Until it is: start requests only from event callbacks (e.g. `Logic`), keep each
   body string referenced until its request finishes, and avoid coroutines around API calls.
+- **`Event.<X>.Unsubscribe` from inside an event callback aborts the client** (SIGABRT, a
+  systemd coredump; 2026-10-26, dev-bridge). `Event.VarTransmit.Unsubscribe` called from inside
+  the plugin's `Logic` callback did it, and `pcall` around the call didn't help: it is a native
+  abort, not a Lua error. An earlier crash that session had the same shape (a probe that
+  unsubscribed itself from inside its own `Logic` callback). Safe: `Unsubscribe` in
+  `PluginShutdown`, including the one a plugin's own `prl` from `Logic` triggers. Not yet known:
+  whether `Unsubscribe` from a UI hook callback (not an `Event` dispatch) is safe, and whether
+  `Event.Logic.Subscribe` from inside a `Logic` callback is (the first crash did that too). To
+  stop a handler from inside a callback, make it a no-op instead (a flag it checks first), and
+  unsubscribe in `PluginShutdown`. The test harness faults on the call.
 - `pairs(id.VarPlayer)` works, but the integer ID isn't in the value slot (passing the values to
   `FromID` fails with "expected number, received string"). Scanning IDs -70000..20000 found
   ~62k VarPlayer vars (VarBits included) and ~7.8k VarClient vars.
@@ -245,6 +257,17 @@ From `plugins/dev-bridge` in the beta client.
   and names other players while its sender fields are empty. An empty sender doesn't mean the
   text is free of other players' names, which is why dev-bridge filters chat by type allowlist
   (plus own-name match for speech), not by sender.
+- **`Event.<X>.Subscribe` from inside a `Logic` callback works** (`Event.VarTransmit.Subscribe`
+  from an eval snippet: the probe was called 6 times over about 70 s and the client stayed up).
+  `Unsubscribe` there aborts the client (see "Runtime limits we've hit").
+- **`load(chunk, "=eval", "t", env)` honours the mode and env arguments.** In an eval, `x = 1`
+  landed in the scratch env (`rawget(_G, 'x')` was 1, `_G == _ENV` true), not the bridge's own
+  (`rawget(getmetatable(_G).__index, 'x')` was nil). `getmetatable` is exposed to plugins.
+  `eval "Player.GetEntity().displayName"` returned the name; `print('hi', nil, 3) return 7, nil`
+  gave output `["hi nil 3"]`, values `[7, null]`, nvalues 2.
+- **A daemon older than the eval kinds** ignored the request's `kind` and queued `rsdev.py eval`
+  snippets as `exec` console commands, so the bridge ran the Lua as console input. `rsdev.py
+  eval` now checks the daemon's `/cli/status` `kinds` first.
 - **The player's own public line**: `chatType` 2, `senderNameSimple` `UberMouse894`,
   `senderNameUnfiltered` `<img=11>UberMouse894`, `senderNameFiltered`
   `<img=11> <col=6d6d75>Ironman</col> UberMouse894`.

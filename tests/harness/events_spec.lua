@@ -37,6 +37,37 @@ describe("Event subscriptions", function()
         assert.are.equal("", h:output())
     end)
 
+    it("faults on Unsubscribe inside an event callback, even under pcall", function()
+        local h = harness.load(plugin([[
+            Event.KeyTyped.Subscribe("x", function() end)
+            Event.WindowFocusChanged.Subscribe("y", function()
+                pcall(Event.KeyTyped.Unsubscribe, "x")
+            end)
+        ]]))
+        assert.matches(
+            "Event.KeyTyped.Unsubscribe inside an event callback: the client aborts %(SIGABRT%)",
+            harness.errorOf(function()
+                h:fire("WindowFocusChanged", { hasFocus = true })
+            end)
+        )
+    end)
+
+    it("allows Unsubscribe at the top level and in PluginShutdown, even mid-dispatch", function()
+        local h = harness.load(plugin([[
+            Event.KeyTyped.Subscribe("x", function() end)
+            Event.KeyTyped.Unsubscribe("x")
+            Event.KeyTyped.Subscribe("x", function() end)
+            function PluginShutdown() Event.KeyTyped.Unsubscribe("x") end
+            Event.WindowFocusChanged.Subscribe("y", function() ExecuteConsoleCommand("prl me") end)
+        ]]))
+        -- A self-reload from a callback runs PluginShutdown (the client does this safely).
+        h.onConsoleCommand = function()
+            h:unload()
+        end
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        assert.are.same({}, h.instance.subs.KeyTyped)
+    end)
+
     it("passes the payload's stub fields, and faults on one the stub lacks", function()
         local h = harness.load(plugin([[
             Event.WindowFocusChanged.Subscribe("x", function(ev) print(ev.hasFocus) end)

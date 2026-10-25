@@ -18,3 +18,7 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
 - `lib/dev/` + `scripts/dev-receiver.py`: a dev recorder a plugin opts into, which streams what
   it does with the API in the client to a local receiver (see
   [docs/testing.md](docs/testing.md#recordings); `plugins/recorder-demo` is the example).
+
+## License
+
+MIT, see [LICENSE](LICENSE).

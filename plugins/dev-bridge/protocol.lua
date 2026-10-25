@@ -242,13 +242,13 @@ function protocol.parseReply(body)
     return commands, malformed
 end
 
--- Console commands that would disable, reload or revoke a permission of the plugin named as
--- their first argument, short and long forms. plugins_setenabled is refused whatever its
--- true/false argument: telling a re-enable from a disable isn't worth the risk of getting it
--- wrong.
-local SELF_TARGETING = {
-    prl = true,
-    plugins_reload = true,
+-- Console commands that disable the plugin named as their first argument, or revoke one of its
+-- permissions, short and long forms. plugins_setenabled is refused whatever its true/false
+-- argument: telling a re-enable from a disable isn't worth the risk of getting it wrong.
+-- Reloading (prl, plugins_reload) is deliberately absent: probed 2026-10-26, a plugin can reload
+-- itself from its own Logic callback (docs/api-concepts.md), which is how the conductor restarts
+-- the bridge.
+local DISABLING = {
     poff = true,
     plugins_disable = true,
     plugins_setenabled = true,
@@ -256,15 +256,14 @@ local SELF_TARGETING = {
     plugins_permissions_disable = true,
 }
 
--- Whether `command` would disable or reload the bridge itself (or revoke one of its
--- permissions). The bridge runs commands from inside its own Logic callback, and what the
--- client does when a plugin disables itself there is unprobed, so these are refused.
+-- Whether `command` would disable the bridge, or revoke one of its permissions. That would cut
+-- the only channel the daemon has to the client, and nothing on the daemon side could undo it.
 ---@param command string
 ---@return boolean
-function protocol.isSelfTarget(command)
+function protocol.isSelfDisable(command)
     local word, target = command:match("^%s*(%S+)%s+(%S+)")
     if not word then return false end
-    return SELF_TARGETING[word:lower()] == true and target:lower() == protocol.PLUGIN
+    return DISABLING[word:lower()] == true and target:lower() == protocol.PLUGIN
 end
 
 -- Why the bridge won't run `command`, or nil if it will (an `exec` of any other console
@@ -273,9 +272,9 @@ end
 ---@return string?
 function protocol.refusal(command)
     if command.kind ~= "exec" then return "unknown kind " .. command.kind end
-    if protocol.isSelfTarget(command.arg) then
-        return "refused: this would disable or reload dev-bridge from inside its own callback, "
-            .. "which is unprobed in the client; run it from the client console instead"
+    if protocol.isSelfDisable(command.arg) then
+        return "refused: this would disable dev-bridge, cutting the only channel that could "
+            .. "re-enable it; run it from the client console instead"
     end
     return nil
 end

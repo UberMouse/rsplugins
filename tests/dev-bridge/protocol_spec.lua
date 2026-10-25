@@ -88,25 +88,26 @@ describe("protocol.unescape", function()
     end)
 end)
 
-describe("protocol.isSelfTarget", function()
-    it("catches each short and long form naming dev-bridge, any case and spacing", function()
+describe("protocol.isSelfDisable", function()
+    it("catches each disabling form naming dev-bridge, any case and spacing", function()
         for _, command in ipairs({
-            "prl dev-bridge",
-            "  PRL   dev-bridge  ",
             "poff dev-bridge",
-            "plugins_reload dev-bridge",
+            "  POFF   dev-bridge  ",
             "Plugins_Disable DEV-BRIDGE",
             "plugins_setenabled dev-bridge false",
             "plugins_setenabled dev-bridge true",
             "ppd dev-bridge httpAccess",
             "plugins_permissions_disable dev-bridge chatAccess",
         }) do
-            assert(protocol.isSelfTarget(command), command)
+            assert(protocol.isSelfDisable(command), command)
         end
     end)
 
     it("lets other plugins and other commands through", function()
         for _, command in ipairs({
+            "prl dev-bridge",
+            "  PRL   dev-bridge  ",
+            "plugins_reload dev-bridge",
             "prl chore-tracker",
             "poff debug-plugin",
             "pon dev-bridge",
@@ -117,16 +118,17 @@ describe("protocol.isSelfTarget", function()
             "!tele 0,50,50,9,56",
             "prl dev-bridge2",
         }) do
-            assert(not protocol.isSelfTarget(command), command)
+            assert(not protocol.isSelfDisable(command), command)
         end
     end)
 end)
 
 describe("protocol.refusal", function()
-    it("refuses unknown kinds and self-targeting commands, and nothing else", function()
+    it("refuses unknown kinds and self-disabling commands, and nothing else", function()
         assert.are.equal("unknown kind eval", protocol.refusal({ kind = "eval", arg = "1" }))
         assert.matches("console", protocol.refusal({ kind = "exec", arg = "poff dev-bridge" }))
         assert.is_nil(protocol.refusal({ kind = "exec", arg = "plist" }))
+        assert.is_nil(protocol.refusal({ kind = "exec", arg = "prl dev-bridge" }))
     end)
 end)
 

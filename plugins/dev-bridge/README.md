@@ -46,12 +46,18 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   up to 1 MB of events that have not been sent. Past that the oldest are dropped. Events taken
   into a sync that fails are dropped too, not retried; the next sync's `dropped` count tells the
   daemon how many.
-- It refuses any command that would disable or reload it, or revoke one of its permissions
-  (`prl`, `poff`, `plugins_reload`, `plugins_disable`, `plugins_setenabled`, `ppd`,
-  `plugins_permissions_disable` naming `dev-bridge`), because what the client does when a plugin
-  disables itself from inside its own callback hasn't been tried. Run those from the console.
-  The check needs the plugin name as the second word, so a bare `prl` or `poff` with no argument
-  is not refused (whether the client treats that as "all plugins" is unknown): don't send one.
+- It refuses any command that would disable it or revoke one of its permissions (`poff`,
+  `plugins_disable`, `plugins_setenabled` with any argument, `ppd`, `plugins_permissions_disable`
+  naming `dev-bridge`): that would cut the only channel that could re-enable it. Run those from
+  the client console. The check needs the plugin name as the second word, so a bare `prl` or
+  `poff` with no argument is not refused (whether the client treats that as "all plugins" is
+  unknown): don't send one.
+- `prl dev-bridge` (or `plugins_reload dev-bridge`) is allowed: probed in the client, a plugin
+  reloads itself cleanly from its own `Logic` callback. The reloaded bridge is a new session, so
+  that command's result is never reported. The daemon resolves it as "bridge restarted before
+  reporting" as soon as the new session syncs, so `rsdev.py exec "prl dev-bridge"` exits 1
+  (`error: bridge restarted before reporting`), or 3 (outcome unknown) if the new session hasn't
+  synced within `--timeout`. That is the expected result of a successful reload, not a failure.
 - Disabling it (`poff dev-bridge`) unsubscribes everything and cancels any sync in flight.
 
 ## Why it isn't for submission

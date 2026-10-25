@@ -118,7 +118,7 @@ describe("dev-bridge", function()
     )
 
     it(
-        "answers unknown kinds, self-targeting commands and failing commands with ok=false",
+        "answers unknown kinds, self-disabling commands and failing commands with ok=false",
         function()
             local h = support.load()
             h.onConsoleCommand = function(command)
@@ -128,9 +128,10 @@ describe("dev-bridge", function()
             support.answer(h, {
                 status = 200,
                 body = support.line("k1", "eval", "1 + 1")
-                    .. support.line("k2", "exec", "  PRL  dev-bridge")
+                    .. support.line("k2", "exec", "  POFF  dev-bridge")
                     .. support.line("k3", "exec", "plugins_setenabled dev-bridge true")
-                    .. support.line("k4", "exec", "boom"),
+                    .. support.line("k4", "exec", "boom")
+                    .. support.line("k5", "exec", "prl dev-bridge"),
             })
             h:advance(20 * 10)
             local results = support.last(h).results
@@ -140,7 +141,9 @@ describe("dev-bridge", function()
             assert.is_false(results[3].ok)
             assert.is_false(results[4].ok)
             assert.matches("no such command", results[4].error)
-            assert.are.same({ "boom" }, support.ran(h)) -- the refused ones never ran
+            -- The refused ones never ran; a self-reload is not refused.
+            assert.are.same({ "boom", "prl dev-bridge" }, support.ran(h))
+            assert.is_true(results[5].ok)
         end
     )
 

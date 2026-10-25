@@ -229,6 +229,9 @@ From `plugins/dev-bridge` in the beta client.
 - **Self-granting works.** `ExecuteConsoleCommand("ppr <plugin>")` then `"ppe <plugin> httpAccess"`
   from `main.lua`'s top level granted the permission: the bridge connected with no manual grant.
 - **HTTP to 127.0.0.1 carries no `Origin` header**, so a local daemon can't use one to vet the caller.
+- **A plugin can reload itself.** `ExecuteConsoleCommand("prl <itself>")` from its own `Logic`
+  callback (twice, capped via PersistentDB) reloaded cleanly: `PluginShutdown` ran in between, the
+  plugin re-enabled with no errors or hitch, and PersistentDB persisted across it.
 - **Console output isn't a ChatMessage.** `ExecuteConsoleCommand("plist")`'s output did not arrive
   as a `ChatMessage` (chatAccess granted; the player's own public chat did), so `ChatMessage` is
   not a way to capture console output.

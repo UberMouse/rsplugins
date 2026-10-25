@@ -49,6 +49,55 @@ describe("replaying a recording", function()
         assert.are.equal(2, h.world.state.vars.VarPlayer[1297])
     end)
 
+    it("packs a replayed VarBit update into its base, delivered under the VarBit's name", function()
+        local h = harness.new(plugin([[
+            Event.VarTransmit.Subscribe("v", function(ev)
+                local p = var.VarPlayer
+                say(ev.var.configName, ev.oldValue, ev.newValue, p.HANDSAND_BUCKETS.value,
+                    p.HANDSAND_BUCKETS_CLAIMED_TODAY.value)
+            end)
+        ]]))
+        local claimed =
+            { config = "HANDSAND_BUCKETS_CLAIMED_TODAY", id = -55455, type = "VarPlayer" }
+        local buckets = { config = "HANDSAND_BUCKETS", id = 2801, type = "VarPlayer" }
+        h:useRecording({
+            {
+                t = 1,
+                k = "event",
+                name = "VarTransmit",
+                payload = { var = buckets, oldValue = 0, newValue = 1 },
+                op = {
+                    op = "setVar",
+                    domain = "VarPlayer",
+                    name = "HANDSAND_BUCKETS",
+                    id = 2801,
+                    value = 1,
+                },
+            },
+            {
+                t = 2,
+                k = "event",
+                name = "VarTransmit",
+                payload = { var = claimed, oldValue = 0, newValue = 1 },
+                op = {
+                    op = "setVar",
+                    domain = "VarPlayer",
+                    name = "HANDSAND_BUCKETS_CLAIMED_TODAY",
+                    id = -55455,
+                    value = 1,
+                },
+            },
+        })
+        h:load()
+        h:playRecording()
+        assert.are.equal(
+            "1 HANDSAND_BUCKETS 0 1 1 0\n2 HANDSAND_BUCKETS_CLAIMED_TODAY 0 1 3 1",
+            h:output()
+        )
+        assert.are.equal(3, h.world.state.vars.VarPlayer[2801])
+        assert.is_nil(h.world.state.vars.VarPlayer[-55455])
+    end)
+
     it("serves a read the latest value recorded at or before the current tick", function()
         local h = harness.new(plugin([[
             Event.Logic.Subscribe("poll", function()

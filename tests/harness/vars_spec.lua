@@ -85,6 +85,91 @@ describe("vars", function()
         assert.is_true(h.env.noBase)
     end)
 
+    describe("VarBit packing", function()
+        -- HANDSAND_BUCKETS (2801) packs HANDSAND_BUCKETS_SAND_EXPLAINED (bit 0),
+        -- HANDSAND_BUCKETS_CLAIMED_TODAY (bit 1), HANDSAND_COUNT (bits 0-6) and
+        -- HANDSAND_RUNEDAY (bits 7-31).
+        local WATCH = [[
+            Event.VarTransmit.Subscribe("v", function(ev)
+                local p = var.VarPlayer
+                print(ev.var.configName, ev.oldValue, ev.newValue, p.HANDSAND_BUCKETS.value,
+                    p.HANDSAND_BUCKETS_CLAIMED_TODAY.value, p.HANDSAND_COUNT.value)
+            end)
+        ]]
+
+        it("reads a VarBit from its base, and a base update names the base", function()
+            -- As claiming Bert's sand sent it in the var-dump change log (2026-10-25).
+            local h = harness.new(plugin(WATCH))
+            h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", 0)
+            h:load()
+            h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", 1)
+            h.world:setVar("VarPlayer", 2801, 3)
+            assert.are.equal("HANDSAND_BUCKETS 0 1 1 0 1\nHANDSAND_BUCKETS 1 3 3 1 3", h:output())
+        end)
+
+        it("writes a VarBit into its bits of the base, and the update names the VarBit", function()
+            local h = harness.new(plugin(WATCH))
+            h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", (5 << 7) | 1) -- runeday 5, count 1
+            h:load()
+            h.world:setVar("VarPlayer", "HANDSAND_BUCKETS_CLAIMED_TODAY", 1)
+            assert.are.equal("HANDSAND_BUCKETS_CLAIMED_TODAY 0 1 643 1 3", h:output())
+            local p = h.env.var.VarPlayer
+            assert.are.same({ 5, 1 }, { p.HANDSAND_RUNEDAY.value, p.FromID(-55454).value })
+        end)
+
+        it("extracts fields from a negative base and writes bit 31 as a negative base", function()
+            local h = harness.load(plugin(""))
+            local p = h.env.var.VarPlayer
+            h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", -1)
+            assert.are.same({ (1 << 25) - 1, 127, 1 }, {
+                p.HANDSAND_RUNEDAY.value,
+                p.HANDSAND_COUNT.value,
+                p.HANDSAND_BUCKETS_CLAIMED_TODAY.value,
+            })
+            h.world:setVar("VarPlayer", "HANDSAND_COUNT", 0)
+            assert.are.equal(-128, p.HANDSAND_BUCKETS.value) -- bits 7-31 still set
+            h.world:setVar("VarPlayer", "OPTION_TOGGLE1", 0)
+            h.world:setVar("VarPlayer", "SLAYER_TOGGLE_SLAYER_COUNTER", 1) -- bit 31
+            assert.are.equal(-2147483648, p.OPTION_TOGGLE1.value)
+            h.world:setVar("VarPlayer", "SLAYER_TOGGLE_SLAYER_COUNTER", 0)
+            assert.are.equal(0, p.OPTION_TOGGLE1.value)
+        end)
+
+        it("faults on a value that doesn't fit the VarBit, naming its bits", function()
+            local h = harness.new(plugin(""))
+            for v, shown in pairs({ [8] = "8", [-1] = "%-1" }) do
+                assert.matches(
+                    "VarPlayer.FRIEND_SORT_MODE is bits 3%-5 of OPTION_TOGGLE1: value must be 0..7, got "
+                        .. shown,
+                    harness.errorOf(function()
+                        h.world:setVar("VarPlayer", "FRIEND_SORT_MODE", v)
+                    end)
+                )
+            end
+        end)
+
+        it("starts an unset base at 0 when a VarBit is set first", function()
+            local h = harness.new(plugin([[
+                Event.VarTransmit.Subscribe("v", function(ev)
+                    print(ev.var.configName, ev.oldValue, ev.newValue, ev.var.baseVar.value)
+                end)
+            ]]))
+            h:load()
+            h.world:setVar("VarPlayer", "FRIEND_SORT_MODE", 5)
+            assert.are.equal("FRIEND_SORT_MODE 0 5 40", h:output())
+            assert.are.equal(0, h.env.var.VarPlayer.OPTION_HIDE_DUEL_OP.value)
+        end)
+
+        it("faults on reading a VarBit whose base was never set", function()
+            assert.matches(
+                "var.VarPlayer.HANDSAND_COUNT.value was never set",
+                harness.errorOf(function()
+                    harness.load(plugin("local v = var.VarPlayer.HANDSAND_COUNT.value"))
+                end)
+            )
+        end)
+    end)
+
     it("keeps var values read-only to the plugin", function()
         assert.matches(
             "VarType.value is read%-only",

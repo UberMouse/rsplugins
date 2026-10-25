@@ -77,13 +77,21 @@ function M.varValueError(rec, value)
         if math.type(value) ~= "integer" then
             return label .. " is " .. rec.type .. ": expected an integer, got " .. tostring(value)
         end
-        if rec.mask then
-            local width = rec.mask
-            while width & 1 == 0 do
-                width = width >> 1
+        if rec.baseVar then
+            if not rec.mask then
+                return label .. " is a VarBit of " .. rec.baseVar .. " with no bits in vars.csv"
             end
-            if value < 0 or value > width then
-                return label .. " is a VarBit: value must be 0.." .. width
+            local max = rec.mask >> rec.lo
+            if value < 0 or value > max then
+                return string.format(
+                    "%s is bits %d-%d of %s: value must be 0..%d, got %d",
+                    label,
+                    rec.lo,
+                    rec.hi,
+                    rec.baseVar,
+                    max,
+                    value
+                )
             end
         end
     elseif rec.type == "STRING" then
@@ -135,12 +143,42 @@ local OBJ_FIELDS = stubs.fields("ObjType")
 
 local ops = {}
 
+-- A var's value in the world, or nil if it was never set. A VarBit holds no value of its own:
+-- it is its bits of its base var's value, read unsigned (nil while the base is unset).
+---@param state table
+---@param rec table catalog record
+---@return any
+function M.varValue(state, rec)
+    local values = state.vars[rec.domain]
+    if not rec.baseVar then return values[rec.id] end
+    local base = rec.mask and values[M.varRecord(rec.domain, rec.baseVar).id]
+    return base and (base & rec.mask) >> rec.lo
+end
+
+-- The signed 32-bit int with v's low 32 bits, as the client holds an INTEGER var.
+---@param v integer
+---@return integer
+local function int32(v)
+    v = v & 0xFFFFFFFF
+    return v >= 0x80000000 and v - 0x100000000 or v
+end
+
+-- Setting a VarBit writes its bits into its base var (starting an unset base at 0) and keeps
+-- the base's other bits. The update names the var that was set, base or VarBit, with that
+-- var's old and new values: the var-dump change log (2026-10-25) has both kinds of update.
 function ops.setVar(state, op)
     local rec = M.varRecord(op.domain, op.name or op.id)
     checkVarValue(rec, op.value)
     local values = state.vars[rec.domain]
     local old = values[rec.id]
-    values[rec.id] = op.value
+    if rec.baseVar then
+        local base = M.varRecord(rec.domain, rec.baseVar)
+        values[base.id] = values[base.id] or 0
+        old = M.varValue(state, rec)
+        values[base.id] = int32((values[base.id] & ~rec.mask) | (op.value << rec.lo))
+    else
+        values[rec.id] = op.value
+    end
     -- The client fires VarTransmit for every update, changed or not (core/events.html#vartransmit).
     return { { event = "VarTransmit", domain = rec.domain, id = rec.id, old = old, new = op.value } }
 end

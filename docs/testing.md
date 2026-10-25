@@ -105,7 +105,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 
 | Call | Fires |
 |---|---|
-| `setVar(domain, nameOrId, value)` | `VarTransmit`, on every call |
+| `setVar(domain, nameOrId, value)` | `VarTransmit`, on every call, naming the var set. A VarBit is packed into its base var (see the [fidelity ledger](#fidelity-ledger)) |
 | `login(displayName)` / `logout()` | nothing |
 | `setPosition(x, z, level?)` | nothing. The player's world tile (`level` defaults to 0), read back as `Player.GetEntity().coordGrid`; it survives a logout |
 | `setSkill(skill, { level, xp, gameplay?, capped?, xpCapped? })` | nothing. The optional fields default to `level` / `xp` |
@@ -399,8 +399,9 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
   `ChatMessage` of `ChatType.PLUGIN` (the plugin's own `Chat.AddMessage` coming back) is
   dropped, since the harness delivers those itself.
 - **Not applied to the world**: a `setVar` whose var isn't in `docs/vars/vars.csv`, or whose
-  value its type can't hold in the harness (config-typed vars, and BOOLEAN vars, which
-  VarTransmit reports as 0/1). The event still fires with the recorded values, except for a
+  value its type can't hold in the harness (config-typed vars, BOOLEAN vars, which
+  VarTransmit reports as 0/1, and the two VarBits the catalog gives no bits,
+  `PSR_XPBLOCKSKILLS_0_LISTENER` and `_1_LISTENER`). The event still fires with the recorded values, except for a
   var the catalog lacks: then the delivery is skipped and listed in `h.replay.skipped`.
 - **Gaps.** After a `dropped` line, reads and the world may not match what the plugin saw,
   so `h:useRecording` refuses a recording with one, giving the count, unless the test passes
@@ -478,6 +479,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Subscribers run in subscription order; reusing a name replaces it for that event only; a payload edited by one subscriber is what the next sees (fields the stub doesn't mark "(Read-only)", such as `ChatMessage.chatMessage`, are writable) | [core/events.html#overview](https://developer.runescape.com/rs/core/events.html#overview), #event-payloads |
 | `Logic` at a fixed 50 Hz with `logicTick`; `ServerLogic` about every 600 ms with no payload | core/events.html#logic, #serverlogic; recording `20261025-144642-8f7250b863`: about 3000 Logic ticks per `CLOCK_TIME_DATE_MINUTES` minute, and `ServerLogic` 30 ticks apart two times in three (16 to 82 seen). The harness's is exactly every 30 |
 | `VarTransmit` fires on every update, changed or not, after the value is set, with `var`, `oldValue`, `newValue` | core/events.html#vartransmit |
+| VarBit packing: a VarBit's `.value` is its catalog `bits` of its base var's value, unsigned, the base a 32-bit int that may be negative. Setting the base fires one `VarTransmit` naming the base (base old/new); setting a VarBit writes its bits into the base, keeping the others, and fires one naming the VarBit (field old/new). A value that doesn't fit the bits faults. A VarBit set while its base is unset starts the base at 0 (so its first `oldValue` is 0); reading one whose base is unset faults as unmocked. Replay packs the same way and delivers each event under the var the recording named. The catalog has no VarClient VarBits | var-dump change log, 2026-10-25 (`dumps/var-dump/changes.jsonl`): claiming Bert's sand sent `HANDSAND_BUCKETS` (2801) 0 -> 1 -> 3 and `HANDSAND_BUCKETS_CLAIMED_TODAY` (bit 1) then read 1; chopping sent `LEAGUE_TASK_PROGRESS_CHOP_ANY` (a VarBit of `LEAGUE_TASK_PROGRESS_BASE_3`) by its own name, 0 -> 1 -> 2 -> 3 -> 4; `TOPLEVEL_V2_PARENT_VARP_1` arrived under its own name and two of its VarBits' names. Bits from `docs/vars/vars.csv` |
 | `var.<Domain>.NAME` and `FromID(id)` give one VarType per var (`ev.var == var.VarPlayer.X`); VarBits report `isVarBit`, `baseVar`, `varBitMask`; `baseVar`/`varBitMask` are nil otherwise; properties are read-only | game/config/vartype.html, `docs/vars/vars.csv` |
 | `Player.IsAvailable` says whether player data can be read | game/player.html#isavailable |
 | `PlayerEntity.coordGrid` is the player's tile as a `CoordGrid` with `level`, `x`, `z` (world tiles), `mapSquareX`/`Z` (`x // 64`) and `localX`/`Z` (`x % 64`) | game/entity/playerentity.html#properties, game/coordgrid.html#properties; a map square is 64 tiles ([api-concepts.md](api-concepts.md#coordinates)) |
@@ -565,9 +567,11 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
   `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP`, `config.*` beyond `Inv` and `Obj`,
   `Plugin.resources`, `Player.GetTrackingID` / `GetRunEnergy` / `GetWeight` / `GetCombatLevel`,
   `PlayerEntity` beyond `displayName` and `coordGrid`, `InvType.stockCount`.
-- **Vars**: VarBit packing (setting a base var doesn't change its VarBits, nor the reverse).
-  VarTransmit naming one VarBit per base-var update, and BOOLEAN vars reading `true` (both
-  unconfirmed, [api-concepts.md](api-concepts.md#runtime-limits-weve-hit)). The error logged for
+- **Vars**: BOOLEAN vars reading `true` (unconfirmed,
+  [api-concepts.md](api-concepts.md#runtime-limits-weve-hit)). Which name the client gives an
+  update, base or VarBit: the builder names the var the test set. A replayed VarBit value
+  (event or read) whose base the world doesn't know yet starts the base at 0, so the base's
+  other VarBits read 0 rather than unrecorded until the recording gives them. The error logged for
   unsupported ValueTypes. Config-typed values (OBJ, NPC, COORDGRID...): `setVar` refuses them.
 - **VarTransmit values of BOOLEAN and config-typed vars.** The client's `oldValue`/`newValue`
   are plain integers for these (BOOLEAN 0/1, COORDGRID, INV, OBJ, ACHIEVEMENT, COMPONENT...;

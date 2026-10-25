@@ -31,7 +31,7 @@ local VarType = strict.class("VarType", {
             return M.ValueType[s.rec.type]
         end,
         value = function(s)
-            local v = s.h.world.state.vars[s.rec.domain][s.rec.id]
+            local v = world.varValue(s.h.world.state, s.rec)
             if v == nil then
                 local config = recording.configPath("var", s.rec.domain, s.rec.name)
                 local path = recording.memberPath(config, "value")

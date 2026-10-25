@@ -12,13 +12,13 @@ local M = {}
 local vars = nil ---@type table?
 local configs = {}
 
--- The bitmask for a VarBit's "lo-hi" bit range (vars.csv `bits` column).
+-- A VarBit's "lo-hi" bit range (vars.csv `bits` column).
 ---@param bits string
----@return integer
-local function maskOf(bits)
+---@return integer lo
+---@return integer hi
+local function bitRange(bits)
     local lo, hi = bits:match("^(%d+)%-(%d+)$")
-    lo, hi = assert(tonumber(lo)), assert(tonumber(hi))
-    return ((1 << (hi - lo + 1)) - 1) << lo
+    return assert(math.tointeger(tonumber(lo))), assert(math.tointeger(tonumber(hi)))
 end
 
 -- Built into a local and published at the end, so a failed load leaves no partial catalog.
@@ -50,8 +50,11 @@ local function loadVars()
                 name = name,
                 type = typeName,
                 baseVar = baseVar ~= "" and baseVar or nil,
-                mask = bits ~= "" and maskOf(bits) or nil,
             }
+            if bits ~= "" then
+                rec.lo, rec.hi = bitRange(bits)
+                rec.mask = ((1 << (rec.hi - rec.lo + 1)) - 1) << rec.lo
+            end
             loaded.byName[domain] = loaded.byName[domain] or {}
             loaded.byId[domain] = loaded.byId[domain] or {}
             loaded.byName[domain][name] = rec
@@ -61,7 +64,8 @@ local function loadVars()
     return loaded
 end
 
--- A var's catalog record { domain, id, name, type, baseVar?, mask? }, by name or ID.
+-- A var's catalog record { domain, id, name, type, baseVar?, lo?, hi?, mask? }, by name or ID.
+-- A VarBit has baseVar (its base var's name) and, where vars.csv gives its bits, lo/hi/mask.
 ---@param domain string "VarPlayer" or "VarClient"
 ---@param key string|integer
 ---@return table? # the record, or nil if the catalog has no such var

@@ -25,10 +25,11 @@ M.TITLES = { daily = "Daily", weekly = "Weekly", monthly = "Monthly" }
 ---@field total integer how many rows there are
 
 -- The sections in the order Daily, Weekly, Monthly, each holding only its selected chores
--- (shop chores included). A period with nothing selected has no section.
+-- (shop chores included). A period with nothing selected has no section. Without a clock
+-- (`now` nil: logged out or loading) nothing shows done, since no period can be placed.
 ---@param s ChoreState
 ---@param chores Chore[]
----@param now integer epoch minutes
+---@param now integer? epoch minutes
 ---@return ChoreSection[]
 function M.view(s, chores, now)
     local sections = {}
@@ -36,7 +37,7 @@ function M.view(s, chores, now)
         local section = { period = p, title = M.TITLES[p], rows = {}, done = 0, total = 0 }
         for _, chore in ipairs(chores) do
             if chore.period == p and state.isSelected(s, chore.id) then
-                local done = state.isDone(s, chore, now)
+                local done = now ~= nil and state.isDone(s, chore, now)
                 section.rows[#section.rows + 1] = {
                     id = chore.id,
                     name = chore.name,

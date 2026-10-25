@@ -96,6 +96,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `h.chatLog` | `{ message, chatType, sender }` per chat-window message, after subscribers' edits |
 | `h.requests` | Started HTTP requests in order: `{ method, url, body, headers, request }` |
 | `h.db` | PersistentDB entries, `key -> { type, value }`; survives reload |
+| `h.dbWrites` | How many values the plugin has stored (`Set` and the typed setters), across reloads |
 | `h.tick` | Logic ticks so far (`ev.logicTick`) |
 | `h.ui` | The PrettyUI driver: find, click, drag and resize the plugin's PrettyUI objects ([below](#the-prettyui-driver-hui)) |
 | `h.replay` | While replaying: `timeline`, `reads` (path -> `{ v }`, the reads seen so far), `skipped` (`{ t, event, why }` per recorded delivery the harness couldn't make) and `dropped` (`{ t, n }` per gap in the recording) |

@@ -88,6 +88,8 @@ local function set(s, key, value, want)
         value, t = value + 0.0, T.FLOAT
     end
     if want and t ~= want then return nil end
+    -- Seeding a replay's store (no harness on `s`) isn't the plugin writing.
+    if s.h then s.h.dbWrites = s.h.dbWrites + 1 end
     s.db[key] = { type = t, value = t == T.STRUCTURED_DATA and copyData(value) or value }
     return true
 end

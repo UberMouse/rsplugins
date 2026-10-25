@@ -68,6 +68,7 @@ function M.new(plugin, opts)
         chatQueue = {}, -- Chat.AddMessage text waiting for the next logic step
         requests = {}, -- HTTP requests, in the order they were started
         db = {}, -- PersistentDB entries: key -> { type, value }
+        dbWrites = 0, -- PersistentDB stores (Set and the typed setters) so far, across reloads
         varProxies = {},
         configProxies = {},
         invProxies = {},

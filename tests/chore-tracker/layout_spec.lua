@@ -1,0 +1,81 @@
+-- core/layout: the window's saved layout, read back and kept inside the plugin layer.
+
+require("tests.chore-tracker.support")
+local layout = require("core/layout")
+
+describe("chore-tracker layout", function()
+    it("defaults to an open window with its button in the close X's slot", function()
+        local l = layout.default()
+        assert.is_false(l.collapsed)
+        assert.are.same({ l.x + l.width - 28, l.y + 7 }, { l.buttonX, l.buttonY })
+    end)
+
+    it("round-trips through serialise and fromStored", function()
+        local l = layout.default()
+        l.x, l.collapsed, l.buttonY = 10, true, 99
+        local back = layout.fromStored(layout.serialise(l))
+        assert.are.same(l, back)
+        assert.is_true(layout.same(l, back))
+    end)
+
+    it("accepts whole floats, and falls back to the default on anything malformed", function()
+        local stored = layout.serialise(layout.default())
+        stored.x = 600.0
+        assert.are.equal(600, layout.fromStored(stored).x)
+        assert.is_true(math.type(layout.fromStored(stored).x) == "integer")
+        for _, bad in ipairs({
+            { x = 1.5 },
+            { width = "wide" },
+            { collapsed = 1 },
+            { version = 2 },
+        }) do
+            local value = layout.serialise(layout.default())
+            value.x = 1
+            for k, v in pairs(bad) do
+                value[k] = v
+            end
+            assert.are.same(layout.default(), layout.fromStored(value))
+        end
+        assert.are.same(layout.default(), layout.fromStored(nil))
+        assert.are.same(layout.default(), layout.fromStored("layout"))
+    end)
+
+    it("tells layouts apart by any field", function()
+        local a, b = layout.default(), layout.default()
+        assert.is_true(layout.same(a, b))
+        b.buttonX = b.buttonX + 1
+        assert.is_false(layout.same(a, b))
+        b = layout.default()
+        b.collapsed = true
+        assert.is_false(layout.same(a, b))
+    end)
+
+    it("moves and shrinks a layout that no longer fits its parent", function()
+        local l = {
+            x = 3000,
+            y = -50,
+            width = 900,
+            height = 5000,
+            collapsed = true,
+            buttonX = 4000,
+            buttonY = -3,
+        }
+        local c = layout.clamp(l, 1000, 800, 240, 160, 20)
+        assert.are.same({
+            x = 100,
+            y = 0,
+            width = 900,
+            height = 800,
+            collapsed = true,
+            buttonX = 980,
+            buttonY = 0,
+        }, c)
+        local fits = layout.default()
+        assert.are.same(fits, layout.clamp(fits, 3836, 2121, 240, 160, 20))
+    end)
+
+    it("keeps the minimum size even in a parent smaller than it", function()
+        local c = layout.clamp(layout.default(), 100, 100, 240, 160, 20)
+        assert.are.same({ 0, 0, 240, 160 }, { c.x, c.y, c.width, c.height })
+    end)
+end)

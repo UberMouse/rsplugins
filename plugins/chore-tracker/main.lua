@@ -12,12 +12,16 @@
 --     button to move it (with the console closed); click it to open the window again, grown
 --     left and down from the button.
 --   * A chore counts as done until its period resets, by the game clock (UTC): daily at
---     00:00, weekly on Wednesday 00:00, monthly at 00:00 on the 1st.
---
--- Picks and ticks are kept in memory for now: they reset on reload.
+--     00:00, weekly on Wednesday 00:00, monthly at 00:00 on the 1st. Ticks clear by
+--     themselves when the clock passes a reset.
+--   * Picks and ticks are saved per character (by display name) as they change. The window's
+--     position, size and collapsed state, and the collapsed button's spot, are saved for all
+--     characters. Logged out, the window says so; until the game clock reads, nothing can be
+--     ticked.
 --
 -- It only shows a list you tick by hand: no permissions, nothing sent to the game, nothing
--- about other players. Console lines carry [CHORES] (grep: \[CHORES\]).
+-- about other players. Console lines carry [CHORES] (grep: \[CHORES\]); the display name is
+-- never logged.
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -27,22 +31,21 @@
 -- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
 
 local chores = require("data/chores")
+local layout = require("core/layout")
 local period = require("core/period")
 local state = require("core/state")
 local view = require("core/view")
+local store = require("shell/store")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
 local function say(...)
     log("[CHORES]", ...)
 end
 
--- PrettyUI's close X is 20 px, at (width - 28, 7) from the window's top-left; the
--- hamburger takes that slot.
+-- PrettyUI's close X is 20 px; the hamburger takes its slot (layout.SLOT_X, SLOT_Y).
 local BUTTON_SIZE = 20
-local SLOT_X, SLOT_Y = -28, 7
 
--- Where the window first opens, and the smallest it can be resized to.
-local DEFAULT_LAYOUT = { x = 600, y = 300, width = 320, height = 420 }
+-- The smallest the window can be resized to.
 local MIN_WIDTH, MIN_HEIGHT = 240, 160
 
 -- Row text colours (0xRRGGBBAA): PrettyUI 1.2.0's default for a choice, and a dimmed one
@@ -50,16 +53,29 @@ local MIN_WIDTH, MIN_HEIGHT = 240, 160
 local TEXT_COLOUR = 0xE7D7B0FF
 local DONE_COLOUR = 0x7A7262FF
 
--- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapse).
+-- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapseAt).
 local COLLAPSE_TOOLTIP = { text = "Collapse" }
 
 -- Tooltips wrap at this width; wiki URLs are long.
 local TOOLTIP_WIDTH = 360
 
+-- How often, in Logic ticks (50 a second), to look for a login change and a moved or
+-- resized window.
+local POLL_TICKS = 25
+
+-- Minutes since the Unix epoch; a VarTransmit fires as it ticks over.
+local CLOCK = var.VarPlayer.CLOCK_TIME_DATE_MINUTES
+local CLOCK_ID = CLOCK.id
+
 local parent = ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)
 assert(parent, "the plugin layer should exist once a plugin runs")
 
-local tracker = state.new() -- picks and ticks
+-- The logged-in character's display name (used only as their store key, never logged), and
+-- their picks and ticks.
+local character = nil ---@type string?
+local tracker = state.new()
+-- What the window shows: "loggedOut", "waiting" (for the game clock) or "ready".
+local phase = nil ---@type string?
 local mode = "list" -- or "settings"
 local win = nil ---@type prettyui.Window?
 local openButton = nil ---@type prettyui.SpriteButton? the hamburger in the window
@@ -74,20 +90,32 @@ local headings = {} ---@type table<string, ui.Text>
 -- removing the collapsed panel after expanding wait a tick.
 local pendingMode = nil ---@type string?
 local retiring = nil ---@type prettyui.Panel?
+-- The layout the store holds, so it's written only when the window has really moved.
+local savedLayout = nil ---@type ChoreLayout?
+
+---------------------------------------------------------------------------
+-- Reading the game
+---------------------------------------------------------------------------
+
+-- The game clock, or nil until it reads (logged out, loading).
+---@return integer?
+local function clockNow()
+    local minutes = CLOCK.value
+    if type(minutes) == "number" and minutes > 0 then return math.tointeger(minutes) end
+    return nil
+end
+
+-- The logged-in character's display name, or nil when logged out or loading.
+---@return string?
+local function currentName()
+    if not Player.IsAvailable() then return nil end
+    local entity = Player.GetEntity()
+    return entity and entity.displayName or nil
+end
 
 ---------------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------------
-
--- Minutes since the Unix epoch, from the game clock. Until the clock reads (logged out,
--- loading) this is 0: marks are then made at minute 0 and every period's start is at or
--- before it, so nothing resets.
----@return integer
-local function now()
-    local minutes = var.VarPlayer.CLOCK_TIME_DATE_MINUTES.value
-    if type(minutes) == "number" and minutes > 0 then return math.tointeger(minutes) or 0 end
-    return 0
-end
 
 ---@param v number
 ---@param lo number
@@ -153,9 +181,10 @@ local function showDone(id, done)
     hiding:SetOptionTooltip(id, widgets.tooltip)
 end
 
--- Bring the list's ticks, dimming and counts up to date with the tracker, in place.
+-- Bring the list's ticks, dimming and counts up to date with the tracker and the clock, in
+-- place. Only rows whose done state changed are touched.
 local function refreshList()
-    for _, section in ipairs(view.view(tracker, chores, now())) do
+    for _, section in ipairs(view.view(tracker, chores, clockNow())) do
         local heading = headings[section.period]
         if heading then heading.content = headingText(section) end
         for _, row in ipairs(section.rows) do
@@ -164,17 +193,24 @@ local function refreshList()
     end
 end
 
--- A row was ticked or unticked by the player.
----@param _ prettyui.CheckboxButton
+-- A row was ticked or unticked by the player: mark it at the clock's minute and save.
+---@param group prettyui.CheckboxButton
 ---@param _values any[]
 ---@param id string
 ---@param ticked boolean
-local function onTick(_, _values, id, ticked)
+local function onTick(group, _values, id, ticked)
+    local now = clockNow()
+    if character == nil or now == nil then
+        -- Nothing to mark against yet: put the box back.
+        group:SetSelected(id, not ticked, false)
+        return
+    end
     if ticked then
-        tracker = state.mark(tracker, id, now())
+        tracker = state.mark(tracker, id, now)
     else
         tracker = state.unmark(tracker, id)
     end
+    store.saveState(character, tracker)
     refreshList()
 end
 
@@ -182,7 +218,9 @@ end
 ---@param openSettings fun()
 local function buildList(w, openSettings)
     w:AddSpriteButton("SETTINGS", openSettings, { size = BUTTON_SIZE, tooltip = "Pick chores" })
-    local sections = view.view(tracker, chores, now())
+    local now = clockNow()
+    if now == nil then w:AddText("Waiting for the game clock.") end
+    local sections = view.view(tracker, chores, now)
     if #sections == 0 then
         w:AddText("No chores picked yet: use the settings button above to choose some.")
         return
@@ -201,7 +239,10 @@ local function buildList(w, openSettings)
                 { choice },
                 { onChange = onTick, colour = DONE_COLOUR, y = normal.root.y }
             )
-            rowWidgets[row.id] = { normal = normal, dimmed = dimmed, tooltip = tooltip }
+            -- Both start unticked and shown; showDone settles which one stays.
+            dimmed.root.hidden = true
+            rowWidgets[row.id] =
+                { normal = normal, dimmed = dimmed, tooltip = tooltip, done = false }
             showDone(row.id, row.done)
         end
     end
@@ -211,17 +252,19 @@ end
 -- Settings view
 ---------------------------------------------------------------------------
 
--- A chore was picked or unpicked.
+-- A chore was picked or unpicked: save it straight away.
 ---@param _ prettyui.CheckboxButton
 ---@param _values any[]
 ---@param id string
 ---@param picked boolean
 local function onPick(_, _values, id, picked)
+    assert(character, "settings are only built for a logged-in character")
     if picked then
         tracker = state.select(tracker, chores, id)
     else
         tracker = state.deselect(tracker, id)
     end
+    store.saveState(character, tracker)
 end
 
 ---@param w prettyui.Window
@@ -253,18 +296,19 @@ end
 
 local collapse -- defined below; the window's hamburger calls it
 
--- (Re)build the window for the current mode at `layout`. There's no PrettyUI call to clear
--- a window's content, so switching views rebuilds the window where it was.
----@param layout { x: number, y: number, width: number, height: number }
-local function buildWindow(layout)
+-- (Re)build the window at `at` for the current phase and mode. There's no PrettyUI call to
+-- clear a window's content, so a view switch, a login change or the clock starting
+-- rebuilds the window where it was.
+---@param at { x: integer, y: integer, width: integer, height: integer }
+local function buildWindow(at)
     if win then win:Destroy() end
     rowWidgets, headings = {}, {}
     local w = prettyui.Window.new(parent, {
         title = "Chores",
-        x = layout.x,
-        y = layout.y,
-        width = layout.width,
-        height = layout.height,
+        x = at.x,
+        y = at.y,
+        width = at.width,
+        height = at.height,
         resizable = true,
         minWidth = MIN_WIDTH,
         minHeight = MIN_HEIGHT,
@@ -272,13 +316,15 @@ local function buildWindow(layout)
     win = w
     w.closeButton.hidden = true
     openButton = prettyui.SpriteButton.new(w.root, "MENU", collapse, {
-        x = SLOT_X,
-        y = SLOT_Y,
+        x = layout.SLOT_X,
+        y = layout.SLOT_Y,
         xAnchor = 1.0,
         size = BUTTON_SIZE,
         tooltip = COLLAPSE_TOOLTIP,
     })
-    if mode == "settings" then
+    if phase == "loggedOut" then
+        w:AddText("Log in to see your chores.")
+    elseif mode == "settings" then
         buildSettings(w, function()
             pendingMode = "list"
         end)
@@ -289,21 +335,21 @@ local function buildWindow(layout)
     end
 end
 
--- Switch to `to`, keeping the window's position and size.
----@param to string
-local function switchView(to)
-    assert(win, "views are switched from the open window")
-    mode = to
+-- Rebuild the window where it is, staying closed if collapsed.
+local function rebuild()
+    assert(win, "the window exists from load to shutdown")
     local r = win.root
     buildWindow({ x = r.x, y = r.y, width = r.width, height = r.height })
+    if collapsed and win then win:Close() end
 end
 
 local expand
 
--- Close the window and put a lone hamburger where the window's was.
-collapse = function()
+-- Close the window and put a lone hamburger at (x, y) in the plugin layer.
+---@param x integer
+---@param y integer
+local function collapseAt(x, y)
     assert(win and openButton, "the window's hamburger only exists with the window")
-    local x, y = screenPos(openButton.root)
     -- The hamburger's tooltip is drawn inside the window, not in its content, so Close hides
     -- it only with the window, and it would be back on the next Show. Replacing it (with a
     -- table, as in showDone) leaves a fresh, hidden one.
@@ -321,6 +367,13 @@ collapse = function()
         size = BUTTON_SIZE,
         tooltip = "Chores (Alt-drag to move)",
     })
+end
+
+-- The window's hamburger: collapse where it is.
+collapse = function()
+    assert(openButton, "the window's hamburger called this")
+    local x, y = screenPos(openButton.root)
+    collapseAt(x, y)
     say("collapsed at", x, y)
 end
 
@@ -330,8 +383,8 @@ expand = function()
     local x, y = screenPos(collapsedButton.root)
     local r = win.root
     -- Kept inside the plugin layer: near an edge the window shifts, off the button's spot.
-    local wx = clamp(x - (r.width + SLOT_X), 0, parent.width - r.width)
-    local wy = clamp(y - SLOT_Y, 0, parent.height - r.height)
+    local wx = clamp(x - (r.width + layout.SLOT_X), 0, parent.width - r.width)
+    local wy = clamp(y - layout.SLOT_Y, 0, parent.height - r.height)
     -- A bare SetPos is snapped back by PrettyUI; SetSize after it makes the spot stick.
     r:SetPos(wx, wy)
     win:SetSize(r.width, r.height)
@@ -341,28 +394,107 @@ expand = function()
     say("expanded from", x, y)
 end
 
+-- Where everything is now, as a layout to save.
+---@return ChoreLayout
+local function currentLayout()
+    assert(win and openButton, "the window exists from load to shutdown")
+    local r = win.root
+    local button = collapsedButton and collapsedButton.root or openButton.root
+    local bx, by = screenPos(button)
+    return {
+        x = r.x,
+        y = r.y,
+        width = r.width,
+        height = r.height,
+        collapsed = collapsed ~= nil,
+        buttonX = bx,
+        buttonY = by,
+    }
+end
+
+-- Save the layout if it differs from what the store holds.
+local function saveLayoutIfChanged()
+    local now = currentLayout()
+    if savedLayout and layout.same(savedLayout, now) then return end
+    store.saveLayout(now)
+    savedLayout = now
+end
+
+---------------------------------------------------------------------------
+-- Following the game
+---------------------------------------------------------------------------
+
+-- Catch up with the login and the clock. A new character (or logging out) loads their
+-- state; a change of phase rebuilds the window. Otherwise, when the clock ticked, the list
+-- updates in place, which is all a reset needs: a mark from before a period's start no
+-- longer counts as done.
+---@param clockTicked boolean
+local function sync(clockTicked)
+    local name = currentName()
+    local now = clockNow()
+    local nextPhase = name == nil and "loggedOut" or now == nil and "waiting" or "ready"
+    local switched = name ~= character
+    if switched then
+        character = name
+        if name then
+            tracker = store.loadState(name)
+            say("showing the logged-in character's chores")
+        else
+            tracker = state.new()
+            say("logged out")
+        end
+    end
+    if switched or nextPhase ~= phase then
+        if nextPhase == "waiting" and phase ~= "waiting" then say("waiting for the game clock") end
+        phase = nextPhase
+        if phase == "loggedOut" then mode = "list" end
+        if win then rebuild() end
+    elseif clockTicked and phase == "ready" and mode == "list" then
+        refreshList()
+    end
+end
+
 ---------------------------------------------------------------------------
 -- Start and stop
 ---------------------------------------------------------------------------
 
-Event.Logic.Subscribe("chore-tracker", function()
+Event.Logic.Subscribe("chore-tracker", function(ev)
     if retiring then
         retiring:Destroy()
         retiring = nil
     end
     if pendingMode then
-        local to = pendingMode
+        mode = pendingMode
         pendingMode = nil
-        switchView(to)
+        rebuild()
+    end
+    if ev.logicTick % POLL_TICKS == 0 then
+        sync(false)
+        saveLayoutIfChanged()
     end
 end)
 
-buildWindow(DEFAULT_LAYOUT)
+Event.VarTransmit.Subscribe("chore-tracker", function(ev)
+    if ev.var.id == CLOCK_ID then sync(true) end
+end)
+
+sync(false)
+-- The layout as stored, then fitted to the plugin layer. savedLayout keeps the stored one,
+-- so a layout that had to be moved in gets saved at the next check.
+savedLayout = store.loadLayout()
+local start =
+    layout.clamp(savedLayout, parent.width, parent.height, MIN_WIDTH, MIN_HEIGHT, BUTTON_SIZE)
+buildWindow(start)
+if start.collapsed then collapseAt(start.buttonX, start.buttonY) end
 say("loaded", #chores, "chores")
 
 function PluginShutdown()
     Event.Logic.Unsubscribe("chore-tracker")
-    if win then win:Destroy() end
+    Event.VarTransmit.Unsubscribe("chore-tracker")
+    if win then
+        saveLayoutIfChanged()
+        win:Destroy()
+    end
     if collapsed then collapsed:Destroy() end
     if retiring then retiring:Destroy() end
 end

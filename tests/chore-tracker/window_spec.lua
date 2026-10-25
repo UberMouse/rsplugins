@@ -1,45 +1,8 @@
 -- The Chore Tracker's window through the harness and its PrettyUI fake: the views, ticking,
 -- and the collapse button.
 
-local harness = require("tests.harness")
-
--- 2026-10-25 01:43 UTC, a Sunday.
-local NOW = 29881543
-
----@return table h
-local function loaded()
-    local h = harness.new("chore-tracker")
-    h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", NOW)
-    h:load()
-    return h
-end
-
--- The one visible list row (of its normal and dimmed copies) for a chore name.
----@param h table
----@param name string
----@return table
-local function row(h, name)
-    return h.ui:get("CheckboxButton", { text = name, visible = true })
-end
-
--- Open settings, pick the chores whose ids are given, and go back to the list.
----@param h table
----@param ids string[]
-local function pick(h, ids)
-    assert.is_true(h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS" })))
-    h:advance(20)
-    for _, id in ipairs(ids) do
-        local group
-        for _, cb in ipairs(h.ui:find("CheckboxButton")) do
-            for _, choice in ipairs(h.ui:choices(cb)) do
-                if choice.value == id then group = cb end
-            end
-        end
-        assert.is_true(h.ui:click(assert(group, id), id))
-    end
-    assert.is_true(h.ui:click(h.ui:get("SpriteButton", { sprite = "BACK" })))
-    h:advance(20)
-end
+local helpers = require("tests.chore-tracker.helpers")
+local loaded, row, pick = helpers.loaded, helpers.row, helpers.pick
 
 describe("chore-tracker window", function()
     it("opens titled Chores, with the hint, and logs a tagged line", function()

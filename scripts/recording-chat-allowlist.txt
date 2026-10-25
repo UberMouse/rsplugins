@@ -2,12 +2,16 @@
 # keeps its text only if the whole text matches one of these lines. Any other game text is
 # redacted to "<redacted:N chars>".
 #
-# Adding a pattern is a deliberate review step: it must not be able to match another player's
-# name, since game messages name players ("Bob has logged in."). So no free-form slots (.*,
-# \w+, [A-Za-z ]+): only fixed text, numbers ([0-9,]+), colour tags (<col=[0-9A-Fa-f]{6}>) and
-# alternations of known names (tracks, achievements, areas). Each line is a Python regex
-# anchored as a whole: ^ first, $ last, no other ^ or $, and any | inside a group, as in
-# (?:a|b). Blank lines and lines starting with # are skipped.
+# A pattern must not be able to match another player's name, since game messages name players
+# ("Bob has logged in."): only fixed text, numbers ([0-9,]+), colour tags (<col=[0-9A-Fa-f]{6}>)
+# and alternations of known names (tracks, achievements, areas). The script refuses to load a
+# line with a free-form slot: a . or \w \W \s \S \d \D \b \B outside a class, any class but
+# [0-9,] and the hex inside the whole token <col=[0-9A-Fa-f]{6}> (names like Facade are spelled
+# in hex letters), + * or {n,m} after anything but [0-9,], a quantifier after that token, and
+# any (? form but (?:, (?P<name>, lookarounds and (?#...), which rules out inline flags and
+# conditionals. Each line is a Python regex anchored as a whole: ^ first, $ last, no other ^
+# or $, and any | inside a group, as in (?:a|b). Blank lines and lines starting with # are
+# skipped.
 
 # Thieving: pickpocketing
 ^You pick the target's pocket\.$

@@ -385,9 +385,11 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
      first, `$` last, any `|` inside a group, which the script checks). Any other game text
      becomes `<redacted:N chars>`, N its length in characters, keeping its `chatType`, so a
      game message naming another player ("Bob has logged in.") never reaches a fixture.
-     Adding a pattern is a review step: it must not be able to match a player's name, so no
-     free-form slots (`.*`, `\w+`), only fixed text, numbers, colour tags and lists of known
-     names. To keep a new message, add a pattern for it and re-run.
+     A pattern must not be able to match a player's name, so the script refuses free-form
+     slots (`.`, `\w`, any class but `[0-9,]`, hex anywhere but the `<col=[0-9A-Fa-f]{6}>`
+     tag, inline flags; the full rule heads the allowlist), leaving fixed text, numbers,
+     colour tags and lists of known names.
+     To keep a new message, add a pattern for it and re-run.
    - strips memory addresses from object text, as the recorder now does, and drops the reads
      that then repeat.
    - keeps only the entries with `--from <= t <= --to`, rebased so `--from` is `t = 0`. What

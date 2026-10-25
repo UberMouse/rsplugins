@@ -105,6 +105,27 @@ def leaks(pattern, text):
     return found
 
 
+def class_end(pattern, i):
+    """The index just past the character class that opens at pattern[i] (a `[`)."""
+    i += 1
+    if pattern.startswith("^", i):
+        i += 1
+    if pattern.startswith("]", i):  # first in the class, ] is a literal
+        i += 1
+    while i < len(pattern) and pattern[i] != "]":
+        i += 2 if pattern[i] == "\\" else 1
+    return i + 1
+
+
+def comment_end(pattern, i):
+    """The index just past the (?#...) comment that opens at pattern[i]."""
+    # re reads \) in a comment as an escape, so the comment ends at the first bare ).
+    i += 3
+    while i < len(pattern) and pattern[i] != ")":
+        i += 2 if pattern[i] == "\\" else 1
+    return i + 1
+
+
 def unanchored(pattern):
     """Why the compiled-OK regex `pattern` is not anchored as one whole, or None. It must
     start with ^ and end with $, with no other ^ or $, and no | outside a group: a top-level
@@ -117,21 +138,10 @@ def unanchored(pattern):
             i += 2
             continue
         if c == "[":
-            i += 1
-            if pattern.startswith("^", i):
-                i += 1
-            if pattern.startswith("]", i):  # first in the class, ] is a literal
-                i += 1
-            while i < n and pattern[i] != "]":
-                i += 2 if pattern[i] == "\\" else 1
-            i += 1
+            i = class_end(pattern, i)
             continue
         if pattern.startswith("(?#", i):
-            # re reads \) in a comment as an escape, so the comment ends at the first bare ).
-            i += 3
-            while i < n and pattern[i] != ")":
-                i += 2 if pattern[i] == "\\" else 1
-            i += 1
+            i = comment_end(pattern, i)
             continue
         if c == "(":
             depth += 1
@@ -151,10 +161,78 @@ def unanchored(pattern):
     return None
 
 
+# The only character classes a pattern may use, written exactly so: NUMBER for counts, and hex
+# only inside COLOUR_TAG, since names like "Facade" are spelled in hex letters and the <col=
+# prefix keeps the hex out of a name's position.
+NUMBER, COLOUR_TAG = "[0-9,]", "<col=[0-9A-Fa-f]{6}>"
+# Group openers whose contents are scanned like the rest. Any other (? form is refused, which
+# covers inline flags ((?i, (?s:, (?x) and conditionals ((?().
+GROUPS = ("(?:", "(?P<", "(?=", "(?!", "(?<=", "(?<!")
+
+
+def free_form(pattern):
+    """Why the compiled-OK regex `pattern` has a slot that could match a player's name, or
+    None. Outside a class it may not use . or \\w \\W \\s \\S \\d \\D \\b \\B; its only classes
+    are NUMBER and the one in COLOUR_TAG, which is scanned as one unit that nothing may repeat;
+    + * and {n,m} may only follow NUMBER, and ? only something to repeat."""
+    # Refusing (?x means a # is never a verbose-mode comment hiding text from this scan, and
+    # the caller compiles first, so malformed syntax (a stray \ at the end, ? after ?) never
+    # gets here.
+    i, n = 0, len(pattern)
+    prev = None  # what a quantifier here would repeat: None, "class", "quantifier" or "atom"
+    while i < n:
+        c = pattern[i]
+        if c == "\\":
+            if pattern[i + 1] in "wWsSdDbB":
+                return f"\\{pattern[i + 1]} is a free-form slot"
+            i, prev = i + 2, "atom"
+            continue
+        if pattern.startswith(COLOUR_TAG, i):
+            i, prev = i + len(COLOUR_TAG), None
+            continue
+        if c == "[":
+            end = class_end(pattern, i)
+            if pattern[i:end] != NUMBER:
+                return f"{pattern[i:end]} is not {NUMBER}, or hex in a {COLOUR_TAG} tag"
+            i, prev = end, "class"
+            continue
+        if pattern.startswith("(?#", i):
+            i = comment_end(pattern, i)
+            continue
+        if pattern.startswith("(?", i):
+            opener = next((g for g in GROUPS if pattern.startswith(g, i)), None)
+            if opener is None:
+                return f"{pattern[i:i + 3]}... is a flag or construct a pattern may not use"
+            i = pattern.index(">", i) + 1 if opener == "(?P<" else i + len(opener)
+            prev = None
+            continue
+        if c == ".":
+            return ". is a free-form slot"
+        if c in "*+{":
+            if prev != "class":
+                return f"{c} may only follow {NUMBER}"
+            if c == "{":
+                end = pattern.find("}", i)
+                if end < 0 or not re.fullmatch(r"[0-9]+(?:,[0-9]*)?", pattern[i + 1:end]):
+                    return "a { that isn't a {n} or {n,m} after a class"
+                i = end
+            prev = "quantifier"
+        elif c == "?":
+            if prev is None:
+                return "a ? with nothing before it to make optional"
+            prev = "quantifier"
+        elif c in "(|^$":
+            prev = None
+        else:  # a literal, or the ) closing a group
+            prev = "atom"
+        i += 1
+    return None
+
+
 def load_allowlist(path):
     """The game-chat patterns in `path`: one regex per line, `#` comments and blank lines
     skipped. Each must be anchored as a whole (unanchored), so it can only match a whole
-    message."""
+    message, and have no slot free-form enough to match a player's name (free_form)."""
     patterns = []
     for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip() or line.startswith("#"):
@@ -163,13 +241,15 @@ def load_allowlist(path):
             pattern = re.compile(line)
         except re.error as e:
             raise Refused(f"{path}:{n}: not a regex: {e}") from None
-        why = unanchored(line)
+        why = unanchored(line) or free_form(line)
         if why:
             raise Refused(f"{path}:{n}: {why}")
         patterns.append(pattern)
     return patterns
 
 
+# The recorder's recording.objectText (lib/dev/recording.lua) strips the same suffix; change
+# the two together.
 def strip_address(text):
     return ADDRESS.sub("", text)
 
@@ -198,7 +278,8 @@ def redact_chat(entry, allowlist):
 
 def dedup_reads(entries):
     """Drop reads that repeat the previous value of their path (after a `dropped` gap, the
-    recorder records a value again, so the comparison starts over)."""
+    recorder records a value again, so the comparison starts over). This is the recorder's
+    pushIfChanged rule (lib/dev/recorder.lua); change the two together."""
     last, out = {}, []
     for e in entries:
         if e.get("k") == "dropped":

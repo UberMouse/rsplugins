@@ -111,6 +111,7 @@ local function push(entry)
 end
 
 -- Push `entry` unless `v` is what was last recorded under `key` and that entry wasn't lost.
+-- scripts/recording-sanitise.py (dedup_reads) applies this rule to reads; change the two together.
 ---@param key string
 ---@param v any already serialised
 ---@param entry table

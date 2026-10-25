@@ -26,6 +26,7 @@ end
 -- An API object's tostring() text without its memory address: the client's text is like
 -- `sol.jag::InventoryProxy: 0x591cbdbce258`, and Inventory.Find() and Player.GetEntity() hand
 -- out a fresh object per call, so with the address every call would differ and be recorded.
+-- scripts/recording-sanitise.py (strip_address) strips the same suffix; change the two together.
 ---@param v any
 ---@return string
 function recording.objectText(v)

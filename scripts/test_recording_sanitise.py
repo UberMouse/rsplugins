@@ -179,8 +179,29 @@ class SanitiseTest(unittest.TestCase):
                 self.load(pattern)
 
     def test_accepts_alternations_inside_a_group_and_escaped_or_in_a_class(self):
+        # Most of these classes are free-form, so this checks the anchoring scan on its own.
         for pattern in ("^a(?:b|c)$", "^[|]$", "^a\\|b$", "^[]|$^]$", "^[^]|]$",
                         "^a(?#x|y\\))$", "^[\\]|]$"):
+            with self.subTest(pattern):
+                self.assertIsNone(sanitiser.unanchored(pattern))
+
+    def test_refuses_an_allowlist_pattern_with_a_free_form_slot(self):
+        for pattern in ("^(?:a|.*)$", "^.*$", "^\\w+ has logged in\\.$", "^[^x]*$",
+                        "^(?s:.*)$", "^(?x: a | .* )$", "^(a)?(?(1)a|.*)$", "^(?P<n>a|.*)$",
+                        "^(?i:a)$", "^\\d+$", "^\\bx$", "^[0-9A-Z]+$", "^(?:a)+$", "^a*$",
+                        "^[0-9A-Fa-f]+ has logged in\\.$", "^[0-9A-Fa-f]{1,6}$",
+                        "^[0-9A-Fa-f]$", "^[0-9A-Fa-f]{6}$", "^[0-9A-Fa-f]{6}?$",
+                        "^(?:a[0-9A-Fa-f]{6})?$", "^[0-9A-Fa-f]{6} has logged in\\.$",
+                        "^<col=[0-9A-Fa-f]{6}>?x$"):
+            with self.subTest(pattern), self.assertRaises(sanitiser.Refused):
+                self.load(pattern)
+
+    def test_loads_the_allowlist_and_the_slots_it_allows(self):
+        lines = [line for line in sanitiser.ALLOWLIST.read_text(encoding="utf-8").splitlines()
+                 if line.strip() and not line.startswith("#")]
+        self.assertEqual(len(lines), len(sanitiser.load_allowlist(sanitiser.ALLOWLIST)))
+        for pattern in ("^[0-9,]+ x$", "^<col=[0-9A-Fa-f]{6}>a$", "^(?P<n>a|b)?c$",
+                        "^a(?=b)(?!c)(?<=b)(?<!c)b$", "^a\\.b?$"):
             with self.subTest(pattern):
                 self.assertEqual(1, len(self.load(pattern)))
 
@@ -207,7 +228,9 @@ class SanitiseTest(unittest.TestCase):
 
     def test_no_allowlist_pattern_matches_a_message_naming_a_player(self):
         for pattern in sanitiser.load_allowlist(sanitiser.ALLOWLIST):
-            for message in ("Bob has logged in.", "Bob coins have been added to your money pouch."):
+            for message in ("Bob", "Bob 123", "Bob <col=ffffff>", "Bob has logged in.",
+                            "Bead has logged in.", "Face", "Facade has logged in.",
+                            "Bob coins have been added to your money pouch."):
                 self.assertIsNone(pattern.fullmatch(message), pattern.pattern)
 
 

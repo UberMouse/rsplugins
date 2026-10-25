@@ -77,8 +77,12 @@ def batch_error(batch):
     for key in ("schema", "seq"):
         if not is_int(batch.get(key)):
             return f"{key} is not an integer"
+    if batch["seq"] < 1:
+        return "seq is under 1 (the recorder counts batches from 1)"
     if not is_int(batch.get("dropped", 0)):
         return "dropped is not an integer"
+    if batch.get("dropped", 0) < 0:
+        return "dropped is negative"
     entries = batch.get("entries")
     if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
         return "entries is not a list of objects"
@@ -92,13 +96,18 @@ def ordered(entry):
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Seconds a socket read may wait, so a client that sends less body than its Content-Length
+    # can't hold this single-threaded server; the handler drops a timed-out connection.
+    timeout = 5
+
     def do_POST(self):
         if self.path != "/record":
             return self.reply(404)
-        # A missing or negative length would block this single-threaded server in read().
+        # A missing or negative length would leave read() waiting on the client, and int()
+        # raises on a digit string thousands long, hence the 10-digit cap before it.
         length = self.headers.get("Content-Length", "")
-        if not (length.isascii() and length.isdigit()):
-            print(f"bad Content-Length: {length!r}")
+        if not (length.isascii() and length.isdigit() and len(length) <= 10):
+            print(f"bad Content-Length: {length[:20]!r} ({len(length)} characters)")
             return self.reply(400)
         if int(length) > MAX_BODY:
             print(f"batch of {length} bytes is over the {MAX_BODY}-byte cap")

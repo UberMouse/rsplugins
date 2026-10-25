@@ -159,9 +159,11 @@ URL is the same address).
 **`exec`** queues one console command, waits for the plugin's result and exits: 0 ok; 1 the plugin
 reported an error (printed); 2 never delivered before the timeout (the command is withdrawn, so it
 can never run later) or the daemon is down; 3 delivered but no result arrived in time (the outcome
-is unknown). Exit 3 also covers "never ran": if the HTTP reply carrying the command is lost (the
-plugin's request timed out or failed after the daemon answered), the plugin never receives it and
-the daemon never re-sends it, so non-idempotent commands can't run twice; check the client.
+is unknown). With `--shot`, 4 means the command returned 0 but the shot failed, and 130 means it
+was interrupted during the shot (see `shot` below). Exit 3 also covers "never ran": if the HTTP
+reply carrying the command is lost (the plugin's request timed out or failed after the daemon
+answered), the plugin never receives it and the daemon never re-sends it, so non-idempotent
+commands can't run twice; check the client.
 Commands run in the order queued, and each is delivered at most once. **Every command
 is logged with its id in `dumps/rsdev/daemon.log`**: that log is the audit trail.
 
@@ -177,22 +179,25 @@ growth in a sync's `dropped` count appears as an event `{"name": "dropped", "n_l
 
 **`shot`** captures the client's X11 window (`maim -u -i <window>`) so Claude can see the game and
 plugin UI while checking a change; it needs no daemon. It prints each file's path on stdout, in
-`dumps/rsdev/shots/<YYYYmmdd-HHMMSS-mmm>[-NN].<ext>` (`-NN` only for a `--count` series, which shares one stamp). The window is
-found through the window manager's client list by `WM_CLASS` `"rs2client", "RuneScape"`, never by
-title; `--window 0x...` names one instead. By default the shot is shrunk with ImageMagick to fit
-`--max 1600` px (never enlarged) and written as a JPEG; `--max 0` keeps the full-size PNG.
-`--region WxH+X+Y` is relative to the window. `--count N` (1-100) takes a series, starting a
-capture every `--every S` seconds (default 1; an overrunning capture makes the next start at once),
-after `--delay S`. `exec ... --shot [--shot-delay 1.0]` captures once the command has a result (ok
-or a plugin error; not if it was never delivered), and takes `--region`/`--max`/`--window`; exec's
-exit code stands, and a failed shot makes it exit 4 only if the command itself returned 0.
+`dumps/rsdev/shots/<YYYYmmdd-HHMMSS-mmm>[-NN].<ext>` (`-NN` only for a `--count` series, which
+shares one stamp). The window is found through the window manager's client list by `WM_CLASS`
+`"rs2client", "RuneScape"`, never by title; `--window 0x...` names one instead. By default the
+shot is shrunk with ImageMagick to fit `--max 1600` px (never enlarged) and written as a JPEG;
+`--max 0` keeps the full-size PNG. `--region WxH+X+Y` is relative to the window. `--count N`
+(1-100) takes a series, starting a capture every `--every S` seconds (default 1; an overrunning
+capture makes the next start at once), after `--delay S`. `exec ... --shot [--shot-delay 1.0]`
+captures once the command has a result (ok or a plugin error; not if it was never delivered), and
+takes `--region`/`--max`/`--window`, which are errors without `--shot`; exec's exit code stands,
+and a failed shot makes it exit 4 only if the command itself returned 0.
 
 `shot` exits 0 ok; 1 the capture or conversion failed (the tool's stderr is shown); 2 it could not
 try: no window found or several (it lists them; pick with `--window`), the window is not visible, or a
 tool is missing (enter the dev shell: `direnv`). A client on another workspace is refused, naming
-that workspace, because maim would silently capture whatever is on screen there; `shot` never
-switches workspaces, focuses or raises anything. If another window has focus it warns, since
-windows on top (floating ones) appear in the capture. X11 only.
+that workspace, because maim would silently capture whatever is on screen there. Visibility is
+checked before every capture, so a window that leaves the screen mid-series stops the series
+(exit 2; paths already printed stay valid); `shot` never switches workspaces, focuses or raises
+anything. If another window has focus it warns, since windows on top (floating ones) appear in the
+capture. X11 only.
 
 In-client check: with the client showing on screen, `scripts/rsdev.py shot` prints a path under
 `dumps/rsdev/shots/` and the image is the game window. Switch to another workspace so the client is

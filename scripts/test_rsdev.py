@@ -365,8 +365,9 @@ class ExecTests(DaemonCase):
             with self.subTest(bad), mock.patch("sys.stderr", StringIO()):
                 with self.assertRaises(SystemExit):
                     rsdev.main(["exec", "--timeout", bad, "x"])
-        self.assertEqual(rsdev.positive_timeout("120"), 120.0)
-        self.assertEqual(rsdev.positive_timeout("0.5"), 0.5)
+        parse = rsdev.number_arg(0, rsdev.MAX_WAIT, "--timeout", low_open=True)
+        self.assertEqual(parse("120"), 120.0)
+        self.assertEqual(parse("0.5"), 0.5)
 
 
 class BrowserGuardTests(DaemonCase):
@@ -756,6 +757,14 @@ class ShotParseTests(unittest.TestCase):
         with mock.patch("sys.stderr", StringIO()), self.assertRaises(SystemExit):
             rsdev.main(["shot", "--window", "0x１a"])
 
+    def test_shot_options_need_shot_on_exec(self):
+        for argv in (["--window", "0x5"], ["--region", "1x1+0+0"], ["--max", "1600"], ["--shot-delay", "0"]):
+            with self.subTest(argv), mock.patch("sys.stderr", StringIO()) as err:
+                with self.assertRaises(SystemExit) as caught:
+                    rsdev.main(["exec", *argv, "x"])
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn("only apply with --shot", err.getvalue())
+
     def test_property_parsers(self):
         self.assertEqual(rsdev.parse_window_ids("_NET_CLIENT_LIST(WINDOW): window id # 0x1, 0x5a0002d"), ["0x1", "0x5a0002d"])
         self.assertEqual(rsdev.parse_window_ids("_NET_CLIENT_LIST:  not found."), [])
@@ -952,6 +961,51 @@ class ShotTests(unittest.TestCase):
         self.assertEqual([Path(p).stem[-3:] for p in paths], ["-01", "-02", "-03"])
         # delay, then no wait after the overrunning first capture, then the 0.6 s left of 1.0
         self.assertEqual(sleeps, [0.5, 0.6])
+
+    def test_window_hidden_during_delay_is_not_captured(self):
+        run = fake_x({"0x20": RS_CLASS}, active="0x20")
+        views = iter([False])  # the window is gone by the time --delay has slept
+
+        def hiding(argv):
+            res = run(argv)
+            if argv[0] == "xwininfo":
+                res.stdout = "  Map State: " + ("IsViewable" if next(views) else "IsUnviewable")
+            return res
+
+        paths, error = self.shoot(hiding, delay=5.0, count=2)
+        self.assertEqual(error.code, 2)
+        self.assertIn("is not visible", str(error))
+        self.assertEqual(paths, [])
+        self.assertNotIn("maim", [c[0] for c in run.calls])
+
+    def test_window_hidden_mid_series_stops_the_series(self):
+        run = fake_x({"0x20": RS_CLASS}, active="0x20")
+        views = iter([True, False])
+
+        def hiding(argv):
+            res = run(argv)
+            if argv[0] == "xwininfo":
+                res.stdout = "  Map State: " + ("IsViewable" if next(views) else "IsUnviewable")
+            return res
+
+        paths, error = self.shoot(hiding, count=3)
+        self.assertEqual(error.code, 2)
+        self.assertEqual(len(paths), 1)
+        self.assertEqual([c[0] for c in run.calls].count("maim"), 1)
+
+    def test_check_visible_messages(self):
+        def gone(argv):
+            return SimpleNamespace(returncode=1, stdout="", stderr="xwininfo: error: No such window with id 0xdeadbee.\n")
+
+        with mock.patch.object(rsdev, "run_tool", gone), self.assertRaises(rsdev.ShotError) as caught:
+            rsdev.check_visible("0xdeadbee")
+        msg = str(caught.exception)
+        self.assertIn("not found (xwininfo: error: No such window", msg)
+        self.assertEqual(msg.count("xwininfo:"), 1)
+        run = fake_x({"0x20": RS_CLASS}, viewable=False)
+        with mock.patch.object(rsdev, "run_tool", run), self.assertRaises(rsdev.ShotError) as caught:
+            rsdev.check_visible("0x20")
+        self.assertTrue(str(caught.exception).startswith("window 0x20 is not visible"))
 
     def test_cmd_shot_exit_codes(self):
         with mock.patch.object(rsdev, "take_shots", side_effect=rsdev.ShotError(2, "nope")), mock.patch("sys.stderr", self.err):

@@ -60,8 +60,10 @@ MAX_WAIT = 120.0  # cap on how long one /cli request may block a thread
 # The game window's WM_CLASS (instance, class). The title is never matched: a browser tab called
 # "RuneScape - Vivaldi" has the same words in it.
 CLIENT_WM_CLASS = ["rs2client", "RuneScape"]
-SHOT_TOOLS = ("maim", "xprop", "xwininfo")  # all from the dev shell (flake.nix)
+# Always required; magick too unless --max 0. All come from the dev shell (flake.nix).
+SHOT_TOOLS = ("maim", "xprop", "xwininfo")
 MAX_SHOT_COUNT = 100
+DEFAULT_SHOT_MAX = 1600  # --max default: longest side in pixels
 
 
 def is_int(v):
@@ -496,17 +498,6 @@ class DaemonRefused(OSError):
     """A reachable daemon answered a request with a 4xx: the request itself was wrong."""
 
 
-def positive_timeout(text):
-    """argparse type for --timeout: seconds the daemon will accept (it caps a wait at MAX_WAIT)."""
-    try:
-        value = float(text)
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
-    if not 0 < value <= MAX_WAIT:
-        raise argparse.ArgumentTypeError(f"must be above 0 and at most {MAX_WAIT:g} seconds")
-    return value
-
-
 def call(args, path, payload=None, timeout=5.0):
     """One request to the daemon; the decoded JSON reply. Raises OSError if it isn't there."""
     url = f"http://{HOST}:{args.port}{path}"
@@ -662,9 +653,8 @@ def cmd_exec(args):
     # Shoot once the command has a result (ok or plugin error), not if it never reached the bridge.
     if not args.shot or code not in (0, 1):
         return code
-    shot = SimpleNamespace(
-        window=args.window, region=args.region, max=args.max, out=args.out, count=1, every=1, delay=args.shot_delay
-    )
+    # Every shot option parsed for exec reaches the shot; only the series fields are fixed here.
+    shot = SimpleNamespace(**{**vars(args), "count": 1, "every": 1, "delay": args.shot_delay})
     shot_code = cmd_shot(shot)
     if shot_code == 130:  # interrupted: stop quietly with the conventional status
         return 130
@@ -802,17 +792,18 @@ def workspace_hint(win):
     return f"it is on workspace {name}"
 
 
-def check_visible(win):
-    """Refuse a window that isn't viewable; warn if something else has focus (and may cover it)."""
+def check_visible(win, warn_focus=True):
+    """Refuse a window that isn't viewable; optionally warn if something else has focus (and may
+    cover it). Called before every capture: the window can leave the screen between shots."""
     res = run_tool(["xwininfo", "-id", win])
     if res.returncode != 0:  # a --window id that names nothing fails here
         lines = [ln.strip() for ln in res.stderr.splitlines() if ln.strip()]
         why = next((ln for ln in lines if "No such window" in ln), lines[0] if lines else "no output")
-        raise ShotError(2, f"window {win} not found (xwininfo: {why})")
+        raise ShotError(2, f"window {win} not found (xwininfo: {why.removeprefix('xwininfo: ')})")
     if not is_viewable(res.stdout):
-        raise ShotError(
-            2, f"client window {win} is not visible: {workspace_hint(win)}. Switch to it yourself and retry."
-        )
+        raise ShotError(2, f"window {win} is not visible: {workspace_hint(win)}. Switch to it yourself and retry.")
+    if not warn_focus:
+        return
     active = re.findall(r"0x[0-9a-fA-F]+", tool_text(["xprop", "-root", "_NET_ACTIVE_WINDOW"]))
     if active and window_number(active[0]) != window_number(win):
         print(
@@ -827,7 +818,7 @@ def capture_one(win, dest, region, max_px):
     which are renamed into place on success and always removed."""
     png = dest.with_name(dest.stem + ".tmp.png")
     jpg = dest.with_name(dest.stem + ".tmp.jpg")
-    cmd = ["maim", "-u", "-i", win]
+    cmd = ["maim", "-u", "-i", win]  # -u hides the mouse cursor
     if region:
         cmd += ["-g", region]
     try:
@@ -853,7 +844,6 @@ def take_shots(opts):
         if shutil.which(tool) is None:
             raise ShotError(2, f"{tool} not found: enter the dev shell (direnv)")
     win = opts.window or find_client_window()
-    check_visible(win)
     shots_dir = opts.out / "rsdev" / "shots"
     shots_dir.mkdir(parents=True, exist_ok=True)
     paths = shot_paths(shots_dir, shot_stamp(time.time()), opts.count, opts.max)
@@ -866,6 +856,7 @@ def take_shots(opts):
             if wait > 0:
                 time.sleep(wait)
         started = time.monotonic()
+        check_visible(win, warn_focus=path == paths[0])
         capture_one(win, path, opts.region, opts.max)
         print(path, flush=True)
 
@@ -936,7 +927,7 @@ def main(argv=None):
     shot_opts.add_argument(
         "--max",
         type=number_arg(0, 100_000, "--max", int),
-        default=1600,
+        default=DEFAULT_SHOT_MAX,
         help="shrink to fit this many pixels and write a JPEG; 0 keeps the full-size PNG",
     )
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -945,10 +936,11 @@ def main(argv=None):
     for name, fn in (("start", cmd_start), ("stop", cmd_stop), ("status", cmd_status)):
         sub.add_parser(name, parents=[common]).set_defaults(run=fn)
     p = sub.add_parser("exec", parents=[common, shot_opts])
+    p.set_defaults(max=None)  # unset, so a shot option given without --shot is detectable
     p.add_argument("command", nargs="+")
-    p.add_argument("--timeout", type=positive_timeout, default=10.0)
+    p.add_argument("--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0)
     p.add_argument("--shot", action="store_true", help="capture the client once the command has a result")
-    p.add_argument("--shot-delay", type=number_arg(0, 60, "--shot-delay"), default=1.0)
+    p.add_argument("--shot-delay", type=number_arg(0, 60, "--shot-delay"))
     p.set_defaults(run=cmd_exec)
     p = sub.add_parser("events", parents=[common])
     p.add_argument("--since", type=int, default=0)
@@ -961,6 +953,12 @@ def main(argv=None):
     p.add_argument("--delay", type=number_arg(0, 3600, "--delay"), default=0.0)
     p.set_defaults(run=cmd_shot)
     args = parser.parse_args(argv)
+    if args.cmd == "exec":
+        given = [f for f in ("window", "region", "max", "shot_delay") if getattr(args, f) is not None]
+        if given and not args.shot:
+            parser.error("--window, --region, --max and --shot-delay only apply with --shot")
+        args.max = DEFAULT_SHOT_MAX if args.max is None else args.max
+        args.shot_delay = 1.0 if args.shot_delay is None else args.shot_delay
     return args.run(args) or 0
 
 

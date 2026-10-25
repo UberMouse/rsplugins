@@ -142,6 +142,11 @@ describe("stdlib", function()
         assert.is_number(h.env.t)
     end)
 
+    it("withholds string.dump", function()
+        local h = harness.load(plugin("hasDump = string.dump ~= nil"))
+        assert.is_false(h.env.hasDump)
+    end)
+
     it("gives each load its own copy of a library table", function()
         local h = harness.load(plugin("string.extra = true"))
         assert.is_nil(rawget(string, "extra")) -- the host's string table is untouched

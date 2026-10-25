@@ -120,6 +120,34 @@ describe("client limits", function()
         )
     end)
 
+    it("aborts a runaway loop inside a coroutine", function()
+        local h = harness.new(plugin("coroutine.wrap(function() while true do end end)()"))
+        h.budgetMs = 50
+        assert.matches(
+            "main.lua: Maximum function execution time of 50 ms exceeded",
+            harness.errorOf(function()
+                h:load()
+            end)
+        )
+    end)
+
+    it("charges a coroutine to the callback that resumes it", function()
+        local h = harness.load(
+            plugin([[
+            local co = coroutine.create(function() coroutine.yield() while true do end end)
+            coroutine.resume(co)
+            Event.Logic.Subscribe("resume", function() coroutine.resume(co) end)
+        ]]),
+            { budgetMs = 50 }
+        )
+        assert.matches(
+            "Event.Logic subscriber 'resume': Maximum function execution time of 50 ms exceeded",
+            harness.errorOf(function()
+                h:advance(20)
+            end)
+        )
+    end)
+
     it("applies the budget to main.lua too, defaulting to the client's 1000 ms", function()
         local h = harness.new(plugin("while true do end"))
         assert.are.equal(1000, h.budgetMs)

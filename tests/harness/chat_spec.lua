@@ -32,7 +32,10 @@ describe("Chat", function()
         h.world:grant("chatAccess")
         h.world:chat("seen", { chatType = ChatType.PUBLIC, sender = "Zezima" })
         assert.are.equal(ChatType.PUBLIC .. " Zezima seen", h:output())
-        assert.are.equal(2, #h.chatLog) -- the chat window shows both
+        h.world:revoke("chatAccess")
+        h.world:chat("unseen again", { chatType = ChatType.PUBLIC, sender = "Zezima" })
+        assert.are.equal(ChatType.PUBLIC .. " Zezima seen", h:output())
+        assert.are.equal(3, #h.chatLog) -- the chat window shows all three
     end)
 
     it("faults on AddMessage without chatAccess", function()

@@ -3,6 +3,7 @@
 -- `unmocked API: <name>`, so a plugin using an API the harness doesn't model fails its test
 -- instead of quietly getting nil. Plugins may still assign globals (PluginShutdown...).
 
+local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
 
 local M = {}
@@ -67,6 +68,26 @@ local function copy(lib)
     return out
 end
 
+-- The coroutine library, with every new thread under the time budget (runtime.watch).
+---@return table
+local function budgetedCoroutine()
+    local lib = copy(coroutine)
+    lib.create = function(f)
+        local thread = coroutine.create(f)
+        runtime.watch(thread)
+        return thread
+    end
+    -- wrap's thread is never handed out, so it is watched from inside on its first resume.
+    lib.wrap = function(f)
+        if type(f) ~= "function" then return coroutine.wrap(f) end -- the stdlib's own error
+        return coroutine.wrap(function(...)
+            runtime.watch(coroutine.running())
+            return f(...)
+        end)
+    end
+    return lib
+end
+
 -- `require` as the client implements it (docs/plugin-anatomy.md): the path is relative to the
 -- plugin root, without extension; each file runs once per load and later calls get the
 -- cached result; a missing file gives nil; a circular require is an error. A file that fails
@@ -110,6 +131,9 @@ function M.build(h, instance)
     for _, name in ipairs(LIBS) do
         env[name] = copy(_G[name])
     end
+    -- Whether the client has string.dump is unknown, so a plugin shouldn't rely on it.
+    env.string.dump = nil
+    env.coroutine = budgetedCoroutine()
     for name, enabled in pairs(h.stdlib) do
         if enabled then
             assert(OPT_IN[name], "stdlib opt-in only covers os and io, not " .. name)

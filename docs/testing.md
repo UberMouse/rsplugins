@@ -117,6 +117,8 @@ The harness fails loudly rather than guessing:
 - **`unmocked API: <name>`**: the plugin read a global, member or payload field the harness doesn't
   mock. Either the API is out of scope (see below) or the name is wrong. The fault is positioned
   at the plugin line, and if the plugin swallows it with `pcall` the call still fails afterwards.
+  That includes a feature probe such as `pcall(function() return SomeApi.x end)`: unmocked use
+  must be visible, and a probe means the mock needs extending.
 - **`unmocked state: ...`**: the API exists but the test never set the value (a var's `.value`, a
   skill, an `ObjType` field, a payload field `h:fire` didn't pass). Set it in the test. This
   includes the `oldValue` of the first `setVar` of a var: set it before `h:load()` so the plugin
@@ -189,9 +191,9 @@ plain Lua and busted, not in the plugin sandbox:
 | `Chat.AddMessage` without chatAccess | Faults |
 | `ChatMessage.timestamp` | A fixed epoch (2026-01-01) plus elapsed logic time |
 | PersistentDB | `IterateEntries` goes in key order. `Delete` returns true. Typed setters return nil on a type mismatch |
-| Stdlib | Provides the base functions, `string`, `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in), and `debug`, `load*`, `dofile`, `package`, `collectgarbage` |
+| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in), and `debug`, `load*`, `dofile`, `package`, `collectgarbage` |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
-| The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates aren't checked |
+| The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
 
 ### Not modelled
 
@@ -211,6 +213,13 @@ plain Lua and busted, not in the plugin sandbox:
 - **Dependencies**: `PluginDependencyUpdate`, `OptionalDependencyChanged`, dependency globals.
 - **HTTP request bodies being garbage-collected** before the request finishes (a suspicion in
   api-concepts.md), and coroutines crashing the client.
+- **An HTTP request started from a coroutine resumed after a completion callback.** Only a
+  request started while the callback itself runs fails the test. A coroutine created in the
+  callback and resumed later from `Logic` starts its request unflagged: whether the client
+  treats that as inside the callback is undocumented.
+- **String methods on string values**: `("").rep` and `getmetatable("").__index` resolve
+  through the host's `string` table, not the sandbox copy (busted shares that metatable, so the
+  harness leaves it alone). The known difference is `dump`, which is reachable that way.
 
 ### Where the official page and the stubs disagree
 

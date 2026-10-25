@@ -666,6 +666,8 @@ def cmd_exec(args):
         window=args.window, region=args.region, max=args.max, out=args.out, count=1, every=1, delay=args.shot_delay
     )
     shot_code = cmd_shot(shot)
+    if shot_code == 130:  # interrupted: stop quietly with the conventional status
+        return 130
     return code or (4 if shot_code else 0)  # exec's own failure code stands
 
 
@@ -682,7 +684,7 @@ class ShotError(Exception):
 
 def region_arg(text):
     """argparse type for --region: window-relative WxH+X+Y, as maim -g takes it."""
-    m = re.fullmatch(r"(\d+)x(\d+)\+(\d+)\+(\d+)", text)
+    m = re.fullmatch(r"([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)", text)
     if not m or int(m[1]) == 0 or int(m[2]) == 0:
         raise argparse.ArgumentTypeError(f"{text!r} is not WxH+X+Y with W and H above 0")
     return text
@@ -690,7 +692,7 @@ def region_arg(text):
 
 def window_arg(text):
     """argparse type for --window: an X window id such as 0x5a0002d."""
-    if not re.fullmatch(r"0x[0-9a-fA-F]+", text):
+    if not re.fullmatch(r"0x[0-9a-fA-F]+", text, re.ASCII):
         raise argparse.ArgumentTypeError(f"{text!r} is not a window id like 0x5a0002d")
     return text
 
@@ -747,6 +749,11 @@ def convert_args(src, dest, max_px):
     return ["magick", str(src), "-resize", f"{max_px}x{max_px}>", "-quality", "85", str(dest)]
 
 
+def shot_stamp(now):
+    """The filename stamp for epoch time `now`; milliseconds keep shots started in one second apart."""
+    return time.strftime("%Y%m%d-%H%M%S", time.localtime(now)) + f"-{int(now * 1000) % 1000:03d}"
+
+
 def shot_paths(shots_dir, stamp, count, max_px):
     """The file for each shot of a series: <stamp>[-NN].<ext>, with NN only for a series."""
     ext = "png" if max_px == 0 else "jpg"
@@ -772,7 +779,12 @@ def tool_text(argv):
 def find_client_window():
     """The client's window id, found through the window manager's client list by WM_CLASS."""
     listing = tool_text(["xprop", "-root", "_NET_CLIENT_LIST"])
-    found = [w for w in parse_window_ids(listing) if is_client_class(tool_text(["xprop", "-id", w, "WM_CLASS"]))]
+    found = []
+    for w in parse_window_ids(listing):
+        res = run_tool(["xprop", "-id", w, "WM_CLASS"])
+        # A window can close between the list and this query (BadWindow); it is not the client then.
+        if res.returncode == 0 and is_client_class(res.stdout):
+            found.append(w)
     if not found:
         raise ShotError(2, "client window not found (is the RS3 client running?)")
     if len(found) > 1:
@@ -805,8 +817,9 @@ def check_visible(win):
 
 
 def capture_one(win, dest, region, max_px):
-    """Write one shot to `dest`: maim a PNG, then (unless max_px is 0) shrink it to a JPEG."""
-    png = dest if max_px == 0 else dest.with_name(dest.stem + ".tmp.png")
+    """Write one shot to `dest`: maim a PNG, then shrink it to a JPEG (unless max_px is 0).
+    `dest` only ever appears complete: maim writes a temp PNG, which is renamed or converted."""
+    png = dest.with_name(dest.stem + ".tmp.png")
     cmd = ["maim", "-u", "-i", win]
     if region:
         cmd += ["-g", region]
@@ -818,9 +831,13 @@ def capture_one(win, dest, region, max_px):
             res = run_tool(convert_args(png, dest, max_px))
             if res.returncode != 0:
                 raise ShotError(1, f"magick failed: {res.stderr.strip()}")
+        else:
+            png.replace(dest)
+    except ShotError:
+        dest.unlink(missing_ok=True)  # magick may have left a partial file
+        raise
     finally:
-        if max_px:
-            png.unlink(missing_ok=True)
+        png.unlink(missing_ok=True)
 
 
 def take_shots(opts):
@@ -833,7 +850,7 @@ def take_shots(opts):
     check_visible(win)
     shots_dir = opts.out / "rsdev" / "shots"
     shots_dir.mkdir(parents=True, exist_ok=True)
-    paths = shot_paths(shots_dir, time.strftime("%Y%m%d-%H%M%S"), opts.count, opts.max)
+    paths = shot_paths(shots_dir, shot_stamp(time.time()), opts.count, opts.max)
     if opts.delay:
         time.sleep(opts.delay)
     started = None
@@ -853,6 +870,8 @@ def cmd_shot(args):
     except ShotError as err:
         print(f"rsdev: {err}", file=sys.stderr)
         return err.code
+    except KeyboardInterrupt:  # shots already printed stay valid
+        return 130
     return 0
 
 

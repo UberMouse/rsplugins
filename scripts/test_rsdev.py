@@ -702,7 +702,7 @@ RS_CLASS = 'WM_CLASS(STRING) = "rs2client", "RuneScape"'
 VIVALDI_CLASS = 'WM_CLASS(STRING) = "vivaldi-stable", "Vivaldi-stable"'
 
 
-def fake_x(classes, viewable=True, active="0x10", desktop=3, fail=()):
+def fake_x(classes, viewable=True, active="0x10", desktop=3, fail=(), gone=()):
     """A stand-in for rsdev.run_tool: `classes` maps window id -> WM_CLASS line. Records argvs."""
     calls = []
 
@@ -719,6 +719,8 @@ def fake_x(classes, viewable=True, active="0x10", desktop=3, fail=()):
                 out = f"_NET_ACTIVE_WINDOW(WINDOW): window id # {active}"
             else:
                 out = '_NET_DESKTOP_NAMES(UTF8_STRING) = "1: web", "2: slack", "3: dev", "4"'
+        elif argv[0] == "xprop" and argv[2] in gone:
+            return SimpleNamespace(returncode=1, stdout="", stderr="BadWindow")
         elif argv[0] == "xprop":
             out = classes[argv[2]] if argv[3] == "WM_CLASS" else f"_NET_WM_DESKTOP(CARDINAL) = {desktop}"
         elif argv[0] == "xwininfo":
@@ -741,7 +743,7 @@ def shot_opts(out, **over):
 class ShotParseTests(unittest.TestCase):
     def test_region(self):
         self.assertEqual(rsdev.region_arg("200x100+0+30"), "200x100+0+30")
-        for bad in ("0x100+0+0", "100x0+0+0", "100x100+-1+0", "100x100", "100x100+1", "axb+0+0", "-1x5+0+0"):
+        for bad in ("0x100+0+0", "100x0+0+0", "100x100+-1+0", "100x100", "100x100+1", "axb+0+0", "-1x5+0+0", "１０x10+0+0", "10x10+0+０"):
             with self.subTest(bad), self.assertRaises(rsdev.argparse.ArgumentTypeError):
                 rsdev.region_arg(bad)
 
@@ -751,6 +753,8 @@ class ShotParseTests(unittest.TestCase):
                 rsdev.main(["shot", *argv])
         with mock.patch("sys.stderr", StringIO()), self.assertRaises(SystemExit):
             rsdev.main(["shot", "--window", "5a0002d"])
+        with mock.patch("sys.stderr", StringIO()), self.assertRaises(SystemExit):
+            rsdev.main(["shot", "--window", "0x１a"])
 
     def test_property_parsers(self):
         self.assertEqual(rsdev.parse_window_ids("_NET_CLIENT_LIST(WINDOW): window id # 0x1, 0x5a0002d"), ["0x1", "0x5a0002d"])
@@ -758,6 +762,10 @@ class ShotParseTests(unittest.TestCase):
         self.assertEqual(rsdev.parse_cardinal("_NET_WM_DESKTOP(CARDINAL) = 3\n"), 3)
         self.assertIsNone(rsdev.parse_cardinal("_NET_WM_DESKTOP:  not found."))
         self.assertEqual(rsdev.parse_strings('x = "1: web", "3: dev"'), ["1: web", "3: dev"])
+
+    def test_stamp_has_milliseconds(self):
+        self.assertRegex(rsdev.shot_stamp(1700000000.1239), r"^\d{8}-\d{6}-123$")
+        self.assertNotEqual(rsdev.shot_stamp(1700000000.1), rsdev.shot_stamp(1700000000.2))
 
     def test_max_picks_format(self):
         d = Path("/s")
@@ -800,6 +808,13 @@ class ShotTests(unittest.TestCase):
         self.assertEqual(len(paths), 1)
         self.assertTrue(paths[0].endswith(".jpg") and Path(paths[0]).read_bytes() == b"jpg")
         self.assertEqual(list(Path(paths[0]).parent.glob("*.tmp.png")), [])  # temp deleted
+
+    def test_vanished_window_is_skipped(self):
+        run = fake_x({"0x10": VIVALDI_CLASS, "0x20": RS_CLASS}, gone=("0x10",))
+        paths, err = self.shoot(run)
+        self.assertIsNone(err)
+        maim = [c for c in run.calls if c[0] == "maim"][0]
+        self.assertEqual(maim[:4], ["maim", "-u", "-i", "0x20"])
 
     def test_no_match_and_several(self):
         _, err = self.shoot(fake_x({"0x10": VIVALDI_CLASS}))
@@ -851,6 +866,26 @@ class ShotTests(unittest.TestCase):
         self.assertEqual(err.code, 1)
         self.assertIn("maim broke", str(err))
 
+    def test_max_zero_failed_maim_leaves_no_file(self):
+        _, err = self.shoot(fake_x({"0x20": RS_CLASS}, active="0x20", fail=("maim",)), max=0)
+        self.assertEqual(err.code, 1)
+        self.assertEqual(list(Path(self.tmp.name).rglob("*.png")), [])
+
+    def test_convert_failure_shows_stderr_and_leaves_no_file(self):
+        _, err = self.shoot(fake_x({"0x20": RS_CLASS}, active="0x20", fail=("magick",)))
+        self.assertEqual(err.code, 1)
+        self.assertIn("magick broke", str(err))
+        self.assertEqual([p for p in Path(self.tmp.name).rglob("*") if p.is_file()], [])
+
+    def test_max_zero_does_not_need_magick(self):
+        with mock.patch("shutil.which", lambda t: None if t == "magick" else "/bin/x"):
+            run = fake_x({"0x20": RS_CLASS}, active="0x20")
+            with mock.patch.object(rsdev, "run_tool", run), redirect_stdout(StringIO()):
+                rsdev.take_shots(shot_opts(self.tmp.name, max=0))  # no ShotError
+            with mock.patch.object(rsdev, "run_tool", run), self.assertRaises(rsdev.ShotError) as cm:
+                rsdev.take_shots(shot_opts(self.tmp.name))
+        self.assertIn("magick", str(cm.exception))
+
     def test_missing_tool_names_it(self):
         with mock.patch("shutil.which", lambda t: None if t == "maim" else "/bin/x"):
             with self.assertRaises(rsdev.ShotError) as cm:
@@ -895,6 +930,8 @@ class ShotTests(unittest.TestCase):
             self.assertEqual(rsdev.cmd_shot(shot_opts(self.tmp.name)), 2)
         with mock.patch.object(rsdev, "take_shots"):
             self.assertEqual(rsdev.cmd_shot(shot_opts(self.tmp.name)), 0)
+        with mock.patch.object(rsdev, "take_shots", side_effect=KeyboardInterrupt):
+            self.assertEqual(rsdev.cmd_shot(shot_opts(self.tmp.name)), 130)
 
 
 class ExecShotTests(unittest.TestCase):
@@ -912,6 +949,7 @@ class ExecShotTests(unittest.TestCase):
         self.assertEqual(self.merge(0, 2), (4, True))
         self.assertEqual(self.merge(1, 0), (1, True))  # a plugin error still gets a shot
         self.assertEqual(self.merge(1, 2), (1, True))  # exec's code stands
+        self.assertEqual(self.merge(0, 130), (130, True))  # Ctrl-C during the shot
 
     def test_no_shot_without_a_result(self):
         self.assertEqual(self.merge(2, 0), (2, False))  # never delivered

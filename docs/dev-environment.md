@@ -177,7 +177,7 @@ growth in a sync's `dropped` count appears as an event `{"name": "dropped", "n_l
 
 **`shot`** captures the client's X11 window (`maim -u -i <window>`) so Claude can see the game and
 plugin UI while checking a change; it needs no daemon. It prints each file's path on stdout, in
-`dumps/rsdev/shots/<YYYYmmdd-HHMMSS>[-NN].<ext>` (`-NN` only for a `--count` series). The window is
+`dumps/rsdev/shots/<YYYYmmdd-HHMMSS-mmm>[-NN].<ext>` (`-NN` only for a `--count` series, which shares one stamp). The window is
 found through the window manager's client list by `WM_CLASS` `"rs2client", "RuneScape"`, never by
 title; `--window 0x...` names one instead. By default the shot is shrunk with ImageMagick to fit
 `--max 1600` px (never enlarged) and written as a JPEG; `--max 0` keeps the full-size PNG.
@@ -193,6 +193,10 @@ tool is missing (enter the dev shell: `direnv`). A client on another workspace i
 that workspace, because maim would silently capture whatever is on screen there; `shot` never
 switches workspaces, focuses or raises anything. If another window has focus it warns, since
 windows on top (floating ones) appear in the capture. X11 only.
+
+In-client check: with the client showing on screen, `scripts/rsdev.py shot` prints a path under
+`dumps/rsdev/shots/` and the image is the game window. Switch to another workspace so the client is
+hidden and run it again: it exits 2 with a message naming the client's workspace.
 
 Privacy: a shot shows whatever is on screen, including other players' names and chat. Shots stay in
 the gitignored `dumps/`, and Claude views them whenever useful (approved by the user); delete them

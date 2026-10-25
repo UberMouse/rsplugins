@@ -34,7 +34,8 @@ local InvType = strict.class("InvType", {
         size = function(s)
             local inv = s.h.world.state.invs[s.id]
             if not inv then
-                strict.fault(
+                return s.h:recorded(
+                    "config.Inv." .. s.name .. ".size",
                     "unmocked state: InvType.size of " .. s.name .. " (no h.world:setInventory)"
                 )
             end
@@ -49,7 +50,8 @@ for field in pairs(stubs.fields("ObjType")) do
         local defined = s.h.world.state.objs[s.id]
         local v = defined and defined[field]
         if v == nil then
-            strict.fault(
+            return s.h:recorded(
+                string.format("config.Obj.%s.%s", s.name, field),
                 string.format("unmocked state: ObjType.%s of %s (h.world:defineObj)", field, s.name)
             )
         end
@@ -207,13 +209,82 @@ local Inv = strict.class("Inv", {
     },
 })
 
+-- An InvSlot from its recorded form, { obj = { config, id, type }, count }.
+---@param h table
+---@param v table?
+---@return table?
+local function recordedSlot(h, v)
+    return v and InvSlot.new({ h = h, obj = v.obj.id, count = v.count })
+end
+
+-- Replay only: an Inv for an inventory the recording shows the plugin found, but that the
+-- world doesn't hold yet (no InventoryAdded/Updated so far). Every member is the recorded
+-- read under its path, e.g. `Inventory.Find(config.Inv.INV).usedSlotCount`, so reading one
+-- the recording lacks faults `unrecorded: <path>`. It keeps reading the recording after the
+-- world gets the inventory; Find hands out world-backed Invs from then on.
+local function recordedField(name)
+    return function(s)
+        return s.h:recorded(s.path .. "." .. name)
+    end
+end
+local RecordedInv = strict.class("Inv", {
+    fields = {
+        id = function(s)
+            return s.id
+        end,
+        config = function(s)
+            return configProxy(s.h, "Inv", s.id)
+        end,
+        isValid = recordedField("isValid"),
+        slotCount = recordedField("slotCount"),
+        usedSlotCount = recordedField("usedSlotCount"),
+        freeSlotCount = recordedField("freeSlotCount"),
+    },
+    methods = {
+        GetSlot = function(s, index)
+            if math.type(index) ~= "integer" then strict.fault("Inv:GetSlot(index: Integer)") end
+            return recordedSlot(s.h, s.h:recorded(string.format("%s:GetSlot(%d)", s.path, index)))
+        end,
+        GetSlots = function(s)
+            local slots = s.h:recorded(s.path .. ":GetSlots()")
+            if slots == nil then return nil end
+            local out = {}
+            for i, v in pairs(slots) do
+                out[i] = recordedSlot(s.h, v)
+            end
+            return out
+        end,
+        GetTotal = function(s, key)
+            local id = objKey(key)
+            if not id then strict.fault("Inv:GetTotal expects an ObjType or an obj ID") end
+            -- The recorder writes an ObjType argument by its config path, an ID as a number.
+            local arg = objTypeIds[key] and ("config.Obj." .. tostring(key.configName))
+                or tostring(id)
+            return s.h:recorded(s.path .. ":GetTotal(" .. arg .. ")")
+        end,
+        GetCategoryTotal = function(s, category)
+            return s.h:recorded(s.path .. ":GetCategoryTotal(" .. tostring(category) .. ")")
+        end,
+    },
+})
+
 local Inventory = strict.class("Inventory", {
     statics = {
-        -- Nil when the inventory isn't loaded (undocumented; the page shows no nil case).
+        -- Nil when the inventory isn't loaded (undocumented; the page shows no nil case). When
+        -- replaying, an inventory the world doesn't hold is what the recording says Find
+        -- returned.
         Find = function(s, key)
             local id = invTypeIds[key] or (math.type(key) == "integer" and key)
             if not id then strict.fault("Inventory.Find expects an InvType or an inv ID") end
             local inv = s.h.world.state.invs[id]
+            if not inv and s.h.replay then
+                -- Named as the recorder names it: an InvType by its config path.
+                local arg = invTypeIds[key] and ("config.Inv." .. tostring(key.configName))
+                    or tostring(id)
+                local path = "Inventory.Find(" .. arg .. ")"
+                if s.h:recorded(path) == nil then return nil end
+                return RecordedInv.new({ h = s.h, id = id, path = path })
+            end
             if not inv then return nil end
             local k = id .. ":" .. inv.generation
             s.h.invProxies[k] = s.h.invProxies[k]

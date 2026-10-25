@@ -23,7 +23,9 @@ local EPOCH = 1767225600 -- 2026-01-01T00:00:00Z
 ---@param message string
 ---@param chatType integer
 ---@param sender string? "" when no player sent it
-function M.deliver(h, message, chatType, sender)
+---@param timestamp integer? unix seconds; defaults to the harness clock (a replay passes the
+---  recorded one)
+function M.deliver(h, message, chatType, sender, timestamp)
     sender = sender or ""
     local payload = events.payload("ChatMessage", {
         chatMessage = message,
@@ -31,7 +33,7 @@ function M.deliver(h, message, chatType, sender)
         senderNameFiltered = sender,
         senderNameSimple = sender,
         chatType = chatType,
-        timestamp = EPOCH + h.tick // 50,
+        timestamp = timestamp or EPOCH + h.tick // 50,
     })
     assert(payload, "ChatMessage has a payload")
     if h.world.state.permissions.granted.chatAccess then

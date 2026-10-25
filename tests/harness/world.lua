@@ -63,16 +63,16 @@ function M.varRecord(domain, key)
     return rec
 end
 
--- Check a var value against its catalog type.
+-- Why a var can't hold `value` in the harness's world, or nil if it can. A replay uses this to
+-- leave alone the vars the world doesn't model.
 ---@param rec table catalog record
 ---@param value any
-local function checkVarValue(rec, value)
+---@return string?
+function M.varValueError(rec, value)
     local label = rec.domain .. "." .. rec.name
     if INTEGER_TYPES[rec.type] then
         if math.type(value) ~= "integer" then
-            strict.fault(
-                label .. " is " .. rec.type .. ": expected an integer, got " .. tostring(value)
-            )
+            return label .. " is " .. rec.type .. ": expected an integer, got " .. tostring(value)
         end
         if rec.mask then
             local width = rec.mask
@@ -80,24 +80,27 @@ local function checkVarValue(rec, value)
                 width = width >> 1
             end
             if value < 0 or value > width then
-                strict.fault(label .. " is a VarBit: value must be 0.." .. width)
+                return label .. " is a VarBit: value must be 0.." .. width
             end
         end
     elseif rec.type == "STRING" then
-        if type(value) ~= "string" then strict.fault(label .. " is STRING: expected a string") end
+        if type(value) ~= "string" then return label .. " is STRING: expected a string" end
     elseif rec.type == "BOOLEAN" then
-        if type(value) ~= "boolean" then
-            strict.fault(label .. " is BOOLEAN: expected a boolean")
-        end
+        if type(value) ~= "boolean" then return label .. " is BOOLEAN: expected a boolean" end
     else
-        strict.fault(
-            label
-                .. " is "
-                .. rec.type
-                .. ": the harness only models integer, string and "
-                .. "boolean vars"
-        )
+        return label
+            .. " is "
+            .. rec.type
+            .. ": the harness only models integer, string and boolean vars"
     end
+    return nil
+end
+
+---@param rec table catalog record
+---@param value any
+local function checkVarValue(rec, value)
+    local err = M.varValueError(rec, value)
+    if err then strict.fault(err) end
 end
 
 -- An obj's ID, resolved from a config name or ID, or raise.
@@ -139,8 +142,10 @@ function ops.setVar(state, op)
     return { { event = "VarTransmit", domain = rec.domain, id = rec.id, old = old, new = op.value } }
 end
 
+-- `displayName` may be nil: a replay infers a login from Player.IsAvailable() before it has
+-- seen the name read.
 function ops.login(state, op)
-    assert(type(op.displayName) == "string", "login needs a displayName")
+    assert(op.displayName == nil or type(op.displayName) == "string", "displayName is a string")
     local p = state.player
     p.loggedIn, p.displayName, p.login = true, op.displayName, p.login + 1
     return {}

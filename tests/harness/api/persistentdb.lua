@@ -132,13 +132,15 @@ local methods = {
         return true
     end,
 }
-for suffix, t in pairs({
+-- The typed getters' and setters' suffixes (GetInt, SetInt...).
+local TYPED = {
     Bool = T.BOOL,
     Int = T.INT,
     Float = T.FLOAT,
     String = T.STRING,
     StructuredData = T.STRUCTURED_DATA,
-}) do
+}
+for suffix, t in pairs(TYPED) do
     methods["Get" .. suffix] = function(s, key)
         return getTyped(s, key, t)
     end
@@ -148,6 +150,17 @@ for suffix, t in pairs({
 end
 
 local PersistentDB = strict.class("PersistentDB", { methods = methods })
+
+-- Store what a recorded Get found under `key` (a replay's starting state). `getter` is the
+-- method that found it ("Get", "GetInt"...), which gives the stored type; for a plain Get it
+-- is the value's own type, so a Float that JSON wrote as a whole number comes back an Int.
+---@param db table h.db
+---@param key string
+---@param getter string
+---@param value any
+function M.seed(db, key, getter, value)
+    set({ db = db }, key, value, TYPED[getter:sub(4)])
+end
 
 ---@param h table the harness
 ---@param env table the sandbox being built

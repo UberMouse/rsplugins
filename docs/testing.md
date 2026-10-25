@@ -22,6 +22,7 @@ client (`prl <plugin>`).
 | `tests/harness/api/*.lua` | The mocks, one module per API area |
 | `tests/harness/sandbox.lua`, `runtime.lua`, `strict.lua` | The plugin's environment, client limits, strict proxies |
 | `tests/harness/stubs.lua`, `catalog.lua` | Reads `docs/api/` and `docs/vars/vars.csv` |
+| `tests/harness/timeline.lua`, `replay.lua` | Replaying a recording: grouping its entries by tick (pure), and driving the world from them |
 | `tests/harness/*_spec.lua` | The harness's own tests |
 | `tests/<plugin>/*_spec.lua` | A plugin's tests |
 | `lib/dev/`, `scripts/dev-receiver.py` | The dev recorder and its receiver ([Recordings](#recordings)) |
@@ -85,6 +86,8 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `h:advance(ms)` | Run the clock forward in 20 ms logic steps; a remainder carries over. Each step: deliver answered HTTP requests, deliver queued `Chat.AddMessage` messages, fire `Logic`, and every 30th step `ServerLogic` |
 | `h:fire(event, fields?)` | Fire any stub event; `fields` must be fields of the stub's `<Event>EventPayload`. For events the world builder doesn't model (`KeyDown`, `SkillTransmit`...) |
 | `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "" }`, `{ timedOut = true }` or `{ error = "info", errorCode = n }`. Delivered on the next step |
+| `h:useRecording(source)` | Drive the world from a recording (a `.jsonl` path, repo-relative or absolute, or a list of entries); call before `h:load()`. See [Replaying a recording](#replaying-a-recording) |
+| `h:playRecording()` | Step the clock to the recording's last tick |
 | `h:output()` | Everything the plugin printed or logged, one line per call |
 | `h.env` | The current sandbox environment |
 | `h.console` | `{ kind = "print"|"log", text }` per call |
@@ -92,6 +95,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `h.requests` | Started HTTP requests in order: `{ method, url, body, headers, request }` |
 | `h.db` | PersistentDB entries, `key -> { type, value }`; survives reload |
 | `h.tick` | Logic ticks so far (`ev.logicTick`) |
+| `h.replay` | While replaying: `timeline`, `reads` (path -> `{ v }`, the reads seen so far) and `skipped` (`{ t, event, why }` per recorded delivery the harness couldn't make) |
 
 ### The world `h.world`
 
@@ -125,6 +129,8 @@ The harness fails loudly rather than guessing:
   skill, an `ObjType` field, a payload field `h:fire` didn't pass). Set it in the test. This
   includes the `oldValue` of the first `setVar` of a var: set it before `h:load()` so the plugin
   sees a change from a known value.
+- **`unrecorded: <path>`**: replaying, the plugin read something neither the world nor the
+  recording has a value for ([Replaying a recording](#replaying-a-recording)).
 - **Unknown names**: vars must exist in `docs/vars/vars.csv`, and invs and objs in
   `docs/api/consts/{Inv,Obj}.lua`, so a misspelt `var.VarPlayer.X` or `config.Obj.X` fails the
   test.
@@ -286,19 +292,53 @@ in the client, so inventories come back as arrays, with empty slots as obj -1.)
 | `OptionalPermissionChanged` | `{"op": "setPermission", "permission", "enabled"}` |
 | `ChatMessage` | `{"op": "chat", "message", "chatType", "sender"}` (`sender` is `senderNameUnfiltered`) |
 
-### Replaying (notes for the harness)
+### Replaying a recording
 
-- Apply each event's `op` at its `t`, then deliver the event. Serve a read from the latest
-  `read` with its path at or before the current `t`: deduplication drops only repeats, so that
-  is exact.
-- Login isn't an event. Infer it from `Player.IsAvailable()` and `Player.GetEntity().displayName`
-  reads. Seed `h.db` from each key's first `db` `Get`. Take the starting permissions from the
-  first `perm` entries.
-- A `chat` op whose `chatType` is `ChatType.PLUGIN` is the plugin's own `Chat.AddMessage`
-  coming back. The harness produces those itself, so don't replay them as server chat.
-- A `setVar` whose `value` is a config (`{"config": ...}`) can't be applied: the harness doesn't
-  model config-typed vars.
-- After a `dropped` line, reads and the world may not match the plugin's view.
+A recording replays as a world timeline: the plugin runs in the harness again, and the world
+does what the recording says it did. Scripted and replayed changes share one world, so a test
+can start from a recording and script more on top, during or after it.
+
+```lua
+local h = harness.new("recorder-demo", { grant = { "chatAccess" }, stdlib = { os = true, io = true } })
+h:useRecording("tests/fixtures/recorder-demo-shop.jsonl")
+h:load()            -- main.lua sees the reads recorded at t = 0
+h:playRecording()   -- step to the last recorded tick
+h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
+```
+
+- **Events fire at their recorded tick** (`t` = `h.tick`), after that tick's `Logic` (events
+  at `t = 0` straight after `main.lua`). Each event's `op` is applied to the world first,
+  without the events the world would derive from it, and then the recorded event is fired: an
+  `InventoryUpdated` stays one even for an inventory new to the world. Payload API objects
+  are rebuilt from the world (`ev.var`, `ev.inv`); an event with any other object in its
+  payload faults. While the recording lasts, `ServerLogic` comes only from it.
+- **Reads.** A mock serves what the world holds, and otherwise the latest read recorded under
+  the same path at or before the current tick. A read the recording never made faults with
+  `unrecorded: <path>`. Reads made by an event's callbacks are in place before that event
+  fires, and reads made by `Logic` callbacks before `Logic` fires (within one tick, a later
+  read of a path wins). Reads the world models also go into the world: a var's `.value`
+  (when the world can hold the value) and the login (below).
+- **An inventory the recording knows but the world doesn't yet** (no Added/Updated event so
+  far): `Inventory.Find` returns an `Inv` whose every member is the recorded read under its
+  path (`Inventory.Find(config.Inv.INV).usedSlotCount`), or nil if Find was recorded
+  returning nil. Once the world has the inventory, Find returns world-backed `Inv`s.
+- **Starting state.** The login is inferred from `Player.IsAvailable()` and
+  `Player.GetEntity().displayName` reads. PersistentDB is seeded from each key's first
+  `db` entry, when that is a `Get`/`GetInt`/... that found a value (a key the plugin wrote
+  first is left unset). Permissions start as their first `perm` entries say, on top of
+  `opts.grant`; later changes come from `OptionalPermissionChanged` events. A recording made
+  of a plugin that never calls `Plugin.HasPermission` has no `perm` entries, so grant what it
+  needs in `opts.grant`: replaying a `ChatMessage` without chatAccess faults.
+- **Normalised on load**: JSON string slot keys (`{"1": ...}`) become integers, and a
+  `ChatMessage` of `ChatType.PLUGIN` (the plugin's own `Chat.AddMessage` coming back) is
+  dropped, since the harness delivers those itself.
+- **Not applied to the world**: a `setVar` whose var isn't in `docs/vars/vars.csv`, or whose
+  value its type can't hold in the harness (config-typed vars, and BOOLEAN vars, which
+  VarTransmit reports as 0/1). The event still fires with the recorded values, except for a
+  var the catalog lacks: then the delivery is skipped and listed in `h.replay.skipped`.
+- `http` entries aren't replayed: answer the plugin's requests with `h:respond`. After a
+  `dropped` line, reads and the world may not match what the plugin saw (`timeline.dropped`
+  counts the lost entries). The header's `schema` must be 1.
 
 ## Fidelity ledger
 

@@ -31,12 +31,10 @@ local VarType = strict.class("VarType", {
         value = function(s)
             local v = s.h.world.state.vars[s.rec.domain][s.rec.id]
             if v == nil then
-                strict.fault(
-                    string.format(
-                        "unmocked state: var.%s.%s.value was never set (h.world:setVar)",
-                        s.rec.domain,
-                        s.rec.name
-                    )
+                local path = string.format("var.%s.%s.value", s.rec.domain, s.rec.name)
+                return s.h:recorded(
+                    path,
+                    "unmocked state: " .. path .. " was never set (h.world:setVar)"
                 )
             end
             return v

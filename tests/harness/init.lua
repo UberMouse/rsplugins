@@ -9,7 +9,8 @@
 --   assert.matches("...", h:output())
 --
 -- This file is the shell: it owns the clock and the plugin instance, and turns world changes
--- (world.lua) into events for the mocks (api/) to dispatch.
+-- (world.lua) into events for the mocks (api/) to dispatch. A recording can drive the same
+-- world (h:useRecording, replay.lua).
 
 local dkjson = require("dkjson")
 local chat = require("tests.harness.api.chat")
@@ -20,6 +21,7 @@ local paths = require("tests.harness.paths")
 local persistentdb = require("tests.harness.api.persistentdb")
 local player = require("tests.harness.api.player")
 local pluginApi = require("tests.harness.api.plugin")
+local replay = require("tests.harness.replay")
 local runtime = require("tests.harness.runtime")
 local sandbox = require("tests.harness.sandbox")
 local vars = require("tests.harness.api.vars")
@@ -139,7 +141,11 @@ function Harness:load()
     assert(source, self.label .. "/main.lua not found")
     -- selene: allow(incorrect_standard_library_use) -- its std has the pre-5.2 load/loadfile
     local chunk = assert(load(source, "@" .. self.label .. "/main.lua", "t", instance.env))
+    -- Replaying, main.lua sees the reads recorded while it ran, and the events recorded
+    -- before the first Logic tick follow it.
+    replay.beforeLogic(self)
     runtime.call(self.budgetMs, "main.lua", chunk)
+    replay.afterLogic(self)
 end
 
 -- Disable the plugin: call its global PluginShutdown, if any (docs/plugin-anatomy.md). From
@@ -166,13 +172,18 @@ end
 
 -- One logic step: deliver answered HTTP requests, then queued chat messages, then fire Logic,
 -- and ServerLogic every SERVER_TICK steps. The order within a step is the harness's choice;
--- the client's is undocumented.
+-- the client's is undocumented. Replaying, the recording's entries for this tick go around
+-- Logic, and ServerLogic comes from the recording until it ends.
 function Harness:step()
     self.tick = self.tick + 1
     http.deliver(self)
     chat.flush(self)
+    replay.beforeLogic(self)
     events.dispatch(self, "Logic", events.payload("Logic", { logicTick = self.tick }))
-    if self.tick % SERVER_TICK == 0 then events.dispatch(self, "ServerLogic", nil) end
+    local recorded = replay.afterLogic(self)
+    if not recorded and self.tick % SERVER_TICK == 0 then
+        events.dispatch(self, "ServerLogic", nil)
+    end
 end
 
 -- Run the client clock forward by `ms` milliseconds (whole 20 ms logic ticks; a remainder
@@ -204,6 +215,36 @@ end
 ---  { error = "info", errorCode = n }
 function Harness:respond(record, response)
     http.respond(record, response)
+end
+
+---------------------------------------------------------------------------
+-- Replaying a recording (docs/testing.md, "Replaying a recording")
+---------------------------------------------------------------------------
+
+-- Drive the world from a recording: its events fire at their recorded ticks as the clock
+-- runs, and reads the world can't answer get the latest recorded value. Call before load().
+-- Builder calls work as usual alongside and after it, on the same world.
+---@param source string|table a .jsonl path (repo-relative or absolute), or a list of entries
+---@return table timeline
+function Harness:useRecording(source)
+    return replay.attach(self, source)
+end
+
+-- Run the clock to the recording's last tick.
+function Harness:playRecording()
+    assert(self.replay, "no recording (h:useRecording)")
+    while self.tick < self.replay.timeline.lastTick do
+        self:step()
+    end
+end
+
+-- For the mocks: a value the world doesn't hold. Replaying, the latest recorded read of
+-- `key`, or a fault `unrecorded: <key>`; otherwise a fault with `message`.
+---@param key string the recorder's path for the read, e.g. "var.VarPlayer.QP.value"
+---@param message string? the fault when not replaying
+---@return any
+function Harness:recorded(key, message)
+    return replay.lookup(self, key, message)
 end
 
 -- Everything the plugin printed or logged, one line per call.
@@ -264,6 +305,7 @@ end
 
 ---@param displayName string
 function Builder:login(displayName)
+    assert(type(displayName) == "string", "login needs a displayName")
     self:apply({ op = "login", displayName = displayName })
 end
 

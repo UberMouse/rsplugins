@@ -16,11 +16,16 @@ for _, v in pairs(M.SkillType) do
     SKILLS[v] = true
 end
 
--- Only displayName is modelled; other PlayerEntity members fault as unmocked.
+-- Only displayName is modelled; other PlayerEntity members fault as unmocked. A replayed login
+-- may not know the name yet (h:recorded).
 local PlayerEntity = strict.class("PlayerEntity", {
     fields = {
         displayName = function(s)
-            return s.displayName
+            if s.displayName ~= nil then return s.displayName end
+            return s.h:recorded(
+                "Player.GetEntity().displayName",
+                "unmocked state: the player's displayName (h.world:login)"
+            )
         end,
     },
 })
@@ -46,7 +51,8 @@ local function skillGetter(fn, key)
         if not SKILLS[skill] then strict.fault("Player." .. fn .. ": not a SkillType value") end
         local levels = p.skills[skill]
         if not levels then
-            strict.fault(
+            return s.h:recorded(
+                string.format("Player.%s(%d)", fn, skill),
                 "unmocked state: skill " .. tostring(skill) .. " was never set (h.world:setSkill)"
             )
         end
@@ -64,7 +70,7 @@ local Player = strict.class("Player", {
             local p = loggedIn(s, "GetEntity")
             if s.entityLogin ~= p.login then
                 s.entityLogin = p.login
-                s.entity = PlayerEntity.new({ displayName = p.displayName })
+                s.entity = PlayerEntity.new({ h = s.h, displayName = p.displayName })
             end
             return s.entity
         end,

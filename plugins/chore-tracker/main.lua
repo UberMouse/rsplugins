@@ -63,9 +63,10 @@ local TOOLTIP_WIDTH = 360
 -- resized window.
 local POLL_TICKS = 25
 
--- Minutes since the Unix epoch; a VarTransmit fires as it ticks over.
+-- Minutes since the Unix epoch; a VarTransmit fires as it ticks over. Var ids repeat across
+-- domains (VarClient, VarNPC...), so a match needs the domain as well as the id.
 local CLOCK = var.VarPlayer.CLOCK_TIME_DATE_MINUTES
-local CLOCK_ID = CLOCK.id
+local CLOCK_ID, CLOCK_DOMAIN = CLOCK.id, CLOCK.typeName
 
 local parent = ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)
 assert(parent, "the plugin layer should exist once a plugin runs")
@@ -448,6 +449,9 @@ local function sync(clockTicked)
         if nextPhase == "waiting" and phase ~= "waiting" then say("waiting for the game clock") end
         phase = nextPhase
         if phase == "loggedOut" then mode = "list" end
+        -- A view switch clicked in the old content is stale now (it would reopen settings
+        -- after a logout).
+        pendingMode = nil
         if win then rebuild() end
     elseif clockTicked and phase == "ready" and mode == "list" then
         refreshList()
@@ -475,7 +479,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)
-    if ev.var.id == CLOCK_ID then sync(true) end
+    if ev.var.id == CLOCK_ID and ev.var.typeName == CLOCK_DOMAIN then sync(true) end
 end)
 
 sync(false)

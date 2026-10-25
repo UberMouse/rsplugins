@@ -169,6 +169,21 @@ describe("chore-tracker login", function()
         assert.is_nil(h:output():find("Lynx", 1, true))
     end)
 
+    it("drops a view switch clicked just before a logout", function()
+        local h = loaded()
+        h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS" }))
+        -- The logout is seen (here through the clock's VarTransmit) before the next Logic
+        -- tick applies the switch.
+        h.world:logout()
+        setClock(h, helpers.NOW + 1)
+        h:advance(20)
+        h.ui:get("Text", { text = "Log in to see your chores" })
+        h.world:login("Zezima")
+        h:advance(POLL_MS)
+        h.ui:get("SpriteButton", { sprite = "SETTINGS" })
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "BACK" }))
+    end)
+
     it("shows the new character straight from the settings view", function()
         local h = loaded()
         pick(h, { DAILY.id })

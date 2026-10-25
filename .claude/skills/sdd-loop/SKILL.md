@@ -497,7 +497,9 @@ After the final §4 passes, write `phase: "done"` to state.json, then give the *
   (`CLAUDE.md`: tagged debug logging comes with a regex). **If the bridge is connected, run the
   console half before reporting**: `rsdev.py exec "prf"` / `exec "prl <name>"`, then `shot` and
   `events`. Say what you saw (the overlay is there, an error showed). Leave on the user's list
-  only the steps that need their hands, and run the console and capture side while they do them.
+  only the in-game actions, and run the console and capture side while they do them. If the
+  bridge isn't connected, ask the user to `pon dev-bridge` (their one console step) rather than
+  handing them console commands.
 - Any `**Assumption:**` you made, the moderation tier you placed the feature in, and anything you
   noticed but kept out of scope.
 

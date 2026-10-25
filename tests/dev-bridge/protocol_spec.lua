@@ -144,6 +144,16 @@ describe("protocol.chatAllowed", function()
         end
     end)
 
+    it("forwards SPAM only with no sender or the local player's name", function()
+        assert.are.equal(ChatType.SPAM, protocol.SPAM)
+        assert.is_true(protocol.chatAllowed(protocol.SPAM, "", OWN))
+        assert.is_true(protocol.chatAllowed(protocol.SPAM, nil, nil))
+        assert.is_true(protocol.chatAllowed(protocol.SPAM, "<img=11>UberMouse894", OWN))
+        assert.is_false(protocol.chatAllowed(protocol.SPAM, "Bob", OWN))
+        assert.is_false(protocol.chatAllowed(protocol.SPAM, "Bob", nil))
+        assert.is_false(protocol.chatAllowed(protocol.SPAM, OWN, nil)) -- own name unknown
+    end)
+
     it("forwards every system type whatever the sender", function()
         for name, value in pairs(protocol.SYSTEM_CHAT) do
             assert.are.equal(true, protocol.chatAllowed(value, "", OWN), name)
@@ -252,5 +262,42 @@ describe("protocol.entryView", function()
             "<player>",
             protocol.entryView({ subjectText = "B", actionType = 2046 }, false).subjectText
         )
+    end)
+end)
+
+describe("protocol MiniMenu constants", function()
+    -- The stub's enum blocks, read from the file: the harness doesn't model MiniMenu.
+    local function enum(name)
+        local file = assert(io.open("docs/api/generated/game/minimenu.lua"))
+        local text = file:read("a")
+        file:close()
+        local body = assert(text:match(name .. " = {(.-)\n}"), name)
+        local out = {}
+        for key, value in body:gmatch("([%w_]+) = (%d+)") do
+            out[key] = tonumber(value)
+        end
+        return out
+    end
+
+    it("matches the stub's PLAYER entry type", function()
+        assert.are.equal(enum("MiniMenuEntryType").PLAYER, protocol.ENTRY_TYPE_PLAYER)
+    end)
+
+    it("treats exactly the stub's player action types as player actions", function()
+        local actions = enum("MiniMenuActionType")
+        local players = {}
+        for key, value in pairs(actions) do
+            local isPlayer = key == "TGT_PLAYER" or key:match("^OP_PLAYER%d+") ~= nil
+            if isPlayer then players[value] = true end
+            assert.are.equal(isPlayer, protocol.playerAction(value), key)
+        end
+        assert.is_true(next(players) ~= nil)
+        assert.is_false(protocol.playerAction(nil))
+    end)
+
+    it("blanks extraText of a player entry but leaves verbText", function()
+        local view = protocol.entryView({ verbText = "Trade with", extraText = "Bob" }, true)
+        assert.are.equal("Trade with", view.verbText)
+        assert.are.equal("<player>", view.extraText)
     end)
 end)

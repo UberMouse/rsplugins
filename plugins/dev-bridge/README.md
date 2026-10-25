@@ -65,4 +65,9 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
 It executes console and cheat commands sent from outside the client, which no submitted plugin
 may do, and forwards chat to a program on your machine (only your own lines and system messages:
 speech from other players is dropped, as is every chat type not on the allowlist in
-`protocol.lua`). It exists only to test other plugins on the dev worlds.
+`protocol.lua`). `GENERAL` and the other system types are forwarded with their text as-is, so
+that text can still name other players. Residual risk: a `MiniMenuEntrySelected` that names a
+player without `playerData`, a `PLAYER` entry type or a player action type (friends-list or
+chat-name right-clicks, say; unprobed) is not redacted.
+
+It exists only to test other plugins on the dev worlds.

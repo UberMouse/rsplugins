@@ -10,7 +10,8 @@
 -- docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
 --
 -- Chat forwarding is limited to the player's own lines and system messages (protocol.lua);
--- other players' chat is dropped here. rsdev writes the events it receives to
+-- system text is forwarded as-is, so it can still name other players. Other players' chat is
+-- dropped here. rsdev writes the events it receives to
 -- dumps/rsdev/events/.
 
 local protocol = require("protocol")
@@ -325,11 +326,14 @@ local function unsubscribeAll()
     end
 end
 
--- Stop everything: no more callbacks, and any sync in flight is cancelled.
+-- Stop everything: no more callbacks, and any sync in flight is cancelled. Safe to call twice
+-- (an error stop, then PluginShutdown). Cancel runs under pcall so a raise can't skip the
+-- "stopped after an error" message that follows the call.
 local function teardown()
+    if stopped then return end
     stopped = true
     unsubscribeAll()
-    if inFlight and inFlight.request then inFlight.request:Cancel() end
+    if inFlight and inFlight.request then pcall(inFlight.request.Cancel, inFlight.request) end
     inFlight = nil
 end
 

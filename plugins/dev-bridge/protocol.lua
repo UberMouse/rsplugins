@@ -38,7 +38,7 @@ protocol.ENV_NAMES = {
 ---------------------------------------------------------------------------
 
 -- ChatType values (core/events.lua), by name; a spec checks them against the stub. These
--- carry no player speech and pass whatever their sender. Examines were seen arriving as
+-- carry no player speech and pass whatever their sender (SPAM, below, is not one of them). Examines were seen arriving as
 -- GENERAL (0) in the client; the *_EXAMINE types stay in case they are used.
 protocol.SYSTEM_CHAT = {
     GENERAL = 0,
@@ -51,11 +51,16 @@ protocol.SYSTEM_CHAT = {
     CONSOLE_ERROR = 96,
     CONSOLE_BUFFER_REPLACE = 98,
     CONSOLE = 99,
-    SPAM = 109,
 }
 
+-- SPAM is undocumented (neither the stub nor developer.runescape.com describes it). Game
+-- messages such as "You pick the target's pocket." arrive as SPAM with no sender, but it may
+-- also carry other players' chat that the game filtered as spam, so it is forwarded only with
+-- an empty sender or the local player's own name.
+protocol.SPAM = 109
+
 -- Player speech: forwarded only when the local player is the sender. Anything in neither
--- table is dropped, which is deliberate: BROADCAST_WORLD (138) carries News lines naming
+-- table (SPAM aside) is dropped, which is deliberate: BROADCAST_WORLD (138) carries News lines naming
 -- other players with an empty sender, so a missing sender doesn't make text safe.
 protocol.SPEECH_CHAT = {
     MOD = 1,
@@ -111,7 +116,7 @@ function protocol.isOwnName(name, ownName)
 end
 
 -- Whether a chat message may be forwarded: system types always, speech types only from the
--- local player, everything else never. `ownName` is nil when the player's name can't be read.
+-- local player, SPAM only when senderless or the local player's, everything else never. `ownName` is nil when the player's name can't be read.
 ---@param chatType any
 ---@param senderSimple any the payload's senderNameSimple
 ---@param ownName any
@@ -119,6 +124,10 @@ end
 function protocol.chatAllowed(chatType, senderSimple, ownName)
     if SYSTEM_SET[chatType] then return true end
     if SPEECH_SET[chatType] then return protocol.isOwnName(senderSimple, ownName) end
+    if chatType == protocol.SPAM then
+        return protocol.normaliseName(senderSimple) == ""
+            or protocol.isOwnName(senderSimple, ownName)
+    end
     return false
 end
 
@@ -150,12 +159,14 @@ protocol.ENTRY_FIELDS = {
 }
 
 -- Text fields that hold a targeted player's name.
-local ENTRY_NAME_FIELDS = { "subjectText", "fullText", "overrideText" }
-local ENTRY_TYPE_PLAYER = 7 -- MiniMenuEntryType.PLAYER
--- MiniMenuActionType: TGT_PLAYER, OP_PLAYER1..10 and their low-priority twins.
+-- fullText is verb + subject + extra, so extraText may carry the name of a player-targeting
+-- entry too. verbText is left alone: it is the action word ("Trade with").
+local ENTRY_NAME_FIELDS = { "subjectText", "extraText", "fullText", "overrideText" }
+protocol.ENTRY_TYPE_PLAYER = 7 -- MiniMenuEntryType.PLAYER
+-- Whether a MiniMenuActionType is TGT_PLAYER, OP_PLAYER1..10 or their low-priority twins.
 ---@param action any
 ---@return boolean
-local function playerAction(action)
+function protocol.playerAction(action)
     if type(action) ~= "number" then return false end
     return action == 15 or (action >= 44 and action <= 53) or (action >= 2044 and action <= 2053)
 end
@@ -172,8 +183,8 @@ function protocol.entryView(fields, hasPlayerData)
     end
     if
         hasPlayerData ~= false
-        or out.actionEntryType == ENTRY_TYPE_PLAYER
-        or playerAction(out.actionType)
+        or out.actionEntryType == protocol.ENTRY_TYPE_PLAYER
+        or protocol.playerAction(out.actionType)
     then
         for _, name in ipairs(ENTRY_NAME_FIELDS) do
             if out[name] ~= nil then out[name] = "<player>" end

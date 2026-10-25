@@ -539,8 +539,15 @@ def cmd_stop(args):
             path.unlink(missing_ok=True)
             print(f"rsdev is not running (stale pid file for {file_pid} removed)")
         return 0
-    # The pid the daemon reports about itself is the proof; /proc can't be read on macOS. Without
-    # a pid file (a foreground `daemon`), the reported pid is all there is to go on.
+    # The pid the daemon reports about itself is the proof. Without a pid file (a foreground
+    # `daemon`), the reported pid is all there is to go on.
+    # kill(0) signals our process group and kill(-1) every process we may signal, so a squatter's
+    # or a corrupt file's pid must be a real process id before it reaches os.kill; `type` rules out
+    # bool (True == 1).
+    for label, pid, optional in (("daemon", daemon_pid, False), ("pid file", file_pid, True)):
+        if not (optional and pid is None) and not (type(pid) is int and pid > 1):
+            print(f"{label} pid {pid!r} is not a usable process id; not signalling", file=sys.stderr)
+            return 1
     if file_pid is not None and file_pid != daemon_pid:
         print(
             f"pid file says {file_pid} but the daemon on port {args.port} reports {daemon_pid}; "
@@ -548,7 +555,12 @@ def cmd_stop(args):
             file=sys.stderr,
         )
         return 1
-    os.kill(daemon_pid, signal.SIGTERM)
+    try:
+        os.kill(daemon_pid, signal.SIGTERM)
+    except ProcessLookupError:  # it exited between the status call and the signal
+        path.unlink(missing_ok=True)
+        print(f"rsdev (pid {daemon_pid}) already gone")
+        return 0
     for _ in range(50):
         if not daemon_up(args):
             break
@@ -611,28 +623,46 @@ def cmd_exec(args):
 def cmd_events(args):
     since = args.since
     run = None  # the daemon run the numbers belong to
-    try:
-        while True:
-            wait = 25 if args.follow else 0
-            path = f"/cli/events?since={since}&wait={wait}"
-            if args.name:
-                path += "&name=" + urllib.parse.quote(args.name)
+    delay = None  # backoff before the next retry; None while connected
+    while True:
+        # After a drop, ask without waiting: a long poll with the old `since` would sit on a new
+        # daemon's low-numbered events until it timed out, before the run change showed.
+        wait = 25 if args.follow and delay is None else 0
+        path = f"/cli/events?since={since}&wait={wait}"
+        if args.name:
+            path += "&name=" + urllib.parse.quote(args.name)
+        try:
             reply = call(args, path, timeout=wait + 10)
-            for event in reply["events"]:
-                print(json.dumps(event), flush=True)
-            if run is not None and reply["run"] != run:
-                # A new daemon numbers from 1 again; the old `since` would hide everything.
-                print("daemon restarted; numbering restarted", file=sys.stderr)
-                run, since = reply["run"], 0
-                continue
-            run, since = reply["run"], reply["last"]
+        except KeyboardInterrupt:
+            return 0
+        except (OSError, ValueError) as err:
             if not args.follow:
+                print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
+                return 2
+            # A restart always drops the long-poll connection, so --follow waits it out.
+            if delay is None:
+                print("daemon not reachable; retrying", file=sys.stderr)
+                delay = 0.5
+            try:
+                time.sleep(delay)
+            except KeyboardInterrupt:
                 return 0
-    except KeyboardInterrupt:
-        return 0
-    except (OSError, ValueError) as err:
-        print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
-        return 2
+            delay = min(delay * 2, 5.0)
+            continue
+        if delay is not None:
+            print("daemon reachable again", file=sys.stderr)
+            delay = None
+        if run is not None and reply["run"] != run:
+            # A new daemon numbers from 1 again, and this reply used the old `since`: drop it and
+            # refetch from the start.
+            print("daemon restarted; numbering restarted", file=sys.stderr)
+            run, since = reply["run"], 0
+            continue
+        for event in reply["events"]:
+            print(json.dumps(event), flush=True)
+        run, since = reply["run"], reply["last"]
+        if not args.follow:
+            return 0
 
 
 def main(argv=None):

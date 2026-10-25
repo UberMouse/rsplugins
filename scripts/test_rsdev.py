@@ -8,8 +8,12 @@ over HTTP the way the recorder, the bridge plugin and the CLI do."""
 import importlib.util
 import json
 import os
+import socket
+import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -464,6 +468,32 @@ class StopTests(DaemonCase):
         kill.assert_not_called()
         self.assertTrue(path.exists())
 
+    def test_unusable_pids_are_never_signalled(self):
+        for bad in (0, -1, 1, "x", True, 1.5, None):
+            with self.subTest(status_pid=bad):
+                with mock.patch.object(rsdev.os, "kill") as kill, mock.patch.object(
+                    rsdev, "call", lambda *a, **k: {"pid": bad}
+                ), mock.patch("sys.stderr", StringIO()):
+                    self.assertEqual(rsdev.cmd_stop(self.args()), 1)
+                kill.assert_not_called()
+        for bad in (0, -1, 1):
+            with self.subTest(file_pid=bad):
+                self.write_pid(bad)
+                with mock.patch.object(rsdev.os, "kill") as kill, mock.patch.object(
+                    rsdev, "call", lambda *a, **k: {"pid": os.getpid()}
+                ), mock.patch("sys.stderr", StringIO()):
+                    self.assertEqual(rsdev.cmd_stop(self.args()), 1)
+                kill.assert_not_called()
+
+    def test_daemon_that_exited_before_the_signal_is_already_gone(self):
+        path = self.write_pid(os.getpid())
+        with mock.patch.object(rsdev.os, "kill", side_effect=ProcessLookupError), redirect_stdout(
+            StringIO()
+        ) as out:
+            self.assertEqual(rsdev.cmd_stop(self.args()), 0)
+        self.assertFalse(path.exists())
+        self.assertIn("already gone", out.getvalue())
+
 
 class EventsTests(DaemonCase):
     def seed(self):
@@ -521,6 +551,88 @@ class EventsTests(DaemonCase):
         self.assertIn("daemon restarted; numbering restarted", err.getvalue())
         self.assertEqual([json.loads(ln)["n"] for ln in out.getvalue().splitlines()], [5, 1])
         self.assertEqual([p.split("&")[0] for p in paths[:4]], ["/cli/events?since=0", "/cli/events?since=5", "/cli/events?since=0", "/cli/events?since=1"])
+
+    def test_stale_since_reply_from_a_new_run_is_not_printed(self):
+        replies = [
+            {"events": [{"n": 5}], "last": 5, "run": "old"},
+            {"events": [{"n": 9, "name": "stale"}], "last": 9, "run": "new"},
+            {"events": [{"n": 1}], "last": 1, "run": "new"},
+        ]
+
+        def fake_call(args, path, payload=None, timeout=5.0):
+            if not replies:
+                raise KeyboardInterrupt
+            return replies.pop(0)
+
+        args = SimpleNamespace(port=1, since=0, follow=True, name=None)
+        out = StringIO()
+        with mock.patch.object(rsdev, "call", fake_call), mock.patch("sys.stderr", StringIO()), redirect_stdout(out):
+            rsdev.cmd_events(args)
+        self.assertEqual([json.loads(ln)["n"] for ln in out.getvalue().splitlines()], [5, 1])
+
+    def test_non_follow_exits_2_when_the_daemon_is_down(self):
+        self.server.shutdown()
+        self.server.socket.close()
+        args = SimpleNamespace(port=self.port, since=0, follow=False, name=None)
+        with mock.patch("sys.stderr", StringIO()):
+            self.assertEqual(rsdev.cmd_events(args), 2)
+
+
+
+
+class FollowRestartTests(unittest.TestCase):
+    """--follow against real daemon processes, since only a dead process drops the long poll."""
+
+    def start_daemon(self, port, out):
+        proc = subprocess.Popen(
+            [sys.executable, str(SCRIPT), "daemon", "--port", str(port), "--out", str(out)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self.addCleanup(lambda: (proc.poll() is None and proc.kill(), proc.wait()))
+        for _ in range(100):
+            try:
+                get(port, "/cli/status")
+                return proc
+            except OSError:
+                time.sleep(0.05)
+        self.fail("daemon did not come up")
+
+    def wait_for(self, cond):
+        for _ in range(300):
+            if cond():
+                return
+            time.sleep(0.05)
+        self.fail("condition never became true")
+
+    def test_follow_survives_a_real_daemon_restart(self):
+        with tempfile.TemporaryDirectory() as tmp, socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+            probe.close()
+            out_dir = Path(tmp)
+            first = self.start_daemon(port, out_dir)
+            post(port, "/bridge/sync", sync_body(events=[{"t": 1, "name": "OLD", "payload": 1}]))
+            args = SimpleNamespace(port=port, since=0, follow=True, name=None)
+            out, err = StringIO(), StringIO()
+            result = []
+            with mock.patch("sys.stderr", err), redirect_stdout(out):
+                t = threading.Thread(target=lambda: result.append(rsdev.cmd_events(args)), daemon=True)
+                t.start()
+                self.wait_for(lambda: len(out.getvalue().splitlines()) >= 1)
+                first.terminate()
+                first.wait()
+                self.wait_for(lambda: "retrying" in err.getvalue())
+                self.start_daemon(port, out_dir)
+                post(port, "/bridge/sync", sync_body(session="b2", events=[{"t": 9, "name": "NEW", "payload": 9}]))
+                self.wait_for(lambda: len(out.getvalue().splitlines()) >= 2)
+                time.sleep(0.5)  # a duplicate would show up by now
+            lines = [json.loads(ln) for ln in out.getvalue().splitlines()]
+            self.assertEqual([(e["n"], e["name"]) for e in lines], [(1, "OLD"), (1, "NEW")])
+            self.assertEqual(err.getvalue().count("daemon not reachable; retrying"), 1)
+            self.assertIn("daemon reachable again", err.getvalue())
+            self.assertIn("daemon restarted; numbering restarted", err.getvalue())
+            self.assertEqual(result, [])  # still following; the daemon thread dies with the process
 
 
 class EscapeTests(unittest.TestCase):

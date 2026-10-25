@@ -160,8 +160,11 @@ is unknown). Commands run in the order queued, and each is delivered at most onc
 is logged with its id in `dumps/rsdev/daemon.log`**: that log is the audit trail.
 
 **`events`** prints the forwarded events as JSON lines, each with an increasing `n`, numbered from 1
-per daemon run (a restarted daemon starts again at 1; `--follow` notices, says so on stderr and
-continues from 0). `--since N` gives those after `n`; `--name` keeps one event name; `--follow`
+per daemon run (a restarted daemon starts again at 1). `--follow` survives a daemon restart: when the
+connection drops it prints "daemon not reachable; retrying" on stderr once and retries every 0.5 s,
+doubling to 5 s, then prints "daemon reachable again" and, seeing the new daemon, "daemon restarted;
+numbering restarted" and continues from 0, printing each new event once. Without `--follow`, a down
+daemon exits 2. `--since N` gives those after `n`; `--name` keeps one event name; `--follow`
 keeps printing until interrupted. The last 10,000 are kept in memory; every event is also appended to
 `dumps/rsdev/events/<session>.jsonl`. A growth in a sync's `dropped` count appears as an event
 `{"name": "dropped", "n_lost": ...}`.

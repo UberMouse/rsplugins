@@ -26,7 +26,7 @@ client (`prl <plugin>`).
 | `tests/harness/*_spec.lua` | The harness's own tests |
 | `tests/<plugin>/*_spec.lua` | A plugin's tests |
 | `lib/dev/`, `scripts/dev-receiver.py` | The dev recorder and its receiver ([Recordings](#recordings)) |
-| `scripts/recording-sanitise.py`, `tests/fixtures/` | Recorded sessions made into committed fixtures ([Turning a session into a fixture](#turning-a-session-into-a-fixture)) |
+| `scripts/recording-sanitise.py`, `recording-chat-allowlist.txt`, `test_recording_sanitise.py`, `tests/fixtures/` | Recorded sessions made into committed fixtures, the game chat a fixture may keep, and the sanitiser's tests ([Turning a session into a fixture](#turning-a-session-into-a-fixture)) |
 | `tests/recorder/` | The recorder's tests, with `plugins/recorder-demo` |
 
 ## Writing a plugin test
@@ -330,7 +330,7 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
   `OptionalPermissionChanged` has decided faults `unrecorded: Plugin.HasPermission(<perm>)`. A
   `Get*` or `CheckExists*` of a key the store doesn't hold faults
   `unrecorded: PersistentDB:<Method>("<key>")` unless the recording has a `db` entry for it
-  (so it was seen unset) or the plugin deleted it or called `Clear` during the replay. A key
+  or the plugin deleted it or called `Clear` during the replay. A key
   the plugin stores, or the test puts in `h.db`, is answered from the store.
 - **An inventory the recording knows but the world doesn't yet** (no Added/Updated event so
   far): `Inventory.Find` returns a new `Inv` each call (as the client does) whose every member
@@ -371,11 +371,22 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
    - replaces the player's display name, as the recording's own
      `Player.GetEntity().displayName` reads give it, with a placeholder (`--placeholder`,
      default `Fixture Player`) in every string: read values, chat sender fields, and inside
-     any other text. It matches case-insensitively, with a space, underscore, hyphen or
-     no-break space in the name matching any of them. It refuses a recording without that read,
-     and checks its output for the name before writing.
+     any other text. It matches case-insensitively as a substring, with a space, underscore,
+     hyphen or no-break space in the name matching any of them, and prints how many it
+     replaced, never the name. It refuses a recording without that read, and a name under 4
+     characters (which would match inside other words) without `--short-name-ok`. It looks
+     for the name in its output, as text and in every string the text decodes to, before
+     writing and again in the file read back; if it is there, it exits non-zero and leaves
+     none of its output on disk.
    - redacts every chat message with a non-empty sender (one a player sent): its text and
      sender fields become `<redacted>`.
+   - keeps game chat (no sender) only if the whole text matches a line of
+     `scripts/recording-chat-allowlist.txt`, a list of anchored regexes. Any other game text
+     becomes `<redacted:N chars>`, N its length in characters, keeping its `chatType`, so a
+     game message naming another player ("Bob has logged in.") never reaches a fixture.
+     Adding a pattern is a review step: it must not be able to match a player's name, so no
+     free-form slots (`.*`, `\w+`), only fixed text, numbers, colour tags and lists of known
+     names. To keep a new message, add a pattern for it and re-run.
    - strips memory addresses from object text, as the recorder now does, and drops the reads
      that then repeat.
    - keeps only the entries with `--from <= t <= --to`, rebased so `--from` is `t = 0`. What
@@ -385,15 +396,20 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
      dropped, so the world starts empty and the replay serves what the plugin had read; an
      inventory, say, is a [read-backed Inv](#replaying-a-recording) until its first update in
      the window. The header gains `"window": [from, to]`.
+   - refuses a `dropped` line at or before `--to` unless `--allow-dropped`: in the window it is
+     a gap, and before it the state carried in at `t = 0` may be wrong. Allowed, the window's
+     are kept and the earlier ones become one at `t = 0`, so the spec must pass `allowDropped`
+     too.
 3. Check the result before committing: count the display name's matches in it (0 means
    none), e.g. ``grep -ci "$(jq -r 'select(.path == "Player.GetEntity().displayName") | .v' <session>.jsonl | head -1)" <fixture>``,
    and read what chat is left (`jq -c 'select(.name == "ChatMessage") | .payload.chatMessage'`).
-   The script only knows the player's own name and chat senders: a game message that names
-   another player, or a plugin that copies chat text into a read or the store, needs a look by
-   hand.
+   The script only knows the player's own name and the chat it redacts: a plugin that copies
+   chat text into a read or the store, or reads other players' names, needs a look by hand.
 4. Keep it small: a window of a minute or so is tens of KB. A bank update is about 40 KB on
    its own (1920 slots), so leave bank changes out of the window unless the test needs one.
 5. Replay it in a spec with `h:useRecording("tests/fixtures/<name>.jsonl")`.
+
+`scripts/check-lua.sh` also runs the sanitiser's tests, `scripts/test_recording_sanitise.py`.
 
 ## Fidelity ledger
 

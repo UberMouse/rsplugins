@@ -1,0 +1,31 @@
+# Game chat that scripts/recording-sanitise.py keeps in a fixture: a ChatMessage with no sender
+# keeps its text only if the whole text matches one of these lines. Any other game text is
+# redacted to "<redacted:N chars>".
+#
+# Adding a pattern is a deliberate review step: it must not be able to match another player's
+# name, since game messages name players ("Bob has logged in."). So no free-form slots (.*,
+# \w+, [A-Za-z ]+): only fixed text, numbers ([0-9,]+), colour tags (<col=[0-9A-Fa-f]{6}>) and
+# alternations of known names (tracks, achievements, areas). Each line is a Python regex
+# anchored with ^ and $; blank lines and lines starting with # are skipped.
+
+# Thieving: pickpocketing
+^You pick the target's pocket\.$
+^<col=[0-9A-Fa-f]{6}>Your pickpocket target becomes aware of your presence\.$
+^You fail to steal from the target\.$
+^You've been stunned\.$
+^You're stunned\.$
+
+# Money pouch and currency pouch
+^[0-9,]+ coins have been (?:added to|removed from) your money pouch\.$
+^The following has been added to your currency pouch: [0-9,]+ x (?:Spooky tokens)\.$
+
+# Daily Horseclan confections
+^<col=[0-9A-Fa-f]{6}>While skilling, you find your daily Horseclan confections\.$
+
+# Music unlocks, by track name
+^<col=[0-9A-Fa-f]{6}>You have unlocked a new music track: (?:The Duke)\.$
+
+# Achievements and area task sets, by achievement and area name
+^Congratulations! You have completed: (?:'Window Shopping' - Browse Lumbridge's general store)\.$
+^<col=[0-9A-Fa-f]{6}>You've just completed your first achievement in the following area task set: (?:Beginner|Easy|Medium|Hard|Elite) (?:Lumbridge)$
+^<col=[0-9A-Fa-f]{6}>Go to the 'Area Task Sets' tab of the 'Achievements' interface to find out about the other tasks in the set and the rewards for completing them\.$

@@ -14,6 +14,7 @@
 #                     harness code run outside the plugin sandbox
 #   6. tests          scripts/test-lua.sh: every tests/**/*_spec.lua under busted (always the
 #                     whole suite, whatever paths were given)
+#   7. sanitiser      scripts/test_recording_sanitise.py, the fixture sanitiser's tests (always)
 #
 # Usage: scripts/check-lua.sh [path ...]
 #   Paths default to plugins/, lib/ and tests/ (those that exist). Exit 0 = all checks passed;
@@ -113,6 +114,12 @@ if test_out=$(scripts/test-lua.sh 2>&1); then
 else
     echo "$test_out"
     failed+=("tests (run: scripts/test-lua.sh)")
+fi
+
+# The sanitiser decides what private data reaches a committed fixture, so its tests gate too.
+if ! py_out=$(PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/test_recording_sanitise.py 2>&1); then
+    echo "$py_out"
+    failed+=("sanitiser tests (run: python3 -m unittest scripts/test_recording_sanitise.py)")
 fi
 
 if [[ ${#failed[@]} -gt 0 ]]; then

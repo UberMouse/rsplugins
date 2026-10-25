@@ -60,9 +60,10 @@ local function checkKey(key)
     if type(key) ~= "string" then strict.fault("PersistentDB key must be a string") end
 end
 
--- Replaying, a read of a key the store lacks is answered only if the replay knows the key
--- was unset (docs/testing.md, "Replaying a recording"); otherwise the client's store may
--- have held a value the recording never showed, so it faults.
+-- Replaying, a read of a key the store lacks is answered only if the recording touched the
+-- key or the plugin deleted it or cleared the store (docs/testing.md, "Replaying a
+-- recording"); otherwise the client's store may have held a value the recording never
+-- showed, so it faults.
 ---@param s table
 ---@param method string e.g. "GetInt", for the fault
 ---@param key string

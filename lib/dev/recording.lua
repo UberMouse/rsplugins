@@ -143,6 +143,8 @@ end
 -- The entry buffer: encoded entries waiting to be sent, oldest first
 ---------------------------------------------------------------------------
 
+-- Entries sit at buffer[first..last]. An entry keeps its index until it leaves, and leaving
+-- is always from the front, so everything below `first` has been taken or dropped.
 ---@return table
 function recording.newBuffer()
     return { first = 1, last = 0, bytes = 0 }

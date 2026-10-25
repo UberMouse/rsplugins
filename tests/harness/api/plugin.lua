@@ -49,11 +49,12 @@ end
 ---@param env table the sandbox being built
 function M.install(h, env)
     local urls = h.manifest.urls or {}
+    -- Catchable: a plugin may pcall a lookup to probe for an optional url (dev/recorder does),
+    -- and a probe that comes back empty is not a misuse.
     local lookup = strict.lookup(function(name)
-        strict.fault("Plugin.urls." .. tostring(name) .. " is not in plugin.json urls")
+        strict.fault("Plugin.urls." .. tostring(name) .. " is not in plugin.json urls", true)
     end, urls)
-    -- The page calls urls a table, so pairs() over it lists the manifest's urls. It is the
-    -- one way to ask for a url that may be missing without the fault above (dev/recorder).
+    -- The page calls urls a table, so pairs() over it lists the manifest's urls.
     getmetatable(lookup).__pairs = function()
         return next, urls, nil
     end

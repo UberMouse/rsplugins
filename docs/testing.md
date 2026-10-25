@@ -189,7 +189,9 @@ recorder-demo's probe line reports it as `moduleSharesEnv`. If that is `false`, 
 
 **Moderation.** The recorder and recorder-demo are dev tools, never for submission. A plugin
 for submission ships without `dev/`, without the two lines above, and without `urls.recorder`.
-It keeps httpAccess only if a feature of its own needs it.
+It keeps httpAccess only if a feature of its own needs it. Recordings hold the plugin's request
+headers (an `Authorization` header included) and bodies, chat lines and display names, so keep
+them local.
 
 ### Recording a session
 
@@ -226,7 +228,9 @@ so any other member is nil where the harness would fault.
 second and one at a time, never from an HTTP callback. Each body stays referenced until its
 request finishes. A batch holds up to 256 KB of entries. The buffer keeps up to 8 MB. Past that
 the oldest entries are dropped, and so is a batch the receiver doesn't take, after which the next
-POST waits 5 s. Drops are counted, and the first one logs one console line. One value is capped
+POST waits 5 s. A failed batch isn't re-sent, so the buffer bounds memory but doesn't carry data
+across a receiver outage: start the receiver before granting httpAccess. Drops (buffer overflow
+and failed batches) are counted, and the first one logs one console line. One value is capped
 at 10,000 nodes and each string at 4096 bytes, so recording a full bank stays well inside a
 call's 1000 ms. Entries not yet sent when the plugin is disabled are lost (normally under a
 second's worth), because nothing is sent from `PluginShutdown`.
@@ -324,8 +328,8 @@ and any other a JSON object with string keys, so an inventory with empty slots c
 |---|---|
 | A subscriber error | Fails the test, naming the event and subscriber (the client logs it to the console) |
 | `var.<Domain>.FromID` for an ID that isn't in the catalog | nil (the catalog holds every ID `FromID` returned a var for in `plugins/var-dump`; the client may raise instead) |
-| `Plugin.urls.<name>` missing from the manifest | Faults |
-| `pairs(Plugin.urls)` | Lists the manifest's urls. The page calls `urls` a table; whether the client's can be iterated is unconfirmed. The dev recorder uses it to look for `urls.recorder` without the fault above |
+| `Plugin.urls.<name>` missing from the manifest | Faults. Unlike other faults, a `pcall` around the lookup catches it for good, so a plugin can probe for an optional url |
+| `pairs(Plugin.urls)` | Lists the manifest's urls. The page calls `urls` a table; whether the client's can be iterated is unconfirmed. The dev recorder looks for `urls.recorder` this way first, then by a `pcall`'d lookup |
 | Granting a permission the manifest doesn't request | The builder errors |
 | A `require`d file that errors | Fails the test (the client returns nil) |
 | Replacing a subscription by name | Keeps its original position in the order |

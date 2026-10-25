@@ -69,8 +69,11 @@ local httpCount = 0 -- the plugin's own requests, numbered for their start/done 
 
 -- Encoded value last recorded per read path (and per permission), so a value the plugin
 -- reads every tick is recorded only when it changes. A replay serves each read the latest
--- recorded value, so nothing is lost.
-local lastRecorded = {}
+-- recorded value, so nothing is lost, unless that entry was dropped: `recordedAt` holds each
+-- one's buffer index, and anything at or below `lostThrough` may have been dropped, so a read
+-- deduplicated against it is recorded again.
+local lastRecorded, recordedAt = {}, {}
+local lostThrough = 0
 
 -- Recorder failures must not break the plugin: the first is logged and recording stops.
 ---@param fn function
@@ -88,8 +91,10 @@ end
 ---@param why string
 local function noteDropped(count, why)
     dropped = dropped + count
-    -- A dropped entry may be the one a later identical read was deduplicated against.
-    lastRecorded = {}
+    -- Drops are always the oldest entries (the buffer's front, or a batch taken from it), so
+    -- everything below the buffer's first entry counts as lost. That includes entries sent
+    -- fine or still in flight, which only costs re-recording a few unchanged reads.
+    lostThrough = buffer.first - 1
     if not warnedDrop then
         warnedDrop = true
         say("dropping the oldest entries (" .. why .. "); is scripts/dev-receiver.py running?")
@@ -103,15 +108,15 @@ local function push(entry)
     if lost > 0 then noteDropped(lost, "buffer full") end
 end
 
--- True if `v` differs from what was last recorded under `key`, which then remembers it.
+-- Push `entry` unless `v` is what was last recorded under `key` and that entry wasn't lost.
 ---@param key string
 ---@param v any already serialised
----@return boolean
-local function changed(key, v)
+---@param entry table
+local function pushIfChanged(key, v, entry)
     local text = json.encode(v)
-    if lastRecorded[key] == text then return false end
-    lastRecorded[key] = text
-    return true
+    if lastRecorded[key] == text and recordedAt[key] > lostThrough then return end
+    push(entry)
+    lastRecorded[key], recordedAt[key] = text, buffer.last
 end
 
 ---------------------------------------------------------------------------
@@ -199,7 +204,7 @@ end
 ---@param value any
 local function recordRead(path, value)
     local v = serialise(value)
-    if changed("read:" .. path, v) then push({ k = "read", path = path, v = v }) end
+    pushIfChanged("read:" .. path, v, { k = "read", path = path, v = v })
 end
 
 local ReadProxy = {}
@@ -490,9 +495,11 @@ local function wrapPlugin(plugin)
                     local granted = value(permission, ...)
                     guard(function()
                         local name = tostring(permission)
-                        if changed("perm:" .. name, granted) then
-                            push({ k = "perm", permission = name, v = granted })
-                        end
+                        pushIfChanged(
+                            "perm:" .. name,
+                            granted,
+                            { k = "perm", permission = name, v = granted }
+                        )
                     end)
                     return granted
                 end
@@ -648,8 +655,9 @@ end
 -- Install
 ---------------------------------------------------------------------------
 
--- urls.recorder from the manifest, or nil. Found by iterating, since indexing a missing name
--- may raise (the test harness makes it fault); indexed only if the table can't be iterated.
+-- urls.recorder from the manifest, or nil. Looked for by iterating first, since indexing a
+-- missing name may raise (the test harness's does). Whether the client's urls can be iterated
+-- is undocumented, so if iterating fails or doesn't find it, it is indexed under pcall too.
 ---@param urls any
 ---@return string?
 local function manifestUrl(urls)
@@ -659,7 +667,7 @@ local function manifestUrl(urls)
         end
         return nil
     end)
-    if ok then return found end
+    if ok and found then return found end
     local indexed, value = pcall(function()
         return urls[URL_NAME]
     end)

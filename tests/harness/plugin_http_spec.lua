@@ -36,6 +36,14 @@ describe("Plugin", function()
         )
     end)
 
+    it("lets a pcall probe for a url the manifest lacks", function()
+        local h = harness.load(plugin([[
+            found, err = pcall(function() return Plugin.urls.wiki end)
+        ]]))
+        assert.is_false(h.env.found)
+        assert.matches("Plugin.urls.wiki is not in plugin.json urls", h.env.err)
+    end)
+
     it("lists the manifest urls with pairs", function()
         local h = harness.load(plugin([[
             names = {}

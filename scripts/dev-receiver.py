@@ -9,7 +9,8 @@ Listens on 127.0.0.1 (the plugin's "recorder" URL) for POST /record, a batch:
 Each plugin enable is one session, written to <out>/<plugin>/<time>-<session>.jsonl: a
 header line {"k": "session", ...}, then one entry per line in the order they arrive. When the
 batch's cumulative `dropped` count has grown, a {"k": "dropped", "n": ...} line marks the gap
-first. The format is documented in docs/testing.md ("Recordings").
+first. The format is documented in docs/testing.md ("Recordings"). A malformed batch gets a
+400 (a body over MAX_BODY, a 413) and nothing is written.
 """
 
 import argparse
@@ -21,7 +22,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOST = "127.0.0.1"
-SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # plugin and session names become paths
+# Plugin and session names become path parts. A leading letter or digit rules out "." and "..".
+SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # used with fullmatch
+# Well above the recorder's 256 KB batches; a bigger body is refused unread.
+MAX_BODY = 2 * 1024 * 1024
 
 
 class Session:
@@ -59,6 +63,28 @@ def session_for(out_dir, batch):
     return current
 
 
+def is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def batch_error(batch):
+    """Why a decoded batch can't be written, or None if it can."""
+    if not isinstance(batch, dict):
+        return "not a JSON object"
+    for key in ("plugin", "session"):
+        if not isinstance(batch.get(key), str) or not SAFE_NAME.fullmatch(batch[key]):
+            return f"bad {key} name {batch.get(key)!r}"
+    for key in ("schema", "seq"):
+        if not is_int(batch.get(key)):
+            return f"{key} is not an integer"
+    if not is_int(batch.get("dropped", 0)):
+        return "dropped is not an integer"
+    entries = batch.get("entries")
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        return "entries is not a list of objects"
+    return None
+
+
 def ordered(entry):
     """The entry with t and k first, so the file reads well."""
     head = {key: entry[key] for key in ("t", "k") if key in entry}
@@ -69,18 +95,26 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/record":
             return self.reply(404)
-        raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        # A missing or negative length would block this single-threaded server in read().
+        length = self.headers.get("Content-Length", "")
+        if not (length.isascii() and length.isdigit()):
+            print(f"bad Content-Length: {length!r}")
+            return self.reply(400)
+        if int(length) > MAX_BODY:
+            print(f"batch of {length} bytes is over the {MAX_BODY}-byte cap")
+            return self.reply(413)
+        raw = self.rfile.read(int(length))
         try:
             # Game text isn't always valid UTF-8, and one bad byte shouldn't lose a batch.
             batch = json.loads(raw.decode("utf-8", errors="replace"))
-            names_ok = all(SAFE_NAME.match(str(batch[k])) for k in ("plugin", "session"))
-            entries = batch["entries"]
-        except (json.JSONDecodeError, KeyError, TypeError) as err:
+        except json.JSONDecodeError as err:
             print(f"bad batch: {err!r}; {len(raw)} bytes, starts {raw[:80]!r}")
             return self.reply(400)
-        if not names_ok:
-            print(f"bad plugin/session name: {batch.get('plugin')!r} {batch.get('session')!r}")
+        error = batch_error(batch)
+        if error:
+            print(f"bad batch: {error}")
             return self.reply(400)
+        entries = batch["entries"]
 
         session = session_for(self.server.out_dir, batch)
         lost = batch.get("dropped", 0) - session.dropped

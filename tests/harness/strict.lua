@@ -9,7 +9,8 @@
 --
 -- Errors the harness raises go through M.fault, which also records them. A plugin that wraps
 -- an API call in pcall would otherwise swallow the error; the runtime re-raises any fault
--- recorded during a plugin call once the call returns (runtime.lua).
+-- recorded during a plugin call once the call returns (runtime.lua). A fault a plugin may
+-- provoke on purpose to probe for something optional (a manifest url) is raised unrecorded.
 
 local M = {}
 
@@ -24,8 +25,9 @@ local HARNESS = debug.getinfo(1, "S").source:match("^(.*/)strict%.lua$") or "@te
 -- tests/harness/: the plugin line that misused the API, or the spec line that built a bad
 -- world op. (Counting frames instead breaks on Lua's tail calls, which drop frames.)
 ---@param message string
-function M.fault(message)
-    M.faults[#M.faults + 1] = message
+---@param catchable boolean? true to let a pcall in the plugin catch it for good
+function M.fault(message, catchable)
+    if not catchable then M.faults[#M.faults + 1] = message end
     local level = 2
     while true do
         local info = debug.getinfo(level, "S")

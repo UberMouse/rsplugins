@@ -55,6 +55,35 @@ describe("dev recorder", function()
         assert.is_true(reads[2].t > reads[1].t)
     end)
 
+    it("records a read again after its entry is dropped, and only then", function()
+        local h = harness.new(
+            support.plugin(support.INSTALL .. [[
+            Event.Logic.Subscribe("poll", function() local qp = var.VarPlayer.QP.value end)
+            Event.VarTransmit.Subscribe("filler", function() end)
+        ]]),
+            { grant = {} } -- nothing is sent, so only the buffer limit drops entries
+        )
+        h.world:setVar("VarPlayer", "QP", 10)
+        h.world:setVar("VarPlayer", "OPTION_RUN", 0)
+        h:load()
+        h.env.require("dev/recorder").limits.bufferBytes = 2000
+        h:step() -- tick 1: QP recorded
+        for i = 1, 20 do
+            h.world:setVar("VarPlayer", "OPTION_RUN", i % 2) -- pushes the tick 1 read out
+        end
+        h:step() -- tick 2: QP recorded again
+        h.world:setVar("VarPlayer", "OPTION_RUN", 1)
+        h.world:setVar("VarPlayer", "OPTION_RUN", 0) -- drops older entries, not the tick 2 read
+        h:step() -- tick 3: QP unchanged and its entry still there, so not recorded
+        h.world:grant("httpAccess")
+        h:advance(1200)
+
+        local batch = support.batches(h)[1]
+        assert.is_true(batch.dropped > 0)
+        local reads = support.where(batch.entries, { path = "var.VarPlayer.QP.value" })
+        assert.are.same({ { k = "read", path = "var.VarPlayer.QP.value", v = 10, t = 2 } }, reads)
+    end)
+
     it("records each delivery once, whatever the number of subscribers", function()
         local h = harness.new(
             support.plugin(support.INSTALL .. [[
@@ -77,6 +106,43 @@ describe("dev recorder", function()
             { op = "setVar", domain = "VarPlayer", name = "QP", id = 1297, value = 12 },
             events[2].op
         )
+    end)
+
+    it("keeps every slot of an inventory with empty slots", function()
+        local h = harness.new(
+            support.plugin(support.INSTALL .. [[
+            local slots = Inventory.Find(config.Inv.INV):GetSlots()
+            Event.InventoryUpdated.Subscribe("inv", function() end)
+        ]]),
+            { grant = { "httpAccess" } }
+        )
+        -- Slots 3 and 5 empty: the slot table's `#` is 4, the same as its slot count.
+        local gapped = {}
+        for _, i in ipairs({ 1, 2, 4, 6 }) do
+            gapped[i] = { obj = "LOGS", count = i }
+        end
+        h.world:setInventory("INV", gapped, 28)
+        h:load()
+        gapped[6].count = 60
+        h.world:setInventory("INV", gapped)
+        h:step()
+        local entries = support.entries(h)
+
+        -- JSON objects, keyed by slot.
+        local logs = { config = "LOGS", id = 1511, type = "Obj" }
+        assert.are.same({
+            ["1"] = { obj = logs, count = 1 },
+            ["2"] = { obj = logs, count = 2 },
+            ["4"] = { obj = logs, count = 4 },
+            ["6"] = { obj = logs, count = 6 },
+        }, support.where(entries, { path = "Inventory.Find(config.Inv.INV):GetSlots()" })[1].v)
+        local event = support.where(entries, { k = "event", name = "InventoryUpdated" })[1]
+        assert.are.same({
+            ["1"] = { obj = 1511, count = 1 },
+            ["2"] = { obj = 1511, count = 2 },
+            ["4"] = { obj = 1511, count = 4 },
+            ["6"] = { obj = 1511, count = 60 },
+        }, event.op.slots)
     end)
 
     it("passes subscriber edits and return values through", function()
@@ -191,6 +257,19 @@ describe("dev recorder", function()
         -- Still the harness's own Player, not a stand-in.
         assert.are.equal("Player", getmetatable(h.env.Player).__name)
         assert.are.equal(0, #h.requests)
+    end)
+
+    it("finds urls.recorder by indexing when Plugin.urls iterates to nothing", function()
+        -- Stands in for a client whose urls answer through __index but can't be listed.
+        local hidePairs =
+            "getmetatable(Plugin.urls).__pairs = function() return next, {}, nil end\n"
+        local h = harness.load(
+            support.plugin(hidePairs .. support.INSTALL .. "local up = Player.IsAvailable()"),
+            { grant = { "httpAccess" } }
+        )
+        assert.are.equal("", h:output())
+        h:step()
+        assert.are.equal(1, #support.posts(h))
     end)
 
     it("leaves a plugin without dev/ running unrecorded", function()

@@ -38,7 +38,9 @@ function M.new(manifest)
     return {
         vars = { VarPlayer = {}, VarClient = {} }, -- domain -> id -> value
         player = { loggedIn = false, displayName = nil, login = 0, skills = {} },
-        invs = {}, -- inv id -> { id, size, slots = { [i] = { obj = id, count = n } }, generation }
+        -- inv id -> { id, size, slots = { [i] = { obj = id, count = n } }, generation }, with
+        -- only the non-empty slots in `slots`
+        invs = {},
         invGeneration = 0,
         objs = {}, -- obj id -> fields a test defined (name, category...)
         permissions = { requested = requested, granted = {} },
@@ -180,14 +182,22 @@ function ops.defineObj(state, op)
     return {}
 end
 
--- Replace an inventory's contents. `slots` maps slot index (1-based) to { obj, count }.
+-- The obj ID of an empty slot. In the client, GetSlots() gives every empty slot as obj -1
+-- (configName "UNKNOWN") with count 0 (recording 20261025-144642-8f7250b863).
+M.EMPTY_OBJ = -1
+
+-- Replace an inventory's contents. `slots` maps slot index (1-based) to { obj, count }; a slot
+-- left out, or given as obj -1 (how recordings write empty slots), is empty. A real obj with
+-- count 0 is not empty: a bought-out shop line stays in its shop inventory that way.
 function ops.setInventory(state, op)
     local id = M.invId(op.inv)
     local old = state.invs[id]
     local slots, highest = {}, 0
     for i, slot in pairs(op.slots) do
         assert(math.type(i) == "integer" and i >= 1, "inventory slots are 1-based integers")
-        slots[i] = { obj = objId(slot.obj), count = slot.count or 1 }
+        if slot.obj ~= M.EMPTY_OBJ then
+            slots[i] = { obj = objId(slot.obj), count = slot.count or 1 }
+        end
         highest = math.max(highest, i)
     end
     local size = op.size or (old and old.size) or highest

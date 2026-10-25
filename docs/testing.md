@@ -101,7 +101,7 @@ withheld libraries), `echo = true` (also print the plugin's console output).
 | `login(displayName)` / `logout()` | nothing |
 | `setSkill(skill, { level, xp, gameplay?, capped?, xpCapped? })` | nothing. The optional fields default to `level` / `xp` |
 | `defineObj(nameOrId, fields)` | nothing. Gives an `ObjType` the stub fields a test needs (`name`, `category`...) |
-| `setInventory(inv, { [slot] = { obj, count? } }, size?)` | `InventoryAdded` the first time, then `InventoryUpdated` with the changed slots (no event if nothing changed) |
+| `setInventory(inv, { [slot] = { obj, count? } }, size?)` | `InventoryAdded` the first time, then `InventoryUpdated` with the changed slots (no event if nothing changed). A slot left out, or given as `{ obj = -1, count = 0 }`, is empty |
 | `removeInventory(inv)` | `InventoryRemoved`; the Inv objects for it become invalid |
 | `grant(perm)` / `revoke(perm)` | `OptionalPermissionChanged`, if it changed and the manifest lists it as optional |
 | `chat(message, { chatType?, sender? })` | `ChatMessage` (default `ChatType.GENERAL`), if chatAccess is granted |
@@ -268,10 +268,13 @@ stand-in's path, a quoted string, or a number, boolean or `nil`.
 
 **Values.** Plain data is copied. A config is `{"config": configName, "id", "type": typeName}`,
 an `InvSlot` is `{"obj": <config>, "count"}`, and any other API object is its `tostring()`
-text. A table met again inside itself becomes `"<cycle>"`, a string over the cap ends
-`<+N bytes>`, and values past the cap become `"<truncated>"`. A table keyed 1..n is a JSON array
-and any other a JSON object with string keys, so an inventory with empty slots comes back as
-`{"1": ..., "5": ...}`.
+text without the memory address (`sol.jag::InventoryProxy`, not
+`sol.jag::InventoryProxy: 0x591cbdbce258`): `Inventory.Find()` and `Player.GetEntity()` hand out
+a fresh object per call, so with the address every call would be recorded. A table met again
+inside itself becomes `"<cycle>"`, a string over the cap ends `<+N bytes>`, and values past the
+cap become `"<truncated>"`. A table keyed 1..n is a JSON array and any other a JSON object with
+string keys, so a table with holes comes back as `{"1": ..., "5": ...}`. (`GetSlots()` is dense
+in the client, so inventories come back as arrays, with empty slots as obj -1.)
 
 **World ops** in `event.op` use the shapes `world.apply` takes:
 
@@ -312,6 +315,7 @@ and any other a JSON object with string keys, so an inventory with empty slots c
 | `var.<Domain>.NAME` and `FromID(id)` give one VarType per var (`ev.var == var.VarPlayer.X`); VarBits report `isVarBit`, `baseVar`, `varBitMask`; `baseVar`/`varBitMask` are nil otherwise; properties are read-only | game/config/vartype.html, `docs/vars/vars.csv` |
 | `Player.IsAvailable` says whether player data can be read | game/player.html#isavailable |
 | `Inventory.Find` returns an `Inv`; slots are 1-indexed; `GetSlot`/`GetSlots` return copies; an Inv goes invalid (`isValid`) when its inventory is removed, and re-adding it makes a new Inv | game/inventory.html |
+| `Inv:GetSlots()` is dense, one slot per index up to `slotCount`, with each empty slot as obj -1 (configName `UNKNOWN`) and count 0. A real obj with count 0 is not empty: a bought-out shop line stays in its shop inventory that way (GENERALSHOP1 slot 7, obj 590 x0) | recording `20261025-144642-8f7250b863` (recorder-demo in the beta client, 2026-10-25) |
 | `InventoryAdded`/`Updated` (`slotsUpdated`)/`Removed` carry the `InvType` | core/events.html#inventoryadded and below |
 | PersistentDB: Get nil when unset; typed getters nil on a type mismatch; Set returns a Bool; unsupported table fields are dropped; `IterateEntries` stops on `true` and returns the count; persists across reload | core/persistentdb.html |
 | `PersistentDBType` values 0–4 (the stub has strings) | core/persistentdb.html#persistentdbtype |
@@ -337,9 +341,11 @@ and any other a JSON object with string keys, so an inventory with empty slots c
 | Order within a logic step | HTTP deliveries, then queued chat, then `Logic`, then `ServerLogic` |
 | HTTP | A response arrives on the step after the test answers it, and never on the step that started the request. `successful` is true for any status code. Progress callbacks are never called. `Cancel` means no callback. Without httpAccess, `new`/`Get`/`Post` fault. Timeouts happen only when the test responds with one |
 | Player getters while logged out | Fault (`IsAvailable` is the documented guard). `GetEntity` returns the same object until the next login |
+| A fresh object per call | `Player.GetEntity()` and `Inventory.Find()` give a new userdata on every call in the client (recording `20261025-144642-8f7250b863`); the harness hands out one object per login / per inventory. Whether the client's compare equal with `==` is unconfirmed |
 | `Inventory.Find` for an inventory that isn't loaded | nil |
 | Reading an invalid Inv (anything but `isValid`) | Faults (the page says to check `isValid` first) |
-| Empty slots | `GetSlot` gives nil; `GetSlots` has holes there (so `ipairs` stops at the first) |
+| `Inv:GetSlot` on an empty slot | nil. Unconfirmed: the client may give an obj -1 slot, as `GetSlots` does |
+| A count-0 slot (bought-out shop line) | Counts as used in `usedSlotCount` / `freeSlotCount` (unconfirmed) |
 | `Chat.AddMessage` without chatAccess | Faults |
 | `ChatMessage.timestamp` | A fixed epoch (2026-01-01) plus elapsed logic time |
 | PersistentDB | `IterateEntries` goes in key order. `Delete` returns true. Typed setters return nil on a type mismatch |

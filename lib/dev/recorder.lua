@@ -191,7 +191,7 @@ local function objectForm(v)
     -- In the client, API objects are userdata; there a config is found by its configName.
     -- (The harness's objects are tables, which faults on probing a member they lack.)
     if type(real) == "userdata" then return recording.objectData(real) end
-    return tostring(real)
+    return recording.objectText(real)
 end
 
 ---@param value any
@@ -232,8 +232,8 @@ local function standIn(real, class, path)
     return proxy
 end
 
--- GetSlots(): a table of InvSlots keyed by slot (empty slots are holes), each given a
--- stand-in; the whole list is recorded as one read.
+-- GetSlots(): a table of InvSlots keyed by slot, each given a stand-in; the whole list is
+-- recorded as one read.
 ---@param slots any
 ---@param path string
 ---@return any

@@ -59,6 +59,17 @@ describe("recording.objectData", function()
     it("writes other userdata as its tostring() text", function()
         assert.matches("^file %(", recording.objectData(io.stdout))
     end)
+
+    it("leaves the memory address out of an object's text", function()
+        -- The client's text for an Inv, from recording 20261025-144642-8f7250b863.
+        local inv = setmetatable({}, {
+            __tostring = function()
+                return "sol.jag::InventoryProxy: 0x591cbdbce258"
+            end,
+        })
+        assert.are.equal("sol.jag::InventoryProxy", recording.objectData(inv))
+        assert.are.equal("sol.jag::InventoryProxy", recording.objectText(inv))
+    end)
 end)
 
 describe("recording.callPath", function()

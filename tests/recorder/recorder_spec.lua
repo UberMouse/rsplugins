@@ -84,6 +84,36 @@ describe("dev recorder", function()
         assert.are.same({ { k = "read", path = "var.VarPlayer.QP.value", v = 10, t = 2 } }, reads)
     end)
 
+    it("deduplicates reads of objects handed out fresh on each call", function()
+        -- Stands in for the client's Inventory, whose Find returns a new userdata per call,
+        -- each with its own address in its tostring() text.
+        local fakeInventory = [[
+            local made = 0
+            Inventory = { Find = function()
+                made = made + 1
+                return setmetatable({}, { __tostring = function()
+                    return string.format("sol.jag::InventoryProxy: 0x%x", 0x591cbdbce258 + made)
+                end })
+            end }
+        ]]
+        local h = harness.new(
+            support.plugin(fakeInventory .. support.INSTALL .. [[
+            for _ = 1, 3 do local inv = Inventory.Find(config.Inv.INV) end
+        ]]),
+            { grant = { "httpAccess" } }
+        )
+        h:load()
+        h:step()
+        assert.are.same({
+            {
+                k = "read",
+                path = "Inventory.Find(config.Inv.INV)",
+                v = "sol.jag::InventoryProxy",
+                t = 0,
+            },
+        }, support.where(support.entries(h), { path = "Inventory.Find(config.Inv.INV)" }))
+    end)
+
     it("records each delivery once, whatever the number of subscribers", function()
         local h = harness.new(
             support.plugin(support.INSTALL .. [[
@@ -108,7 +138,7 @@ describe("dev recorder", function()
         )
     end)
 
-    it("keeps every slot of an inventory with empty slots", function()
+    it("records every slot of an inventory, empty ones as obj -1 x0", function()
         local h = harness.new(
             support.plugin(support.INSTALL .. [[
             local slots = Inventory.Find(config.Inv.INV):GetSlots()
@@ -116,32 +146,33 @@ describe("dev recorder", function()
         ]]),
             { grant = { "httpAccess" } }
         )
-        -- Slots 3 and 5 empty: the slot table's `#` is 4, the same as its slot count.
-        local gapped = {}
-        for _, i in ipairs({ 1, 2, 4, 6 }) do
-            gapped[i] = { obj = "LOGS", count = i }
+        local slots = {}
+        for _, i in ipairs({ 1, 2, 4 }) do
+            slots[i] = { obj = "LOGS", count = i }
         end
-        h.world:setInventory("INV", gapped, 28)
+        h.world:setInventory("INV", slots, 5)
         h:load()
-        gapped[6].count = 60
-        h.world:setInventory("INV", gapped)
+        slots[4].count = 40
+        h.world:setInventory("INV", slots)
         h:step()
         local entries = support.entries(h)
 
-        -- JSON objects, keyed by slot.
         local logs = { config = "LOGS", id = 1511, type = "Obj" }
+        local empty = { obj = { config = "UNKNOWN", id = -1, type = "Obj" }, count = 0 }
         assert.are.same({
-            ["1"] = { obj = logs, count = 1 },
-            ["2"] = { obj = logs, count = 2 },
-            ["4"] = { obj = logs, count = 4 },
-            ["6"] = { obj = logs, count = 6 },
+            { obj = logs, count = 1 },
+            { obj = logs, count = 2 },
+            empty,
+            { obj = logs, count = 4 },
+            empty,
         }, support.where(entries, { path = "Inventory.Find(config.Inv.INV):GetSlots()" })[1].v)
         local event = support.where(entries, { k = "event", name = "InventoryUpdated" })[1]
         assert.are.same({
-            ["1"] = { obj = 1511, count = 1 },
-            ["2"] = { obj = 1511, count = 2 },
-            ["4"] = { obj = 1511, count = 4 },
-            ["6"] = { obj = 1511, count = 60 },
+            { obj = 1511, count = 1 },
+            { obj = 1511, count = 2 },
+            { obj = -1, count = 0 },
+            { obj = 1511, count = 40 },
+            { obj = -1, count = 0 },
         }, event.op.slots)
     end)
 

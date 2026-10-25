@@ -43,9 +43,12 @@ describe("plugins/recorder-demo with the recorder", function()
             1,
             one(entries, { path = "Inventory.Find(config.Inv.INV).usedSlotCount" }).v
         )
+        local slots = one(entries, { path = "Inventory.Find(config.Inv.INV):GetSlots()" }).v
+        assert.are.equal(28, #slots)
+        assert.are.same({ obj = { config = "LOGS", id = 1511, type = "Obj" }, count = 6 }, slots[1])
         assert.are.same(
-            { { obj = { config = "LOGS", id = 1511, type = "Obj" }, count = 6 } },
-            one(entries, { path = "Inventory.Find(config.Inv.INV):GetSlots()" }).v
+            { obj = { config = "UNKNOWN", id = -1, type = "Obj" }, count = 0 },
+            slots[2]
         )
         assert.are.same(
             { { k = "db", op = "GetInt", key = "enables", t = 0 } },
@@ -60,9 +63,12 @@ describe("plugins/recorder-demo with the recorder", function()
             newValue = 1,
         }, transmit.payload)
         assert.are.equal("setVar", transmit.op.op)
+        local op = one(entries, { k = "event", name = "InventoryUpdated" }).op
+        assert.are.same({ "setInventory", 93, 28 }, { op.op, op.inv, op.size })
+        assert.are.equal(28, #op.slots)
         assert.are.same(
-            { op = "setInventory", inv = 93, size = 28, slots = { { obj = 1511, count = 6 } } },
-            one(entries, { k = "event", name = "InventoryUpdated" }).op
+            { { obj = 1511, count = 6 }, { obj = -1, count = 0 } },
+            { op.slots[1], op.slots[2] }
         )
         assert.are.equal(
             "hello",

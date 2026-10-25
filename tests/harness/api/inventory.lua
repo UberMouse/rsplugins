@@ -12,6 +12,7 @@
 local catalog = require("tests.harness.catalog")
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
+local world = require("tests.harness.world")
 
 local M = {}
 
@@ -75,6 +76,8 @@ local function configProxy(h, kind, id)
     local k = kind .. ":" .. id
     if not h.configProxies[k] then
         local _, name = catalog.config(kind, id)
+        -- An empty slot's obj: not in docs/api/consts, named as the client names it.
+        if kind == "Obj" and id == world.EMPTY_OBJ then name = "UNKNOWN" end
         local proxy = (kind == "Inv" and InvType or ObjType).new({ h = h, id = id, name = name });
         (kind == "Inv" and invTypeIds or objTypeIds)[proxy] = id
         h.configProxies[k] = proxy
@@ -121,6 +124,13 @@ local function slotCopy(h, inv, i)
     return slot and InvSlot.new({ h = h, obj = slot.obj, count = slot.count })
 end
 
+-- An empty slot as the client's GetSlots() gives it: obj -1, count 0.
+---@param h table
+---@return table
+local function emptySlot(h)
+    return InvSlot.new({ h = h, obj = world.EMPTY_OBJ, count = 0 })
+end
+
 ---@param key any an ObjType proxy or an obj ID
 ---@return integer?
 local function objKey(key)
@@ -160,18 +170,19 @@ local Inv = strict.class("Inv", {
         end,
     },
     methods = {
-        -- An empty slot returns nil: the page only says "Returns nil on failure".
+        -- An empty slot returns nil: the page only says "Returns nil on failure". Unconfirmed:
+        -- the client may give an obj -1 slot here, as GetSlots does.
         GetSlot = function(s, index)
             local inv = live(s)
             if math.type(index) ~= "integer" then strict.fault("Inv:GetSlot(index: Integer)") end
             return slotCopy(s.h, inv, index)
         end,
-        -- Keyed by slot index, so empty slots are holes; ipairs stops at the first one. How the
-        -- client represents empty slots here is unknown.
+        -- Dense, one InvSlot per slot, with empty slots as obj -1 x0, as in the client
+        -- (recording 20261025-144642-8f7250b863).
         GetSlots = function(s)
             local inv, out = live(s), {}
             for i = 1, inv.size do
-                out[i] = slotCopy(s.h, inv, i)
+                out[i] = slotCopy(s.h, inv, i) or emptySlot(s.h)
             end
             return out
         end,

@@ -18,6 +18,7 @@ describe("Inventory", function()
             emptySlot = inv:GetSlot(2) == nil
             logs, coins = inv:GetTotal(config.Obj.LOGS), inv:GetTotal(995)
             slots = inv:GetSlots()
+            empty = { slots[2].obj.id, slots[2].obj.configName, slots[2].count }
             bank = Inventory.Find(config.Inv.BANK) == nil
         ]]))
         h.world:setInventory("INV", {
@@ -34,7 +35,26 @@ describe("Inventory", function()
         assert.is_true(env.emptySlot)
         assert.are.same({ 2, 5000 }, { env.logs, env.coins })
         assert.are.equal(5000, env.slots[4].count)
+        -- Dense, with empty slots as obj -1 x0, as the client gives them.
+        assert.are.equal(28, #env.slots)
+        assert.are.same({ -1, "UNKNOWN", 0 }, env.empty)
         assert.is_true(env.bank)
+    end)
+
+    it("keeps a slot with count 0 (a bought-out shop line) apart from an empty one", function()
+        local h = harness.new(plugin([[
+            local shop = Inventory.Find(config.Inv.GENERALSHOP1)
+            local slot = shop:GetSlots()[2]
+            soldOut = { slot.obj.configName, slot.count, shop.usedSlotCount }
+        ]]))
+        -- From recording 20261025-144642-8f7250b863: obj 590 x0 in GENERALSHOP1 slot 7.
+        h.world:setInventory("GENERALSHOP1", {
+            { obj = 1931, count = 30 },
+            { obj = 590, count = 0 },
+            { obj = -1, count = 0 },
+        })
+        h:load()
+        assert.are.same({ "TINDERBOX", 0, 2 }, h.env.soldOut)
     end)
 
     it("fires InventoryAdded, then InventoryUpdated with the changed slots", function()

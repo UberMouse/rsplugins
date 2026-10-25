@@ -23,8 +23,17 @@ local function capString(s)
     return s:sub(1, recording.MAX_STRING) .. string.format("<+%d bytes>", #s - recording.MAX_STRING)
 end
 
+-- An API object's tostring() text without its memory address: the client's text is like
+-- `sol.jag::InventoryProxy: 0x591cbdbce258`, and Inventory.Find() and Player.GetEntity() hand
+-- out a fresh object per call, so with the address every call would differ and be recorded.
+---@param v any
+---@return string
+function recording.objectText(v)
+    return (tostring(v):gsub(": 0x%x+$", ""))
+end
+
 -- How a value that isn't plain data is written: a config (anything with a configName) as
--- { config = name, id = n, type = typeName }, anything else as its tostring() text. Reading a
+-- { config = name, id = n, type = typeName }, anything else as its objectText(). Reading a
 -- member a value doesn't have may raise (client userdata), hence the pcall.
 ---@param v any
 ---@return any
@@ -34,7 +43,7 @@ function recording.objectData(v)
         return { config = v.configName, id = v.id, type = v.typeName }
     end)
     if ok and form then return form end
-    return tostring(v)
+    return recording.objectText(v)
 end
 
 -- A copy of `value` that JSON can hold. Plain tables are copied (a table met again inside

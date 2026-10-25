@@ -11,6 +11,7 @@
 -- method or option faults as unmocked; extend the fake, with a ledger row, when a plugin
 -- needs more.
 
+local events = require("tests.harness.api.events")
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
 local ui = require("tests.harness.api.ui")
@@ -974,7 +975,15 @@ function Driver:click(target, value)
         local ok, why = self:lands(cs)
         if not ok then return false, why end
         local ws = lib.closeButtons[cs]
-        runtime.call(h.budgetMs, "PrettyUI close button", windowClose, ws)
+        events.during(
+            h.instance,
+            "uiHooks",
+            runtime.call,
+            h.budgetMs,
+            "PrettyUI close button",
+            windowClose,
+            ws
+        )
         return true
     end
     local r = self:record(target)
@@ -982,7 +991,16 @@ function Driver:click(target, value)
         local ok, why = self:lands(r.s.rootState)
         if not ok then return false, why end
         if r.s.action then
-            runtime.call(h.budgetMs, "SpriteButton action", r.s.action, r.obj, true)
+            events.during(
+                h.instance,
+                "uiHooks",
+                runtime.call,
+                h.budgetMs,
+                "SpriteButton action",
+                r.s.action,
+                r.obj,
+                true
+            )
         end
         return true
     elseif r.kind == "CheckboxButton" then
@@ -991,9 +1009,16 @@ function Driver:click(target, value)
                 local ok, why = self:lands(item.rowState)
                 if not ok then return false, why end
                 if item.disabled then return false, "disabled choice" end
-                runtime.call(h.budgetMs, "CheckboxButton click", function()
-                    r.obj:SetSelected(value, not item.selected)
-                end)
+                events.during(
+                    h.instance,
+                    "uiHooks",
+                    runtime.call,
+                    h.budgetMs,
+                    "CheckboxButton click",
+                    function()
+                        r.obj:SetSelected(value, not item.selected)
+                    end
+                )
                 return true
             end
         end

@@ -189,9 +189,9 @@ like `exec` and exits with the same codes (0 ok; 1 the plugin reported an error,
 stderr, e.g. a Lua error, after any `output` lines the snippet printed before it; 2 never
 delivered or daemon down; 3 delivered, no result in time). On success it prints one JSON object to stdout, indented by 2: `{"values": [...], "nvalues": n,
 "output": [...]}`, plus `"truncated": true` when the plugin cut something to fit its caps.
-`eval --reset` (no code allowed) queues a `reset` command and prints `ok (<id>)`; the bridge then
-reloads itself (`prl dev-bridge`), so the next session has no probes and a fresh scratch env
-(`status` shows the new session once it syncs). Before queueing, `eval` and `eval --reset` check
+`eval --reset` (no code allowed) queues a `reset` command and prints `ok (<id>)`: the bridge
+clears its eval probes and starts a fresh scratch env, without reloading (same session, no
+console command; probes are table entries, not client subscriptions). Before queueing, `eval` and `eval --reset` check
 that the daemon's `GET /cli/status` lists the kind in `kinds`. A daemon started before the eval
 kinds existed ignores `kind` and would queue the Lua as a console command, so then the CLI exits
 2 without queueing and says to restart it (`scripts/rsdev.py stop && scripts/rsdev.py start`);

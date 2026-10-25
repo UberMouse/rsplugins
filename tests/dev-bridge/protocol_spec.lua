@@ -1,6 +1,7 @@
 -- The dev bridge's pure core (plugins/dev-bridge/protocol.lua): the sync body, parsing and
 -- unescaping the daemon's reply, which commands are refused, the chat and menu-entry privacy
--- filters, and the shape and caps of eval results and the Log and Emit events.
+-- filters, the shape and caps of eval results and the Log and Emit events, and the probe-able
+-- events.
 
 local dkjson = require("dkjson")
 local support = require("tests.dev-bridge.support")
@@ -518,45 +519,68 @@ describe("protocol Log and Emit entries", function()
     end)
 end)
 
-describe("protocol probe names", function()
-    it("prefixes a probe's name so it can't be one of the bridge's own", function()
-        assert.are.equal("devBridgeEval_count", protocol.probeName("count"))
-        -- The bridge's own names are "devBridge" plus an event name; none starts with Eval_.
-        local stubs = require("tests.harness.stubs")
-        for event in pairs(stubs.fields("Event")) do
-            assert(not event:match("^Eval_"), event)
+describe("protocol probe-able events", function()
+    -- The stub's Event fields in file order (docs/api/generated/core/events.lua).
+    local function stubEvents()
+        local file = assert(io.open("docs/api/generated/core/events.lua"))
+        local names = {}
+        for line in file:lines() do
+            local name = line:match("^%-%-%-@field (%w+) EventSubscription<")
+            if name then names[#names + 1] = name end
+        end
+        file:close()
+        return names
+    end
+
+    it("lists every stub event in stub order, less the excluded ones, each once", function()
+        local expected = {}
+        for _, name in ipairs(stubEvents()) do
+            if not protocol.PROBE_EXCLUDED[name] then expected[#expected + 1] = name end
+        end
+        assert.are.same(expected, protocol.PROBE_EVENTS)
+        local stub = require("tests.harness.stubs").fields("Event")
+        for name in pairs(protocol.PROBE_EXCLUDED) do
+            assert(stub[name], name .. " is excluded but not a stub event")
         end
     end)
 
-    it("names the event, the probe's own name and the error when one stops", function()
+    it("leaves out the per-frame draw hooks and the layer events", function()
+        local excluded = {}
+        for name in pairs(protocol.PROBE_EXCLUDED) do
+            excluded[#excluded + 1] = name
+        end
+        table.sort(excluded)
+        assert.are.same(
+            { "ContentLayerReady", "Draw", "EntityDraw", "SettingsLayerReady" },
+            excluded
+        )
+    end)
+
+    it("says why an event can't be probed, or nil when it can", function()
+        assert.is_nil(protocol.probeEventError("Logic"))
+        assert.matches(
+            "^Event.EntityDraw is not probe%-able: it fires for every entity",
+            protocol.probeEventError("EntityDraw")
+        )
+        assert.matches(
+            "^Event.Nope is not probe%-able: no such event",
+            protocol.probeEventError("Nope")
+        )
+        assert.matches("^Event.1 is not probe%-able", protocol.probeEventError(1))
+    end)
+
+    it("names the event, the probe's own name and the error when one is removed", function()
         assert.are.equal(
-            'probe Event.Logic "count" disarmed after an error: eval:1: boom',
+            'probe Event.Logic "count" removed after an error: eval:1: boom',
             protocol.probeErrorText("Logic", "count", "eval:1: boom")
         )
     end)
-end)
 
-describe("protocol probe cap and reset reload", function()
-    it("allows probes up to the cap, then names it and eval --reset", function()
+    it("allows probes up to the cap, then names it, Unsubscribe and eval --reset", function()
         assert.is_nil(protocol.probeCapError(protocol.limits.probes - 1))
         local err = protocol.probeCapError(protocol.limits.probes)
         assert.matches("at most 32 probes per bridge session", err)
+        assert.matches("Unsubscribe", err)
         assert.matches("eval %-%-reset", err)
     end)
-
-    it(
-        "reloads only once the reset's result synced and nothing is queued, unsent or in flight",
-        function()
-            local ready = { resetSynced = true, queued = 0, unsent = 0, inFlight = false }
-            assert.is_true(protocol.reloadDue(ready))
-            for key, value in pairs({ resetSynced = false, queued = 1, unsent = 1, inFlight = true }) do
-                local state = {}
-                for k, v in pairs(ready) do
-                    state[k] = v
-                end
-                state[key] = value
-                assert(protocol.reloadDue(state) == false, key)
-            end
-        end
-    )
 end)

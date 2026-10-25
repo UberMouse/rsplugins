@@ -7,6 +7,7 @@
 -- raise. From docs/api-concepts.md ("Runtime limits we've hit"): starting a request inside a
 -- completion callback crashed the client, so it fails the test here.
 
+local events = require("tests.harness.api.events")
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
 
@@ -155,7 +156,11 @@ function M.deliver(h)
             end
             if record.onDone and record.instance.alive then
                 h.inHttpCallback = true
+                -- A callback for the Event rules too (api/events.lua, M.during).
                 local ok, err = pcall(
+                    events.during,
+                    record.instance,
+                    "callbacks",
                     runtime.call,
                     h.budgetMs,
                     "HTTP completion callback for " .. record.url,

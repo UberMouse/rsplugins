@@ -45,7 +45,7 @@ describe("Event subscriptions", function()
             end)
         ]]))
         assert.matches(
-            "Event.KeyTyped.Unsubscribe inside an event callback: the client aborts %(SIGABRT%)",
+            "Event.KeyTyped.Unsubscribe inside an event or HTTP callback: the client aborts %(SIGABRT%)",
             harness.errorOf(function()
                 h:fire("WindowFocusChanged", { hasFocus = true })
             end)
@@ -66,6 +66,82 @@ describe("Event subscriptions", function()
         end
         h:fire("WindowFocusChanged", { hasFocus = true })
         assert.are.same({}, h.instance.subs.KeyTyped)
+    end)
+
+    it("faults on Unsubscribe inside an HTTP completion callback", function()
+        local h = harness.load({
+            ["main.lua"] = [[
+                local started = false
+                Event.KeyTyped.Subscribe("x", function() end)
+                Event.Logic.Subscribe("go", function()
+                    if started then return end
+                    started = true
+                    HTTPRequest.new(Plugin.urls.sink):Get(function()
+                        Event.KeyTyped.Unsubscribe("x")
+                    end)
+                end)
+            ]],
+            ["plugin.json"] = [[{ "name": "T", "version": "0.0.1",
+                "contactEmailAddress": "t@example.com", "optionalPermissions": [ "httpAccess" ],
+                "urls": { "sink": "http://127.0.0.1:8765" } }]],
+        }, { grant = { "httpAccess" } })
+        h:step()
+        h:respond(h.requests[1], { status = 200 })
+        assert.matches(
+            "Event.KeyTyped.Unsubscribe inside an event or HTTP callback",
+            harness.errorOf(function()
+                h:step()
+            end)
+        )
+    end)
+
+    it(
+        "faults on Unsubscribe of a subscription made inside a callback, even in shutdown",
+        function()
+            local h = harness.load(plugin([[
+            Event.WindowFocusChanged.Subscribe("y", function()
+                Event.KeyTyped.Subscribe("x", function() end)
+            end)
+            function PluginShutdown() Event.KeyTyped.Unsubscribe("x") end
+        ]]))
+            h:fire("WindowFocusChanged", { hasFocus = true })
+            assert.matches(
+                "Event.KeyTyped.Unsubscribe of a subscription made inside a callback: the client aborts",
+                harness.errorOf(function()
+                    h:unload()
+                end)
+            )
+        end
+    )
+
+    it("marks a load-time subscription replaced inside a callback as made there", function()
+        local h = harness.load(plugin([[
+            Event.KeyTyped.Subscribe("x", function() end)
+            Event.WindowFocusChanged.Subscribe("y", function()
+                Event.KeyTyped.Subscribe("x", function() end)
+            end)
+            function PluginShutdown() Event.KeyTyped.Unsubscribe("x") end
+        ]]))
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        assert.matches(
+            "made inside a callback",
+            harness.errorOf(function()
+                h:unload()
+            end)
+        )
+    end)
+
+    it("lets a subscription made inside a callback deliver, if never unsubscribed", function()
+        local h = harness.load(plugin([[
+            n = 0
+            Event.WindowFocusChanged.Subscribe("y", function()
+                Event.KeyTyped.Subscribe("x", function() n = n + 1 end)
+            end)
+        ]]))
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
+        h:unload()
+        assert.are.equal(1, h.env.n)
     end)
 
     it("passes the payload's stub fields, and faults on one the stub lacks", function()

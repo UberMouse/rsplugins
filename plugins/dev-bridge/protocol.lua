@@ -1,7 +1,8 @@
 -- The dev bridge's pure core: the sync body the plugin POSTs, parsing the daemon's reply into
 -- commands, and deciding which commands the bridge refuses. It also holds the privacy filters
 -- deciding which chat messages and menu entries may leave the client (chatView, entryView),
--- and the shape and caps of eval results and of the Log and Emit events.
+-- the shape and caps of eval results and of the Log and Emit events, and which events the
+-- bridge subscribes to and eval probes may use (PROBE_EVENTS).
 -- Nothing here calls the API or keeps state; main.lua and eval.lua (the shell) do both. The
 -- protocol is documented in docs/dev-environment.md ("Dev bridge") and served by
 -- scripts/rsdev.py.
@@ -27,8 +28,8 @@ protocol.limits = {
     valueBytes = 64 * 1024, -- encoded values of one eval result, or one Emit's value
     outputLines = 200, -- print/log lines one eval result keeps
     lineBytes = 2 * 1024, -- one output line, Log text, error or Emit tag
-    -- Distinct probe (event, name) pairs per session. Probes can't be unsubscribed while the
-    -- bridge runs (eval.lua), only disarmed, so each one stays subscribed until the reload.
+    -- Live probes per session (eval.lua). A probe is a table entry, so removing one frees
+    -- its slot at once; the cap bounds what one event's fan-out can cost.
     probes = 32,
 }
 
@@ -409,38 +410,109 @@ function protocol.emitEntry(t, tag, value)
     return withField(json.encode({ t = t, name = "Emit" }), "payload", payloadJson)
 end
 
--- A probe's subscription is registered under this prefix plus the name the snippet gave, so
--- it can't replace the bridge's own subscriptions ("devBridge" plus an event name, and no
--- event is named "Eval_...").
-protocol.PROBE_PREFIX = "devBridgeEval_"
+---------------------------------------------------------------------------
+-- The events the bridge subscribes to, and probes
+---------------------------------------------------------------------------
 
----@param name string the name the snippet subscribed with
----@return string
-function protocol.probeName(name)
-    return protocol.PROBE_PREFIX .. name
+-- Every event the bridge subscribes to, each once, at load, as "devBridge<Event>" (main.lua),
+-- and so the events an eval probe may use: a probe is an entry in eval.lua's table that the
+-- bridge's handler calls, never a client subscription of its own. Four client aborts
+-- (docs/api-concepts.md, "Runtime limits we've hit") showed that a subscription made inside a
+-- callback can never be unsubscribed safely, so nothing is subscribed after load.
+-- The stub's Event table (docs/api/generated/core/events.lua) in its order, less
+-- PROBE_EXCLUDED; a spec checks the two cover it exactly.
+protocol.PROBE_EVENTS = {
+    "Logic",
+    "ServerLogic",
+    "OptionalDependencyChanged",
+    "OptionalPermissionChanged",
+    "KeyUp",
+    "KeyDown",
+    "KeyTyped",
+    "VarTransmit",
+    "ChatMessage",
+    "PlayerEntityAdded",
+    "PlayerEntityRemoved",
+    "NPCEntityAdded",
+    "NPCEntityRemoved",
+    "ObjStackEntityAdded",
+    "ObjStackEntityRemoved",
+    "ObjStackEntityChanged",
+    "WindowFocusChanged",
+    "GameStateChanged",
+    "WindowSizeChanged",
+    "SkillTransmit",
+    "RunEnergyTransmit",
+    "RunWeightTransmit",
+    "MiniMenuOpened",
+    "MiniMenuClosed",
+    "MiniMenuReady",
+    "MiniMenuEntryAdded",
+    "MiniMenuEntrySelected",
+    "LocAdded",
+    "LocRemoved",
+    "LocCustomised",
+    "LocAnimation",
+    "InventoryAdded",
+    "InventoryUpdated",
+    "InventoryRemoved",
+    "GrandExchangeOfferUpdated",
+    "WorldCreated",
+    "WorldUpdated",
+    "RegionCreated",
+    "RegionUpdated",
+}
+
+-- The stub's events the bridge does not subscribe to, and why: a subscription can't be added
+-- later, so leaving one out means no probe can ever use it.
+protocol.PROBE_EXCLUDED = {
+    Draw = "it fires every rendered frame, so a handler there would cost frame time for the "
+        .. "whole session",
+    EntityDraw = "it fires for every entity on every frame, and its subscribers' boolean "
+        .. "return decides whether the entity is drawn, which a handler must not touch",
+    SettingsLayerReady = "it needs hasSettingsIcon in the manifest, which dev-bridge lacks, so "
+        .. "it never fires for the bridge",
+    ContentLayerReady = "it needs hasRibbonIcon in the manifest, which dev-bridge lacks, so it "
+        .. "never fires for the bridge",
+}
+
+local PROBE_SET = {}
+for _, event in ipairs(protocol.PROBE_EVENTS) do
+    PROBE_SET[event] = true
 end
 
--- The error for a snippet subscribing a new probe when `count` probes already exist, or nil
--- if there is room.
+-- Why a snippet can't probe `event` (Event.<event>.Subscribe/Unsubscribe in eval), or nil if
+-- it can.
+---@param event any
+---@return string?
+function protocol.probeEventError(event)
+    if PROBE_SET[event] then return nil end
+    local name = "Event." .. protocol.text(event)
+    local why = protocol.PROBE_EXCLUDED[event]
+    if why then return name .. " is not probe-able: " .. why end
+    return name .. " is not probe-able: no such event (dev-bridge's README lists the ones that are)"
+end
+
+-- The error for a snippet adding a probe when `count` are live, or nil if there is room.
 ---@param count integer
 ---@return string?
 function protocol.probeCapError(count)
     if count < protocol.limits.probes then return nil end
     return string.format(
-        "at most %d probes per bridge session (they can't be unsubscribed while it runs); "
-            .. "`rsdev.py eval --reset` clears them",
+        "at most %d probes per bridge session; Event.<Name>.Unsubscribe one, or "
+            .. "`rsdev.py eval --reset` clears them all",
         protocol.limits.probes
     )
 end
 
--- The Log text for a probe stopped by its first error.
+-- The Log text for a probe removed after its first error.
 ---@param event string
 ---@param name string the name the snippet subscribed with
 ---@param err any
 ---@return string
 function protocol.probeErrorText(event, name, err)
     return string.format(
-        "probe Event.%s %q disarmed after an error: %s",
+        "probe Event.%s %q removed after an error: %s",
         event,
         name,
         protocol.text(err)
@@ -514,25 +586,6 @@ function protocol.consoleRefusal(command)
             .. "re-enable it; run it from the client console instead"
     end
     return nil
-end
-
--- A reset reloads the bridge (`prl dev-bridge`) rather than unsubscribing its probes, but
--- only once the daemon has its result, and when nothing else would be lost by reloading:
--- no commands still queued, no results unsent, no sync in flight.
----@param state { resetSynced: boolean, queued: integer, unsent: integer, inFlight: boolean }
----@return boolean
-function protocol.reloadDue(state)
-    return state.resetSynced and state.queued == 0 and state.unsent == 0 and not state.inFlight
-end
-
--- The error for a command that arrives while a reset's reload is pending: running it would
--- lose its result (or its effect) in the reload.
----@param resetId string
----@return string
-function protocol.reloadingError(resetId)
-    return "not run: the bridge is reloading for reset "
-        .. resetId
-        .. "; send it again once it reconnects"
 end
 
 local KINDS = { exec = true, eval = true, reset = true }

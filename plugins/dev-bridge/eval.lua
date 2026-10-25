@@ -1,20 +1,30 @@
 -- The dev bridge's eval (shell): runs Lua snippets the local daemon sends (command kind eval)
--- in a scratch environment kept for the bridge session, and tracks the probes they install.
+-- in a scratch environment kept for the bridge session, and holds the probes they install.
+--
+-- A probe is an entry in this module's table, never a client subscription. main.lua
+-- subscribes each event in protocol.PROBE_EVENTS once, at load, and its handler calls
+-- fanOut, which calls that event's probes. Four client aborts (docs/api-concepts.md, "Runtime
+-- limits we've hit") showed that a subscription made inside a callback, where snippets run,
+-- can never be unsubscribed safely, so a snippet's Subscribe and Unsubscribe only edit the
+-- table, and reset clears it without a client call.
 --
 -- A snippet's globals live in the scratch table (its _G too); reads fall through to the
 -- bridge's globals. In it, these globals differ from the bridge's:
 --   print, log  during a snippet, captured into the result's output; afterwards (from a probe
 --               callback), sent as Log events (source "eval"). Both reach the console too.
 --   emit(tag, value)  sends an Emit event with the value serialised.
---   Event       Subscribe registers under protocol.probeName(name), so a probe can't replace
---               the bridge's own subscriptions. Unsubscribe from inside an event callback
---               aborts the client (docs/api-concepts.md), and snippets run inside Logic, so a
---               probe is never unsubscribed while the bridge runs, only disarmed: its
---               Unsubscribe, or its callback's first error, makes it a no-op, and a later
---               Subscribe of the same name re-arms it. Only shutdown unsubscribes probes, so
---               a session has at most protocol.limits.probes of them; reset reloads the bridge.
+--   Event       Event.<X>.Subscribe(name, fn) adds the probe `name` on X, or replaces its
+--               callback; Event.<X>.Unsubscribe(name) removes it. X must be in
+--               protocol.PROBE_EVENTS, else both raise. At most protocol.limits.probes live
+--               probes. A probe's first error removes it.
 --   ExecuteConsoleCommand  refuses what exec refuses (protocol.consoleRefusal).
 -- The scratch env is a convenience, not a sandbox: the snippet is trusted as exec is.
+--
+-- A snippet must NEVER call the real Event.<X>.Subscribe or Unsubscribe, which it can reach
+-- through getmetatable(_G).__index. A subscription made at runtime can never be removed
+-- without aborting the client, so from then on even `prl dev-bridge` or `poff dev-bridge` is
+-- expected to abort it. Probably the same for ExecuteConsoleCommand("prl <other plugin>") or
+-- poff when that plugin made subscriptions at runtime (unverified).
 --
 -- A snippet runs inside the bridge's Logic call, so one that runs past the client's 1000 ms
 -- limit is aborted by the client, which takes the bridge down with it (`pon dev-bridge`
@@ -28,6 +38,17 @@ local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is 
 local compile = load
 
 local eval = {}
+
+---@class (exact) DevBridgeProbe
+---@field name string the name the snippet subscribed with
+---@field callback function
+---@field removed boolean set when unsubscribed, replaced, errored or cleared
+
+-- One event's probes in the order added. `running` counts the fan-outs of the event in
+-- progress (a probe can trigger a nested one), during which removed entries stay in place.
+---@class DevBridgeProbeList
+---@field [integer] DevBridgeProbe
+---@field running integer
 
 -- A value as plain data, as forwarded event payloads are; one that can't be serialised (its
 -- tostring() raises) becomes text saying so rather than failing the whole result.
@@ -46,11 +67,12 @@ end
 ---@return table
 function eval.new(host)
     local self = {}
-    -- event name -> { [the snippet's subscription name] = its entry }: one per real
-    -- subscription, armed while its callback is set.
-    local probes = {} ---@type table<string, table<string, { callback: function? }>>
-    local count = 0 -- entries in probes, against protocol.limits.probes
-    local disarmed = false -- set by disarmAll: every probe is a no-op from then on
+    -- event name -> its probes. An event with no live probes has no list, so the bridge's
+    -- handler checks `self.probes[event]` and returns. Emptied in place, never replaced, so
+    -- the host may keep the reference.
+    local probes = {} ---@type table<string, DevBridgeProbeList>
+    self.probes = probes
+    local count = 0 -- live probes, against protocol.limits.probes
     local output = nil ---@type { lines: string[], truncated: boolean }?
 
     -- A print or log from scratch code: into the running snippet's output, else a Log event.
@@ -64,65 +86,133 @@ function eval.new(host)
         end
     end
 
-    -- Disarm a probe: its subscription stays, but its wrapper does nothing from now on.
+    -- Drop `list`'s removed entries, and the list itself once empty, unless a fan-out of its
+    -- event is walking it by index; the last fan-out to finish sweeps instead.
+    ---@param event string
+    ---@param list DevBridgeProbeList
+    local function sweep(event, list)
+        if list.running > 0 then return end
+        local kept = 0
+        for i = 1, #list do
+            local probe = list[i]
+            list[i] = nil
+            if not probe.removed then
+                kept = kept + 1
+                list[kept] = probe
+            end
+        end
+        -- A clear() during the fan-out detached this list; a new one may stand in its place.
+        if kept == 0 and probes[event] == list then probes[event] = nil end
+    end
+
+    ---@param probe DevBridgeProbe
+    local function markRemoved(probe)
+        if probe.removed then return end
+        probe.removed = true
+        count = count - 1
+    end
+
+    -- The live probe `name` on `event`, if any.
     ---@param event string
     ---@param name string
-    local function disarm(event, name)
-        local probe = probes[event] and probes[event][name]
-        if probe then probe.callback = nil end
+    ---@return DevBridgeProbe?
+    local function find(event, name)
+        for _, probe in ipairs(probes[event] or {}) do
+            if probe.name == name and not probe.removed then return probe end
+        end
+        return nil
     end
 
     ---@param event string
     ---@param name any
-    ---@param callback any
-    local function subscribe(event, name, callback)
-        if type(name) ~= "string" or type(callback) ~= "function" then
-            error("Event." .. event .. ".Subscribe(name: string, callback: function)", 3)
+    local function remove(event, name)
+        local probe = type(name) == "string" and find(event, name)
+        if not probe then return end
+        markRemoved(probe)
+        sweep(event, probes[event])
+    end
+
+    -- Add the probe, replacing one of the same name: the old entry is removed and the new one
+    -- goes last, so a replacement made during a fan-out is first called on the next dispatch.
+    ---@param event string
+    ---@param name string
+    ---@param callback function
+    local function add(event, name, callback)
+        remove(event, name)
+        local list = probes[event]
+        if not list then
+            list = { running = 0 }
+            probes[event] = list
         end
-        probes[event] = probes[event] or {}
-        local existing = probes[event][name]
-        if existing then
-            -- Re-armed in place: a second Subscribe under the same name is avoided, since
-            -- whether the client replaces or duplicates it is unconfirmed.
-            existing.callback = callback
-            return
-        end
-        local full = protocol.probeCapError(count)
-        if full then error(full, 3) end
-        local entry = { callback = callback } ---@type { callback: function? }
-        -- Calls the probe's current callback, passing its returns through (some events use
-        -- them: EntityDraw's boolean). Once disarmed (by name, or all of them) it does nothing.
-        local function wrapper(...)
-            local current = entry.callback
-            if disarmed or not current then return end
-            local result = table.pack(pcall(current, ...))
-            if result[1] then return table.unpack(result, 2, result.n) end
-            entry.callback = nil
-            local text = protocol.probeErrorText(event, name, result[2])
-            log(protocol.TAG, text)
-            host.push(protocol.logEntry(host.tick(), "error", text, "eval"))
-        end
-        Event[event].Subscribe(protocol.probeName(name), wrapper)
-        probes[event][name] = entry
+        list[#list + 1] = { name = name, callback = callback, removed = false }
         count = count + 1
     end
 
-    -- Event as a snippet sees it: Event.<Name>.Subscribe/Unsubscribe, the probe versions.
+    -- Event as a snippet sees it. Errors are raised at level 2, the snippet's call.
     local eventProxy = setmetatable({}, {
         __index = function(_, event)
-            if Event[event] == nil then return nil end
             return {
                 Subscribe = function(name, callback)
-                    subscribe(event, name, callback)
+                    local refused = protocol.probeEventError(event)
+                    if refused then error(refused, 2) end
+                    if type(name) ~= "string" or type(callback) ~= "function" then
+                        error(
+                            "Event." .. event .. ".Subscribe(name: string, callback: function)",
+                            2
+                        )
+                    end
+                    local full = not find(event, name) and protocol.probeCapError(count)
+                    if full then error(full, 2) end
+                    add(event, name, callback)
                 end,
-                -- Only disarms: Unsubscribe from inside a callback (snippets run in Logic)
-                -- aborts the client.
                 Unsubscribe = function(name)
-                    if type(name) == "string" then disarm(event, name) end
+                    local refused = protocol.probeEventError(event)
+                    if refused then error(refused, 2) end
+                    remove(event, name)
                 end,
             }
         end,
     })
+
+    -- Call `event`'s probes with `payload`, in the order added, each under pcall. Their
+    -- returns are dropped: no event in PROBE_EVENTS uses a subscriber's return, so a probe
+    -- can't affect the client that way. Mark and sweep: a probe removed during the pass (by
+    -- itself, another probe, an error or a clear) is only marked, so it isn't called later in
+    -- the pass, and the pass sweeps it at the end; a probe added during the pass lands past
+    -- the length read at its start, so it is first called on the next dispatch. A probe's
+    -- first error removes it, logged once on the console and as a Log event.
+    ---@param event string
+    ---@param payload any
+    function self.fanOut(event, payload)
+        local list = probes[event]
+        if not list then return end
+        list.running = list.running + 1
+        for i = 1, #list do
+            local probe = list[i]
+            if not probe.removed then
+                local ok, err = pcall(probe.callback, payload)
+                if not ok then
+                    markRemoved(probe)
+                    local text = protocol.probeErrorText(event, probe.name, err)
+                    log(protocol.TAG, text)
+                    host.push(protocol.logEntry(host.tick(), "error", text, "eval"))
+                end
+            end
+        end
+        list.running = list.running - 1
+        sweep(event, list)
+    end
+
+    -- Remove every probe: a pure table edit, so safe from inside any callback.
+    function self.clear()
+        for event, list in pairs(probes) do
+            for _, probe in ipairs(list) do
+                probe.removed = true
+            end
+            probes[event] = nil
+        end
+        count = 0
+    end
 
     ---@return table
     local function newScratch()
@@ -149,6 +239,12 @@ function eval.new(host)
     end
     local scratch = newScratch()
 
+    -- Command kind reset: no probes and a fresh scratch env, without reloading the bridge.
+    function self.reset()
+        self.clear()
+        scratch = newScratch()
+    end
+
     -- Run one snippet: `return <source>` first, so an expression gives its values, then
     -- `<source>` as statements. Returns the fields of protocol.resultEntry, but the id.
     ---@param source string
@@ -172,24 +268,6 @@ function eval.new(host)
             values[i - 1] = serialise(result[i])
         end
         return { ok = true, values = values, nvalues = result.n - 1, output = printed }
-    end
-
-    -- Make every probe a no-op, without unsubscribing any: safe from inside a callback.
-    function self.disarmAll()
-        disarmed = true
-    end
-
-    -- Unsubscribe every probe for real. Only PluginShutdown may call this: Unsubscribe from
-    -- inside an event callback aborts the client. Each under pcall, so one failing can't
-    -- leave the rest.
-    function self.unsubscribeAll()
-        disarmed = true
-        for event, names in pairs(probes) do
-            for name in pairs(names) do
-                pcall(Event[event].Unsubscribe, protocol.probeName(name))
-            end
-        end
-        probes, count = {}, 0
     end
 
     return self

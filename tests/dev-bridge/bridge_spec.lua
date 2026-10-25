@@ -3,7 +3,7 @@
 
 local support = require("tests.dev-bridge.support")
 
--- The forwarded events' subscription names, as main.lua makes them.
+-- The forwarded events, in the order main.lua subscribes them (protocol.PROBE_EVENTS order).
 local FORWARDED = {
     "ChatMessage",
     "VarTransmit",
@@ -13,6 +13,25 @@ local FORWARDED = {
 }
 
 describe("dev-bridge", function()
+    it("subscribes each probe-able event once at load, and nothing else", function()
+        local h = support.load()
+        local protocol = h.env.require("protocol")
+        for _, event in ipairs(protocol.PROBE_EVENTS) do
+            local subs = h.instance.subs[event]
+            assert.are.same({ "devBridge" .. event }, { subs[1].name, subs[2] }, event)
+        end
+        for event in pairs(protocol.PROBE_EXCLUDED) do
+            assert.are.same({}, h.instance.subs[event], event)
+        end
+        local probeable = {}
+        for _, event in ipairs(protocol.PROBE_EVENTS) do
+            probeable[event] = true
+        end
+        for _, event in ipairs(FORWARDED) do
+            assert(probeable[event], event)
+        end
+    end)
+
     it("grants itself its permissions on load, ppr first", function()
         local h = support.load()
         assert.are.same({
@@ -409,8 +428,8 @@ describe("dev-bridge", function()
         h:step()
         assert.is_true(open[1].state.fields.cancelled)
         assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
-        -- Stopped from inside Logic, so disarmed, not unsubscribed (the harness faults on an
-        -- Unsubscribe there): still subscribed, and doing nothing.
+        -- Stopped from inside Logic, so made a no-op, not unsubscribed (the harness faults on
+        -- an Unsubscribe there): still subscribed, and doing nothing.
         assert.are.same("devBridgeLogic", h.instance.subs.Logic[1].name)
         local requests = #h.requests
         h.world:chat("ignored")
@@ -427,7 +446,7 @@ describe("dev-bridge", function()
         local open = support.open(h)[1]
         h:unload()
         assert.is_true(open.state.fields.cancelled)
-        for _, event in ipairs({ "Logic", table.unpack(FORWARDED) }) do
+        for _, event in ipairs(h.env.require("protocol").PROBE_EVENTS) do
             assert.are.same({}, h.instance.subs[event], event)
         end
     end)

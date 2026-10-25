@@ -733,7 +733,8 @@ def daemon_lacks(args, kind):
     except (OSError, ValueError, AttributeError) as err:
         print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
         return 2
-    if kind in kinds:
+    # A status whose kinds isn't a list (null, or text that `in` would search) can't vouch.
+    if isinstance(kinds, list) and kind in kinds:
         return None
     what = "eval --reset" if kind == "reset" else kind
     print(

@@ -737,6 +737,13 @@ class StaleDaemonTests(DaemonCase):
                 self.assertIn(f"predates `rsdev.py {what}`", err)
                 self.assertIn("scripts/rsdev.py stop && scripts/rsdev.py start", err)
 
+    def test_eval_refuses_a_status_whose_kinds_is_not_a_list(self):
+        for kinds in (None, "exec eval reset", {"eval": True}):
+            with self.subTest(kinds):
+                code, err, paths = self.cli_against({"kinds": kinds}, "eval", "1")
+                self.assertEqual((code, paths), (2, ["/cli/status"]))
+                self.assertIn("scripts/rsdev.py stop && scripts/rsdev.py start", err)
+
     def test_eval_goes_ahead_when_the_daemon_lists_its_kind(self):
         code, _, paths = self.cli_against({"kinds": ["exec", "eval", "reset"]}, "eval", "1")
         self.assertEqual((code, paths), (0, ["/cli/status", "/cli/exec"]))

@@ -75,9 +75,13 @@ Agent(implementer, model=implModel):
        tagged `say()`. Every function you add or change that returns a value gets a LuaLS
        `---@return <type>` line (`CLAUDE.md`); use `T?` where it can return nil.
     2. Format, then verify: `stylua <the .lua files you changed>`, then `scripts/check-lua.sh`
-       must exit 0. There is no test suite; do not add a test framework. Pure logic that can run
-       outside the client may be exercised with plain `lua` from a scratch script in a temp dir
-       (never committed). A missing tool means the dev shell is not loaded: STOP and report it.
+       must exit 0; it also runs the busted suite in `tests/`. Behaviour you add or change in a
+       plugin gets specs in `tests/<plugin>/*_spec.lua` against the mock harness
+       (`docs/testing.md`): scripted world-builder specs for scoped logic, recorded-timeline
+       replay for integration paths. If the harness lacks an API the plugin needs, extend the mock
+       (grounded in the stubs, with a fidelity-ledger row) rather than leaving the path untested.
+       If your Bash tool lacks the dev shell, run tools through `direnv exec . <cmd>`. A missing
+       tool even then means the dev shell is broken: STOP and report it.
     3. Commit your work (`git add <the paths you changed> && git commit` with message
        `<COMMIT_MSG>`, ending with `<TRAILERS>`). Never `git add -A` or `git add .`: the user may
        have unrelated uncommitted edits in the tree. Do NOT push.

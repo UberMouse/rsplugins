@@ -10,8 +10,11 @@ stops doing its job, the overlay that never draws or never clears, the setting t
 client freeze or crash. Say whether it bites on a path the change can reach. Never report the form
 of a line in isolation; trace it to the behaviour it causes.
 
-There is no test suite here. `scripts/check-lua.sh` runs `luac -p`, selene, stylua and LuaLS
-against the API stubs in `docs/api/`, and nothing else. LuaLS only sees what is typed: through an
+`scripts/check-lua.sh` runs `luac -p`, selene, stylua, LuaLS against the API stubs in `docs/api/`,
+and the busted suite in `tests/`, which runs plugins against a mock of the API. The mock models
+only what the fidelity ledger in `docs/testing.md` lists: a passing test says nothing about
+behaviour outside it, so don't dismiss a finding as "the tests would catch it" unless a spec
+exercises that path under a modelled behaviour. LuaLS only sees what is typed: through an
 `any` (a `pcall` result, an untyped table) it cannot catch a nil index, a wrong `.`/`:` call, a
 misspelt API member or a wrong argument order, and it trusts the stubs even where they are wrong.
 Those are found by review or by a user in the client. Do not dismiss them as "the type check

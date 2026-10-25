@@ -13,7 +13,10 @@ Before writing plugin code, read `docs/README.md` and the docs your task touches
 for manifests, `require`, lifecycle hooks and PersistentDB; `docs/guidelines.md` for what
 moderation accepts). Look up every API name and signature in the stubs in `docs/api/` (grep
 `docs/api/generated/`) before you use it. Don't call one from memory. `scripts/check-lua.sh` type-checks
-against the stubs, but only where a value is typed, and the stubs can be wrong. Check
+against the stubs, but only where a value is typed, and the stubs can be wrong. It also runs the
+busted suite in `tests/` against the mock API harness (`docs/testing.md`); plugin behaviour you add
+or change gets specs there. If your Bash tool lacks the Nix dev shell, run tools through
+`direnv exec . <cmd>`. Check
 https://developer.runescape.com/rs/ when it matters, and say in your report which API calls you
 could not confirm.
 

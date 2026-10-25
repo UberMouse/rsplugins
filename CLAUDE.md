@@ -24,7 +24,8 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
   `scripts/check-lua.sh` green, and is deleted once it has answered.
 - When the client is open, drive it yourself through the dev bridge
   ([docs/dev-environment.md](docs/dev-environment.md#dev-bridge)). Run `scripts/rsdev.py status`
-  first. If the bridge is connected, run the console commands yourself (`rsdev.py exec "prf"`,
+  first, and if the daemon is down, start it yourself (`scripts/rsdev.py start`). If the bridge is
+  connected, run the console commands yourself (`rsdev.py exec "prf"`,
   `exec "prl <plugin>"`), read what plugins forward with `events`, and look at the game and plugin
   UI with `shot` (then Read the printed path). Ask the user only for what needs their hands:
   starting the client, enabling the bridge (`pon dev-bridge`), and acting in game. If it isn't

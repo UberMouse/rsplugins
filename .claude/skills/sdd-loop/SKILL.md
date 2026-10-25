@@ -74,7 +74,8 @@ If mid-loop the work turns out to need genuine design work, do **not** silently 
 - Human input comes only through `AskUserQuestion`, so this loop works in a background job.
 - **The live client, through the dev bridge: conductor only.** When the user has the client open,
   `scripts/rsdev.py status` says whether the `dev-bridge` plugin is connected
-  ([docs/dev-environment.md](../../../docs/dev-environment.md#dev-bridge)). If it is, the
+  ([docs/dev-environment.md](../../../docs/dev-environment.md#dev-bridge)). If the daemon is
+  down, the conductor starts it (`scripts/rsdev.py start`). If the bridge is connected, the
   conductor runs console commands (`exec "prl <plugin>"`), reads forwarded events (`events`) and
   captures the window (`shot`, then Read the printed path). Implementers, fix agents and
   reviewers never run `rsdev.py` (the templates say so). Two agents must not send console

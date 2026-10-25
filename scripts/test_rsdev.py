@@ -7,6 +7,7 @@ over HTTP the way the recorder, the bridge plugin and the CLI do."""
 
 import importlib.util
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -24,10 +25,13 @@ rsdev = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rsdev)
 
 
-def post(port, path, body, headers=None):
-    """POST; returns (status, body text). `body` may be bytes or a JSON-able value."""
+def post(port, path, body, headers=None, cli=True):
+    """POST; returns (status, body text). `body` may be bytes or a JSON-able value.
+
+    Sends X-Rsdev like the CLI does, unless cli=False."""
     data = body if isinstance(body, bytes) else json.dumps(body).encode()
-    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=data, headers=headers or {})
+    sent = {"X-Rsdev": "1"} if cli else {}
+    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=data, headers={**sent, **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status, resp.read().decode()
@@ -36,7 +40,8 @@ def post(port, path, body, headers=None):
 
 
 def get(port, path):
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=10) as resp:
+    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers={"X-Rsdev": "1"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
         return json.load(resp)
 
 
@@ -180,7 +185,7 @@ class RecordTests(DaemonCase):
         import socket
 
         with socket.create_connection(("127.0.0.1", self.port), timeout=5) as s:
-            head = f"POST {path} HTTP/1.0\r\n" + (f"Content-Length: {length}\r\n" if length else "")
+            head = f"POST {path} HTTP/1.0\r\nHost: 127.0.0.1:{self.port}\r\n" + (f"Content-Length: {length}\r\n" if length else "")
             s.sendall((head + "\r\n").encode())
             return int(s.recv(100).split()[1])
 
@@ -258,6 +263,12 @@ class SyncTests(DaemonCase):
         on_disk = (self.out / "rsdev" / "events" / "b1.jsonl").read_text().splitlines()
         self.assertEqual([json.loads(ln)["n"] for ln in on_disk], [1, 2, 3])
 
+    def test_an_events_own_n_and_session_keys_do_not_override_the_daemons(self):
+        self.sync(events=[{"t": 1, "name": "A", "n": 99, "session": "evil"}, {"t": 2, "name": "B"}])
+        got = get(self.port, "/cli/events")["events"]
+        self.assertEqual([(e["n"], e["session"]) for e in got], [(1, "b1"), (2, "b1")])
+        self.assertEqual([e["name"] for e in get(self.port, "/cli/events?since=1")["events"]], ["B"])
+
     def test_dropped_growth_becomes_a_marker_event(self):
         self.sync(dropped=3, events=[{"t": 9, "name": "A", "payload": 1}])
         self.sync(seq=2, dropped=3)
@@ -307,6 +318,16 @@ class ExecTests(DaemonCase):
         t.join()
         self.assertEqual(result["outcome"], "unknown")
 
+    def test_unknown_outcome_forgets_the_command_and_ignores_a_late_result(self):
+        t, result = self.exec_async("slow", timeout=0.3)
+        self.wait_queued()
+        (line,) = self.sync()
+        t.join()
+        self.assertEqual(result["outcome"], "unknown")
+        self.assertEqual(self.server.state.status()["awaiting_result"], 0)
+        self.sync(seq=2, results=[{"id": line[0], "ok": True}])
+        self.assertIn(f"ignored result for unknown command id '{line[0]}'", self.log.getvalue())
+
     def test_every_queued_command_is_logged_with_its_id(self):
         t, result = self.exec_async("give item")
         self.wait_queued()
@@ -326,6 +347,122 @@ class ExecTests(DaemonCase):
             self.assertEqual(rsdev.cmd_exec(args), 2)  # nobody polling: withdrawn
             args.port = 1  # nothing listens there
             self.assertEqual(rsdev.cmd_exec(args), 2)
+
+
+class BrowserGuardTests(DaemonCase):
+    """A web page must not be able to drive the daemon (CSRF, DNS rebinding)."""
+
+    def bodies(self):
+        return {
+            "/cli/exec": {"command": "cheat", "timeout": 0.1},
+            "/bridge/sync": sync_body(),
+            "/record": batch(),
+        }
+
+    def assert_untouched(self):
+        st = self.server.state.status()
+        self.assertEqual((st["bridge"], st["queued"], st["events"]), (None, 0, 0))
+        self.assertFalse((self.out / "recordings").exists())
+        self.assertNotIn("queued command", self.log.getvalue())
+
+    def test_origin_is_refused_on_every_post_route(self):
+        for route, body in self.bodies().items():
+            hdr = {"Origin": "http://evil.example"}
+            self.assertEqual(post(self.port, route, body, hdr)[0], 403, route)
+            self.assertIn(f"refused {route}: Origin", self.log.getvalue())
+        self.assert_untouched()
+
+    def test_origin_is_refused_on_get_routes(self):
+        for route in ("/cli/status", "/cli/events"):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{self.port}{route}", headers={"X-Rsdev": "1", "Origin": "null"}
+            )
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                urllib.request.urlopen(req)
+            self.assertEqual(caught.exception.code, 403)
+
+    def test_foreign_host_is_refused(self):
+        for host in ("evil.example", f"evil.example:{self.port}", "127.0.0.1", f"127.0.0.1:{self.port + 1}"):
+            for route, body in self.bodies().items():
+                self.assertEqual(post(self.port, route, body, {"Host": host})[0], 403, (host, route))
+        self.assert_untouched()
+        self.assertIn("refused /record: Host 'evil.example'", self.log.getvalue())
+
+    def test_localhost_host_is_accepted(self):
+        status, _ = post(self.port, "/record", batch(), {"Host": f"localhost:{self.port}"})
+        self.assertEqual(status, 200)
+
+    def test_cli_routes_need_x_rsdev(self):
+        body = self.bodies()["/cli/exec"]
+        self.assertEqual(post(self.port, "/cli/exec", body, cli=False)[0], 403)
+        self.assertEqual(post(self.port, "/cli/exec", body, {"X-Rsdev": "0"}, cli=False)[0], 403)
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/cli/status")
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(req)
+        self.assertEqual(caught.exception.code, 403)
+        self.assert_untouched()
+        # the plugin-facing routes don't need it
+        self.assertEqual(post(self.port, "/record", batch(), cli=False)[0], 200)
+
+    def test_the_clis_own_requests_work(self):
+        args = SimpleNamespace(port=self.port)
+        self.assertTrue(rsdev.call(args, "/cli/status")["up"])
+        self.assertEqual(rsdev.call(args, "/cli/events")["events"], [])
+        reply = rsdev.call(args, "/cli/exec", {"command": "x", "timeout": 0.1})
+        self.assertEqual(reply["outcome"], "withdrawn")
+
+
+class StopTests(DaemonCase):
+    def args(self):
+        return SimpleNamespace(port=self.port, out=self.out)
+
+    def write_pid(self, pid):
+        path = rsdev.pid_file(self.args())
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{pid}\n")
+        return path
+
+    def fake_kill(self):
+        """os.kill that records the call and, for SIGTERM, stops the in-process server."""
+        calls = []
+
+        def kill(pid, sig):
+            calls.append((pid, sig))
+            threading.Thread(target=self.server.shutdown).start()
+            self.server.socket.close()  # nothing answers from here on
+
+        return calls, kill
+
+    def test_stops_a_live_daemon_whose_pid_matches_the_file(self):
+        path = self.write_pid(os.getpid())  # the in-process server reports our own pid
+        calls, kill = self.fake_kill()
+        with mock.patch.object(rsdev.os, "kill", kill), redirect_stdout(StringIO()):
+            self.assertEqual(rsdev.cmd_stop(self.args()), 0)
+        self.assertEqual(calls, [(os.getpid(), rsdev.signal.SIGTERM)])
+        self.assertFalse(path.exists())
+
+    def test_stops_a_daemon_with_no_pid_file_by_its_reported_pid(self):
+        calls, kill = self.fake_kill()
+        with mock.patch.object(rsdev.os, "kill", kill), redirect_stdout(StringIO()):
+            self.assertEqual(rsdev.cmd_stop(self.args()), 0)
+        self.assertEqual([c[0] for c in calls], [os.getpid()])
+
+    def test_stale_pid_file_is_removed_and_nothing_is_signalled(self):
+        self.server.shutdown()
+        self.server.socket.close()  # the daemon is gone
+        path = self.write_pid(12345)
+        with mock.patch.object(rsdev.os, "kill") as kill, redirect_stdout(StringIO()) as out:
+            self.assertEqual(rsdev.cmd_stop(self.args()), 0)
+        kill.assert_not_called()
+        self.assertFalse(path.exists())
+        self.assertIn("stale", out.getvalue())
+
+    def test_pid_file_naming_another_pid_is_not_signalled(self):
+        path = self.write_pid(os.getpid() + 1)
+        with mock.patch.object(rsdev.os, "kill") as kill, mock.patch("sys.stderr", StringIO()):
+            self.assertEqual(rsdev.cmd_stop(self.args()), 1)
+        kill.assert_not_called()
+        self.assertTrue(path.exists())
 
 
 class EventsTests(DaemonCase):
@@ -360,7 +497,30 @@ class EventsTests(DaemonCase):
 
     def test_follow_times_out_empty(self):
         reply = get(self.port, "/cli/events?since=0&wait=0.1")
-        self.assertEqual(reply, {"events": [], "last": 0})
+        self.assertEqual(reply, {"events": [], "last": 0, "run": self.server.state.run})
+
+    def test_follow_restarts_numbering_when_the_daemon_run_changes(self):
+        ev = lambda n: {"n": n, "name": "A"}  # noqa: E731
+        replies = [
+            {"events": [ev(5)], "last": 5, "run": "old"},
+            {"events": [], "last": 5, "run": "new"},  # new daemon: `last` is the stale since
+            {"events": [ev(1)], "last": 1, "run": "new"},
+        ]
+        paths = []
+
+        def fake_call(args, path, payload=None, timeout=5.0):
+            paths.append(path)
+            if not replies:
+                raise KeyboardInterrupt
+            return replies.pop(0)
+
+        args = SimpleNamespace(port=1, since=0, follow=True, name=None)
+        err, out = StringIO(), StringIO()
+        with mock.patch.object(rsdev, "call", fake_call), mock.patch("sys.stderr", err), redirect_stdout(out):
+            self.assertEqual(rsdev.cmd_events(args), 0)
+        self.assertIn("daemon restarted; numbering restarted", err.getvalue())
+        self.assertEqual([json.loads(ln)["n"] for ln in out.getvalue().splitlines()], [5, 1])
+        self.assertEqual([p.split("&")[0] for p in paths[:4]], ["/cli/events?since=0", "/cli/events?since=5", "/cli/events?since=0", "/cli/events?since=1"])
 
 
 class EscapeTests(unittest.TestCase):

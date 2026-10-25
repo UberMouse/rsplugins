@@ -99,6 +99,7 @@ class State:
         self.events = deque(maxlen=MAX_EVENTS)
         self.last_n = 0  # n of the newest event
         self.total_dropped = 0
+        self.run = secrets.token_hex(4)  # event numbers restart per daemon run; followers check it
 
     # --- recorder (POST /record) -------------------------------------------------------------
 
@@ -173,6 +174,8 @@ class State:
                 cmd = self.commands.get(result["id"])
                 if cmd is not None:
                     self._finish(cmd, result["ok"], result.get("error", ""))
+                else:  # e.g. the late result of an exec that already gave up on it
+                    print(f"ignored result for unknown command id {result['id']!r}")
 
             lost = body.get("dropped", 0) - bridge["dropped"]
             bridge["dropped"] = max(bridge["dropped"], body.get("dropped", 0))
@@ -202,7 +205,8 @@ class State:
     def _add_event(self, session, event):
         """Number, keep and persist one event. Caller holds the lock."""
         self.last_n += 1
-        stored = {"n": self.last_n, "session": session, **event}
+        # n and session last, so an event carrying its own keys can't override the numbering.
+        stored = {**event, "n": self.last_n, "session": session}
         self.events.append(stored)
         folder = self.out_dir / "rsdev" / "events"
         folder.mkdir(parents=True, exist_ok=True)
@@ -238,6 +242,9 @@ class State:
                 return {"outcome": "withdrawn", "id": cmd.id}
             if cmd.state == "delivered":
                 print(f"command {cmd.id} delivered but no result in {timeout}s")
+                # Forget it, or a plugin that never reports would grow `commands` without bound.
+                # A result that turns up later is ignored (see sync).
+                del self.commands[cmd.id]
                 return {"outcome": "unknown", "id": cmd.id}
             outcome = "ok" if cmd.ok else "error"
             return {"outcome": outcome, "id": cmd.id, "error": cmd.error or ""}
@@ -266,6 +273,7 @@ class State:
             seen = None if b is None else round(time.time() - b["seen"], 3)
             return {
                 "up": True,
+                "pid": os.getpid(),  # lets `stop` confirm which process answers on the port
                 "bridge": None
                 if b is None
                 else {
@@ -347,8 +355,33 @@ class Handler(BaseHTTPRequestHandler):
     # how long `exec` and `events --follow` block, which wait on a Condition, not the socket.
     timeout = 5
 
+    def refused(self, route):
+        """Whether to refuse this request as one a browser sent (a 403 is already replied).
+
+        A web page can POST to 127.0.0.1 (a CORS "simple" request needs no preflight) and DNS
+        rebinding can point a hostname at it, so a bind to loopback alone doesn't keep web pages
+        out. A browser always sends Origin on a cross-origin POST and a Host that isn't ours when
+        rebound; the CLI sends no Origin. /cli/* also needs the custom header X-Rsdev, which
+        makes a browser preflight first, and the daemon never answers a preflight with CORS
+        headers. The log line names the route and header, to show what a client library sends.
+        """
+        host = self.headers.get("Host")
+        port = self.server.server_address[1]
+        if host not in (f"{HOST}:{port}", f"localhost:{port}"):
+            print(f"refused {route}: Host {host!r}")
+            return self.reply(403) or True
+        if "Origin" in self.headers:
+            print(f"refused {route}: Origin {self.headers['Origin']!r}")
+            return self.reply(403) or True
+        if route.startswith("/cli/") and self.headers.get("X-Rsdev") != "1":
+            print(f"refused {route}: no X-Rsdev header")
+            return self.reply(403) or True
+        return False
+
     def do_POST(self):
         route = urllib.parse.urlsplit(self.path).path
+        if self.refused(route):
+            return None
         if route not in ("/record", "/bridge/sync", "/cli/exec"):
             return self.reply(404)
         # A missing or negative length would leave read() waiting on the client, and int()
@@ -392,6 +425,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parts = urllib.parse.urlsplit(self.path)
+        if self.refused(parts.path):
+            return None
         query = urllib.parse.parse_qs(parts.query)
         state = self.server.state
         if parts.path == "/cli/status":
@@ -404,7 +439,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(400)
             name = query.get("name", [None])[0]
             found, last = state.events_after(since, name, max(wait, 0.0))
-            return self.reply_json({"events": found, "last": last})
+            return self.reply_json({"events": found, "last": last, "run": state.run})
         self.reply(404)
 
     def reply_json(self, obj):
@@ -443,7 +478,7 @@ def call(args, path, payload=None, timeout=5.0):
     """One request to the daemon; the decoded JSON reply. Raises OSError if it isn't there."""
     url = f"http://{HOST}:{args.port}{path}"
     data = None if payload is None else json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data)
+    req = urllib.request.Request(url, data=data, headers={"X-Rsdev": "1"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.load(resp)
@@ -488,36 +523,41 @@ def cmd_start(args):
     return 1
 
 
-def pid_is_rsdev(pid):
-    """Whether pid is one of our daemons, so a stale pid file can't make us kill a stranger."""
-    try:
-        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
-    except OSError:
-        return False
-    return b"rsdev.py" in cmdline
-
-
 def cmd_stop(args):
     path = pid_file(args)
     try:
-        pid = int(path.read_text().strip())
+        file_pid = int(path.read_text().strip())
     except (OSError, ValueError):
-        print("rsdev is not running (no pid file)")
+        file_pid = None
+    try:
+        daemon_pid = call(args, "/cli/status", timeout=1.0)["pid"]
+    except (OSError, ValueError, KeyError):
+        # Never signal a pid we couldn't confirm: with no answer, the file is only a leftover.
+        if file_pid is None:
+            print("rsdev is not running (no pid file)")
+        else:
+            path.unlink(missing_ok=True)
+            print(f"rsdev is not running (stale pid file for {file_pid} removed)")
         return 0
-    if not pid_is_rsdev(pid):
-        path.unlink(missing_ok=True)
-        print(f"rsdev is not running (stale pid file for {pid} removed)")
-        return 0
-    os.kill(pid, signal.SIGTERM)
+    # The pid the daemon reports about itself is the proof; /proc can't be read on macOS. Without
+    # a pid file (a foreground `daemon`), the reported pid is all there is to go on.
+    if file_pid is not None and file_pid != daemon_pid:
+        print(
+            f"pid file says {file_pid} but the daemon on port {args.port} reports {daemon_pid}; "
+            "not signalling either",
+            file=sys.stderr,
+        )
+        return 1
+    os.kill(daemon_pid, signal.SIGTERM)
     for _ in range(50):
-        if not pid_is_rsdev(pid):
+        if not daemon_up(args):
             break
         time.sleep(0.1)
     else:
-        print(f"rsdev (pid {pid}) did not stop", file=sys.stderr)
+        print(f"rsdev (pid {daemon_pid}) did not stop", file=sys.stderr)
         return 1
     path.unlink(missing_ok=True)
-    print(f"rsdev stopped (pid {pid})")
+    print(f"rsdev stopped (pid {daemon_pid})")
     return 0
 
 
@@ -570,6 +610,7 @@ def cmd_exec(args):
 
 def cmd_events(args):
     since = args.since
+    run = None  # the daemon run the numbers belong to
     try:
         while True:
             wait = 25 if args.follow else 0
@@ -579,7 +620,12 @@ def cmd_events(args):
             reply = call(args, path, timeout=wait + 10)
             for event in reply["events"]:
                 print(json.dumps(event), flush=True)
-            since = reply["last"]
+            if run is not None and reply["run"] != run:
+                # A new daemon numbers from 1 again; the old `since` would hide everything.
+                print("daemon restarted; numbering restarted", file=sys.stderr)
+                run, since = reply["run"], 0
+                continue
+            run, since = reply["run"], reply["last"]
             if not args.follow:
                 return 0
     except KeyboardInterrupt:

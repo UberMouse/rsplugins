@@ -128,12 +128,19 @@ scripts/rsdev.py start                       # detached; log dumps/rsdev/daemon.
 scripts/rsdev.py status                      # daemon up?, bridge connected?, session, seq, env facts, queue, events, dropped
 scripts/rsdev.py exec <console command...> [--timeout 10]
 scripts/rsdev.py events [--since N] [--follow] [--name X]
-scripts/rsdev.py stop
+scripts/rsdev.py stop                        # asks the daemon for its pid; signals only if it matches the pid file
 ```
 
 `scripts/rsdev.py daemon` runs it in the foreground instead. `--port` (default 8766) and `--out`
 (default `dumps/` in the repo, whatever the cwd) go on any subcommand. The daemon listens on
-127.0.0.1 only, so its endpoints are only reachable from this machine. A plugin names the daemon
+127.0.0.1 only, but that alone doesn't keep out web pages in your browser (they can POST to
+loopback, and DNS rebinding can point a hostname at it). So every request is refused with a 403
+(and one log line naming the route and the header) if its `Host` isn't `127.0.0.1:<port>` or
+`localhost:<port>`, or if it carries an `Origin` header, which browsers add to cross-origin
+requests; the CLI sends none. `/cli/*` also needs the header `X-Rsdev: 1`, which the CLI always
+sends and which makes a browser preflight the request (the daemon never answers a preflight with
+CORS headers). If the in-client bridge plugin's HTTP library sends an `Origin`, the log will show
+`refused /bridge/sync: Origin ...`. A plugin names the daemon
 with the manifest URL `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the recorder's `recorder`
 URL is the same address).
 
@@ -143,9 +150,10 @@ can never run later) or the daemon is down; 3 delivered but no result arrived in
 is unknown). Commands run in the order queued, and each is delivered at most once. **Every command
 is logged with its id in `dumps/rsdev/daemon.log`**: that log is the audit trail.
 
-**`events`** prints the forwarded events as JSON lines, each with a daemon-wide increasing `n`
-(`--since N` gives those after `n`; `--name` keeps one event name; `--follow` keeps printing until
-interrupted). The last 10,000 are kept in memory; every event is also appended to
+**`events`** prints the forwarded events as JSON lines, each with an increasing `n`, numbered from 1
+per daemon run (a restarted daemon starts again at 1; `--follow` notices, says so on stderr and
+continues from 0). `--since N` gives those after `n`; `--name` keeps one event name; `--follow`
+keeps printing until interrupted. The last 10,000 are kept in memory; every event is also appended to
 `dumps/rsdev/events/<session>.jsonl`. A growth in a sync's `dropped` count appears as an event
 `{"name": "dropped", "n_lost": ...}`.
 

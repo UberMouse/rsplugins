@@ -1213,7 +1213,7 @@ const synth = await agent(
     JSON.stringify(findingsList, null, 2),
     dupBlock,
     "",
-    "A conductor fixes the primary findings from this report and a human may promote appendix ones, both by id, so " +
+    "A conductor fixes the primary findings from this report and adjudicates each appendix one (fix, reject or defer), both by id, so " +
       "every finding MUST be a self-contained, individually addressable block keyed by its id — never merge two " +
       "distinct issues into one.",
     "",

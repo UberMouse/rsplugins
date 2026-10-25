@@ -34,7 +34,7 @@ planning gates."
                        ─►(re-review what the fix addressed)*─► task done, committed
   4. Verify        scripts/check-lua.sh exits 0 (+ workflow tests / hook selftest if touched)
   5. Code review   Workflow(branch-code-review.js, base: BASE) ─► auto-fix every PRIMARY finding
-                     ─► appendix reported, not fixed ─► re-verify
+                     ─► conductor adjudicates each appendix finding (fix / reject / defer) ─► re-verify
   6. Hand back     reviewed commits on main + the in-client checks for the user; phase done
 ```
 
@@ -387,18 +387,24 @@ a finding is primary when at least half its non-refuting votes are at or above t
   clears (only the failed lenses re-run). If it stays incomplete, stop and report which lenses
   and items are missing as a blocker; never finish the loop on a partial review.
 - **Zero findings**: go to §6.
-- Otherwise **fix every `primary` finding.** Leave `appendix` (low-confidence) findings unfixed
-  (the deliberate "didn't make the bar" set), but **list them in the final report** so the user
-  can promote any of them.
-- **A primary moderation finding is not auto-fixed.** Whether a feature stays, changes or goes is
-  the user's call (`CLAUDE.md`: flag borderline features). `AskUserQuestion` with the finding and
-  the options (drop the feature / change it to <allowed form> / keep it, dev-only), then fix per
-  the answer.
+- Otherwise **fix every `primary` finding.**
+- **Adjudicate every `appendix` (low-confidence) finding yourself; do not hand them to the
+  user.** The user asked for this. For each one, read the cited code and decide:
+  - **Fix**: the problem is real and in scope. It joins the fix groups below, exactly like a
+    primary finding.
+  - **Reject**: the finding is wrong, or the change isn't worth making. Give a one-line reason a
+    reader can check against the code: what the finding misread, or why the cost outweighs it.
+  - **Defer**: the problem is real but out of this run's scope. Put it in `notes`.
+  The verifiers' low band means "unsure", not "skip", so judge the code, not the band.
+- **A moderation finding is not auto-fixed or auto-rejected, primary or appendix.** Whether a
+  feature stays, changes or goes is the user's call (`CLAUDE.md`: flag borderline features).
+  `AskUserQuestion` with the finding and the options (drop the feature / change it to <allowed
+  form> / keep it, dev-only), then fix per the answer.
 
 Fix them:
 
-1. **Group the primary findings by file**, ordering groups so a module changes before the files
-   that `require` it.
+1. **Group the findings to fix (every primary, plus the appendix ones adjudicated Fix) by
+   file**, ordering groups so a module changes before the files that `require` it.
 2. Per group, **strictly sequentially**: dispatch a fix agent (the *Fix agent for §5* template,
    `model: implModel`) with the finding text + resolution **inline**. It stages but does **not**
    commit.
@@ -470,8 +476,9 @@ After the final §4 passes, write `phase: "done"` to state.json, then give the *
 
 - What was implemented, per task, with commit SHAs (`git log --oneline "$BASE"..HEAD`).
 - What the per-task reviews caught and fixed. Any UNREVIEWED task, by id.
-- Code review: primary findings fixed (by id), appendix findings **not** fixed (by id + one line
-  each, so the user can promote them), anything deferred (with why), and the report path.
+- Code review: primary findings fixed (by id); each appendix finding's adjudication (by id:
+  fixed, rejected with the reason, or deferred with why); anything else deferred (with why); and
+  the report path.
 - The final `scripts/check-lua.sh` result, and the workflow tests / hook selftest if they ran.
 - **In-client checks**, as a numbered list the user can follow in the beta client: `prf` if a
   manifest or plugin was added, `prl <name>` (or `pon <name>`), each action from the criteria's

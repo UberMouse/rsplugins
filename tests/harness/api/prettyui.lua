@@ -189,6 +189,63 @@ local function track(lib, kind, obj, s)
     lib.byObj[obj] = record
 end
 
+---------------------------------------------------------------------------
+-- Tooltips, as 1.2.0 attaches them (src/tooltip.lua). A tooltip shows on its target's
+-- mouse-over and hides only on that same target's mouse-leave, so hiding the target (or an
+-- ancestor) leaves a shown tooltip up. A Window's or Panel's content tooltips (the content's
+-- tooltip context, CheckboxButton choices included) are drawn on the host's parent, outside
+-- the host: Window:Close hides them and Destroy destroys them. A SpriteButton made with
+-- SpriteButton.new on any other component draws its tooltip inside that component, so it is
+-- out of sight only while that component is.
+---------------------------------------------------------------------------
+
+-- A new, hidden tooltip, or nil for no tooltip.
+---@param lib table
+---@param target table the hovered component's state
+---@param parent table the state of the component it is drawn in
+---@param value any a string or { text, ... }; nil for none
+---@param context table? the host's content tooltip context
+---@return table?
+local function attachTip(lib, target, parent, value, context)
+    if value == nil then return nil end
+    local text = type(value) == "table" and value.text or value
+    local tip = { target = target, parent = parent, text = tostring(text or ""), shown = false }
+    tip.context = context
+    lib.tooltips[#lib.tooltips + 1] = tip
+    if context then context.tips[#context.tips + 1] = tip end
+    return tip
+end
+
+---@param tip table?
+local function destroyTip(tip)
+    if tip then tip.destroyed = true end
+end
+
+-- SetTooltip / SetOptionTooltip: a string on an existing tooltip only changes its text (a
+-- shown one stays shown); anything else destroys the old one and attaches a new, hidden one.
+---@param lib table
+---@param old table?
+---@param value any
+---@param target table
+---@param parent table
+---@param context table?
+---@return table?
+local function replaceTip(lib, old, value, target, parent, context)
+    if old and value ~= nil and type(value) ~= "table" then
+        old.text = tostring(value)
+        return old
+    end
+    destroyTip(old)
+    return attachTip(lib, target, parent, value, context)
+end
+
+-- A host's content tooltip context: tooltips drawn on `parent` (the host's parent).
+---@param parent table
+---@return table
+local function newContext(parent)
+    return { parent = parent, tips = {} }
+end
+
 local SpriteButton = strict.class("prettyui.SpriteButton instance", {
     undeclared = true,
     fields = {
@@ -197,9 +254,16 @@ local SpriteButton = strict.class("prettyui.SpriteButton instance", {
         end,
     },
     methods = {
+        -- A string changes the text; a table or nil replaces it (hidden), as 1.2.0 does.
+        SetTooltip = function(s, value)
+            live(s)
+            s.tip = replaceTip(s.lib, s.tip, value, s.rootState, s.tipParent, s.context)
+            return true
+        end,
         Destroy = function(s)
             if s.destroyed then return end
             s.destroyed = true
+            destroyTip(s.tip)
             s.root:Destroy()
             s.root = nil
         end,
@@ -211,8 +275,9 @@ local SpriteButton = strict.class("prettyui.SpriteButton instance", {
 ---@param name any
 ---@param action any
 ---@param options table already checked
+---@param context table? the host's tooltip context, for a button added to a host's content
 ---@return table
-local function newSpriteButton(lib, parent, name, action, options)
+local function newSpriteButton(lib, parent, name, action, options, context)
     -- The real library raises these as plain Lua errors; a plugin may catch them.
     if type(name) ~= "string" then
         strict.fault("SpriteButton sprite name must be a string", true)
@@ -225,9 +290,11 @@ local function newSpriteButton(lib, parent, name, action, options)
     end
     local s = {
         kind = "SpriteButton",
+        lib = lib,
         spriteName = name:upper(),
         action = action,
-        tooltip = options.tooltip,
+        context = context,
+        tipParent = context and context.parent or parent,
     }
     s.root, s.rootState = ui.create("Sprite", parent)
     s.root:SetPos(options.x or 0, options.y or 0, options.xAnchor or 0, options.yAnchor or 0)
@@ -235,6 +302,7 @@ local function newSpriteButton(lib, parent, name, action, options)
         options.width or options.size or SPRITE_BUTTON_SIZE,
         options.height or options.size or SPRITE_BUTTON_SIZE
     )
+    s.tip = attachTip(lib, s.rootState, s.tipParent, options.tooltip, context)
     local obj = SpriteButton.new(s)
     s.proxy = obj
     track(lib, "SpriteButton", obj, s)
@@ -252,6 +320,7 @@ local Divider = strict.class("prettyui.Divider instance", {
         Destroy = function(s)
             if s.destroyed then return end
             s.destroyed = true
+            destroyTip(s.tip)
             s.root:Destroy()
             s.root = nil
         end,
@@ -299,9 +368,32 @@ local Checkbox = strict.class("prettyui.CheckboxButton instance", {
             end
             return false
         end,
+        -- Replace one choice's tooltip (SetTooltip's rules); false if no choice has `value`.
+        SetOptionTooltip = function(s, value, tooltip)
+            live(s)
+            for _, item in ipairs(s.items) do
+                if item.value == value then
+                    item.tooltip = tooltip
+                    item.tip = replaceTip(
+                        s.lib,
+                        item.tip,
+                        tooltip,
+                        item.rowState,
+                        s.context.parent,
+                        s.context
+                    )
+                    return true
+                end
+            end
+            return false
+        end,
         Destroy = function(s)
             if s.destroyed then return end
             s.destroyed = true
+            destroyTip(s.tip)
+            for _, item in ipairs(s.items) do
+                destroyTip(item.tip)
+            end
             s.root:Destroy()
             s.root = nil
         end,
@@ -325,7 +417,7 @@ local function addSpriteButton(s, spriteName, action, options)
     local height = options.height or options.size or SPRITE_BUTTON_SIZE
     placed.x = options.x or PADDING
     if options.y == nil then placed.y = flowRow(s.flow, height, ROW_GAP, 0) end
-    return newSpriteButton(s.lib, s.contentState, spriteName, action, placed)
+    return newSpriteButton(s.lib, s.contentState, spriteName, action, placed, s.tips)
 end
 
 -- AddText / AddTitle: a ui.Text row the plugin can set .content on. The fake can't measure
@@ -348,6 +440,7 @@ local function addText(lib, s, value, isTitle)
     label:SetPos(PADDING, y)
     label:SetSize(-PADDING * 2, height, 1.0)
     ls.content = text
+    ls.tip = attachTip(lib, ls, s.tips.parent, options.tooltip, s.tips)
     track(lib, isTitle and "Title" or "Text", label, ls)
     return label
 end
@@ -373,9 +466,11 @@ local function addCheckbox(lib, s, choices, options)
     end
     local cs = {
         kind = "CheckboxButton",
+        lib = lib,
         items = {},
         onChange = options.onChange,
         colour = options.colour,
+        context = s.tips,
     }
     local height = #choices * CHECKBOX_ROW
     -- Given a y, 1.2.0 places it there (absolute) and the flow doesn't move.
@@ -405,8 +500,10 @@ local function addCheckbox(lib, s, choices, options)
         row:SetPos(0, (i - 1) * CHECKBOX_ROW)
         row:SetSize(0, CHECKBOX_ROW, 1.0)
         item.rowState = rowState
+        item.tip = attachTip(lib, rowState, s.tips.parent, item.tooltip, s.tips)
         cs.items[i] = item
     end
+    cs.tip = attachTip(lib, cs.rootState, s.tips.parent, options.tooltip, s.tips)
     local obj = Checkbox.new(cs)
     cs.proxy = obj
     track(lib, "CheckboxButton", obj, cs)
@@ -419,12 +516,13 @@ end
 ---@return table
 local function addDivider(lib, s, options)
     live(s)
-    checkOptions("Divider", options)
+    options = checkOptions("Divider", options)
     local ds = { kind = "Divider" }
     local y = flowRow(s.flow, DIVIDER_HEIGHT, ROW_GAP, 0)
     ds.root, ds.rootState = ui.create("Sprite", s.contentState)
     ds.root:SetPos(0, y)
     ds.root:SetSize(0, DIVIDER_HEIGHT, 1.0)
+    ds.tip = attachTip(lib, ds.rootState, s.tips.parent, options.tooltip, s.tips)
     local obj = Divider.new(ds)
     track(lib, "Divider", obj, ds)
     return obj
@@ -443,10 +541,21 @@ local function windowSetSize(s, width, height)
     if s.bounded then remember(s) end
 end
 
--- Close: onClose(window) first, then hide (the 1.2.0 order).
+-- Hide (Close) or destroy (Destroy) every tooltip of a host's content context.
+---@param context table
+---@param destroy boolean
+local function clearContext(context, destroy)
+    for _, tip in ipairs(context.tips) do
+        tip.shown = false
+        if destroy then tip.destroyed = true end
+    end
+end
+
+-- Close: hide the content's tooltips, call onClose(window), then hide (the 1.2.0 order).
 ---@param s table
 local function windowClose(s)
     live(s)
+    clearContext(s.tips, false)
     if s.onClose then s.onClose(s.proxy) end
     if not s.destroyed then s.root.hidden = true end
 end
@@ -478,6 +587,8 @@ local Window = strict.class("prettyui.Window instance", {
         Destroy = function(s)
             if s.destroyed then return end
             s.destroyed = true
+            clearContext(s.tips, true)
+            destroyTip(s.tip)
             s.root:Destroy()
             s.root = nil
         end,
@@ -532,6 +643,8 @@ local Panel = strict.class("prettyui.Panel instance", {
         Destroy = function(s)
             if s.destroyed then return end
             s.destroyed = true
+            clearContext(s.tips, true)
+            destroyTip(s.tip)
             s.root:Destroy()
             s.root = nil
         end,
@@ -554,7 +667,7 @@ local WindowModule = module("Window", function(lib, parent, options)
         lib = lib,
         title = options.title,
         onClose = options.onClose,
-        tooltip = options.tooltip,
+        tips = newContext(ps),
         resizable = options.resizable == true,
         minWidth = options.minWidth or WINDOW_DEFAULTS.minWidth,
         minHeight = options.minHeight or WINDOW_DEFAULTS.minHeight,
@@ -577,6 +690,7 @@ local WindowModule = module("Window", function(lib, parent, options)
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
     s.closeButton:SetSize(CLOSE_SIZE, CLOSE_SIZE)
+    s.tip = attachTip(lib, s.rootState, ps, options.tooltip, nil)
     -- Only a titled or resizable window gets PrettyUI's drag bounds, which snap a stray
     -- root:SetPos back.
     s.bounded = s.title ~= nil or s.resizable
@@ -594,7 +708,7 @@ local PanelModule = module("Panel", function(lib, parent, options)
     local s = {
         kind = "Panel",
         lib = lib,
-        tooltip = options.tooltip,
+        tips = newContext(ps),
         backgroundAlpha = options.backgroundAlpha,
         width = options.width or PANEL_DEFAULTS.width,
         height = options.height or PANEL_DEFAULTS.height,
@@ -608,6 +722,7 @@ local PanelModule = module("Panel", function(lib, parent, options)
     content, s.contentState = ui.create("Layer", s.rootState)
     content:SetPos(PANEL_BORDER, PANEL_BORDER)
     content:SetSize(-PANEL_BORDER * 2, -PANEL_BORDER * 2, 1.0, 1.0)
+    s.tip = attachTip(lib, s.rootState, ps, options.tooltip, nil)
     clampIntoParent(s)
     local obj = Panel.new(s)
     s.proxy = obj
@@ -646,7 +761,12 @@ local Library = strict.class("prettyui", {
 function M.install(h, env, global)
     local instance = h.instance
     if not instance.prettyui then
-        local lib = { records = {}, byObj = setmetatable({}, { __mode = "k" }), closeButtons = {} }
+        local lib = {
+            records = {},
+            byObj = setmetatable({}, { __mode = "k" }),
+            closeButtons = {},
+            tooltips = {},
+        }
         lib.global = Library.new({
             Window = WindowModule.new(lib),
             Panel = PanelModule.new(lib),
@@ -885,6 +1005,78 @@ function Driver:resize(win, dw, dh)
     local ny, hgt = axis(y, ui.height(root), dh, ui.height(root.parent), s.minHeight, s.maxHeight)
     s.root:SetPos(nx, ny)
     windowSetSize(s, w, hgt)
+end
+
+-- What a hover target is: the component the pointer is over, and a function giving its
+-- current tooltip (SetTooltip / SetOptionTooltip can replace it). `value` picks a
+-- CheckboxButton's choice.
+---@param target any
+---@param value any
+---@return table component state
+---@return fun(): table?
+function Driver:hoverTarget(target, value)
+    local r = self:lib().byObj[target]
+    local cs = ui.stateOf(target)
+    if r == nil and cs then
+        return cs, function() end
+    end -- a plain component: no tooltip
+    r = self:record(target)
+    if r.kind == "CheckboxButton" then
+        for _, item in ipairs(r.s.items) do
+            if item.value == value then
+                return item.rowState,
+                    function()
+                        return item.tip
+                    end
+            end
+        end
+        error("no checkbox choice with value " .. tostring(value), 3)
+    end
+    local s = r.s
+    return s.rootState or s, function()
+        return s.tip
+    end
+end
+
+-- Move the pointer onto `target` (a choice of a CheckboxButton by `value`). The previous
+-- target gets its mouse-leave first, and this one its mouse-over, which shows its tooltip.
+-- Returns false, and leaves the pointer where it was, if the target is hidden.
+---@param target any
+---@param value any
+---@return boolean
+---@return string?
+function Driver:hover(target, value)
+    local cs, tipOf = self:hoverTarget(target, value)
+    if cs.destroyed then strict.fault("prettyui: hovered a component used after Destroy()") end
+    if not ui.visible(cs) then return false, "hidden" end
+    self:leave()
+    self.hovering = { cs = cs, tipOf = tipOf }
+    local tip = tipOf()
+    if tip then tip.shown = true end
+    return true
+end
+
+-- Move the pointer off whatever it is over. A target hidden (or destroyed) since it was
+-- hovered gets no mouse-leave, so its tooltip stays shown: the stuck tooltips seen in the
+-- client (docs/api-concepts.md, PrettyUI in the client).
+function Driver:leave()
+    local hovering = self.hovering
+    self.hovering = nil
+    if hovering == nil or not ui.visible(hovering.cs) then return end
+    local tip = hovering.tipOf()
+    if tip then tip.shown = false end
+end
+
+-- The text of every tooltip on screen: shown, not destroyed, and drawn in a visible component.
+---@return string[]
+function Driver:tooltips()
+    local out = {}
+    for _, tip in ipairs(self:lib().tooltips) do
+        if tip.shown and not tip.destroyed and ui.visible(tip.parent) then
+            out[#out + 1] = tip.text
+        end
+    end
+    return out
 end
 
 -- Hold or release Alt, as PrettyUI sees it (Keyboard available, not blocked, Alt down: in the

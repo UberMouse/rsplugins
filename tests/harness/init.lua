@@ -160,6 +160,8 @@ function Harness:unload()
     instance.alive = false
     -- The client doesn't keep a key held on the plugin's behalf across a reload.
     self.ui:holdAlt(false)
+    -- Nor is anything hovered in the plugin's next UI.
+    self.ui.hovering = nil
     if type(shutdown) == "function" then runtime.call(self.budgetMs, "PluginShutdown", shutdown) end
 end
 

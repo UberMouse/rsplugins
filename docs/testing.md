@@ -134,6 +134,8 @@ event subscribers.
 | `dragTitle(win, dx, dy)` | Drag a titled Window's title bar, clamped inside its parent |
 | `resize(win, dw, dh)` | Drag a resizable Window's bottom-right corner; clamped to its min/max and the parent's edge |
 | `holdAlt(held)` / `altDrag(panel, dx, dy)` | Hold Alt (with the console closed), then Alt-drag a Panel, clamped inside its parent. `altDrag` returns false and leaves the panel alone unless Alt is held |
+| `hover(target, value?)` / `leave()` | Move the pointer onto a target (a CheckboxButton's choice by `value`), which shows its tooltip after the previous target's mouse-leave; or off it. Hovering a hidden target returns false. A target hidden since it was hovered gets no mouse-leave, so its tooltip stays |
+| `tooltips()` | The text of every tooltip on screen |
 | `choices(checkbox)` | A CheckboxButton's choices as `{ text, value, selected, disabled, tooltip }` in order, and its `colour` option as a second result |
 | `layout(target)` | `{ x, y, width, height, hidden, globalX, globalY, visible }` of a component or an object's root. Specs can also read `x`, `y`, `width`, `height`, `hidden` and `xyGlobal` off the components directly |
 
@@ -189,8 +191,8 @@ When `plugin.json` lists PrettyUI by its numeric mod.io ID in the object form
 (`["prettyui"]`, `["6398181"]`, `{ "prettyui": "6398181" }`) fails the load, since only that
 form is proven in the client; so does any other dependency, naming it. The fake models the
 part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`, with `root`, `closeButton`, `SetSize`, `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
-`AddCheckboxButton`, `AddDivider` and `AddSpriteButton`; `Panel.new`, with `root`, `width`,
-`height`, `SetSize`, `AddSpriteButton` and `Destroy`; and `SpriteButton.new`. Any other member, method or option
+`AddCheckboxButton` (with `SetOptionTooltip`), `AddDivider` and `AddSpriteButton`; `Panel.new`, with `root`, `width`,
+`height`, `SetSize`, `AddSpriteButton` and `Destroy`; and `SpriteButton.new`, with `SetTooltip`; and the tooltips of all of these. Any other member, method or option
 faults as unmocked: extend `api/prettyui.lua` and `types/prettyui.lua` together, with a ledger
 row, when a plugin needs more. LuaLS (`types/prettyui.lua`) doesn't flag an unknown option key
 such as `titel`; the fake faults on it at test time.
@@ -502,6 +504,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | CheckboxButton options `colour` (the choices' text colour, fixed once made) and `y` (placed at that content y, outside the flow: later rows don't move), and a per-choice `tooltip` | 1.2.0 source (`src/selection_button.lua`; `y` makes the placement absolute in `src/core/layout.lua`) |
 | `Window:AddSpriteButton(sprite, action, options)`: the next content row, 24 px by default, or at `options.y` outside the flow | 1.2.0 source (`src/core/content_methods.lua`, the `AddSpriteButton` entry, installed on Window) |
 | Panel option `scrollable` (false: no scrolling, no scrollbar) is accepted; the fake doesn't scroll either way | 1.2.0 source (`src/core/scroll.lua`, `src/panel.lua`) |
+| Tooltips: shown on the target's mouse-over, hidden only on its mouse-leave. A Window's or Panel's content tooltips (choices included) are drawn on the host's parent: `Close` hides them, `Destroy` destroys them. A `SpriteButton.new` button's tooltip is drawn inside the parent it was given. `SetTooltip` / `SetOptionTooltip` with a string retext an existing tooltip (a shown one stays shown); a table or nil destroys it and attaches a new, hidden one | 1.2.0 source (`src/tooltip.lua`, `src/window.lua`, `src/selection_button.lua`); https://prettyui.j3.gg lists both methods |
 
 ### Harness choices: unknown client behaviour, or stricter than the client on purpose
 
@@ -542,7 +545,8 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | PrettyUI text | Doesn't wrap: the fake can't measure fonts, so a body row is 24 px, or 18 px per `<br>`-separated line plus 6 |
 | PrettyUI clicks | `h.ui:click` hits a component's centre. Only a target's own window's title-bar drag layer can cover it; other windows' z-order isn't modelled |
 | A Window's title-bar drag layer position | Tracks the root's live position. In 1.2.0 it is a sibling of the root (`src/window.lua`, `titleDrag`), moved only at the end of a title drag, by the DragBounds callback and by `SetSize`, so between a bare `root:SetPos` and its snap-back the real layer can sit over the old spot and block clicks there instead (not modelled) |
-| PrettyUI scrolling, tooltips and hover states | Not modelled: content that overflows doesn't scroll (the client's Panel does), and tooltips are accepted but never shown |
+| PrettyUI scrolling and hover states | Not modelled: content that overflows doesn't scroll (the client's Panel does), and hover sprites don't change. Hover is only what `h.ui:hover` says |
+| A hovered target hidden or destroyed | Gets no mouse-leave, so its tooltip stays shown until replaced, its window closes or is destroyed. Assumed from the stuck tooltips the user saw (2026-10-25); whether the client sends a leave to a hidden component is unconfirmed. Showing a component under a still pointer fires no mouse-over |
 
 ### Not modelled
 

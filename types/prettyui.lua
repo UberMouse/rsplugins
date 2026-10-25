@@ -116,6 +116,13 @@ function CheckboxButton:IsSelected(value) end
 ---@return boolean # false if no choice has this value
 function CheckboxButton:SetSelected(value, selected, notify) end
 
+---Add, replace (nil removes) one choice's tooltip. A string on an existing tooltip only
+---changes its text; a table makes a new, hidden one.
+---@param value any
+---@param tooltip prettyui.Tooltip?
+---@return boolean # false if no choice has this value
+function CheckboxButton:SetOptionTooltip(value, tooltip) end
+
 function CheckboxButton:Destroy() end
 
 ---@class prettyui.Divider
@@ -196,5 +203,11 @@ function SpriteButtonModule.new(parent, spriteName, action, options) end
 ---@class prettyui.SpriteButton
 ---@field root ui.Sprite
 local SpriteButton = {}
+
+---Replace (nil removes) the tooltip. A string on an existing tooltip only changes its text; a
+---table makes a new, hidden one.
+---@param value prettyui.Tooltip?
+---@return boolean
+function SpriteButton:SetTooltip(value) end
 
 function SpriteButton:Destroy() end

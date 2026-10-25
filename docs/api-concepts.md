@@ -206,6 +206,24 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   PrettyUI never sees Alt while it is open.
 - **Panel drawing.** A Panel draws its frame even at `backgroundAlpha = 0`, and scrolls content
   that overflows it.
+- **A frameless collapsed button** (Chore Tracker, user-checked 2026-10-25): a 20x20 Panel
+  (`backgroundAlpha = 0`, `scrollable = false`) with a 20 px SpriteButton made on
+  `panel.root` at 0,0, not in its content, covers the frame and looks like the same button on a
+  window's title bar. It still Alt-drags, and its screen spot is the Panel's own.
+- **Rows that change colour.** A CheckboxButton's `colour` is fixed once made. Two copies of
+  a row at the same `y` (an explicit `y` keeps the second out of the flow), one shown at a
+  time with `root.hidden`, looked right in the client (user-checked 2026-10-25).
+- **Tooltips can stick (seen in the client; the cause is read from the 1.2.0 source and
+  pending client confirmation).** The user saw some tooltips stay up after they should have
+  closed. In `src/tooltip.lua` a tooltip shows on its target's ONMOUSEOVER and hides only on
+  that target's ONMOUSELEAVE. Content tooltips (CheckboxButton choices included) are drawn on
+  the window's parent, outside the window, so hiding a hovered row's root leaves its tooltip
+  up, presumably because a hidden component never gets the mouse-leave. `Window:Close` hides
+  the content's tooltips and `Destroy` destroys them. A SpriteButton made on `window.root`
+  draws its tooltip inside the root, so Close hides it only with the window and `Show` brings
+  it back. The cure is the documented `SetTooltip(value)` / `SetOptionTooltip(value, tooltip)`
+  with a **table** value, which destroys the old tooltip and attaches a new, hidden one. A
+  string on an existing tooltip only changes its text (`Tooltip.set`), so it stays up.
 
 The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
 types are in `types/prettyui.lua`.

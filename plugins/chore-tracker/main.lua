@@ -50,6 +50,9 @@ local MIN_WIDTH, MIN_HEIGHT = 240, 160
 local TEXT_COLOUR = 0xE7D7B0FF
 local DONE_COLOUR = 0x7A7262FF
 
+-- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapse).
+local COLLAPSE_TOOLTIP = { text = "Collapse" }
+
 -- Tooltips wrap at this width; wiki URLs are long.
 local TOOLTIP_WIDTH = 360
 
@@ -64,7 +67,7 @@ local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
 local collapsedButton = nil ---@type prettyui.SpriteButton?
 -- The list view's widgets, to update in place: chore id -> its two rows, and period ->
 -- its heading.
-local rowWidgets = {} ---@type table<string, { normal: prettyui.CheckboxButton, dimmed: prettyui.CheckboxButton }>
+local rowWidgets = {} ---@type table<string, { normal: prettyui.CheckboxButton, dimmed: prettyui.CheckboxButton, tooltip: prettyui.Tooltip, done: boolean? }>
 local headings = {} ---@type table<string, ui.Text>
 -- Work left for the next Logic tick. A button's action mustn't destroy the button while
 -- PrettyUI is still handling its click, so a view switch (which rebuilds the window) and
@@ -133,10 +136,21 @@ end
 ---@param done boolean
 local function showDone(id, done)
     local widgets = rowWidgets[id]
+    if widgets.done == done then return end
+    widgets.done = done
     widgets.normal:SetSelected(id, done, false)
     widgets.dimmed:SetSelected(id, done, false)
-    widgets.normal.root.hidden = done
-    widgets.dimmed.root.hidden = not done
+    local showing, hiding = widgets.normal, widgets.dimmed
+    if done then
+        showing, hiding = widgets.dimmed, widgets.normal
+    end
+    showing.root.hidden = false
+    hiding.root.hidden = true
+    -- A shown tooltip hides only on its own row's mouse-leave, which a hidden row never gets,
+    -- so the hidden copy's tooltip would stay up. Replacing it with the same table (not a
+    -- string, which only retexts it) gives a fresh, hidden one: PrettyUI 1.2.0's
+    -- SetOptionTooltip behaviour, read from its source (src/tooltip.lua, Tooltip.set).
+    hiding:SetOptionTooltip(id, widgets.tooltip)
 end
 
 -- Bring the list's ticks, dimming and counts up to date with the tracker, in place.
@@ -176,7 +190,8 @@ local function buildList(w, openSettings)
     for _, section in ipairs(sections) do
         headings[section.period] = w:AddTitle(headingText(section))
         for _, row in ipairs(section.rows) do
-            local choice = { text = row.name, value = row.id, tooltip = tooltipFor(row) }
+            local tooltip = tooltipFor(row)
+            local choice = { text = row.name, value = row.id, tooltip = tooltip }
             local normal = w:AddCheckboxButton(
                 { choice },
                 { onChange = onTick, colour = TEXT_COLOUR }
@@ -186,7 +201,7 @@ local function buildList(w, openSettings)
                 { choice },
                 { onChange = onTick, colour = DONE_COLOUR, y = normal.root.y }
             )
-            rowWidgets[row.id] = { normal = normal, dimmed = dimmed }
+            rowWidgets[row.id] = { normal = normal, dimmed = dimmed, tooltip = tooltip }
             showDone(row.id, row.done)
         end
     end
@@ -261,7 +276,7 @@ local function buildWindow(layout)
         y = SLOT_Y,
         xAnchor = 1.0,
         size = BUTTON_SIZE,
-        tooltip = "Collapse",
+        tooltip = COLLAPSE_TOOLTIP,
     })
     if mode == "settings" then
         buildSettings(w, function()
@@ -289,6 +304,10 @@ local expand
 collapse = function()
     assert(win and openButton, "the window's hamburger only exists with the window")
     local x, y = screenPos(openButton.root)
+    -- The hamburger's tooltip is drawn inside the window, not in its content, so Close hides
+    -- it only with the window, and it would be back on the next Show. Replacing it (with a
+    -- table, as in showDone) leaves a fresh, hidden one.
+    openButton:SetTooltip(COLLAPSE_TOOLTIP)
     win:Close()
     collapsed = prettyui.Panel.new(parent, {
         x = x,

@@ -25,6 +25,7 @@ for name in
 do
     INTEGER_TYPES[name] = true
 end
+local INT32_MIN, INT32_MAX = -0x80000000, 0x7FFFFFFF
 
 ---@param manifest table the plugin's parsed plugin.json ({} if it has none)
 ---@return table state
@@ -93,6 +94,17 @@ function M.varValueError(rec, value)
                     value
                 )
             end
+        elseif rec.type ~= "LONG" and (value < INT32_MIN or value > INT32_MAX) then
+            -- The client holds every non-LONG int var as signed 32-bit (the 2026-10-25 var dump
+            -- spans exactly that range), so a value outside it could never be read back.
+            return string.format(
+                "%s is %s: value must be %d..%d, got %d",
+                label,
+                rec.type,
+                INT32_MIN,
+                INT32_MAX,
+                value
+            )
         end
     elseif rec.type == "STRING" then
         if type(value) ~= "string" then return label .. " is STRING: expected a string" end

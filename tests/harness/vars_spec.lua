@@ -148,6 +148,22 @@ describe("vars", function()
             end
         end)
 
+        it("faults on an int var value outside signed 32 bits, but not a LONG's", function()
+            local h = harness.new(plugin(""))
+            for v, shown in pairs({ [0xFFFFFFFF] = "4294967295", [-0x80000001] = "%-2147483649" }) do
+                assert.matches(
+                    "VarPlayer.HANDSAND_BUCKETS is INTEGER: value must be %-2147483648..2147483647, got "
+                        .. shown,
+                    harness.errorOf(function()
+                        h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", v)
+                    end)
+                )
+            end
+            h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", -0x80000000)
+            h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", 0x7FFFFFFF)
+            h.world:setVar("VarPlayer", "CONSTRUCTION_HOUSE_FURNITURE_DATA_INDEX_1", 1 << 40)
+        end)
+
         it("starts an unset base at 0 when a VarBit is set first", function()
             local h = harness.new(plugin([[
                 Event.VarTransmit.Subscribe("v", function(ev)

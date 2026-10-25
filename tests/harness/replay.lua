@@ -24,8 +24,9 @@ local world = require("tests.harness.world")
 
 local M = {}
 
--- Attach a recording to a harness that isn't loaded yet: grant the permissions its first
--- checks found granted, and seed PersistentDB from each key's first Get.
+-- Attach a recording to a harness that isn't loaded yet: set each permission the recording
+-- checked as its first check found it (over opts.grant), and seed PersistentDB from each
+-- key's first Get.
 ---@param h table
 ---@param source string|table a .jsonl path (repo-relative or absolute), or a list of entries
 ---@return table timeline

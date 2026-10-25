@@ -69,6 +69,41 @@ describe("replaying a recording", function()
         assert.are.equal("1 3\n2 3\n3 4\n4 4", h:output())
     end)
 
+    it("serves the slots and totals of an inventory the world doesn't hold", function()
+        local h = harness.new(plugin([[
+            local bank = Inventory.Find(93)
+            local slots = bank:GetSlots()
+            say(#slots, slots[1].obj.configName, slots[2].obj.id, bank:GetTotal(config.Obj.LOGS),
+                bank:GetSlot(1).count, Inventory.Find(config.Inv.BANK) == nil)
+            local missing = bank:GetTotal(995)
+        ]]))
+        local logs = '{"config": "LOGS", "id": 1511, "type": "Obj"}'
+        local empty = '{"config": "UNKNOWN", "id": -1, "type": "Obj"}'
+        local lines = {
+            '{"t": 0, "k": "read", "path": "Inventory.Find(93)", "v": "sol.jag::InventoryProxy"}',
+            '{"t": 0, "k": "read", "path": "Inventory.Find(93):GetSlots()", "v": {"1": {"obj": '
+                .. logs
+                .. ', "count": 5}, "2": {"obj": '
+                .. empty
+                .. ', "count": 0}}}',
+            '{"t": 0, "k": "read", "path": "Inventory.Find(93):GetTotal(config.Obj.LOGS)", "v": 5}',
+            '{"t": 0, "k": "read", "path": "Inventory.Find(93):GetSlot(1)", "v": {"obj": '
+                .. logs
+                .. ', "count": 5}}',
+            -- Recorded returning nil: the JSON has no "v".
+            '{"t": 0, "k": "read", "path": "Inventory.Find(config.Inv.BANK)"}',
+        }
+        h:useRecording(timeline.parse(HEADER .. table.concat(lines, "\n")))
+        -- The recording never read GetTotal(995).
+        assert.matches(
+            "unrecorded: Inventory%.Find%(93%):GetTotal%(995%)",
+            harness.errorOf(function()
+                h:load()
+            end)
+        )
+        assert.are.equal("0 2 LOGS -1 5 5 true", h:output())
+    end)
+
     it("fails a read the recording never made with unrecorded: <key>", function()
         local h = harness.new(plugin("local qp = var.VarPlayer.QP.value"))
         h:useRecording({ { t = 0, k = "read", path = "var.VarPlayer.OPTION_RUN.value", v = 0 } })

@@ -322,13 +322,14 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
   read of a path wins). Reads the world models also go into the world: a var's `.value`
   (when the world can hold the value) and the login (below).
 - **An inventory the recording knows but the world doesn't yet** (no Added/Updated event so
-  far): `Inventory.Find` returns an `Inv` whose every member is the recorded read under its
-  path (`Inventory.Find(config.Inv.INV).usedSlotCount`), or nil if Find was recorded
-  returning nil. Once the world has the inventory, Find returns world-backed `Inv`s.
+  far): `Inventory.Find` returns a new `Inv` each call (as the client does) whose every member
+  is the recorded read under its path (`Inventory.Find(config.Inv.INV).usedSlotCount`), or nil
+  if Find was recorded returning nil. Once the world has the inventory, Find returns
+  world-backed `Inv`s.
 - **Starting state.** The login is inferred from `Player.IsAvailable()` and
   `Player.GetEntity().displayName` reads. PersistentDB is seeded from each key's first
   `db` entry, when that is a `Get`/`GetInt`/... that found a value (a key the plugin wrote
-  first is left unset). Permissions start as their first `perm` entries say, on top of
+  first is left unset). Permissions start as their first `perm` entries say, over
   `opts.grant`; later changes come from `OptionalPermissionChanged` events. A recording made
   of a plugin that never calls `Plugin.HasPermission` has no `perm` entries, so grant what it
   needs in `opts.grant`: replaying a `ChatMessage` without chatAccess faults.

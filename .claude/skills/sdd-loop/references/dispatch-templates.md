@@ -159,7 +159,8 @@ Agent(general-purpose, model=reviewModel):
     ## Report
     FIRST LINE, exactly: `SPEC: PASS` or `SPEC: FAIL`. Then the findings in this same final
     message (file:line, what's missing/extra/wrong) — a verdict whose findings live only in a
-    tool call or a file is a verdict the conductor cannot act on.
+    tool call or a file is a verdict the conductor cannot act on. Then one line listing the
+    touched files you read in full, and those you only grepped or skimmed.
     LAST LINE, exactly: `TREE: unchanged` (compare `git status --short` with what it showed
     when you started; if it differs, say `TREE: CHANGED — <what>`).
 ```
@@ -197,7 +198,9 @@ Agent(general-purpose, model=reviewModel|haiku):
 
     ## Also check, for this task specifically
     <task-specific lens questions — the traps this change could plausibly hit, named by the
-     conductor from the criteria and the touched files. Omit the section if there are none.>
+     conductor from the criteria and the touched files. Where possible, concrete probes to run
+     in scratch: the input that should be refused, the pattern that would bypass a guard.
+     Omit the section if there are none.>
 
     ## Verification scope — do NOT re-run the implementer's work
     Reading the diff is the job. If you genuinely need a build signal, run `scripts/check-lua.sh`
@@ -217,7 +220,8 @@ Agent(general-purpose, model=reviewModel|haiku):
     Then, in this same final message, issues only (Critical / Important / Minor, each with
     file:line + suggestion) — no Strengths or Assessment sections, and a PASS with no issues
     needs no further prose. Findings that exist only in a tool call or a file did not reach the
-    conductor.
+    conductor. Then one line listing the touched files you read in full, and those you only
+    grepped or skimmed, and the scratch probes you ran.
     LAST LINE, exactly: `TREE: unchanged` (compare `git status --short` with what it showed
     when you started; if it differs, say `TREE: CHANGED — <what>`).
 ```

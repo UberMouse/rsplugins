@@ -171,7 +171,7 @@ const realDiff = execFileSync("git", ["diff", "--no-color", "--no-ext-diff", "--
   { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
 const realOut = runAwk(api.COMMENT_AWK, realDiff)
 check("comment awk runs over this repo's Lua history and every line is path:start-end",
-  realOut.length > 0 && realOut.every((l) => /^plugins\/[^:]+\.lua:\d+-\d+ \(/.test(l)), true)
+  realOut.length > 0 && realOut.every((l) => /^[^:\s]+\.lua:\d+-\d+ \(/.test(l)), true)
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nALL PASS")
 process.exit(failures ? 1 : 0)

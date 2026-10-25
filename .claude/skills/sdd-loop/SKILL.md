@@ -64,7 +64,11 @@ If mid-loop the work turns out to need genuine design work, do **not** silently 
   invisible to the user's in-client testing. Every task commits to `main`.
 - **The dev shell** (direnv or `nix develop`): `scripts/check-lua.sh` needs `luac`, `selene`,
   `stylua`, `lua-language-server`, `python3` and the `docs/api/` stubs symlink the shell makes,
-  and the workflow tests need `node`.
+  and the workflow tests need `node`. The Bash tool may not inherit the shell even when the
+  user's terminal has it (`lua: command not found`); run tools through `direnv exec . <cmd>`
+  then, and say so in every dispatch.
+- **Stop a background process by its task id or PID, never `pkill -f <pattern>`**: the shell
+  running that command has the pattern in its own command line, so it kills itself (exit 144).
 - Human input comes only through `AskUserQuestion`, so this loop works in a background job.
 
 ## State you carry
@@ -282,7 +286,10 @@ the durable state.
    - **Code-quality reviewer** (`reviewModel`, `haiku` for a trivial task): quality only, against
      the lenses in `.claude/review-lenses/`. Fill its *Also check* section with the traps this
      change can plausibly hit (an unbounded loop in a callback, a new API call to ground, a
-     teardown path).
+     teardown path). Where you can, name **concrete adversarial probes** for it to run in
+     scratch (the input that should be refused, the pattern that would bypass a guard, the
+     payload field that can be nil), not only areas to look at: a reviewer reliably finds
+     the holes it is pointed at, and rarely the ones it isn't.
    - **Falsification.** A reviewer that wants something proven to fail names the exact mutation
      and the expected failure; it never applies it. Have it run only after BOTH reviewers have
      returned, by the next fix agent. Never ask a reviewer running in parallel to mutate code.
@@ -300,6 +307,12 @@ the durable state.
      `agentInFlight` cleared. A task not implemented and reviewed through this loop is
      **UNREVIEWED**: run its reviews before moving on, or tell the user. §6's report is written
      from these records, so they must be true.
+   - **A guard that protects privacy, moderation or data** (a sanitiser, an allowlist, a
+     permission check, a fail-closed path): before closing the task, probe it yourself. Write
+     inputs that try to get past it and run them against the committed code from a scratch
+     dir (read-only on the tree). The implementer, the fix agent and the reviewer each test
+     the cases they thought of; a hole none of them imagined is found only by someone trying
+     to break it. A hole you find goes to a fix agent like any finding.
    - Run `ListAgents` and `TaskStop` any completed agent still listed.
    - **Dispatch the NEXT task's implementer in the SAME turn as any progress note**, and add it to
      `inFlight`. A turn that ends with tasks left and no Agent or Workflow in flight is a
@@ -329,7 +342,7 @@ The conductor runs these itself (they are read-only checks):
 ```bash
 scripts/check-lua.sh                                   # always; must exit 0
 git diff --name-only "$BASE" HEAD                      # what the run touched, to pick the rest:
-for t in .claude/workflows/*.test.js; do node "$t" || echo "FAILED $t"; done   # if .claude/workflows/ changed
+for t in .claude/workflows/*.test.js; do node "$t" || echo "FAILED $t"; done   # always: one test reads the repo's Lua history
 .claude/hooks/durable-state-resume.selftest.sh         # if .claude/hooks/ changed
 python3 -m py_compile scripts/<changed>.py             # if a Python script changed
 ```
@@ -408,6 +421,9 @@ Fix them:
      `git diff --staged -U0 | grep -E '^[+].*(selene: allow|stylua: ignore)'`. A lint firing on
      new code usually means the code is the wrong shape; re-dispatch unless the stated reason
      holds.
+   - (g) **a fix to a privacy, moderation or data guard holds against your own probes**: run
+     inputs that try to get past it against the staged code from a scratch dir, as §3 step 4
+     describes. A fix that closes the reported hole often leaves its neighbour open.
 
    If it surfaces a problem, re-dispatch the fix agent on the same group with the correction
    before committing. Keep it proportionate: a one-line rename needs only a glance.
@@ -470,12 +486,37 @@ After the final §4 passes, write `phase: "done"` to state.json, then give the *
 
 If, after reading the code, the work needs genuine design decisions or five-plus tasks, **stop
 and say so** instead of hand-rolling a migration through a loop built for small changes.
-`AskUserQuestion`: proceed anyway under sdd-loop / plan it first / narrow the scope.
+`AskUserQuestion`: proceed anyway under sdd-loop / plan it first / narrow the scope / phase it
+into a programme of runs (below).
 
 The trigger is **size and design, not uncertainty**. A handful of ambiguities is §0b doing its
 job. The trigger is an ask that needs *competing approaches weighed* rather than *details pinned
 down* — a new plugin's architecture, a feature whose guideline tier depends on how it is built —
 when the honest answer to "what should this look like?" is a design discussion.
+
+### A programme of runs
+
+When the user's answer is to split the work into phases (infrastructure first, then the
+feature, then extensions), each phase is its own sdd-loop **run**, with its own §0 intake,
+`BASE`, tasks and §4–§6. What ties them together lives in state.json under `programme`:
+
+- `runs[]`: each run's id, scope and status (`pending` / `active` / `done`), and the intake
+  questions already known for a later run, so they are asked at that run's §0 rather than
+  forgotten.
+- `userDecisions`: the answers that bind every run (also copied into `standingInstructions`).
+- `findings`: facts a run established that a later run's intake needs (an in-client probe
+  result, a client behaviour), each with where it is recorded in the repo docs.
+
+At §6 of a run, mark it `done` in `programme.runs` and list the next run's open intake
+questions in the report. The next run starts with §0 and §1 as usual: a fresh `BASE`,
+`tasks` and `phase`, with `programme` and `standingInstructions` carried over. state.json is
+gitignored, so a programme that must outlive the checkout also goes into a committed plan
+doc, but only if the user asks for one.
+
+When the user asks to try a result in the client before the next task (a checkpoint), record
+it in `standingInstructions`, finish the current task's reviews, and wait for their report
+before dispatching the next implementer. Fold what they found into the next task's criteria
+(and `tasks.json`), so the reviewers check against it.
 
 ## Files this skill uses
 

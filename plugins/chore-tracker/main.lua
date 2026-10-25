@@ -29,16 +29,15 @@
 --         such a chore ticks when its notes rise while the player is within 10 tiles of
 --         the giver, on the same plane. shell/detect.lua does these two, reading only the
 --         listed shops' inventories, the backpack and the player's own tile.
---       - Game vars (data/vars.lua): Bert's, Geoffrey's, Cromperty's and Coeden's freebies,
---         the Daily Challenge, Advance Time, Divine Locations and 16 more daily, weekly and
---         monthly chores (marked unproven there) tick when one of the
---         player's own VarPlayer vars changes so that the chore's rule turns true (the
---         Daily Challenge's when its count of claimed challenges rises, so any claim of a
---         challenge's reward ticks it). A rule
---         already true when first read never ticks, nor does one turning true within 10
---         seconds of loading or a character switch (the login's burst of vars), so a chore
---         done while the plugin was off is left to tick by hand. shell/vars.lua does this,
---         reading only the vars those rules name; no var's value is shown.
+--       - Game vars: Bert's, Geoffrey's, Cromperty's and Coeden's freebies, the Daily
+--         Challenge, Advance Time, Divine Locations and others in data/vars.lua (unproven
+--         ones are marked there) tick when one of the player's own VarPlayer vars changes so
+--         that the chore's rule turns true (the Daily Challenge's when its count of claimed
+--         challenges rises, so any claim of a challenge's reward ticks it). A rule already
+--         true when first read never ticks, nor does one turning true within 10 seconds of
+--         loading or a character switch (the login's burst of vars), so a chore done while
+--         the plugin was off is left to tick by hand. shell/vars.lua does this, reading only
+--         the vars those rules name; no var's value is shown.
 --     Each chore they tick (or shop first recorded in a period) logs "[CHORES] purchase
 --     <chore id> at <shop>", "[CHORES] collected <chore id> near <giver>" or "[CHORES] seen
 --     <chore id> done (<var>)" (grep: \[CHORES\] (purchase|collected|seen)).

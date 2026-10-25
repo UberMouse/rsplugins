@@ -6,8 +6,8 @@
 --
 -- `proven` marks a rule whose var was seen to move as the chore was done in the beta client
 -- (the var-dump session of 2026-10-25, docs/api-concepts.md); an unproven one ticks the same
--- way. The four free collections keep dailyscape's weekly period (the user's choice), so the
--- first claim in a week ticks one until Wednesday's reset, although the game's flag is daily.
+-- way. The four free collections keep the weekly period dailyscape's chore list gives them,
+-- so a claim ticks one until Wednesday's reset, although the game's flag is daily.
 
 ---@type ChoreVarRule[]
 return {
@@ -29,9 +29,9 @@ return {
     { chore = "coeden-logs", done = { { "ATELF_DAILY_LOGS_CLAIMED", "==", 1 } }, proven = true },
     -- Bits 0-13 of CHALLENGE_BI_1, which went 0 -> 2 -> 3 as three challenge rewards were
     -- claimed in the challenge window. Whether it resets daily or counts for life is
-    -- unknown; either way a claim raises it, so any rise ticks the chore (the user's choice)
-    -- and it needs no conditions. INTERN_NOTES_DAILY_CHALLENGES_COMPLETE isn't used: it
-    -- counts finished challenges not yet claimed, and falls on the claim.
+    -- unknown; either way a claim raises it, so any rise ticks the chore and it needs no
+    -- conditions. INTERN_NOTES_DAILY_CHALLENGES_COMPLETE isn't used: it counts finished
+    -- challenges not yet claimed, and falls on the claim.
     {
         chore = "daily-challenge",
         done = {},
@@ -54,8 +54,7 @@ return {
         proven = false,
     },
 
-    -- The rules below come from what each var's name states; none was seen to move in the
-    -- client yet.
+    -- The rules below are inferred from each var's name, unproven.
 
     -- The date blossoms were last taken (bits 5-20 of ELFCITY_PERM36), read as a RuneDay:
     -- its unit is assumed from the name, not checked.

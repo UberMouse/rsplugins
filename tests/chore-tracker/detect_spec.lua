@@ -38,7 +38,8 @@ describe("chore-tracker detect", function()
         _G.config, _G.Inventory, _G.Player = saved.config, saved.Inventory, saved.Player
     end)
 
-    it("leaves an inventory or note the config lacks unwatched, saying so once", function()
+    -- Init with a shop and a note the config lacks, then check each is said once and unwatched.
+    local function initAndCheck()
         detect.init({
             chores = support.chores(),
             shops = {
@@ -74,6 +75,19 @@ describe("chore-tracker detect", function()
         }, said)
         table.sort(found)
         assert.are.same({ "INV", "INV", "KNOWN_SHOP", "KNOWN_SHOP" }, found)
+    end
+
+    it("leaves an inventory or note the config lacks unwatched, saying so once", initAndCheck)
+
+    it("treats a config lookup that raises like a name the config lacks", function()
+        for _, domain in ipairs({ "Inv", "Obj" }) do
+            setmetatable(_G.config[domain], {
+                __index = function(_, name)
+                    error("no " .. domain .. " " .. name)
+                end,
+            })
+        end
+        initAndCheck()
     end)
 end)
 
@@ -107,10 +121,10 @@ describe("chore-tracker var detect", function()
         value = 0,
     }
 
-    before_each(function()
-        saved = _G.var
+    ---@param varPlayer table
+    local function load(varPlayer)
         said, applied = {}, 0
-        _G.var = { VarPlayer = { BASE = base, FLAG = flag } }
+        _G.var = { VarPlayer = varPlayer }
         flag.value = 0
         varDetect.init({
             chores = support.chores(),
@@ -135,6 +149,11 @@ describe("chore-tracker var detect", function()
         for _ = 1, 500 do
             varDetect.tick()
         end
+    end
+
+    before_each(function()
+        saved = _G.var
+        load({ BASE = base, FLAG = flag })
     end)
     after_each(function()
         _G.var = saved
@@ -145,6 +164,19 @@ describe("chore-tracker var detect", function()
         flag.value = 1
         varDetect.onVarTransmit({ var = base })
         -- Only d1's rule is left to tick.
+        assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
+        assert.are.equal(1, applied)
+    end)
+
+    it("treats a var lookup that raises like a name the config lacks", function()
+        load(setmetatable({ BASE = base, FLAG = flag }, {
+            __index = function(_, name)
+                error("no var " .. name)
+            end,
+        }))
+        assert.are.same({ "unknown var GONE; not watched" }, said)
+        flag.value = 1
+        varDetect.onVarTransmit({ var = base })
         assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
         assert.are.equal(1, applied)
     end)

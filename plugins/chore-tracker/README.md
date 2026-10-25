@@ -131,8 +131,9 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 - **PrettyUI** (mod.io 6398181), the interface library the window is built with. It is a
   required dependency: install it too.
 - **No permissions.** The plugin reads the game clock, your own character's display name and
-  position, your backpack, the stock of an open shop it watches, and the few game vars of your
-  own character listed above. Plugins can read all of these without one.
+  position, your backpack, the stock of an open shop it watches, and your own character's game
+  vars for the chores in the "Seen from game vars" table. Plugins can read all of these without
+  one.
 
 ## Credits
 
@@ -192,7 +193,7 @@ By submitting a Plugin (as defined in Schedule 4 of the EULA), you acknowledge t
 This plugin requests no permissions.
 
 ## Data Protection
-This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, a few of your own character's game vars (to see some chores done), and the chores you pick and tick.
+This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick.
 This information is not transmitted outside of the plugin under any circumstances.
 Your picked and ticked chores, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state.
 ```

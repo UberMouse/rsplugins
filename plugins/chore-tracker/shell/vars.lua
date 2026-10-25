@@ -1,29 +1,17 @@
--- Seeing chores done from the player's own game vars (data/vars.lua): a chore ticks when a
--- watched var changes and its rule, false on the values read before, holds on the new ones,
--- or, for a rule naming a `rises` var, that var went up and the rule holds on the new values.
--- It reads only the VarPlayer vars those rules name; the rules are worked out by
--- core/vars.lua.
---
--- A var with no value when last read (not a whole number) has no baseline yet: its first
--- value only becomes the baseline, so a chore already done when its var first reads never
--- ticks.
---
--- Only a change seen while the plugin runs ticks anything. A baseline is read on each
--- character switch (main.lua's sync, which includes the load's first one when logged in),
--- and for the 10 seconds after it every read only replaces the baseline, to cover the burst
--- of vars sent at login. So a chore done while the plugin was off is never ticked
--- from its vars: the player ticks it by hand.
---
--- main.lua hands every VarTransmit to onVarTransmit and calls tick on each Logic tick, and
--- hands in the same `apply` as shell/detect.lua, so this module keeps no chore state: only
--- the last values it read.
+-- Ticks chores from the player's own VarPlayer vars: the rules are in data/vars.lua, their
+-- logic in core/vars.lua. A var's first value only sets its baseline. main.lua calls scan on
+-- each character switch, and for SETTLE_TICKS after it every read only replaces the
+-- baseline, so a chore done while the plugin was off is never ticked. main.lua forwards
+-- every VarTransmit and calls tick each Logic tick; this module keeps only the last values
+-- read, no chore state.
 
 local state = require("core/state")
 local varCore = require("core/vars")
 
 local M = {}
 
--- 10 seconds of Logic ticks (50 a second).
+-- 10 s of Logic ticks (50 a second, docs/api-concepts.md "Tick rates"): the window in which
+-- the login's burst of var updates arrives, so they aren't taken for the player doing a chore.
 local SETTLE_TICKS = 500
 
 ---@class ChoreVarOptions
@@ -62,8 +50,11 @@ function M.init(o)
         local names, complete = varCore.names(rule), true
         for _, name in ipairs(names) do
             if not varTypes[name] and not missing[name] then
-                local v = var.VarPlayer[name] --[[@as VarType?]]
-                if v then
+                -- Whether the client returns nil or raises for an unknown name is unconfirmed.
+                local ok, v = pcall(function()
+                    return var.VarPlayer[name] --[[@as VarType?]]
+                end)
+                if ok and v then
                     varTypes[name] = v
                 else
                     missing[name] = true
@@ -161,19 +152,26 @@ function M.onVarTransmit(ev)
     local names = byBase[base.id]
     -- Var ids repeat across domains, so a VarClient with a watched base's id is no match.
     if not names or base.typeName ~= "VarPlayer" then return end
-    local before, after, changed = values, {}, {}
-    for name, value in pairs(values) do
-        after[name] = value
-    end
+    -- The VarBit that moved may be unwatched, so `after` is copied only on a change.
+    local before = values
+    local after = nil ---@type table<string, integer>?
+    local changed = nil ---@type table<string, true>?
     for _, name in ipairs(names) do
         local value = read(name)
         if value ~= before[name] then
+            if not after then
+                after, changed = {}, {}
+                for n, v in pairs(before) do
+                    after[n] = v
+                end
+            end
             after[name] = value
             changed[name] = true
         end
     end
+    if not after or not changed then return end
     values = after
-    if settling == 0 and next(changed) then onChanged(before, after, changed) end
+    if settling == 0 then onChanged(before, after, changed) end
 end
 
 return M

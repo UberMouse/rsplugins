@@ -101,7 +101,8 @@ event subscriptions (see [api-concepts.md](api-concepts.md#events)).
 Two community dev tools are pinned in `flake.nix` (as `flake = false` inputs, not vendored) and
 copied into `plugins/` as real directories by the dev shell's `shellHook`, so the client's
 `dev_plugins` symlink picks them up. They are copies because the client skips a symlinked plugin
-folder inside `dev_plugins` (probe 2026-10-26; see [Runtime limits](api-concepts.md#runtime-limits-weve-hit)).
+folder inside `dev_plugins` (probe 2026-10-26; see
+[Runtime limits](api-concepts.md#runtime-limits-weve-hit)).
 The copies are gitignored, `.luarc.json` skips them (`workspace.ignoreDir`), and
 `scripts/check-lua.sh` skips any `plugins/*` folder holding a `.flake-source` marker, so selene,
 stylua, LuaLS and the tests never reach them. Neither is ours: they are never submitted, and they
@@ -157,18 +158,21 @@ URL is the same address).
 **`exec`** queues one console command, waits for the plugin's result and exits: 0 ok; 1 the plugin
 reported an error (printed); 2 never delivered before the timeout (the command is withdrawn, so it
 can never run later) or the daemon is down; 3 delivered but no result arrived in time (the outcome
-is unknown). Commands run in the order queued, and each is delivered at most once. **Every command
+is unknown). Exit 3 also covers "never ran": if the HTTP reply carrying the command is lost (the
+plugin's request timed out or failed after the daemon answered), the plugin never receives it and
+the daemon never re-sends it, so non-idempotent commands can't run twice; check the client.
+Commands run in the order queued, and each is delivered at most once. **Every command
 is logged with its id in `dumps/rsdev/daemon.log`**: that log is the audit trail.
 
 **`events`** prints the forwarded events as JSON lines, each with an increasing `n`, numbered from 1
-per daemon run (a restarted daemon starts again at 1). `--follow` survives a daemon restart: when the
-connection drops it prints "daemon not reachable; retrying" on stderr once and retries every 0.5 s,
-doubling to 5 s, then prints "daemon reachable again" and, if it had already seen a run from the old
-daemon and now sees a new one, "daemon restarted; numbering restarted" and continues from 0, printing each new event once. Without `--follow`, a down
-daemon exits 2. `--since N` gives those after `n`; `--name` keeps one event name; `--follow`
-keeps printing until interrupted. The last 10,000 are kept in memory; every event is also appended to
-`dumps/rsdev/events/<session>.jsonl`. A growth in a sync's `dropped` count appears as an event
-`{"name": "dropped", "n_lost": ...}`.
+per daemon run (a restarted daemon starts again at 1). `--follow` survives a daemon restart: when
+the connection drops it prints "daemon not reachable; retrying" on stderr once and retries every 0.5
+s, doubling to 5 s, then prints "daemon reachable again" and, if it had already seen a run from the
+old daemon and now sees a new one, "daemon restarted; numbering restarted" and continues from 0,
+printing each new event once. Without `--follow`, a down daemon exits 2. `--since N` gives those
+after `n`; `--name` keeps one event name; `--follow` keeps printing until interrupted. The last
+10,000 are kept in memory; every event is also appended to `dumps/rsdev/events/<session>.jsonl`. A
+growth in a sync's `dropped` count appears as an event `{"name": "dropped", "n_lost": ...}`.
 
 ### Protocol (schema 1)
 
@@ -181,9 +185,9 @@ The plugin polls with `POST <urls.rsdev>/bridge/sync`. The body is JSON:
  "results": [{"id": "c1-ab12cd", "ok": false, "error": "text"}]}
 ```
 
-- `plugin` and `session` match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; `seq` counts syncs from 1; `dropped`
-  is the cumulative number of events lost on the plugin side (`>= 0`); `t` is the logic tick;
-  `payload` is any JSON; `error` is a string (when `ok` is false).
+- `plugin` and `session` match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; `seq` counts syncs from 1;
+  `dropped` is the cumulative number of events lost on the plugin side (`>= 0`); `t` is the logic
+  tick; `payload` is any JSON; `error` is a string (when `ok` is false).
 - `hello` is sent on every sync, so it survives a daemon restart. `env` maps global names to their
   `type()` (at least `load`, `loadstring`, `debug`, `os`, `io`, `require`,
   `ExecuteConsoleCommand`, `coroutine`).

@@ -352,6 +352,22 @@ class ExecTests(DaemonCase):
             args.port = 1  # nothing listens there
             self.assertEqual(rsdev.cmd_exec(args), 2)
 
+    def test_a_request_the_daemon_rejects_is_not_reported_as_unreachable(self):
+        args = SimpleNamespace(port=self.port, command=["x"], timeout=-1)
+        err = StringIO()
+        with mock.patch("sys.stderr", err):
+            self.assertEqual(rsdev.cmd_exec(args), 2)
+        self.assertIn("rejected", err.getvalue())
+        self.assertNotIn("not reachable", err.getvalue())
+
+    def test_timeout_option_range(self):
+        for bad in ("-1", "0", "121", "nan", "abc"):
+            with self.subTest(bad), mock.patch("sys.stderr", StringIO()):
+                with self.assertRaises(SystemExit):
+                    rsdev.main(["exec", "--timeout", bad, "x"])
+        self.assertEqual(rsdev.positive_timeout("120"), 120.0)
+        self.assertEqual(rsdev.positive_timeout("0.5"), 0.5)
+
 
 class BrowserGuardTests(DaemonCase):
     """A web page must not be able to drive the daemon (CSRF, DNS rebinding)."""
@@ -496,6 +512,14 @@ class StopTests(DaemonCase):
 
 
 class EventsTests(DaemonCase):
+    def test_a_sync_lands_in_the_session_file_in_order(self):
+        self.sync(dropped=2, events=[{"t": i, "name": "E", "payload": i} for i in (5, 6, 7)])
+        lines = (self.out / "rsdev" / "events" / "b1.jsonl").read_text().splitlines()
+        stored = [json.loads(line) for line in lines]
+        self.assertEqual([e["n"] for e in stored], [1, 2, 3, 4])
+        self.assertEqual([e["name"] for e in stored], ["dropped", "E", "E", "E"])
+        self.assertEqual(stored, get(self.port, "/cli/events")["events"])
+
     def seed(self):
         self.sync(
             events=[
@@ -660,6 +684,13 @@ class FollowRestartTests(unittest.TestCase):
 
 
 class EscapeTests(unittest.TestCase):
+    def test_fixed_vector(self):
+        # The same vector is asserted against the bridge's unescape in tests/dev-bridge/protocol_spec.lua.
+        raw = "say a\tb\nc\\d\re \\t"
+        escaped = "say a\\tb\\nc\\\\d\\re \\\\t"
+        self.assertEqual(rsdev.escape_arg(raw), escaped)
+        self.assertEqual(rsdev.unescape_arg(escaped), raw)
+
     def test_round_trip(self):
         for text in ("", "plain", "a\tb", "a\nb", "a\rb", "\\", "\\t", "\\\t\n\r\\n"):
             escaped = rsdev.escape_arg(text)

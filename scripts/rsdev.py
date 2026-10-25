@@ -183,9 +183,8 @@ class State:
             if lost > 0:
                 first_t = events[0].get("t") if events else None
                 self.total_dropped += lost
-                self._add_event(body["session"], {"t": first_t, "name": "dropped", "n_lost": lost})
-            for event in events:
-                self._add_event(body["session"], event)
+                events = [{"t": first_t, "name": "dropped", "n_lost": lost}, *events]
+            self._add_events(body["session"], events)
 
             lines = []
             while self.queue:
@@ -202,16 +201,25 @@ class State:
         del self.commands[cmd.id]
         self.cond.notify_all()
 
-    def _add_event(self, session, event):
-        """Number, keep and persist one event. Caller holds the lock."""
-        self.last_n += 1
-        # n and session last, so an event carrying its own keys can't override the numbering.
-        stored = {**event, "n": self.last_n, "session": session}
-        self.events.append(stored)
+    def _add_events(self, session, events):
+        """Number, keep and persist a sync's events. Caller holds the lock.
+
+        One file open per sync: a login burst can be hundreds of events, and every handler thread
+        and long poll waits on this lock.
+        """
+        if not events:
+            return
+        lines = []
+        for event in events:
+            self.last_n += 1
+            # n and session last, so an event carrying its own keys can't override the numbering.
+            stored = {**event, "n": self.last_n, "session": session}
+            self.events.append(stored)
+            lines.append(json.dumps(stored) + "\n")
         folder = self.out_dir / "rsdev" / "events"
         folder.mkdir(parents=True, exist_ok=True)
         with (folder / f"{session}.jsonl").open("a") as f:
-            f.write(json.dumps(stored) + "\n")
+            f.write("".join(lines))
         self.cond.notify_all()  # wakes long-polling `events --follow` calls
 
     # --- CLI ---------------------------------------------------------------------------------
@@ -474,6 +482,21 @@ def run_daemon(args):
 # --- CLI side --------------------------------------------------------------------------------
 
 
+class DaemonRefused(OSError):
+    """A reachable daemon answered a request with a 4xx: the request itself was wrong."""
+
+
+def positive_timeout(text):
+    """argparse type for --timeout: seconds the daemon will accept (it caps a wait at MAX_WAIT)."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+    if not 0 < value <= MAX_WAIT:
+        raise argparse.ArgumentTypeError(f"must be above 0 and at most {MAX_WAIT:g} seconds")
+    return value
+
+
 def call(args, path, payload=None, timeout=5.0):
     """One request to the daemon; the decoded JSON reply. Raises OSError if it isn't there."""
     url = f"http://{HOST}:{args.port}{path}"
@@ -483,6 +506,8 @@ def call(args, path, payload=None, timeout=5.0):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.load(resp)
     except urllib.error.HTTPError as err:  # a daemon that answers badly is still "up"
+        if 400 <= err.code < 500:
+            raise DaemonRefused(f"daemon rejected the request to {path} ({err.code})") from err
         raise OSError(f"daemon answered {err.code} to {path}") from err
 
 
@@ -602,6 +627,9 @@ def cmd_exec(args):
     # The daemon waits `timeout` itself; the extra seconds are for the reply to arrive.
     try:
         reply = call(args, "/cli/exec", {"command": text, "timeout": args.timeout}, args.timeout + 10)
+    except DaemonRefused as err:
+        print(f"rsdev: {err}", file=sys.stderr)
+        return 2
     except (OSError, ValueError) as err:
         print(f"rsdev daemon is not reachable on port {args.port}: {err}", file=sys.stderr)
         return 2
@@ -670,12 +698,12 @@ def main(argv=None):
     common.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("daemon", parents=[common]).set_defaults(run=lambda a: run_daemon(a))
+    sub.add_parser("daemon", parents=[common]).set_defaults(run=run_daemon)
     for name, fn in (("start", cmd_start), ("stop", cmd_stop), ("status", cmd_status)):
         sub.add_parser(name, parents=[common]).set_defaults(run=fn)
     p = sub.add_parser("exec", parents=[common])
     p.add_argument("command", nargs="+")
-    p.add_argument("--timeout", type=float, default=10.0)
+    p.add_argument("--timeout", type=positive_timeout, default=10.0)
     p.set_defaults(run=cmd_exec)
     p = sub.add_parser("events", parents=[common])
     p.add_argument("--since", type=int, default=0)

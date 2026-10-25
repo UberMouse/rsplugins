@@ -2,6 +2,9 @@
 -- list row, and pick chores in the settings view.
 
 local harness = require("tests.harness")
+require("tests.chore-tracker.support")
+local varCore = require("core/vars")
+local varRules = require("data/vars")
 
 local M = {}
 
@@ -22,12 +25,19 @@ M.NEXT_MONTH = 29891520 -- 2026-11-01 00:00, a monthly reset
 
 -- A harness with the clock at `opts.clock` (default NOW; 0 for not ready) and logged in as
 -- `opts.login` (default "Zezima"; false for logged out), loaded unless `opts.load` is false.
+-- Every var data/vars.lua watches starts at 0 (the harness faults on reading an unset one);
+-- set one before loading to start it elsewhere.
 ---@param opts table?
 ---@return table h
 function M.loaded(opts)
     opts = opts or {}
     local h = harness.new("chore-tracker")
     h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", opts.clock or M.NOW)
+    for _, rule in ipairs(varRules) do
+        for _, name in ipairs(varCore.names(rule)) do
+            h.world:setVar("VarPlayer", name, 0)
+        end
+    end
     if opts.login ~= false then h.world:login(opts.login or "Zezima") end
     if opts.load ~= false then h:load() end
     return h

@@ -27,19 +27,26 @@
 --       - Collections (data/collections.lua): Dell Monti's apples and pineapples and the
 --         Weird Old Man's potato cacti (unproven) arrive as banknotes in the backpack, so
 --         such a chore ticks when its notes rise while the player is within 10 tiles of
---         the giver, on the same plane.
---     shell/detect.lua does this, reading only the listed shops' inventories, the backpack
---     and the player's own tile. Each chore it ticks (or shop it first records in a period)
---     logs "[CHORES] purchase <chore id> at <shop>" or "[CHORES] collected <chore id> near
---     <giver>" (grep: \[CHORES\] (purchase|collected)).
+--         the giver, on the same plane. shell/detect.lua does these two, reading only the
+--         listed shops' inventories, the backpack and the player's own tile.
+--       - Game vars (data/vars.lua): Bert's, Geoffrey's, Cromperty's and Coeden's freebies,
+--         the Daily Challenge, Advance Time and Divine Locations tick when one of the
+--         player's own VarPlayer vars changes so that the chore's rule turns true. A rule
+--         already true when first read never ticks, nor does one turning true within 10
+--         seconds of loading or a character switch (the login's burst of vars), so a chore
+--         done while the plugin was off is left to tick by hand. shell/vars.lua does this,
+--         reading only the vars those rules name; no var's value is shown.
+--     Each chore they tick (or shop first recorded in a period) logs "[CHORES] purchase
+--     <chore id> at <shop>", "[CHORES] collected <chore id> near <giver>" or "[CHORES] seen
+--     <chore id> done (<var>)" (grep: \[CHORES\] (purchase|collected|seen)).
 --   * Picks and ticks are saved per character (by display name) as they change. The window's
 --     position, size and collapsed state, and the collapsed button's spot, are saved for all
 --     characters. Logged out, the window says so; until the game clock reads, nothing can be
 --     ticked.
 --
--- It reads only what the game already shows the player (an open shop's stock, their own
--- backpack and position): no permissions, nothing sent to the game, nothing about other
--- players. Console lines carry [CHORES] (grep: \[CHORES\]); the display name is never
+-- It reads only what the game already gives the player's client (an open shop's stock, their
+-- own backpack, position and game vars): no permissions, nothing sent to the game, nothing
+-- about other players. Console lines carry [CHORES] (grep: \[CHORES\]); the display name is never
 -- logged.
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
@@ -52,11 +59,13 @@
 local chores = require("data/chores")
 local collections = require("data/collections")
 local shops = require("data/shops")
+local varRules = require("data/vars")
 local layout = require("core/layout")
 local state = require("core/state")
 local view = require("core/view")
 local detect = require("shell/detect")
 local store = require("shell/store")
+local varDetect = require("shell/vars")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
 local function say(...)
@@ -517,19 +526,23 @@ local function keep(changed)
     if phase == "ready" and mode == "list" then refreshList() end
 end
 
+-- Like a tick by hand, a chore seen done is ignored without a character and a clock to mark
+-- it against.
+---@param change ChoreChange
+local function apply(change)
+    local now = clockNow()
+    if character == nil or now == nil then return end
+    keep(change(tracker, now))
+end
+
 detect.init({
     chores = chores,
     shops = shops,
     collections = collections,
     say = say,
-    -- Like a tick by hand, a chore seen done is ignored without a character and a clock to
-    -- mark it against.
-    apply = function(change)
-        local now = clockNow()
-        if character == nil or now == nil then return end
-        keep(change(tracker, now))
-    end,
+    apply = apply,
 })
+varDetect.init({ chores = chores, rules = varRules, say = say, apply = apply })
 
 ---------------------------------------------------------------------------
 -- Following the game
@@ -556,6 +569,7 @@ local function sync(clockTicked)
             say("logged out")
         end
         detect.scan()
+        varDetect.scan()
     end
     if switched or nextPhase ~= phase then
         if nextPhase == "waiting" and phase ~= "waiting" then say("waiting for the game clock") end
@@ -575,6 +589,7 @@ end
 ---------------------------------------------------------------------------
 
 Event.Logic.Subscribe("chore-tracker", function(ev)
+    varDetect.tick()
     if retiring then
         retiring:Destroy()
         retiring = nil
@@ -594,6 +609,7 @@ end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)
     if ev.var.id == CLOCK_ID and ev.var.typeName == CLOCK_DOMAIN then sync(true) end
+    varDetect.onVarTransmit(ev)
 end)
 
 Event.InventoryAdded.Subscribe("chore-tracker", detect.onInventoryAdded)

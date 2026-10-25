@@ -3,9 +3,10 @@
 A checklist for RuneScape's repeatable chores, the daily, weekly and monthly tasks such as the
 Daily Challenge, Soul Reaper or the Giant Oyster. Pick the ones you do, tick them off as you go,
 and they clear themselves when the game's reset comes round. A few chores also tick themselves:
-the shop runs, when you buy from one of their shops, and Dell Monti's and the Weird Old Man's,
-when their notes arrive. It only reads what the game already shows you, never does anything in
-game for you, and sends nothing anywhere.
+the shop runs, when you buy from one of their shops, Dell Monti's and the Weird Old Man's,
+when their notes arrive, and a few more, such as the Daily Challenge and Bert's sand, when the
+game's own record of your progress shows them done. It only reads what the game already gives
+your client, never does anything in game for you, and sends nothing anywhere.
 
 ## Using it
 
@@ -48,6 +49,27 @@ ticked until its reset, and unticking one by hand changes nothing below.
   pineapple notes, or the Weird Old Man's potato cactus notes (outside the Kalphite Lair;
   *unproven*, as nobody has checked his yet). Any rise counts, wherever the notes came from:
   taking some out of the bank, a trade or picking them up near the giver ticks the chore too.
+- **Seen from game vars.** The game keeps a record of your character's progress in numbered
+  values called vars, and sends your client yours as they change. A chore below ticks when
+  one of these changes so that it shows the chore done:
+
+  | Chore | Ticks when |
+  |---|---|
+  | Sand from Bert | the game marks Bert's sand claimed |
+  | Flax from Geoffrey | the game marks Geoffrey's flax given |
+  | Pure Essence from Wizard Cromperty | the game marks Cromperty's essence claimed |
+  | Logs from Coeden | the game marks Coeden's logs claimed |
+  | Daily Challenge | you have finished as many challenges as you have challenge slots filled |
+  | Advance Time (*unproven*) | the spell's last charge of the week is used |
+  | Divine Locations (*unproven*) | you have gathered the day's limit from divine locations |
+
+  *Unproven* ones haven't been checked in game yet. The four free collections keep the
+  weekly reset the list gives them, although the game lets you claim each daily.
+
+  **Only a change the plugin sees ticks a chore.** For 10 seconds after you log in or the
+  plugin starts, while the game sends your vars, nothing ticks. So a chore done while the
+  plugin was off, or already done when you log in, isn't ticked: tick it by hand. The window
+  never shows a var's value.
 
 The shops each chore watches. Those marked *unproven* were matched by name to the game's own
 list of shop inventories but no purchase there has been checked yet; they tick the same way.
@@ -62,6 +84,7 @@ list of shop inventories but no purchase there has been checked yet; they tick t
 | Rune Shop Run | Aubury (Varrock), Betty (Port Sarim), Ali Morrisane (Al Kharid), Carwen Essencebinder, Void Knight Magic Store, Magic Guild (Yanille), Tutab (Ape Atoll), Lundail (Mage Arena), Rune store (Anachronia), Baba Yaga (Lunar Isle), Mage of Zamorak (Wilderness), the last five *unproven* |
 | Meat Packs | Chargurr (Oo'glog, *unproven*) |
 | Planks from Razmire | Razmire Keelgan (Mort'ton, *unproven*) |
+| Seaweed and Pineapples | Arhein (Catherby) |
 
 Not watched yet, so tick it by hand: Bandit Duty Free (no match for Noterazzo's shop was found
 in the game's list).
@@ -92,8 +115,8 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 - **PrettyUI** (mod.io 6398181), the interface library the window is built with. It is a
   required dependency: install it too.
 - **No permissions.** The plugin reads the game clock, your own character's display name and
-  position, your backpack, and the stock of an open shop it watches. Plugins can read all of
-  these without one.
+  position, your backpack, the stock of an open shop it watches, and the few game vars of your
+  own character listed above. Plugins can read all of these without one.
 
 ## Credits
 
@@ -111,8 +134,12 @@ A purchase that ticks a chore, or is the period's first at that shop, logs
 `[CHORES] purchase <chore id> at <shop>` (such as
 `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`), and a collection that ticks its
 chore logs `[CHORES] collected <chore id> near <giver>` (such as
-`[CHORES] collected oldman-potato-cactus near the Weird Old Man`). Grep regex:
-`\[CHORES\] (purchase|collected)`.
+`[CHORES] collected oldman-potato-cactus near the Weird Old Man`), and a chore ticked from
+the game's vars logs `[CHORES] seen <chore id> done (<var>)`, naming the var whose change
+ticked it (such as `[CHORES] seen bert-sand done (HANDSAND_BUCKETS_CLAIMED_TODAY)`). A watched
+var the game no longer has is logged once at start as `[CHORES] unknown var <name>; not
+watched`, and its chores are left to tick by hand. Grep regex:
+`\[CHORES\] (purchase|collected|seen)`.
 
 ## Files
 
@@ -120,15 +147,18 @@ chore logs `[CHORES] collected <chore id> near <giver>` (such as
 |---|---|
 | `main.lua` | The window, its collapsed button, the two views, and following the login and clock |
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
+| `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
 | `core/shops.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
+| `core/vars.lua` | Whether a chore's var rule holds on a set of var values, and the RuneDay |
 | `core/view.lua` | What the list shows, as plain data |
 | `core/layout.lua` | The saved window layout, read back and kept on screen |
 | `data/chores.lua` | The dailyscape chore list (generated) |
 | `data/shops.lua` | The shops each shop-run chore watches (hand-written) |
 | `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
+| `data/vars.lua` | The chores seen from game vars and each one's rule (hand-written) |
 
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
 (`docs/testing.md`).
@@ -146,7 +176,7 @@ By submitting a Plugin (as defined in Schedule 4 of the EULA), you acknowledge t
 This plugin requests no permissions.
 
 ## Data Protection
-This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, and the chores you pick and tick.
+This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, a few of your own character's game vars (to see some chores done), and the chores you pick and tick.
 This information is not transmitted outside of the plugin under any circumstances.
 Your picked and ticked chores, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state.
 ```

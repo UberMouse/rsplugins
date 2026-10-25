@@ -60,6 +60,10 @@ return {
             proven = false,
         },
     },
+    ["seaweed-and-pineapples"] = {
+        -- Seen in the client: SHOP read 47 (ARHEINSTORE) as the user bought there.
+        { name = "Arhein, Catherby", invs = { "ARHEINSTORE" }, proven = true },
+    },
     ["rune-shop-run"] = {
         { name = "Aubury, Varrock", invs = { "RUNESHOP" }, proven = true },
         { name = "Betty, Port Sarim", invs = { "MAGICSHOP" }, proven = true },

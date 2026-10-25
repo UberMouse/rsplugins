@@ -146,6 +146,21 @@ Found in the beta client (2026-10-20), not in the official docs:
   session. So a plugin watching a VarBit maps `ev.var` to its base
   (`ev.var.isVarBit and ev.var.baseVar or ev.var`) and re-reads the VarBits it watches of that
   base (find them in `docs/vars/vars.csv` by `base_var`).
+- **Chore claim flags move on the claim and come back at login** (var-dump change log and
+  relog snapshot, 2026-10-25). Each went 0 -> 1 as the user claimed, and still read 1 in the
+  snapshot taken after a relog, so the server sends them in the login burst:
+  `HANDSAND_BUCKETS_CLAIMED_TODAY` (bit 1 of `HANDSAND_BUCKETS`, Bert's sand),
+  `ATSEER_REWARD_FLAX_GIVEN_TODAY` (bit 30 of `ATSEER_TASK4`, Geoffrey's flax), `ATAR_ESS_USED`
+  (bit 22 of `ATAR_TASKS_4`, Cromperty's essence) and `ATELF_DAILY_LOGS_CLAIMED` (bit 14 of
+  `ATELF_MAIN4`, Coeden's logs). `INTERN_NOTES_DAILY_CHALLENGES_COMPLETE` counted 0 -> 1 -> 2 as
+  daily challenges finished, while `OMGE_CHALLENGE_CURRENT_ID_1..3` held 2, 2, 3 (a finished
+  slot kept its id) and slots 4-5 held 0. Whether a flag clears at the daily reset or only on
+  the next claim is unconfirmed. Chore Tracker's `data/vars.lua` is built on these.
+- **`SHOP_MULTIPURPOSE` wasn't sent during a purchase at Arhein's shop** (2026-10-25, with
+  `SHOP` = 47, `ARHEINSTORE`), so its `SHOP_SEAWEED_BOUGHT` / `SHOP_PINEAPPLES_BOUGHT` counters
+  can't be seen to move on a purchase; the shop's inventory can.
+- **In the beta client, logging out disables plugins** (the user, 2026-10-25), so what a plugin
+  sees across a logout and the next login can't be observed there.
 - **BOOLEAN vars read mostly `true` (unconfirmed).** 133 of 148 were `true`, including
   implausible ones like `HOUSE_CURRENTLY_PEEKING`, so unset may come back as `true`. Check
   against a BOOLEAN you can toggle before trusting one.

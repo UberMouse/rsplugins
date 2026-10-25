@@ -108,6 +108,7 @@ describe("chore-tracker shop list", function()
             ["yak-hide"] = { "FRISD_YAK_CONTRABAND" },
             ["feathers-of-ma-at"] = { "MENAPHOS_SLAYER_SHOP" },
             ["broad-arrowheads"] = { "OMGE_SLAYERSHOP_SMKI", "SMKI_SLAYERSHOP" },
+            ["seaweed-and-pineapples"] = { "ARHEINSTORE" },
             ["rune-shop-run"] = {
                 "RUNESHOP",
                 "MAGICSHOP",

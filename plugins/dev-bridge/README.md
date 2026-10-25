@@ -11,9 +11,11 @@ It lets Claude, from a terminal, drive the client and watch what happens while y
 - `scripts/rsdev.py exec "prl chore-tracker"` queues a console command; the bridge runs it and
   reports whether `ExecuteConsoleCommand` raised (ok means it ran without a Lua error, not that
   the command did what you hoped).
-- `scripts/rsdev.py events --follow` prints the events the bridge forwards: `ChatMessage` (every
-  chat type), `VarTransmit`, `InventoryUpdated`, `MiniMenuEntrySelected` and `GameStateChanged`,
-  each stamped with the Logic tick it arrived after.
+- `scripts/rsdev.py events --follow` prints the events the bridge forwards: `ChatMessage` (your
+  own lines and system messages only), `VarTransmit`, `InventoryUpdated`,
+  `MiniMenuEntrySelected` (its text fields, with a targeted player's name replaced by
+  `<player>`) and `GameStateChanged`, each stamped with the Logic tick it arrived after. rsdev
+  writes them to `dumps/rsdev/events/`.
 - `scripts/rsdev.py status` shows whether the bridge is connected, and what the client's Lua
   environment has (`type()` of `load`, `loadstring`, `debug`, `os`, `io`, `require`,
   `ExecuteConsoleCommand`, `coroutine`).
@@ -41,16 +43,20 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   Each sync carries the events seen since the last one (at most 256 KB of them) and the results
   of the commands run. The reply carries new commands, which run one per Logic tick.
 - With the daemon down it keeps running: it logs the first failure, retries every 5 s, and keeps
-  up to 1 MB of events. Past that the oldest are dropped, and events in a sync the daemon never
-  received are lost too; the sync's `dropped` count tells the daemon how many.
+  up to 1 MB of events that have not been sent. Past that the oldest are dropped. Events taken
+  into a sync that fails are dropped too, not retried; the next sync's `dropped` count tells the
+  daemon how many.
 - It refuses any command that would disable or reload it, or revoke one of its permissions
   (`prl`, `poff`, `plugins_reload`, `plugins_disable`, `plugins_setenabled`, `ppd`,
   `plugins_permissions_disable` naming `dev-bridge`), because what the client does when a plugin
   disables itself from inside its own callback hasn't been tried. Run those from the console.
+  The check needs the plugin name as the second word, so a bare `prl` or `poff` with no argument
+  is not refused (whether the client treats that as "all plugins" is unknown): don't send one.
 - Disabling it (`poff dev-bridge`) unsubscribes everything and cancels any sync in flight.
 
 ## Why it isn't for submission
 
 It executes console and cheat commands sent from outside the client, which no submitted plugin
-may do, and forwards chat (including other players' names and messages) to a program on your
-machine. It exists only to test other plugins on the dev worlds.
+may do, and forwards chat to a program on your machine (only your own lines and system messages:
+speech from other players is dropped, as is every chat type not on the allowlist in
+`protocol.lua`). It exists only to test other plugins on the dev worlds.

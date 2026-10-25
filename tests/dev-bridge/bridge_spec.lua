@@ -164,7 +164,7 @@ describe("dev-bridge", function()
         h.world:chat("hello", { sender = "Bob" })
         h.world:setVar("VarPlayer", "QP", 11)
         h.world:setInventory("INV", { [1] = { obj = "LOGS", count = 2 } })
-        h:fire("MiniMenuEntrySelected", { entry = { verbText = "Walk here" } })
+        h:fire("MiniMenuEntrySelected", { entry = { verbText = "Walk here", actionType = 23 } })
         h:fire("GameStateChanged", { oldState = 30, newState = 10 })
         support.answer(h)
         h:advance(20 * 10)
@@ -178,9 +178,9 @@ describe("dev-bridge", function()
         assert.are.same(FORWARDED, names)
         assert.are.same({
             chatMessage = "hello",
-            senderNameUnfiltered = "Bob",
-            senderNameFiltered = "Bob",
-            senderNameSimple = "Bob",
+            senderNameUnfiltered = "",
+            senderNameFiltered = "",
+            senderNameSimple = "",
             chatType = 0,
             timestamp = events[1].payload.timestamp,
         }, events[1].payload)
@@ -191,8 +191,64 @@ describe("dev-bridge", function()
         }, events[2].payload)
         assert.are.same({ config = "INV", id = 93, type = "Inv" }, events[3].payload.inv)
         assert.are.same({ 1 }, events[3].payload.slotsUpdated)
-        assert.are.same({ entry = { verbText = "Walk here" } }, events[4].payload)
+        assert.are.same({ entry = { verbText = "Walk here", actionType = 23 } }, events[4].payload)
         assert.are.same({ oldState = 30, newState = 10 }, events[5].payload)
+    end)
+
+    it("forwards the player's own and system chat, never another player's", function()
+        local h = support.new()
+        h.world:login("UberMouse894")
+        h:load()
+        h:step()
+        h.world:chat("a dwarf smith", { chatType = 0 })
+        h.world:chat("Test", { chatType = 2, sender = "<img=11>ubermouse894" })
+        h.world:chat("hi from bob", { chatType = 2, sender = "Bob" })
+        h.world:chat("bob whispers", { chatType = 3, sender = "Bob" })
+        h.world:chat("News: Farmer Hampe has done a feat", { chatType = 138 })
+        h.world:chat("Bob has logged in.", { chatType = 5 })
+        support.answer(h)
+        h:advance(20 * 10)
+        local texts = {}
+        for _, e in ipairs(support.last(h).events) do
+            texts[#texts + 1] = e.payload.chatMessage
+        end
+        assert.are.same({ "a dwarf smith", "Test" }, texts)
+        assert.are.equal(0, support.last(h).dropped) -- filtered, not lost
+    end)
+
+    it("drops speech while the player's name can't be read", function()
+        local h = support.load() -- not logged in
+        h:step()
+        h.world:chat("Test", { chatType = 2, sender = "UberMouse894" })
+        h.world:chat("system", { chatType = 0 })
+        support.answer(h)
+        h:advance(20 * 10)
+        local events = support.last(h).events
+        assert.are.equal(1, #events)
+        assert.are.equal("system", events[1].payload.chatMessage)
+    end)
+
+    it("redacts the name of a player targeted by a selected menu entry", function()
+        local h = support.load()
+        h:step()
+        h:fire("MiniMenuEntrySelected", {
+            entry = {
+                verbText = "Trade with",
+                subjectText = "Bob",
+                fullText = "Trade with Bob",
+                overrideText = "",
+                actionType = 46,
+                actionEntryType = 7,
+                playerData = {},
+            },
+        })
+        support.answer(h)
+        h:advance(20 * 10)
+        local entry = support.last(h).events[1].payload.entry
+        assert.are.equal("Trade with", entry.verbText)
+        assert.are.equal("<player>", entry.subjectText)
+        assert.are.equal("<player>", entry.fullText)
+        assert.is_nil(entry.playerData)
     end)
 
     it("drops the oldest events past the buffer cap and counts them", function()
@@ -255,6 +311,26 @@ describe("dev-bridge", function()
         assert.are.equal(1, support.lines(h, "[BRIDGE] sync failed (reply does not end"))
         h:advance(20 * 250)
         assert.are.equal(0, support.last(h).dropped)
+    end)
+
+    it("cancels the sync in flight when an internal error stops it", function()
+        local h = support.load()
+        h:step()
+        local body = ""
+        for i = 1, 14 do -- still queued when the second sync starts
+            body = body .. support.line("c" .. i, "exec", "plist")
+        end
+        support.answer(h, { status = 200, body = body })
+        h:advance(20 * 10)
+        local open = support.open(h)
+        assert.are.equal(1, #open)
+        h.env.require("protocol").refusal = function()
+            error("boom")
+        end
+        h:step()
+        assert.is_true(open[1].state.fields.cancelled)
+        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        assert.are.same({}, h.instance.subs.Logic)
     end)
 
     it("unsubscribes everything and cancels the sync in flight on shutdown", function()

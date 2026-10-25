@@ -219,6 +219,33 @@ buying out a shop line). See [testing.md](testing.md#recordings) for recordings.
 - **Modules and symlinks.** A `require`d module shares `main.lua`'s globals, `Event` included,
   and the client follows a directory symlink inside the plugin folder (the recorder's `dev/`).
 
+## Seen with dev-bridge (2026-10-26)
+
+From `plugins/dev-bridge` in the beta client.
+
+- **Plugin environment.** `type()` gives `function` for `load`, `require` and
+  `ExecuteConsoleCommand`, `table` for `coroutine`, and nil for `debug`, `io`, `os` and
+  `loadstring`.
+- **Self-granting works.** `ExecuteConsoleCommand("ppr <plugin>")` then `"ppe <plugin> httpAccess"`
+  from `main.lua`'s top level granted the permission: the bridge connected with no manual grant.
+- **HTTP to 127.0.0.1 carries no `Origin` header**, so a local daemon can't use one to vet the caller.
+- **Console output isn't a ChatMessage.** `ExecuteConsoleCommand("plist")`'s output did not arrive
+  as a `ChatMessage` (chatAccess granted; the player's own public chat did), so `ChatMessage` is
+  not a way to capture console output.
+- **`VarTransmit` fires with `oldValue == newValue`** (`FARMING_CURRENT_PATCH` 161 -> 161,
+  `DOUBLEXP_PERM1` 0 -> 0).
+- **A `MiniMenuEntry` payload** serialises (`tostring`) as `sol.jag::MiniMenuEntry`; read its
+  fields by name.
+- **Examines arrive as `GENERAL` (0)**, not `OBJ_EXAMINE`/`NPC_EXAMINE`/`LOC_EXAMINE`, with empty
+  sender fields.
+- **`chatType` 138 (`BROADCAST_WORLD`) is world News** ("News: <player> has accomplished ...")
+  and names other players while its sender fields are empty. An empty sender doesn't mean the
+  text is free of other players' names, which is why dev-bridge filters chat by type allowlist
+  (plus own-name match for speech), not by sender.
+- **The player's own public line**: `chatType` 2, `senderNameSimple` `UberMouse894`,
+  `senderNameUnfiltered` `<img=11>UberMouse894`, `senderNameFiltered`
+  `<img=11> <col=6d6d75>Ironman</col> UberMouse894`.
+
 ## Shops in the client
 
 Found by a throwaway probe in the beta client (2026-10-25): a purchase at each of 17 shops,

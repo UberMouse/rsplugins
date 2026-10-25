@@ -8,6 +8,10 @@
 -- commands run, and the reply carries new commands, which run one per Logic tick. Requests
 -- start only from Logic, never from a completion callback (that crashed the client;
 -- docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
+--
+-- Chat forwarding is limited to the player's own lines and system messages (protocol.lua);
+-- other players' chat is dropped here. rsdev writes the events it receives to
+-- dumps/rsdev/events/.
 
 local protocol = require("protocol")
 -- dev/ is a symlink to lib/dev (the dev recorder's modules); require gives nil without it.
@@ -102,10 +106,59 @@ local function payloadData(name, payload)
     return out
 end
 
+-- The local player's display name, read each time it's needed (chat is rare), or nil when
+-- the player isn't available or the read fails.
+---@return string?
+local function ownName()
+    local ok, name = pcall(function()
+        if not Player.IsAvailable() then return nil end
+        return Player.GetEntity().displayName
+    end)
+    if ok and type(name) == "string" then return name end
+    return nil
+end
+
+-- The MiniMenuEntry's fields as plain data. The entry is client userdata that serialises as
+-- "sol.jag::MiniMenuEntry" (seen in the client), so each field is read by name under pcall;
+-- a field that raises is left out. An unreadable playerData counts as a player target.
+---@param entry any
+---@return table
+local function entryData(entry)
+    local fields = {}
+    for _, field in ipairs(protocol.ENTRY_FIELDS) do
+        local ok, value = pcall(function()
+            return entry[field]
+        end)
+        if ok and (type(value) == "string" or type(value) == "number") then
+            fields[field] = value
+        end
+    end
+    local ok, hasPlayer = pcall(function()
+        return entry.playerData ~= nil
+    end)
+    return protocol.entryView(fields, ok and hasPlayer or nil)
+end
+
+-- What to buffer for an event, or nil to drop it (other players' chat).
+---@param name string
+---@param payload any
+---@return table?
+local function eventData(name, payload)
+    if name == "ChatMessage" then
+        local data = payloadData(name, payload)
+        return data and protocol.chatView(data, ownName())
+    elseif name == "MiniMenuEntrySelected" then
+        return payload and { entry = payload.entry ~= nil and entryData(payload.entry) or nil }
+    end
+    return payloadData(name, payload)
+end
+
 ---@param name string
 ---@param payload any
 local function forward(name, payload)
-    local entry = protocol.eventEntry(tick, name, payloadData(name, payload))
+    local data = eventData(name, payload)
+    if data == nil and name == "ChatMessage" then return end -- filtered out, not lost
+    local entry = protocol.eventEntry(tick, name, data)
     local lost = recording.push(buffer, entry, protocol.limits.bufferBytes)
     if lost > 0 then noteDropped(lost, "buffer full") end
 end
@@ -272,14 +325,21 @@ local function unsubscribeAll()
     end
 end
 
+-- Stop everything: no more callbacks, and any sync in flight is cancelled.
+local function teardown()
+    stopped = true
+    unsubscribeAll()
+    if inFlight and inFlight.request then inFlight.request:Cancel() end
+    inFlight = nil
+end
+
 -- A bug in the bridge would otherwise raise on every tick and flood the console, so the
 -- first error stops it.
 local function guardedLogic(ev)
     if stopped then return end
     local ok, err = pcall(onLogic, ev)
     if ok then return end
-    stopped = true
-    unsubscribeAll()
+    teardown()
     say("stopped after an error (`prl dev-bridge` from the console restarts it):", err)
 end
 
@@ -301,8 +361,5 @@ end
 say("enabled, session " .. session)
 
 function PluginShutdown()
-    stopped = true
-    unsubscribeAll()
-    if inFlight and inFlight.request then inFlight.request:Cancel() end
-    inFlight = nil
+    teardown()
 end

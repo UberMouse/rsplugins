@@ -9,6 +9,8 @@
 -- IDs from docs/api/consts/. ObjType fields beyond id/configName/typeName come from
 -- h.world:defineObj and fault if a test reads one it didn't define.
 
+local recording = require("dev/recording")
+
 local catalog = require("tests.harness.catalog")
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
@@ -35,7 +37,7 @@ local InvType = strict.class("InvType", {
             local inv = s.h.world.state.invs[s.id]
             if not inv then
                 return s.h:recorded(
-                    "config.Inv." .. s.name .. ".size",
+                    recording.memberPath(recording.configPath("config", "Inv", s.name), "size"),
                     "unmocked state: InvType.size of " .. s.name .. " (no h.world:setInventory)"
                 )
             end
@@ -51,7 +53,7 @@ for field in pairs(stubs.fields("ObjType")) do
         local v = defined and defined[field]
         if v == nil then
             return s.h:recorded(
-                string.format("config.Obj.%s.%s", s.name, field),
+                recording.memberPath(recording.configPath("config", "Obj", tostring(s.name)), field),
                 string.format("unmocked state: ObjType.%s of %s (h.world:defineObj)", field, s.name)
             )
         end
@@ -141,6 +143,14 @@ local function objKey(key)
     return nil
 end
 
+-- A config argument's path, as the recorder writes one; nil for any other argument.
+---@param v any
+---@return string?
+local function configArgPath(v)
+    local kind = (invTypeIds[v] and "Inv") or (objTypeIds[v] and "Obj")
+    return kind and recording.configPath("config", kind, tostring(v.configName)) or nil
+end
+
 local Inv = strict.class("Inv", {
     fields = {
         id = function(s)
@@ -179,8 +189,8 @@ local Inv = strict.class("Inv", {
             if math.type(index) ~= "integer" then strict.fault("Inv:GetSlot(index: Integer)") end
             return slotCopy(s.h, inv, index)
         end,
-        -- Dense, one InvSlot per slot, with empty slots as obj -1 x0, as in the client
-        -- (recording 20261025-144642-8f7250b863).
+        -- Dense, one InvSlot per slot, with empty slots as obj -1 x0 (seen in the client; see
+        -- tests/fixtures/recorder-demo-shop.jsonl).
         GetSlots = function(s)
             local inv, out = live(s), {}
             for i = 1, inv.size do
@@ -225,16 +235,18 @@ local function recordedSlot(h, v, path)
     return InvSlot.new({ h = h, obj = id, count = v.count })
 end
 
+-- A field getter that serves the recorded read under this Inv's path.
+local function recordedField(name)
+    return function(s)
+        return s.h:recorded(recording.memberPath(s.path, name))
+    end
+end
+
 -- Replay only: an Inv for an inventory the recording shows the plugin found, but that the
 -- world doesn't hold yet (no InventoryAdded/Updated so far). Every member is the recorded
 -- read under its path, e.g. `Inventory.Find(config.Inv.INV).usedSlotCount`, so reading one
 -- the recording lacks faults `unrecorded: <path>`. It keeps reading the recording after the
 -- world gets the inventory; Find hands out world-backed Invs from then on.
-local function recordedField(name)
-    return function(s)
-        return s.h:recorded(s.path .. "." .. name)
-    end
-end
 local RecordedInv = strict.class("Inv", {
     fields = {
         id = function(s)
@@ -251,28 +263,29 @@ local RecordedInv = strict.class("Inv", {
     methods = {
         GetSlot = function(s, index)
             if math.type(index) ~= "integer" then strict.fault("Inv:GetSlot(index: Integer)") end
-            local path = string.format("%s:GetSlot(%d)", s.path, index)
+            local path = recording.callPath(s.path, true, "GetSlot", table.pack(index), 1)
             return recordedSlot(s.h, s.h:recorded(path), path)
         end,
         GetSlots = function(s)
-            local slots = s.h:recorded(s.path .. ":GetSlots()")
+            local path = recording.callPath(s.path, true, "GetSlots", { n = 0 }, 1)
+            local slots = s.h:recorded(path)
             if slots == nil then return nil end
             local out = {}
             for i, v in pairs(slots) do
-                out[i] = recordedSlot(s.h, v, s.path .. ":GetSlots()[" .. tostring(i) .. "]")
+                out[i] = recordedSlot(s.h, v, recording.indexPath(path, i))
             end
             return out
         end,
         GetTotal = function(s, key)
-            local id = objKey(key)
-            if not id then strict.fault("Inv:GetTotal expects an ObjType or an obj ID") end
-            -- The recorder writes an ObjType argument by its config path, an ID as a number.
-            local arg = objTypeIds[key] and ("config.Obj." .. tostring(key.configName))
-                or tostring(id)
-            return s.h:recorded(s.path .. ":GetTotal(" .. arg .. ")")
+            if not objKey(key) then strict.fault("Inv:GetTotal expects an ObjType or an obj ID") end
+            local args = table.pack(key)
+            return s.h:recorded(
+                recording.callPath(s.path, true, "GetTotal", args, 1, configArgPath)
+            )
         end,
         GetCategoryTotal = function(s, category)
-            return s.h:recorded(s.path .. ":GetCategoryTotal(" .. tostring(category) .. ")")
+            local args = table.pack(category)
+            return s.h:recorded(recording.callPath(s.path, true, "GetCategoryTotal", args, 1))
         end,
     },
 })
@@ -287,10 +300,14 @@ local Inventory = strict.class("Inventory", {
             if not id then strict.fault("Inventory.Find expects an InvType or an inv ID") end
             local inv = s.h.world.state.invs[id]
             if not inv and s.h.replay then
-                -- Named as the recorder names it: an InvType by its config path.
-                local arg = invTypeIds[key] and ("config.Inv." .. tostring(key.configName))
-                    or tostring(id)
-                local path = "Inventory.Find(" .. arg .. ")"
+                local path = recording.callPath(
+                    "Inventory",
+                    false,
+                    "Find",
+                    table.pack(key),
+                    1,
+                    configArgPath
+                )
                 if s.h:recorded(path) == nil then return nil end
                 return RecordedInv.new({ h = s.h, id = id, path = path })
             end

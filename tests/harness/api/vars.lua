@@ -5,6 +5,8 @@
 -- doesn't expose). FromID returns nil for an ID it lacks: the catalog holds every var
 -- plugins/var-dump got back from FromID, though the client may raise rather than return nil.
 
+local recording = require("dev/recording")
+
 local catalog = require("tests.harness.catalog")
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
@@ -31,7 +33,8 @@ local VarType = strict.class("VarType", {
         value = function(s)
             local v = s.h.world.state.vars[s.rec.domain][s.rec.id]
             if v == nil then
-                local path = string.format("var.%s.%s.value", s.rec.domain, s.rec.name)
+                local config = recording.configPath("var", s.rec.domain, s.rec.name)
+                local path = recording.memberPath(config, "value")
                 return s.h:recorded(
                     path,
                     "unmocked state: " .. path .. " was never set (h.world:setVar)"

@@ -11,18 +11,23 @@
 --     the world first and fall back to the read table, so a test can script further changes
 --     on top of a recording.
 
+local recording = require("dev/recording")
+
 local catalog = require("tests.harness.catalog")
 local chat = require("tests.harness.api.chat")
 local events = require("tests.harness.api.events")
 local inventory = require("tests.harness.api.inventory")
 local paths = require("tests.harness.paths")
 local persistentdb = require("tests.harness.api.persistentdb")
+local playerApi = require("tests.harness.api.player")
 local strict = require("tests.harness.strict")
 local timeline = require("tests.harness.timeline")
 local vars = require("tests.harness.api.vars")
 local world = require("tests.harness.world")
 
 local M = {}
+
+local IS_AVAILABLE_PATH = recording.callPath("Player", false, "IsAvailable", { n = 0 }, 1)
 
 -- Attach a recording to a harness that isn't loaded yet: set each permission the recording
 -- checked as its first check found it (over opts.grant), and seed PersistentDB from each
@@ -106,13 +111,13 @@ local function applyRead(h, read)
     h.replay.reads[read.path] = { v = read.v }
     local state, path, v = h.world.state, read.path, read.v
     local player = state.player
-    if path == "Player.IsAvailable()" then
+    if path == IS_AVAILABLE_PATH then
         if v == true and not player.loggedIn then
             world.apply(state, { op = "login" }) -- the name comes with its own read
         elseif v == false and player.loggedIn then
             world.apply(state, { op = "logout" })
         end
-    elseif path == "Player.GetEntity().displayName" then
+    elseif path == playerApi.DISPLAY_NAME_PATH then
         if type(v) == "string" and not (player.loggedIn and player.displayName == v) then
             world.apply(state, { op = "login", displayName = v })
         end

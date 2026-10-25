@@ -69,7 +69,8 @@ end
 -- a timeline:
 --   ticks[t] = { leading = { read... }, events = { { entry, reads = { read... }, skip } } }
 --   lastTick, the highest t; serverLogic, whether any ServerLogic was recorded;
---   dropped, the entries the recording says it lost, and gaps = { { t, n } } where;
+--   dropped, the number of entries the recording says it lost; gaps = { { t, n } }, one per
+--   gap (n entries lost at tick t);
 --   grants[permission] = bool and db[key] = { op, v }, the starting state (noteStart);
 --   dbKeys[key] = true for every PersistentDB key the recording touched.
 -- `skip` marks a ChatMessage of ChatType.PLUGIN: the plugin's own Chat.AddMessage coming back,

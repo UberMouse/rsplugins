@@ -190,7 +190,7 @@ function ops.defineObj(state, op)
 end
 
 -- The obj ID of an empty slot. In the client, GetSlots() gives every empty slot as obj -1
--- (configName "UNKNOWN") with count 0 (recording 20261025-144642-8f7250b863).
+-- (configName "UNKNOWN") with count 0 (see tests/fixtures/recorder-demo-shop.jsonl).
 M.EMPTY_OBJ = -1
 
 -- Replace an inventory's contents. `slots` maps slot index (1-based) to { obj, count }; a slot

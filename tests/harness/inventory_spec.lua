@@ -47,7 +47,7 @@ describe("Inventory", function()
             local slot = shop:GetSlots()[2]
             soldOut = { slot.obj.configName, slot.count, shop.usedSlotCount }
         ]]))
-        -- From recording 20261025-144642-8f7250b863: obj 590 x0 in GENERALSHOP1 slot 7.
+        -- Seen in the client: obj 590 x0 in GENERALSHOP1 slot 7.
         h.world:setInventory("GENERALSHOP1", {
             { obj = 1931, count = 30 },
             { obj = 590, count = 0 },

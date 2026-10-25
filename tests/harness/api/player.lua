@@ -5,10 +5,18 @@
 -- documented as "whether Player data is available to access", so every other getter faults
 -- while logged out, which makes a plugin that skips the check fail its test.
 
+local recording = require("dev/recording")
+
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
 
 local M = {}
+
+-- The recorder's path for the player's name read; a replay also logs in from it.
+M.DISPLAY_NAME_PATH = recording.memberPath(
+    recording.callPath("Player", false, "GetEntity", { n = 0 }, 1),
+    "displayName"
+)
 
 M.SkillType = stubs.value("game/player.lua", "SkillType")
 local SKILLS = {}
@@ -23,7 +31,7 @@ local PlayerEntity = strict.class("PlayerEntity", {
         displayName = function(s)
             if s.displayName ~= nil then return s.displayName end
             return s.h:recorded(
-                "Player.GetEntity().displayName",
+                M.DISPLAY_NAME_PATH,
                 "unmocked state: the player's displayName (h.world:login)"
             )
         end,
@@ -52,7 +60,7 @@ local function skillGetter(fn, key)
         local levels = p.skills[skill]
         if not levels then
             return s.h:recorded(
-                string.format("Player.%s(%d)", fn, skill),
+                recording.callPath("Player", false, fn, table.pack(skill), 1),
                 "unmocked state: skill " .. tostring(skill) .. " was never set (h.world:setSkill)"
             )
         end

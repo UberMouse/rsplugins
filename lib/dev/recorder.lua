@@ -224,7 +224,7 @@ local function standIn(real, class, path)
     local root = CONFIG_ROOT[class]
     if root then
         local ok, canonical = pcall(function()
-            return root .. "." .. real.typeName .. "." .. real.configName
+            return recording.configPath(root, real.typeName, real.configName)
         end)
         if ok then path = canonical end
     end
@@ -246,7 +246,7 @@ local function slotList(slots, path)
     end
     local out = {}
     for i, slot in pairs(slots) do
-        out[i] = standIn(slot, "InvSlot", path .. "[" .. tostring(i) .. "]")
+        out[i] = standIn(slot, "InvSlot", recording.indexPath(path, i))
     end
     guard(recordRead, path, out)
     return out
@@ -290,7 +290,7 @@ function ReadProxy.__index(proxy, key)
     local value = info.real[key]
     local members = CLASSES[info.class]
     if type(value) == "function" then return wrapCall(proxy, info, key, value, members[key]) end
-    local path = info.path .. "." .. tostring(key)
+    local path = recording.memberPath(info.path, key)
     local class = members[key] or members["*"]
     -- Reaching an object (var.VarPlayer.QP) isn't recorded; reading from it is.
     if class then return standIn(value, class, path) end

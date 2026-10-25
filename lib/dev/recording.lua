@@ -77,13 +77,42 @@ function recording.serialise(value, objectForm)
     return walk(value)
 end
 
+-- Read paths. A replay looks reads up by these strings, so the test harness builds its keys
+-- with these same functions.
+
+-- A config, named the same however the plugin reached it, e.g. `config.Inv.INV` or
+-- `var.VarPlayer.QP`. Raises if a part is nil.
+---@param root string "config" or "var"
+---@param typeName any
+---@param configName any
+---@return string
+function recording.configPath(root, typeName, configName)
+    return root .. "." .. typeName .. "." .. configName
+end
+
+-- A member read off the object at `base`, e.g. `Player.GetEntity().displayName`.
+---@param base string
+---@param key any
+---@return string
+function recording.memberPath(base, key)
+    return base .. "." .. tostring(key)
+end
+
+-- One element of the list at `base`, e.g. `Inventory.Find(config.Inv.INV):GetSlots()[1]`.
+---@param base string
+---@param i any
+---@return string
+function recording.indexPath(base, i)
+    return base .. "[" .. tostring(i) .. "]"
+end
+
 -- An argument as it appears in a read's path: a stand-in by its own path, a string quoted,
 -- a number or boolean as written, anything else by its type.
 ---@param v any
----@param pathOf fun(v: any): string?
+---@param pathOf (fun(v: any): string?)?
 ---@return string
 local function argText(v, pathOf)
-    local path = pathOf(v)
+    local path = pathOf and pathOf(v)
     if path then return path end
     local kind = type(v)
     if kind == "string" then return string.format("%q", v) end
@@ -98,7 +127,7 @@ end
 ---@param name string
 ---@param args table
 ---@param first integer
----@param pathOf fun(v: any): string?
+---@param pathOf (fun(v: any): string?)? an argument's own path, if it is a stand-in
 ---@return string
 function recording.callPath(base, isMethod, name, args, first, pathOf)
     local parts = {}

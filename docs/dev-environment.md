@@ -292,15 +292,16 @@ A plugin can forward its log lines to the daemon with `POST <urls.rsdev>/tee`:
 ```
 
 `plugin`, `session`, `seq` and `dropped` follow the rules of a sync above; `t` is an integer,
-`level` is `print`, `log` or `error` (anything else is a 400; `dropped` is produced only by the
-daemon), and `text` a string. The reply is `200` with an empty body,
-or `400` with nothing applied. The body cap, `Content-Length` rules and `Host`/`Origin` refusals
-are those of `/bridge/sync`. Each line becomes a `Log` event with payload `{plugin, level, text}`,
-the line's `t` and the tee's `session`, numbered in the same stream `events` and `logs` read, and
-appended to `dumps/rsdev/events/tee/<plugin>/<session>.jsonl` (a directory per plugin, so
-different plugin and session pairs never share a file). A growth in `dropped` adds a marker, unlike
-a sync's, as a `Log` event with payload `{plugin, level: "dropped", text: "<n> lines lost"}`, so
-`logs` and `logs --plugin X` show which plugin lost lines.
+`level` is `print`, `log` or `error` (anything else, `dropped` included, is a 400), and `text` a
+string. The reply is `200` with an empty body, or `400` with nothing applied. The body cap,
+`Content-Length` rules and `Host`/`Origin` refusals are those of `/bridge/sync`. Each line becomes a
+`Log` event with payload `{plugin, level, text}`, the line's `t` and the tee's `session`, numbered
+in the same stream `events` and `logs` read, and appended to
+`dumps/rsdev/events/tee/<plugin>/<session>.jsonl` (a directory per plugin, so different plugin and
+session pairs never share a file). A growth in the batch's `dropped` makes the daemon add a marker,
+unlike a sync's, as a `Log` event with payload `{plugin, level: "dropped", text: "<n> lines lost"}`,
+so `logs` and `logs --plugin X` show which plugin lost lines. A plugin never sends `dropped` as a
+level.
 
 **Opting a plugin in.** `lib/dev/tee.lua` is the plugin side: it sends a plugin's own `print` and
 `log` output, and the errors its event callbacks raise, to this endpoint. It is a dev tool,
@@ -322,6 +323,9 @@ never for submission. A plugin opts in like the recorder does:
    `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the dev bridge's url name, so one entry
    serves both).
 
+Before uploading, remove the opt-in: `scripts/check-submission.sh <plugin> --root <prepared copy>`
+fails while any piece of it is left.
+
 Then `scripts/rsdev.py exec "prl <name>"` and `scripts/rsdev.py logs --plugin <name>` shows what
 the plugin printed, as `n [<name>] print|log|error: text`. An `error` line reads
 `Event.<X> subscriber '<name>': <message>`; the error is then raised again unchanged, so the
@@ -340,6 +344,6 @@ both modules first, then call `tee.install`, then `recorder.install` (spec in
 `tests/tee/tee_spec.lua`).
 
 **Moderation.** The tee sends only the plugin's own console output and errors, to 127.0.0.1. A
-plugin for submission ships without `dev/`, the lines above (install and shutdown), httpAccess (unless a feature of
-its own needs it) and `urls.rsdev`. Chore Tracker is the first plugin opted in; its README lists
-what to strip.
+plugin for submission ships without `dev/`, the lines above (install and shutdown), httpAccess
+(unless a feature of its own needs it) and `urls.rsdev`. Chore Tracker is the first plugin opted
+in; its README lists what to strip.

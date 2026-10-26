@@ -308,10 +308,19 @@ From `plugins/dev-bridge` in the beta client.
   main-loop stack with no Lua frames running, and no POST was in flight. Every reload that
   survived unloaded an instance whose subscriptions were all unsubscribed in `PluginShutdown`;
   the tee-on instance also held the tee's `devTeeFlush` Logic subscription, which nothing
-  unsubscribed. Hypothesis, unconfirmed: a subscription left registered at unload is
-  dispatched into the dead Lua state. The rule we follow: unsubscribe every subscription in
-  `PluginShutdown`, including ones a `lib/dev` module made (`tee.shutdown()`). The dev
-  recorder's `devRecorderFlush` has the same gap and isn't fixed yet.
+  unsubscribed. Hypothesis, supported by one surviving reload and not proven: a subscription
+  left registered at unload is dispatched into the dead Lua state. With `tee.shutdown()` in
+  chore-tracker's `PluginShutdown` (`lib/dev/tee.lua` at 11b307e), `prl chore-tracker` from
+  the bridge with the tee on left the client up (2026-10-26) and the tee started a new session.
+  The rule we follow: unsubscribe every subscription in `PluginShutdown`, including ones a
+  `lib/dev` module made (`tee.shutdown()`). The dev recorder's `devRecorderFlush` has the same
+  gap and isn't fixed yet.
+- **Closing the client segfaults** (2026-10-26, beta client 951-1): closing it gave a SIGSEGV
+  three times out of three, at 15:09:17 (pid 2637620), 15:12:49 (pid 2649914) and 15:15:07 (pid
+  2656263). `coredumpctl` shows the same stack each time, frame #4 jumping into a heap address.
+  dev-bridge and chore-tracker had been turned off with `poff` before the third close. A SIGSEGV
+  on 2026-10-20 has no core left to compare. So it needs no plugin running at close; most likely
+  it is the client. Residue from plugins loaded earlier in the session can't be ruled out.
 - **Seven client aborts (rs2client SIGABRT, systemd coredumps), 2026-10-26**, the conductor
   driving the beta client through the bridge. Every one passed `Event.<X>.Unsubscribe`
   straight to `pcall` (the rule is under "Runtime limits we've hit"):
@@ -328,6 +337,10 @@ From `plugins/dev-bridge` in the beta client.
      12:47: `PluginShutdown` ran `pcall(Event[event].Unsubscribe, ...)`.
   6. The same on commit f423f49 (stage 1's six load-time subscriptions), after evals.
   7. The same on f423f49 with no eval at all.
+
+  A SIGABRT at 13:20:04 (pid 2557183) on 2026-10-26 has the same signature (frames at
+  rs2client+0xa0df2 and +0x3af451). It most likely came from closing the client while a bridge
+  whose `PluginShutdown` used the `pcall` form was loaded.
 
   Survived: stage 1's bridge (684eedc), whose `PluginShutdown` unsubscribes directly,
   reloading itself with `prl dev-bridge` from `Logic` twice (new sessions in the daemon log);

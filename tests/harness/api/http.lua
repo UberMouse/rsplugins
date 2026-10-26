@@ -147,8 +147,9 @@ function M.deliver(h)
                 f.failed, f.errorCode, f.errorInfo = true, r.errorCode or 0, r.error
             else
                 -- `successful` means the exchange completed, whatever the status code
-                -- (plugins/var-dump checks responseCode separately).
-                f.successful, f.responseCode = true, r.status or 200
+                -- (plugins/var-dump checks responseCode separately). A test can answer
+                -- `successful = false` with a status, as the docs don't say what a non-2xx holds.
+                f.successful, f.responseCode = r.successful ~= false, r.status or 200
                 f.data, f.header = r.body or "", r.header or ""
                 f.downloadedBytes, f.downloadTotalBytes = #f.data, #f.data
                 f.progress = 1.0

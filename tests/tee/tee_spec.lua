@@ -276,6 +276,63 @@ describe("dev tee", function()
             assert.are.equal(1, support.count(h, "refused a batch"))
         end)
 
+        it("drops a 400 batch even when successful is false", function()
+            local h = loaded('print("bad")')
+            shrink(h)
+            h:step()
+            support.answer(h, { status = 400, successful = false })
+            h:step()
+            h.env.print("next")
+            stepsUntilPosts(h, 2, 30)
+            local batch = support.batches(h)[2]
+            assert.are.same({ "next" }, { batch.lines[1].text })
+            assert.are.equal(1, batch.dropped)
+        end)
+
+        -- A plugin whose HTTPRequest fails as the test sets FAIL: "new" throws from new, "post"
+        -- throws from Post.
+        local FLAKY = [[
+FAIL = false
+local real = HTTPRequest
+HTTPRequest = {
+    new = function(...)
+        if FAIL == "new" then error("no request") end
+        local request = real.new(...)
+        return {
+            AddHeader = function(_, ...) request:AddHeader(...) end,
+            Post = function(_, ...)
+                if FAIL == "post" then error("no post") end
+                request:Post(...)
+            end,
+        }
+    end,
+}
+]]
+
+        for _, mode in ipairs({ "new", "post" }) do
+            it(
+                "requeues the lines when HTTPRequest " .. mode .. " throws, and sends them later",
+                function()
+                    -- The tee takes HTTPRequest at install, so the stand-in goes in first.
+                    local h = harness.new(
+                        support.plugin(FLAKY .. support.INSTALL .. 'print("a")'),
+                        { grant = { "httpAccess" } }
+                    )
+                    h:load()
+                    shrink(h)
+                    h.env.FAIL = mode
+                    h:step()
+                    assert.are.equal(0, #support.posts(h))
+                    assert.are.equal(1, support.count(h, "could not start a POST"))
+                    h.env.print("b")
+                    h.env.FAIL = false
+                    stepsUntilPosts(h, 1, 30)
+                    assert.are.same({ "a", "b" }, support.texts(h))
+                    assert.are.equal(1, support.count(h, "could not start a POST"))
+                end
+            )
+        end
+
         it("drops the oldest of a backlog that outgrows the queue while it waits", function()
             local h = loaded('print("a")')
             shrink(h)

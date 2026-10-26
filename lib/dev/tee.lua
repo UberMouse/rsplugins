@@ -164,6 +164,19 @@ end
 -- Sending batches
 ---------------------------------------------------------------------------
 
+-- Count a failure and wait longer before the next POST.
+local function backOff()
+    failures = failures + 1
+    nextPost = tick + teelog.backoff(failures, tee.limits.retryTicks, tee.limits.maxRetryTicks)
+end
+
+-- Put lines that were not delivered back in front of anything queued since; the cap still
+-- applies, and what it drops is counted.
+---@param lines string[]
+local function giveBack(lines)
+    dropped = dropped + teelog.requeue(queue, lines, tee.limits.bufferLines, tee.limits.bufferBytes)
+end
+
 -- The completion callback for a batch. It must not start a request (that crashed the client),
 -- so it only settles the books; the next Logic tick posts again.
 ---@param finished HTTPRequest
@@ -174,17 +187,15 @@ local function onPosted(finished)
         failures, warned = 0, false
         return
     end
-    failures = failures + 1
-    nextPost = tick + teelog.backoff(failures, tee.limits.retryTicks, tee.limits.maxRetryTicks)
-    if finished.successful and finished.responseCode == 400 then
+    backOff()
+    -- Not gated on `successful`: the docs don't say what it holds for a non-2xx reply.
+    if finished.responseCode == 400 then
         -- The daemon applied nothing and would refuse the same lines again, so they go.
         dropped = dropped + #sent.lines
         warnOnce(string.format("daemon refused a batch (400), dropped %d lines", #sent.lines))
         return
     end
-    -- Back in front of anything queued since; the cap still applies.
-    dropped = dropped
-        + teelog.requeue(queue, sent.lines, tee.limits.bufferLines, tee.limits.bufferBytes)
+    giveBack(sent.lines)
     warnOnce(
         finished.timedOut and "POST timed out"
             or string.format(
@@ -211,18 +222,28 @@ local function flush()
         seq = seq,
         dropped = dropped,
     }, lines)
-    local request = http.new(url, PATH)
-    request:AddHeader("Content-Type", "application/json")
-    -- Keep the request and its body referenced until it finishes, in case the client doesn't
-    -- copy the body (docs/api-concepts.md).
-    inFlight = { request = request, body = body, lines = lines }
-    request:Post(body, onPosted)
+    -- A closure, never an API function straight to pcall (that aborts the client).
+    local started, err = pcall(function()
+        local request = http.new(url, PATH)
+        request:AddHeader("Content-Type", "application/json")
+        -- Keep the request and its body referenced until it finishes, in case the client
+        -- doesn't copy the body (docs/api-concepts.md).
+        inFlight = { request = request, body = body, lines = lines }
+        request:Post(body, onPosted)
+    end)
+    if started then return end
+    -- The request never started, so no completion callback will come: free the slot, keep the
+    -- lines for a later tick and wait out a retry.
+    inFlight = nil
+    giveBack(lines)
+    backOff()
+    warnOnce("could not start a POST: " .. tostring(err))
 end
 
 local function onLogic()
     tick = tick + 1
     -- A failure here must not break the plugin's Logic event (and it would repeat every tick),
-    -- so the lines are put back and the tee waits out a retry.
+    -- so it waits out a retry. (A failed request start puts its own lines back, in flush.)
     local ok, err = pcall(flush)
     if not ok then
         nextPost = tick + tee.limits.maxRetryTicks

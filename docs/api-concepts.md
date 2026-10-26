@@ -73,14 +73,12 @@ The official reference annotates Lua with pseudo-types:
 ## Events
 
 - `Event.<Name>.Subscribe("uniqueName", callback)` and `Event.<Name>.Unsubscribe("uniqueName")`.
-  The name identifies the subscription so you can replace or remove it. **Subscribe only at
-  load (`main.lua`'s top level), unsubscribe only in `PluginShutdown`, and never create a
-  subscription inside a callback**: an `Unsubscribe` of one made inside a callback aborted the
-  client wherever it was called from, `PluginShutdown` included, and so did `Unsubscribe` from
-  inside a callback (see "Runtime limits we've hit"). `PluginShutdown` unsubscribing load-time
-  subscriptions has been safe, even when the plugin's own `prl` from `Logic` triggered it, but
-  that self-reload is only known-safe with dev-bridge stage 1's six subscriptions: with 39 it
-  aborted the client.
+  The name identifies the subscription so you can replace or remove it. **Call `Unsubscribe`
+  directly, never pass it straight to `pcall` or `xpcall`**: every client abort seen from it
+  used that form (see "Runtime limits we've hit"). Subscribing at load and unsubscribing in
+  `PluginShutdown` is the plain pattern, and safe even when the plugin's own `prl` from `Logic`
+  triggers the shutdown. A `Subscribe` inside a callback works too (it delivers), and so did a
+  direct `Unsubscribe` of it from inside `Logic`.
 - The callback gets a **payload** table, whose fields depend on the event.
 - Useful events: `ServerLogic` (after each server packet, about once per 0.6 s tick, no
   payload), `Logic` (fixed 50 Hz client tick, `ev.logicTick`), `Draw` (every rendered frame,
@@ -143,31 +141,27 @@ Found in the beta client (2026-10-20), not in the official docs:
   response, the next request either arrived with an empty body or never arrived. The cause isn't
   confirmed. Until it is: start requests only from event callbacks (e.g. `Logic`), keep each
   body string referenced until its request finishes, and avoid coroutines around API calls.
-- **An `Event.<X>.Unsubscribe` of a subscription created at runtime aborts the client, and so
-  may any `Unsubscribe` during a dispatch** (SIGABRT, systemd coredumps; four aborts on
-  2026-10-26 with dev-bridge, listed under "Seen with dev-bridge"). `pcall` doesn't help: it is
-  a native abort, not a Lua error. Every `Unsubscribe` of a subscription made inside a callback
-  aborted, wherever it was called from: inside that subscription's own `Logic` callback, inside
-  another `Logic` callback, in `PluginShutdown`, and in an `HTTPRequest` completion callback.
-  `PluginShutdown` unsubscribing **load-time** subscriptions survived, even when the plugin's
-  own `prl` from its `Logic` callback triggered it, with dev-bridge stage 1's six subscriptions
-  (`Logic`, `ChatMessage`, `VarTransmit`, `InventoryUpdated`, `MiniMenuEntrySelected`,
-  `GameStateChanged`; twice). A fifth abort: the same self-`prl` from `Logic` with 39 load-time
-  subscriptions (every event but `Draw`, `EntityDraw`, `SettingsLayerReady`,
-  `ContentLayerReady`), no runtime-made ones. So surviving a self-reload from `Logic` is not a
-  property of load-time subscriptions in general; which of the 33 extra events caused it, or
-  whether it was their number, is unknown. Two readings fit the first four: (a) unsubscribing a
-  runtime-created subscription aborts, wherever it is called; or (b) any `Unsubscribe` during
-  a dispatch aborts, and the client defers the `PluginShutdown` of a self-`prl` until the
-  dispatch is over. **Safe either way: subscribe only at load (top level), unsubscribe only in
-  `PluginShutdown`, never create a subscription inside a callback; and a self-`prl` from `Logic`
-  is only known-safe with stage 1's six subscriptions.** Creating one inside a
-  callback does work (it delivers), but then it can never be removed, so even reloading or
-  disabling the plugin is expected to abort the client. To stop a handler, make it a no-op (a
-  flag it checks first); for handlers that come and go, subscribe once at load and dispatch to
-  a table of your own (dev-bridge's eval probes). Unknown: whether `Unsubscribe` from a UI
-  hook callback is safe. The test harness faults on both readings (testing.md fidelity
-  ledger).
+- **Never pass `Event.<X>.Unsubscribe` straight to `pcall` (or `xpcall`): call it directly.**
+  All seven client aborts of 2026-10-26 (rs2client SIGABRT, systemd coredumps; listed under
+  "Seen with dev-bridge") called `pcall(Event[event].Unsubscribe, name)` or
+  `pcall(real.Event.Logic.Unsubscribe, ...)`, the API function handed to `pcall` itself.
+  `pcall` doesn't catch it: it is a native abort, not a Lua error. Direct calls survived: stage
+  1's bridge (commit 684eedc) calls `Event.Logic.Unsubscribe(name)` and
+  `Event[name].Unsubscribe(...)` in its `PluginShutdown`, and its own `prl dev-bridge` from
+  `Logic` reloaded cleanly twice; and a runtime `Event.VarTransmit.Subscribe("h4probe", fn)`
+  made inside `Logic`, then a direct `Event.VarTransmit.Unsubscribe("h4probe")` from inside
+  `Logic`, left the client up (session ff92400823; abort 2 was the same situation with the
+  `pcall` form). Unverified: wrapping the call in a Lua closure,
+  `pcall(function() Event.X.Unsubscribe(k) end)` (dev-kit's form), and whether a tail call
+  (`return Event.X.Unsubscribe(k)`, which drops the caller's frame) counts as the `pcall` form;
+  the test harness treats it as one. A plausible mechanism, unconfirmed: the client identifies
+  the calling plugin from the calling Lua frame, and a direct `pcall` makes that frame a C
+  function. The POST crashes above (from a completion callback, and from a coroutine) may share
+  it, also unconfirmed. This supersedes three readings recorded earlier the same day:
+  "`Unsubscribe` inside an event callback aborts", "a subscription created at runtime can
+  never be removed" and "a self-`prl` from `Logic` is only safe with stage 1's six load-time
+  subscriptions". Every crash behind them used the `pcall` form. The harness faults the `pcall`
+  form (testing.md fidelity ledger).
 - `pairs(id.VarPlayer)` works, but the integer ID isn't in the value slot (passing the values to
   `FromID` fails with "expected number, received string"). Scanning IDs -70000..20000 found
   ~62k VarPlayer vars (VarBits included) and ~7.8k VarClient vars.
@@ -263,8 +257,9 @@ From `plugins/dev-bridge` in the beta client.
 - **HTTP to 127.0.0.1 carries no `Origin` header**, so a local daemon can't use one to vet the caller.
 - **A plugin can reload itself.** `ExecuteConsoleCommand("prl <itself>")` from its own `Logic`
   callback (twice, capped via PersistentDB) reloaded cleanly: `PluginShutdown` ran in between, the
-  plugin re-enabled with no errors or hitch, and PersistentDB persisted across it. With 39
-  load-time subscriptions the same self-reload aborted the client (the fifth abort, below).
+  plugin re-enabled with no errors or hitch, and PersistentDB persisted across it. Its
+  `PluginShutdown` must call `Unsubscribe` directly: each self-reload whose shutdown passed it
+  to `pcall` aborted the client (below).
 - **Console output isn't a ChatMessage.** `ExecuteConsoleCommand("plist")`'s output did not arrive
   as a `ChatMessage` (chatAccess granted; the player's own public chat did), so `ChatMessage` is
   not a way to capture console output.
@@ -280,43 +275,37 @@ From `plugins/dev-bridge` in the beta client.
   (plus own-name match for speech), not by sender.
 - **`Event.<X>.Subscribe` from inside a `Logic` callback works** (`Event.VarTransmit.Subscribe`
   from an eval snippet: the probe was called 6 times over about 70 s and the client stayed up;
-  an `Event.Logic.Subscribe` probe made the same way counted 544 ticks, emitting every 50). But
-  such a subscription can never be unsubscribed (next bullet).
-- **Four client aborts (rs2client SIGABRT, systemd coredumps), 2026-10-26**, the conductor
-  driving the beta client through the bridge:
-  1. A `Logic` probe subscribed at runtime (from inside the bridge's `Logic` callback, via
-     eval) errored on its third tick, and its wrapper unsubscribed it from inside its own
-     callback.
-  2. `Event.VarTransmit.Unsubscribe` of a `VarTransmit` subscription made at runtime inside
-     `Logic`, called from inside `Logic` (`eval --reset`). The subscription itself had worked.
-  3. `eval --reset` on commit 0866186: the bridge ran `prl dev-bridge` from its `Logic`
-     callback, and its `PluginShutdown` unsubscribed two `Logic` probes that had been
-     subscribed at runtime inside `Logic`.
-  4. A `Logic` subscription made at runtime inside `Logic` (a snippet reaching the real `Event`
-     through `getmetatable(_G).__index`), unsubscribed from an `HTTPRequest:Get` completion
-     callback.
+  an `Event.Logic.Subscribe` probe made the same way counted 544 ticks, emitting every 50). And
+  it can be removed: a direct `Event.VarTransmit.Unsubscribe` of one, called from inside
+  `Logic`, left the client up (session ff92400823).
+- **Seven client aborts (rs2client SIGABRT, systemd coredumps), 2026-10-26**, the conductor
+  driving the beta client through the bridge. Every one passed `Event.<X>.Unsubscribe`
+  straight to `pcall` (the rule is under "Runtime limits we've hit"):
+  1. A probe's error: eval.lua's `forget` ran `pcall(Event[event].Unsubscribe, ...)` inside the
+     probe's own `Logic` callback (a subscription made at runtime inside `Logic`).
+  2. `eval --reset`: `stop` ran `pcall(Event[event].Unsubscribe, ...)` from `Logic`, for a
+     `VarTransmit` subscription made at runtime inside `Logic`. The subscription had worked.
+  3. `eval --reset` on commit 0866186, which ran `prl dev-bridge` from `Logic`: its
+     `PluginShutdown` ran the `pcall`'d `Unsubscribe`s.
+  4. A `Logic` subscription made at runtime (a snippet reaching the real `Event` through
+     `getmetatable(_G).__index`), removed by `pcall(real.Event.Logic.Unsubscribe, ...)` in an
+     `HTTPRequest:Get` completion callback.
+  5. `exec "prl dev-bridge"` on commit 493f192 (39 load-time subscriptions, one probe live),
+     12:47: `PluginShutdown` ran `pcall(Event[event].Unsubscribe, ...)`.
+  6. The same on commit f423f49 (stage 1's six load-time subscriptions), after evals.
+  7. The same on f423f49 with no eval at all.
 
-  Survived: a probe disarmed on error (made a no-op, never unsubscribed); the bridge running
-  `prl dev-bridge` from `Logic` twice, whose `PluginShutdown` unsubscribed its load-time
-  subscriptions (`Logic` and the forwarded events) cleanly; on 0866186, disarming a probe on
-  `Unsubscribe`, re-arming it, and refusing a `poff dev-bridge` (exit 1). What it means is under
-  "Runtime limits we've hit". The bridge now subscribes a fixed list of events at load and
-  runs probes from a table of its own.
-- **A fifth client abort (rs2client SIGABRT), 2026-10-26 12:47**: bridge commit 493f192
-  subscribed 39 events at load (every stub event but `Draw`, `EntityDraw`,
-  `SettingsLayerReady`, `ContentLayerReady`), made no runtime subscriptions (probes were
-  entries in its own table) and had one probe live; `exec "prl dev-bridge"`, run from the
-  bridge's `Logic`, aborted the client. Stage 1's bridge (commit 684eedc:
-  `Event.Logic.Subscribe("devBridgeLogic", ...)`, then `devBridge<Name>` for `ChatMessage`,
-  `VarTransmit`, `InventoryUpdated`, `MiniMenuEntrySelected`, `GameStateChanged`, all at load,
-  and `PluginShutdown` unsubscribing those six) had run the same self-`prl` from `Logic` twice
-  cleanly. Which of the 33 extra events (or their count) caused it is unknown, so the bridge is
-  back to stage 1's six, and only those are probe-able. Seen on 493f192 before the crash: loading
-  with 39 subscriptions was fine; a `Logic` probe run through the bridge's own handler ran and
-  emitted (554 ticks); a `ServerLogic` probe that raised was removed with one `Log` line; an
-  `Event.Draw` probe was refused with its reason; `Unsubscribe` on the proxy (a table edit)
-  stopped a probe; `eval --reset` kept the session and cleared the scratch env (`x`, `lc` nil
-  afterwards) and the probes (their emits stopped).
+  Survived: stage 1's bridge (684eedc), whose `PluginShutdown` unsubscribes directly,
+  reloading itself with `prl dev-bridge` from `Logic` twice (new sessions in the daemon log);
+  the direct `Unsubscribe` from inside `Logic` above; a probe disarmed on error (made a no-op);
+  on 0866186, refusing a `poff dev-bridge` (exit 1). Seen working on 493f192 and f423f49, with
+  probes as entries in the bridge's own table: loading with 39 load-time subscriptions
+  (493f192); a
+  `Logic` probe run through the bridge's handler (554 ticks, emitting); a `ServerLogic` probe
+  that raised removed with one `Log` line; fan-out to several probes; an `Event.Draw` probe
+  refused with its reason; `Unsubscribe` on the proxy (a table edit) stopping a probe; `eval
+  --reset` keeping the session and clearing the scratch env (`x`, `lc` nil afterwards) and the
+  probes (their emits stopped), with no reload. The bridge now calls `Unsubscribe` directly.
 - **`load(chunk, "=eval", "t", env)` honours the mode and env arguments.** In an eval, `x = 1`
   landed in the scratch env (`rawget(_G, 'x')` was 1, `_G == _ENV` true), not the bridge's own
   (`rawget(getmetatable(_G).__index, 'x')` was nil). `getmetatable` is exposed to plugins.

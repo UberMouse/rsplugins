@@ -14,34 +14,48 @@ local function subNames(h, event)
 end
 
 -- Record, from now on, every real Event.<X>.Subscribe/Unsubscribe the bridge makes, as
--- "Subscribe <event> <name>" or "Unsubscribe <event> <name>".
+-- "Subscribe <event> <name>" or "Unsubscribe <event> <name>", and the Logic tick of each. The
+-- spy tail-calls the real function, so the harness still sees the bridge's own frame as the
+-- caller and still faults an Unsubscribe the bridge passes straight to pcall.
+---@return string[] calls
+---@return integer[] ticks
 local function spyEvent(h)
     local env = h.instance.env
     local real = env.Event
-    local calls = {}
+    local calls, ticks = {}, {}
+    local function note(text)
+        calls[#calls + 1] = text
+        ticks[#ticks + 1] = h.tick
+    end
     env.Event = setmetatable({}, {
         __index = function(_, event)
             local sub = real[event]
             return {
                 Subscribe = function(name, fn)
-                    calls[#calls + 1] = "Subscribe " .. event .. " " .. name
+                    note("Subscribe " .. event .. " " .. name)
                     return sub.Subscribe(name, fn)
                 end,
                 Unsubscribe = function(name)
-                    calls[#calls + 1] = "Unsubscribe " .. event .. " " .. name
+                    note("Unsubscribe " .. event .. " " .. name)
                     return sub.Unsubscribe(name)
                 end,
             }
         end,
     })
-    return calls
+    return calls, ticks
 end
 
--- What spyEvent records for PluginShutdown: one Unsubscribe per probe-able event.
-local function loadTimeUnsubscribes(h)
+-- What spyEvent records for PluginShutdown's load-time part: one Unsubscribe per event of
+-- protocol.LOAD_EVENTS, in order, after any lazy ones (`lazy`, event names in order).
+---@param lazy string[]?
+---@return string[]
+local function shutdownUnsubscribes(h, lazy)
     local out = {}
-    for i, event in ipairs(h.env.require("protocol").PROBE_EVENTS) do
-        out[i] = "Unsubscribe " .. event .. " devBridge" .. event
+    for _, event in ipairs(lazy or {}) do
+        out[#out + 1] = "Unsubscribe " .. event .. " devBridgeProbe" .. event
+    end
+    for _, event in ipairs(h.env.require("protocol").LOAD_EVENTS) do
+        out[#out + 1] = "Unsubscribe " .. event .. " devBridge" .. event
     end
     return out
 end
@@ -295,7 +309,7 @@ end)]]
         assert.is_true(support.eval(h, "Event.Logic.Subscribe('next', function() end)").ok)
     end)
 
-    it("refuses a probe on an event the bridge doesn't subscribe to", function()
+    it("refuses a probe on an excluded or unknown event", function()
         local h = support.loadEval()
         -- A statement, so the error is placed at the snippet's line (as an expression the
         -- call is a tail call, and the error has no position).
@@ -305,13 +319,11 @@ end)]]
             "^eval:1: Event.Draw is not probe%-able: it fires every rendered frame",
             draw.error
         )
-        -- Probe-able before the fifth client abort; no longer subscribed at load.
-        local server = support.eval(h, "local x = Event.ServerLogic.Subscribe('s', print)")
-        assert.is_false(server.ok)
+        local layer = support.eval(h, "local x = Event.SettingsLayerReady.Subscribe('s', print)")
+        assert.is_false(layer.ok)
         assert.matches(
-            "^eval:1: Event.ServerLogic is not probe%-able: not subscribed at load: a "
-                .. "self%-reload from Logic with more subscriptions aborted the client",
-            server.error
+            "^eval:1: Event.SettingsLayerReady is not probe%-able: it needs hasSettingsIcon",
+            layer.error
         )
         local nope = support.eval(h, "Event.Nope.Unsubscribe('d')")
         assert.is_false(nope.ok)
@@ -342,20 +354,21 @@ end)]]
     end)
 
     it(
-        "lets a snippet reload the bridge; its shutdown unsubscribes only the load-time names",
+        "lets a snippet reload the bridge; its shutdown unsubscribes the lazy and load-time names",
         function()
             local h = support.loadEval()
             h.onConsoleCommand = function(command)
                 if command == "prl dev-bridge" then h:unload() end
             end
             support.eval(h, counter("count"))
+            support.eval(h, "Event.ServerLogic.Subscribe('s', function() end)")
             local calls = spyEvent(h)
             support.answer(h, {
                 status = 200,
                 body = support.line("r", "eval", "ExecuteConsoleCommand('prl dev-bridge')"),
             })
             assert.are.same({ "prl dev-bridge" }, support.ran(h))
-            assert.are.same(loadTimeUnsubscribes(h), calls)
+            assert.are.same(shutdownUnsubscribes(h, { "ServerLogic" }), calls)
             assert.are.same({}, subNames(h, "Logic"))
             h:advance(20 * 30)
             assert.are.equal(0, #support.open(h)) -- stopped: no result, no further sync
@@ -381,7 +394,7 @@ end)]]
         assert.are.equal(before, hits)
         assert.are.same({}, calls)
         h:unload()
-        assert.are.same(loadTimeUnsubscribes(h), calls)
+        assert.are.same(shutdownUnsubscribes(h), calls)
     end)
 
     it("stops the bridge if a fan-out itself fails, rather than raising every tick", function()
@@ -419,24 +432,6 @@ end)]]
         assert.is_true(support.eval(h, counter("a")).ok)
     end)
 
-    it("unsubscribes the load-time names on shutdown even if one raises", function()
-        local h = support.loadEval()
-        support.eval(h, counter("count"))
-        local env = h.instance.env
-        local real = env.Event
-        local logic = setmetatable({
-            Unsubscribe = function(name)
-                if name == "devBridgeLogic" then error("unsubscribe failed") end
-                return real.Logic.Unsubscribe(name)
-            end,
-        }, { __index = real.Logic })
-        env.Event = setmetatable({ Logic = logic }, { __index = real })
-        h:unload()
-        env.Event = real
-        assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
-        assert.are.same({}, subNames(h, "VarTransmit")) -- the rest still went
-    end)
-
     it("starts a fresh scratch env after a reload", function()
         local h = support.loadEval()
         support.eval(h, "x = 1")
@@ -444,6 +439,151 @@ end)]]
         h:step()
         assert.are.same({ 1 }, { support.eval(h, "rawget(_G, 'x')").nvalues })
         assert.matches('"values":%[null%]', support.lastRaw(h))
+    end)
+end)
+
+describe("dev-bridge lazy probe subscriptions", function()
+    local SERVER = "devBridgeProbeServerLogic"
+
+    it("subscribes a non-load-time event once, at its first probe, and delivers to it", function()
+        local h = support.loadEval()
+        local calls = spyEvent(h)
+        support.eval(h, "Event.ServerLogic.Subscribe('a', function() emit('a', 1) end)")
+        support.eval(h, "Event.ServerLogic.Subscribe('b', function() end)")
+        assert.are.same({ "Subscribe ServerLogic " .. SERVER }, calls)
+        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+        support.answer(h)
+        h:advance(20 * 30) -- one server tick, then the next sync
+        assert.is_true(#support.payloads(support.last(h), "Emit") >= 1)
+    end)
+
+    it("never makes a client call for probes on the load-time events", function()
+        local h = support.loadEval()
+        local calls = spyEvent(h)
+        support.eval(
+            h,
+            [[Event.Logic.Subscribe('l', function() end)
+Event.VarTransmit.Subscribe('v', function() end)
+Event.GameStateChanged.Subscribe('g', function() error('x') end)
+Event.Logic.Unsubscribe('l')]]
+        )
+        h:fire("GameStateChanged", { oldState = 30, newState = 10 }) -- 'g' raises: removed
+        support.run(h, { { "r", "reset", "" } })
+        assert.are.same({}, calls)
+    end)
+
+    it("unsubscribes directly on a later Logic tick once the last probe goes", function()
+        local h = support.loadEval()
+        support.eval(h, "Event.ServerLogic.Subscribe('a', function() end)")
+        local calls, ticks = spyEvent(h)
+        support.answer(h, {
+            status = 200,
+            body = support.line("u", "eval", "Event.ServerLogic.Unsubscribe('a')"),
+        })
+        local removedAt = h.tick
+        assert.are.same({}, calls) -- nothing on the tick the probe went
+        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+        h:step()
+        assert.are.same({ "Unsubscribe ServerLogic " .. SERVER }, calls)
+        assert.are.same({ removedAt + 1 }, ticks)
+        assert.are.same({}, subNames(h, "ServerLogic"))
+        h:advance(20 * 30)
+        assert.are.equal(1, #calls) -- and only once
+    end)
+
+    it("queues the removal when a probe's first error removes the last one", function()
+        local h = support.loadEval()
+        support.eval(h, "Event.KeyTyped.Subscribe('bad', function() error('x') end)")
+        local calls = spyEvent(h)
+        h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
+        assert.are.equal(1, support.lines(h, 'probe Event.KeyTyped "bad" removed'))
+        assert.are.same({}, calls) -- not from inside KeyTyped's own dispatch
+        h:step()
+        assert.are.same({ "Unsubscribe KeyTyped devBridgeProbeKeyTyped" }, calls)
+    end)
+
+    it("keeps the subscription when a probe comes back before that tick", function()
+        local h = support.loadEval()
+        support.eval(h, "Event.ServerLogic.Subscribe('a', function() end)")
+        local calls = spyEvent(h)
+        support.eval(
+            h,
+            [[Event.ServerLogic.Unsubscribe('a')
+Event.ServerLogic.Subscribe('b', function() emit('b', 1) end)]]
+        )
+        support.answer(h)
+        h:advance(20 * 30)
+        assert.are.same({}, calls)
+        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+        assert.is_true(#support.payloads(support.last(h), "Emit") >= 1)
+    end)
+
+    it("resubscribes an event whose subscription was already removed", function()
+        local h = support.loadEval()
+        support.eval(h, "Event.ServerLogic.Subscribe('a', function() end)")
+        local calls = spyEvent(h)
+        support.eval(h, "Event.ServerLogic.Unsubscribe('a')")
+        support.eval(h, "Event.ServerLogic.Subscribe('a', function() end)")
+        assert.are.same(
+            { "Unsubscribe ServerLogic " .. SERVER, "Subscribe ServerLogic " .. SERVER },
+            calls
+        )
+        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+    end)
+
+    it("queues every lazy subscription on reset, removing them on the next tick", function()
+        local h = support.loadEval()
+        support.eval(
+            h,
+            [[Event.KeyTyped.Subscribe('k', function() end)
+Event.ServerLogic.Subscribe('s', function() end)
+Event.Logic.Subscribe('l', function() end)]]
+        )
+        local calls = spyEvent(h)
+        support.answer(h, { status = 200, body = support.line("r", "reset", "") })
+        assert.are.same({}, calls)
+        h:step()
+        -- In protocol.PROBE_EVENTS order, whatever order the probes came in.
+        assert.are.same({
+            "Unsubscribe ServerLogic " .. SERVER,
+            "Unsubscribe KeyTyped devBridgeProbeKeyTyped",
+        }, calls)
+    end)
+
+    it("unsubscribes the live and pending lazy subscriptions, then the six, on shutdown", function()
+        local h = support.loadEval()
+        support.eval(
+            h,
+            [[Event.KeyTyped.Subscribe('k', function() end)
+Event.ServerLogic.Subscribe('s', function() end)
+Event.Logic.Subscribe('l', function() end)]]
+        )
+        local calls = spyEvent(h)
+        -- KeyTyped's removal is still pending when the plugin unloads.
+        support.answer(h, {
+            status = 200,
+            body = support.line("u", "eval", "Event.KeyTyped.Unsubscribe('k')"),
+        })
+        -- Each is a direct call: the harness faults one passed straight to pcall.
+        h:unload()
+        assert.are.same(shutdownUnsubscribes(h, { "ServerLogic", "KeyTyped" }), calls)
+        assert.are.same({}, subNames(h, "ServerLogic"))
+        assert.are.same({}, subNames(h, "KeyTyped"))
+    end)
+
+    it("makes no client call when an error stops it; shutdown still unsubscribes", function()
+        local h = support.loadEval()
+        support.eval(h, "Event.ServerLogic.Subscribe('s', function() end)")
+        local calls = spyEvent(h)
+        h.env.require("protocol").refusal = function()
+            error("boom")
+        end
+        support.answer(h, { status = 200, body = support.line("c", "exec", "plist") })
+        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        h:advance(20 * 30)
+        assert.are.same({}, calls) -- stopping makes no client call
+        h:unload()
+        assert.are.same(shutdownUnsubscribes(h, { "ServerLogic" }), calls)
     end)
 end)
 

@@ -1,13 +1,12 @@
 -- The dev bridge's eval (shell): runs Lua snippets the local daemon sends (command kind eval)
 -- in a scratch environment kept for the bridge session, and holds the probes they install.
 --
--- A probe is an entry in this module's table, never a client subscription. main.lua
--- subscribes each event in protocol.PROBE_EVENTS once, at load, and its handler calls
--- fanOut, which calls that event's probes. Four client aborts (docs/api-concepts.md, "Runtime
--- limits we've hit") showed that a subscription made inside a callback, where snippets run,
--- can never be unsubscribed safely, so a snippet's Subscribe and Unsubscribe only edit the
--- table, and reset clears it without a client call. A fifth (a self-reload from Logic with 39
--- load-time subscriptions) is why PROBE_EVENTS is only stage 1's six.
+-- A probe is an entry in this module's table, never a client subscription of its own: the
+-- bridge's handler for an event calls fanOut, which calls that event's probes. This module
+-- makes no client calls. It tells the host when an event gains its first probe
+-- (host.firstProbe) and when it has none left (host.noProbes); main.lua then subscribes or
+-- unsubscribes that event's handler at the client, for events outside its six load-time ones.
+-- So a snippet's Subscribe and Unsubscribe, a probe's removal and reset are table edits here.
 --
 -- A snippet's globals live in the scratch table (its _G too); reads fall through to the
 -- bridge's globals. In it, these globals differ from the bridge's:
@@ -21,11 +20,11 @@
 --   ExecuteConsoleCommand  refuses what exec refuses (protocol.consoleRefusal).
 -- The scratch env is a convenience, not a sandbox: the snippet is trusted as exec is.
 --
--- A snippet must NEVER call the real Event.<X>.Subscribe or Unsubscribe, which it can reach
--- through getmetatable(_G).__index. A subscription made at runtime can never be removed
--- without aborting the client, so from then on even `prl dev-bridge` or `poff dev-bridge` is
--- expected to abort it. Probably the same for ExecuteConsoleCommand("prl <other plugin>") or
--- poff when that plugin made subscriptions at runtime (unverified).
+-- A snippet that calls the real Event.<X>.Subscribe (reachable through
+-- getmetatable(_G).__index) must call the real Unsubscribe itself, directly: neither reset nor
+-- the bridge's PluginShutdown knows about it, so after a reset its callback keeps firing.
+-- Never pass Event.<X>.Unsubscribe straight to pcall or xpcall: all seven client aborts seen
+-- so far did that (docs/api-concepts.md, "Runtime limits we've hit").
 --
 -- A snippet runs inside the bridge's Logic call, so one that runs past the client's 1000 ms
 -- limit is aborted by the client, which takes the bridge down with it (`pon dev-bridge`
@@ -53,6 +52,12 @@ local eval = {}
 ---@field [integer] DevBridgeProbe
 ---@field running integer
 
+---@class (exact) DevBridgeEvalHost
+---@field push fun(entry: string)
+---@field tick fun(): integer
+---@field firstProbe fun(event: string)
+---@field noProbes fun(event: string)
+
 -- A value as plain data, as forwarded event payloads are; one that can't be serialised (its
 -- tostring() raises) becomes text saying so rather than failing the whole result.
 ---@param v any
@@ -65,8 +70,10 @@ end
 
 -- A new evaluator for one bridge session. `host.push(entry)` buffers an encoded Log or Emit
 -- event (the host drops it once the bridge has stopped); `host.tick()` is the Logic tick to
--- stamp it with.
----@param host { push: fun(entry: string), tick: fun(): integer }
+-- stamp it with. `host.firstProbe(event)` is called before an event with no probe list gets
+-- one (an error from it fails the snippet's Subscribe), `host.noProbes(event)` once its list
+-- is gone.
+---@param host DevBridgeEvalHost
 ---@return table
 function eval.new(host)
     local self = {}
@@ -105,7 +112,10 @@ function eval.new(host)
             end
         end
         -- A clear() during the fan-out detached this list; a new one may stand in its place.
-        if kept == 0 and probes[event] == list then probes[event] = nil end
+        if kept == 0 and probes[event] == list then
+            probes[event] = nil
+            host.noProbes(event)
+        end
     end
 
     ---@param probe DevBridgeProbe
@@ -144,6 +154,7 @@ function eval.new(host)
         remove(event, name)
         local list = probes[event]
         if not list then
+            host.firstProbe(event)
             list = { running = 0 }
             probes[event] = list
         end
@@ -207,13 +218,14 @@ function eval.new(host)
         sweep(event, list)
     end
 
-    -- Remove every probe: a pure table edit, so safe from inside any callback.
+    -- Remove every probe. No client call: host.noProbes only queues the event's removal.
     function self.clear()
         for event, list in pairs(probes) do
             for _, probe in ipairs(list) do
                 probe.removed = true
             end
             probes[event] = nil
+            host.noProbes(event)
         end
         count = 0
     end

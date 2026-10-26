@@ -191,9 +191,10 @@ delivered or daemon down; 3 delivered, no result in time). On success it prints 
 "output": [...]}`, plus `"truncated": true` when the plugin cut something to fit its caps.
 `eval --reset` (no code allowed) queues a `reset` command and prints `ok (<id>)`: the bridge
 clears its eval probes and starts a fresh scratch env, without reloading (same session, no
-console command; probes are table entries, not client subscriptions, and only on the
-bridge's six load-time events, `Logic` and the five it forwards: a self-reload with more
-load-time subscriptions aborted the client). Before queueing, `eval` and `eval --reset` check
+console command; probes are entries in the bridge's own table, on any event but `Draw`,
+`EntityDraw`, `SettingsLayerReady` and `ContentLayerReady`; an event outside the bridge's six
+load-time ones is subscribed at the client while it has probes, and reset leaves its removal to
+the next `Logic` tick). Before queueing, `eval` and `eval --reset` check
 that the daemon's `GET /cli/status` lists the kind in `kinds`. A daemon started before the eval
 kinds existed ignores `kind` and would queue the Lua as a console command, so then the CLI exits
 2 without queueing and says to restart it (`scripts/rsdev.py stop && scripts/rsdev.py start`);

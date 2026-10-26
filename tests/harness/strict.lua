@@ -41,6 +41,21 @@ function M.fault(message, catchable)
     error(message, level)
 end
 
+-- debug.getinfo's `what` ("Lua", "main" or "C") for the first frame below the harness's own
+-- Lua frames: the code that called into the mocked API. "C" means the API function was handed
+-- straight to a C function such as pcall (or tail-called from a function one called, since a
+-- tail call drops the caller's frame). The same walk as M.fault, but a C frame stops it.
+---@return string
+function M.callerKind()
+    local level = 2
+    while true do
+        local info = debug.getinfo(level, "S")
+        if not info then return "main" end -- nothing below the harness: no caller to blame
+        if info.what == "C" or info.source:sub(1, #HARNESS) ~= HARNESS then return info.what end
+        level = level + 1
+    end
+end
+
 -- A table's keys in a fixed order (grouped by type name, so numbers before strings), so a
 -- fault over several bad entries always names the same one.
 ---@param t table

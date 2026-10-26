@@ -3,7 +3,7 @@
 
 local support = require("tests.dev-bridge.support")
 
--- The forwarded events, in the order main.lua subscribes them (protocol.PROBE_EVENTS order).
+-- The forwarded events, in the order main.lua subscribes them (protocol.LOAD_EVENTS order).
 local FORWARDED = {
     "ChatMessage",
     "VarTransmit",
@@ -46,7 +46,7 @@ end
 describe("dev-bridge", function()
     it("subscribes stage 1's six events at load, in stage 1's order and names", function()
         -- Stage 1's bridge (commit 684eedc) ran a self-reload from Logic twice with exactly
-        -- these; one with 39 load-time subscriptions aborted the client (docs/api-concepts.md).
+        -- these. The other probe-able events are subscribed only once a probe needs them.
         local h, calls = loadRecordingSubscribes()
         assert.are.same({
             "Logic devBridgeLogic",
@@ -57,12 +57,14 @@ describe("dev-bridge", function()
             "GameStateChanged devBridgeGameStateChanged",
         }, calls)
         local protocol = h.env.require("protocol")
-        for _, event in ipairs(protocol.PROBE_EVENTS) do
+        local loaded = {}
+        for _, event in ipairs(protocol.LOAD_EVENTS) do
+            loaded[event] = true
             local subs = h.instance.subs[event]
             assert.are.same({ "devBridge" .. event }, { subs[1].name, subs[2] }, event)
         end
-        for event in pairs(protocol.PROBE_EXCLUDED) do
-            assert.are.same({}, h.instance.subs[event], event)
+        for event, subs in pairs(h.instance.subs) do
+            if not loaded[event] then assert.are.same({}, subs, event) end
         end
     end)
 
@@ -462,8 +464,8 @@ describe("dev-bridge", function()
         h:step()
         assert.is_true(open[1].state.fields.cancelled)
         assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
-        -- Stopped from inside Logic, so made a no-op, not unsubscribed (the harness faults on
-        -- an Unsubscribe there): still subscribed, and doing nothing.
+        -- Stopped from inside Logic, so made a no-op, not unsubscribed (stopping makes no
+        -- client call; PluginShutdown unsubscribes): still subscribed, and doing nothing.
         assert.are.same("devBridgeLogic", h.instance.subs.Logic[1].name)
         local requests = #h.requests
         h.world:chat("ignored")
@@ -480,7 +482,7 @@ describe("dev-bridge", function()
         local open = support.open(h)[1]
         h:unload()
         assert.is_true(open.state.fields.cancelled)
-        for _, event in ipairs(h.env.require("protocol").PROBE_EVENTS) do
+        for _, event in ipairs(h.env.require("protocol").LOAD_EVENTS) do
             assert.are.same({}, h.instance.subs[event], event)
         end
     end)

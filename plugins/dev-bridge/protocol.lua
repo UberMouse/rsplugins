@@ -2,7 +2,7 @@
 -- commands, and deciding which commands the bridge refuses. It also holds the privacy filters
 -- deciding which chat messages and menu entries may leave the client (chatView, entryView),
 -- the shape and caps of eval results and of the Log and Emit events, and which events the
--- bridge subscribes to and eval probes may use (PROBE_EVENTS).
+-- bridge subscribes to at load (LOAD_EVENTS) and eval probes may use (PROBE_EVENTS).
 -- Nothing here calls the API or keeps state; main.lua and eval.lua (the shell) do both. The
 -- protocol is documented in docs/dev-environment.md ("Dev bridge") and served by
 -- scripts/rsdev.py.
@@ -414,15 +414,10 @@ end
 -- The events the bridge subscribes to, and probes
 ---------------------------------------------------------------------------
 
--- Every event the bridge subscribes to, each once, at load, as "devBridge<Event>" (main.lua),
--- in this order, and so the events an eval probe may use: a probe is an entry in eval.lua's
--- table that the bridge's handler calls, never a client subscription of its own. These are
--- stage 1's six (commit 684eedc): Logic, then the five forwarded events. Four client aborts
--- showed that a subscription made inside a callback can never be unsubscribed safely, so
--- nothing is subscribed after load; a fifth showed that a self-reload (`prl dev-bridge`) from
--- Logic aborted the client with 39 load-time subscriptions, while it ran cleanly twice with
--- these six (docs/api-concepts.md, "Runtime limits we've hit").
-protocol.PROBE_EVENTS = {
+-- The bridge's own subscriptions, made at load as "devBridge<Event>" (main.lua) in this order and
+-- unsubscribed only in PluginShutdown: stage 1's six (commit 684eedc), Logic for the bridge's
+-- work, then the five forwarded events.
+protocol.LOAD_EVENTS = {
     "Logic",
     "ChatMessage",
     "VarTransmit",
@@ -431,24 +426,20 @@ protocol.PROBE_EVENTS = {
     "GameStateChanged",
 }
 
-local NOT_SUBSCRIBED = "not subscribed at load: a self-reload from Logic with more "
-    .. "subscriptions aborted the client (docs/api-concepts.md)"
-
--- Every other event in the stub's Event table (docs/api/generated/core/events.lua), and why a
--- probe can't use it. A spec checks that this and PROBE_EVENTS cover the stub exactly.
-protocol.PROBE_EXCLUDED = {
-    Draw = "it fires every rendered frame, so a handler there would cost frame time for the "
-        .. "whole session",
-    EntityDraw = "it fires for every entity on every frame, and its subscribers' boolean "
-        .. "return decides whether the entity is drawn, which a handler must not touch",
-}
-for _, event in ipairs({
+-- The events an eval probe may use (LOAD_EVENTS among them), in the stub's order. A probe is
+-- an entry in eval.lua's table, called by the bridge's handler for its event. An event outside
+-- LOAD_EVENTS gets that handler as a client subscription, "devBridgeProbe<Event>", made when
+-- its first probe is added and removed on a Logic tick after its last one goes (main.lua).
+protocol.PROBE_EVENTS = {
+    "Logic",
     "ServerLogic",
     "OptionalDependencyChanged",
     "OptionalPermissionChanged",
     "KeyUp",
     "KeyDown",
     "KeyTyped",
+    "VarTransmit",
+    "ChatMessage",
     "PlayerEntityAdded",
     "PlayerEntityRemoved",
     "NPCEntityAdded",
@@ -457,6 +448,7 @@ for _, event in ipairs({
     "ObjStackEntityRemoved",
     "ObjStackEntityChanged",
     "WindowFocusChanged",
+    "GameStateChanged",
     "WindowSizeChanged",
     "SkillTransmit",
     "RunEnergyTransmit",
@@ -465,22 +457,33 @@ for _, event in ipairs({
     "MiniMenuClosed",
     "MiniMenuReady",
     "MiniMenuEntryAdded",
+    "MiniMenuEntrySelected",
     "LocAdded",
     "LocRemoved",
     "LocCustomised",
     "LocAnimation",
     "InventoryAdded",
+    "InventoryUpdated",
     "InventoryRemoved",
     "GrandExchangeOfferUpdated",
     "WorldCreated",
     "WorldUpdated",
     "RegionCreated",
     "RegionUpdated",
-    "SettingsLayerReady",
-    "ContentLayerReady",
-}) do
-    protocol.PROBE_EXCLUDED[event] = NOT_SUBSCRIBED
-end
+}
+
+-- Every other event in the stub's Event table (docs/api/generated/core/events.lua), and why a
+-- probe can't use it. A spec checks that this and PROBE_EVENTS cover the stub exactly.
+protocol.PROBE_EXCLUDED = {
+    Draw = "it fires every rendered frame, so a handler there would cost frame time for the "
+        .. "whole session",
+    EntityDraw = "it fires for every entity on every frame, and its subscribers' boolean "
+        .. "return decides whether the entity is drawn, which a handler must not touch",
+    SettingsLayerReady = "it needs hasSettingsIcon in the manifest, which dev-bridge lacks, so "
+        .. "it never fires for the bridge",
+    ContentLayerReady = "it needs hasRibbonIcon in the manifest, which dev-bridge lacks, so it "
+        .. "never fires for the bridge",
+}
 
 local PROBE_SET = {}
 for _, event in ipairs(protocol.PROBE_EVENTS) do
@@ -563,8 +566,7 @@ end
 -- permissions, short and long forms. plugins_setenabled is refused whatever its true/false
 -- argument, since telling a re-enable from a disable is error-prone. Reloading (prl,
 -- plugins_reload) is allowed: a plugin can reload itself from its own Logic callback, which is
--- how the daemon side restarts the bridge. That is only known to be safe with the bridge's six
--- load-time subscriptions (PROBE_EVENTS; docs/api-concepts.md).
+-- how the daemon side restarts the bridge (docs/api-concepts.md, "Seen with dev-bridge").
 local DISABLING = {
     poff = true,
     plugins_disable = true,

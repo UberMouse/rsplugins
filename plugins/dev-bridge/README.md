@@ -60,8 +60,8 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   above, or a bare `prl` or `poff` with no argument (whether the client treats that as "all
   plugins" is unknown) would pass: don't send one.
 - `prl dev-bridge` (or `plugins_reload dev-bridge`) is allowed: probed in the client, the
-  bridge reloads itself cleanly from its own `Logic` callback with its six load-time
-  subscriptions (with 39 it aborted the client, see below). The reloaded bridge is a new session, so
+  bridge reloads itself cleanly from its own `Logic` callback, provided its `PluginShutdown`
+  calls `Unsubscribe` directly (see below). The reloaded bridge is a new session, so
   that command's result is never reported. The daemon resolves it as "bridge restarted before
   reporting" as soon as the new session syncs, so `rsdev.py exec "prl dev-bridge"` exits 1
   (`error: bridge restarted before reporting`), or 3 (outcome unknown) if the new session hasn't
@@ -70,19 +70,21 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   answered), those commands are never run and never re-sent, and `rsdev.py exec` reports
   "delivered but no result" (exit 3). That is safe for non-idempotent commands, but exit 3
   means "unknown": check the client.
-- It subscribes once, at load, to the six events in `protocol.PROBE_EVENTS`: `Logic` (as
+- At load it subscribes the six events in `protocol.LOAD_EVENTS`: `Logic` (as
   `devBridgeLogic`), then the five above, each as `devBridge<Event>`, the same names and order
-  as stage 1's bridge. It never subscribes or unsubscribes anything after that: an
-  `Unsubscribe` of a subscription made inside a callback, or one called during a dispatch,
-  aborted the client four times, and a fifth abort came from `prl dev-bridge` run from `Logic`
-  while the bridge held 39 load-time subscriptions (docs/api-concepts.md, "Runtime limits we've
-  hit"). Each handler forwards its event if it is one of the five above, does the bridge's own
-  work on `Logic`, then runs the eval probes on that event. With none, that costs one table
-  read per delivery.
-- Disabling it (`poff dev-bridge`) unsubscribes those load-time subscriptions, and nothing
-  else, and cancels any sync in flight. An internal error (in a handler or a probe fan-out)
-  stops the bridge by making every handler do nothing, clearing the probes and cancelling the
-  sync in flight; it unsubscribes nothing until `PluginShutdown`.
+  as stage 1's bridge. Each handler forwards its event if it is one of the five above, does the
+  bridge's own work on `Logic`, then runs the eval probes on that event. With none, that costs
+  one table read per delivery. Other events are subscribed only while an eval probe needs them
+  ("Eval" below).
+- **Every `Event.<X>.Unsubscribe` is a direct call.** All seven client aborts seen on
+  2026-10-26 passed it straight to `pcall` (`pcall(Event[event].Unsubscribe, name)`), including
+  three `prl dev-bridge` reloads whose `PluginShutdown` did; stage 1's bridge, which calls it
+  directly, reloaded cleanly (docs/api-concepts.md, "Runtime limits we've hit").
+- Disabling or reloading it runs `PluginShutdown`: it cancels any sync in flight, then
+  unsubscribes, directly, every probe event subscribed at the client and the six load-time
+  events. An internal error (in a handler or a probe fan-out) stops the bridge by making every
+  handler do nothing, clearing the probes and cancelling the sync in flight; it makes no client
+  call, and unsubscribes nothing until `PluginShutdown`.
 - Every `[BRIDGE]` console line is also sent to the daemon as a `Log` event
   (`{plugin: "dev-bridge", level: "log", text}`), so `rsdev.py logs` shows it.
 
@@ -107,25 +109,30 @@ Logic tick, one command per tick, like `exec`.
   like the result's values). Read them with `rsdev.py events --name Emit`.
 - `Event.<Name>.Subscribe(name, callback)` in a snippet installs a **probe**: `callback` is
   called with the event's payload each time the bridge's own handler for that event runs.
-  A probe is an entry in a table in `eval.lua`, not a client subscription, so it can't touch
-  the bridge's own subscriptions whatever its name. Subscribing a name the event already has
+  A probe is an entry in a table in `eval.lua`, not a client subscription of its own, so it
+  can't touch the bridge's subscriptions whatever its name. Subscribing a name the event already has
   replaces it: the old callback is not called again and the new one goes last. A probe's
   returns are dropped (no probe-able event uses a subscriber's return), so it can't affect the
   client that way; it can still edit the payload (`ChatMessage.chatMessage`, say), and
   forwarding happens before the probes run.
 - `Event.<Name>.Unsubscribe(name)` removes the probe; an unknown name does nothing. Both are
   table edits, safe anywhere, including from inside a probe.
-- **Probe-able events** are the six in `protocol.PROBE_EVENTS`, the bridge's only
-  subscriptions: `Logic`, `ChatMessage`, `VarTransmit`, `InventoryUpdated`,
-  `MiniMenuEntrySelected` and `GameStateChanged`. The list is short because of the fifth client
-  abort: with 39 events (all but four) subscribed at load, `prl dev-bridge` from `Logic` aborted
-  the client, while stage 1's bridge, with these six, survived the same reload twice. Which of
-  the other events (or how many) caused it is unknown, so none is subscribed. `Subscribe` and
-  `Unsubscribe` refuse every other event with a Lua error naming the event and why: `Draw` fires
-  every rendered frame, so a handler there would cost frame time for the whole session;
-  `EntityDraw` fires for every entity on every frame, and its subscribers' boolean return
-  decides whether the entity is drawn; any other event is "not subscribed at load". An unknown
-  name is refused as "no such event".
+- **Probe-able events** are those in `protocol.PROBE_EVENTS`: every event in the API stub
+  but four. `Subscribe` and `Unsubscribe` refuse those four with a Lua error naming the event
+  and why: `Draw` fires every rendered frame, so a handler there would cost frame time for the
+  whole session; `EntityDraw` fires for every entity on every frame, and its subscribers'
+  boolean return decides whether the entity is drawn; `SettingsLayerReady` and
+  `ContentLayerReady` never fire for the bridge, which has no `hasSettingsIcon` or
+  `hasRibbonIcon` in its manifest. An unknown name is refused as "no such event".
+- **Lazy subscriptions.** A probe on one of the six load-time events runs from the bridge's
+  existing handler, with no client call. The first probe on any other event makes one direct
+  client call, `Event.<X>.Subscribe("devBridgeProbe<X>", handler)`, there and then in the
+  snippet (a `Subscribe` from inside `Logic` works). When that event's last probe goes (its
+  `Unsubscribe`, its first error, or a reset), the bridge doesn't unsubscribe at once: it
+  queues the event, and its own `Logic` handler calls `Event.<X>.Unsubscribe("devBridgeProbe<X>")`
+  directly on a later tick. A new probe on the event before then cancels the removal, so the
+  subscription stays. Until then the subscription delivers to no probes, which costs a table
+  read.
 - **Changes during a fan-out** (mark and sweep): a probe removed while its event's probes are
   being called (by itself, another probe or an error) is not called again in that pass, and is
   dropped from the table when the pass ends. One added or replaced during the pass is first
@@ -137,18 +144,17 @@ Logic tick, one command per tick, like `exec`.
 - A session holds at most 32 live probes. A `Subscribe` of a new one past that raises a Lua
   error in the snippet (`ok=false`) naming the cap; `Unsubscribe` frees a slot at once, and
   `rsdev.py eval --reset` clears them all.
-- **Never call the real `Event.<X>.Subscribe` or `Unsubscribe` from a snippet.** It is
-  reachable, through `getmetatable(_G).__index`. A subscription created at runtime (inside any
-  callback, and snippets run inside `Logic`) can't be removed without aborting the client, so
-  from then on even `prl dev-bridge` or `poff dev-bridge` is expected to abort it. The same
-  probably goes for `ExecuteConsoleCommand("prl <other plugin>")` (or `poff`) from a snippet
-  when that plugin made subscriptions at runtime (unverified).
+- **Never pass `Event.<X>.Unsubscribe` straight to `pcall`** (or `xpcall`), from a snippet or
+  anywhere: that form aborted the client seven times. A snippet can reach the real `Event`
+  through `getmetatable(_G).__index`; one that subscribes it must unsubscribe it itself, with
+  a direct call, before a reset or reload: neither knows about it, and after a reset its
+  callback keeps firing. Prefer probes.
 - `ExecuteConsoleCommand` in a snippet refuses what `exec` refuses: a self-disable raises a Lua
   error, so the eval fails with that message. `prl dev-bridge` is allowed, and as with `exec`,
   the reload means that eval's result is never reported.
 - `rsdev.py eval --reset` (kind `reset`) clears every probe and starts a fresh scratch env, then
-  answers ok (no values). The bridge does not reload: same session, no console command, no
-  client call. Disabling or reloading the bridge also clears the probes and the scratch env,
+  answers ok (no values). The bridge does not reload: same session, no console command. Probe
+  events subscribed at the client are unsubscribed on the next `Logic` tick, as above. Disabling or reloading the bridge also clears the probes and the scratch env,
   which lives for one session and is never saved.
 - Caps keep a sync under the daemon's 2 MB body limit. Values over 64 KB encoded are dropped
   (`nvalues` stays the true count), `output` keeps 200 lines of up to 2 KB each, and a result
@@ -179,8 +185,9 @@ Those chat and menu filters cover only the events the bridge forwards itself, an
 forwarding is unchanged by eval. **They do not apply to eval:** a snippet can read anything the
 API exposes, other players included, and a probe sees the full payload of every subscribed
 event (other players' chat text, inventories, menu entries naming players) and could emit it.
-What a snippet returns or emits reaches the daemon unfiltered. `KeyUp`, `KeyDown` and `KeyTyped`
-are no longer subscribed, so no probe sees keystrokes. Eval is the conductor's local dev tool, with
+What a snippet returns or emits reaches the daemon unfiltered. A probe on `KeyUp`, `KeyDown` or
+`KeyTyped` sees every keystroke while it is installed; the bridge subscribes to those events
+only while such a probe exists. Eval is the conductor's local dev tool, with
 the same trust as `exec`: it runs only Lua that the daemon on this machine sends. The daemon
 logs each snippet's first 200 characters to `dumps/rsdev/daemon.log` and hands the result to
 the waiting `rsdev.py eval`, which prints it. Its `Emit` and `Log` events are written to

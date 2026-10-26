@@ -68,7 +68,8 @@ describe("Plugin", function()
     it("fires OptionalPermissionChanged when a permission is granted or revoked", function()
         local h = harness.load(plugin([[
             Event.OptionalPermissionChanged.Subscribe("p", function(ev)
-                print(ev.permissionName, ev.enabled, Plugin.HasPermission(ev.permissionName))
+                local perm = PluginPermissions[ev.permissionName]
+                print(ev.permissionName, ev.enabled, Plugin.HasPermission(perm))
             end)
         ]]))
         h.world:grant("chatAccess")
@@ -76,6 +77,25 @@ describe("Plugin", function()
         h.world:revoke("chatAccess")
         assert.are.equal("chatAccess true true\nchatAccess false false", h:output())
     end)
+
+    it(
+        "hands out opaque permission values and refuses a name string, as the client does",
+        function()
+            local h = harness.load(plugin([[
+            local p = PluginPermissions.httpAccess
+            opaque = { type(p) ~= "string", p == "httpAccess", p == PluginPermissions.httpAccess }
+            text = tostring(p)
+        ]]))
+            assert.are.same({ true, false, true }, h.env.opaque)
+            assert.matches("^sol%.jag::scripting::PluginPermission: ", h.env.text)
+            assert.matches(
+                'HasPermission%("httpAccess"%): stack index 1, expected userdata, received string',
+                harness.errorOf(function()
+                    harness.load(plugin('Plugin.HasPermission("httpAccess")'))
+                end)
+            )
+        end
+    )
 
     it("only grants permissions the manifest requests", function()
         local h = harness.new(plugin(""))

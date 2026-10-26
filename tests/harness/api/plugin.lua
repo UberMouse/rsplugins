@@ -5,18 +5,38 @@ local stubs = require("tests.harness.stubs")
 
 local M = {}
 
-M.PluginPermissions = stubs.value("core/plugin.lua", "PluginPermissions")
-local PERMISSIONS = {}
-for _, v in pairs(M.PluginPermissions) do
-    PERMISSIONS[v] = true
+-- Live, each PluginPermissions value is a userdata (sol.jag::scripting::PluginPermission), the
+-- same object on every read, and Plugin.HasPermission refuses anything else, its name string
+-- included (docs/api-concepts.md). The harness hands out one opaque proxy per permission; the
+-- world and recordings name permissions by their string, as OptionalPermissionChanged does.
+local PERMISSION_META = { __name = "sol.jag::scripting::PluginPermission" }
+PERMISSION_META.__tostring = function(self)
+    return string.format("sol.jag::scripting::PluginPermission: %p", self)
+end
+local NAMES = {} -- proxy -> name
+M.PluginPermissions = {} -- name -> proxy
+for name in pairs(stubs.value("core/plugin.lua", "PluginPermissions")) do
+    local proxy = setmetatable({}, PERMISSION_META)
+    M.PluginPermissions[name], NAMES[proxy] = proxy, name
 end
 
--- Fault unless `perm` is a PluginPermissions value.
+-- The client's error for a string where a PluginPermissions value belongs.
+local STRING_PERMISSION = "stack index 1, expected userdata, received string: value is not a "
+    .. "valid userdata (bad argument into 'bool(const jag::scripting::PluginPermission&)')"
+
+-- The name of a PluginPermissions value; faults on anything else.
 ---@param perm any
-function M.checkPermission(perm)
-    if not PERMISSIONS[perm] then
+---@return string
+function M.permissionName(perm)
+    local name = NAMES[perm]
+    if not name then
+        if type(perm) == "string" then
+            strict.fault(string.format("Plugin.HasPermission(%q): %s", perm, STRING_PERMISSION))
+        end
         strict.fault("not a PluginPermissions value: " .. tostring(perm))
     end
+    ---@cast name -? -- fault() never returns
+    return name
 end
 
 -- A manifest url as the client hands it out: an opaque object, not a string. Live (beta client
@@ -55,8 +75,8 @@ local Plugin = strict.class("Plugin", {
     statics = {
         -- Replaying, a permission neither the recording nor the test has decided faults rather
         -- than answering the not-granted default: the client may well have had it granted.
-        HasPermission = function(s, perm)
-            M.checkPermission(perm)
+        HasPermission = function(s, value)
+            local perm = M.permissionName(value)
             local perms = s.h.world.state.permissions
             if s.h.replay and not perms.known[perm] then
                 strict.fault("unrecorded: Plugin.HasPermission(" .. tostring(perm) .. ")")

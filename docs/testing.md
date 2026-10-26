@@ -74,7 +74,7 @@ end)
 |---|---|
 | `harness.new(plugin, opts?)` | A harness, not yet loaded. `plugin` is a folder name under `plugins/`, a path containing `/`, or a table of inline files `{ ["main.lua"] = "...", ["plugin.json"] = "..." }` |
 | `harness.load(plugin, opts?)` | `new` then `h:load()` |
-| `harness.enums` | `ChatType`, `PersistentDBType`, `PluginPermissions`, `SkillType`, `ValueType` |
+| `harness.enums` | `ChatType`, `PersistentDBType`, `PluginPermissions`, `SkillType`, `ValueType`. `PluginPermissions` values are opaque, as in the client; the world builder (`grant`, `revoke`, `opts.grant`) names permissions by string |
 | `harness.errorOf(fn, ...)` | The error message `fn` raises; fails if it doesn't raise |
 
 `opts`: `grant = { "httpAccess", ... }` (permissions granted from the start, without an event),
@@ -366,7 +366,7 @@ recorded while `main.lua` runs, and `k`, its kind:
 | `read` | `path`, `v` |
 | `event` | `name`; `payload`, each field the stub's `<Name>EventPayload` lists (none for `ServerLogic`); `op`, the world op it stands for, when the harness models one |
 | `db` | `op` (the method, e.g. `GetInt`), `key`, `value` (the second argument, e.g. what `Set` stored), `v` (the result) |
-| `perm` | `permission`, `v` |
+| `perm` | `permission` (its name, e.g. `httpAccess`), `v` |
 | `http` | `id`, `phase`. For `start`: `method`, `url`, `headers`, `body`. For `done`: `successful`, `failed`, `timedOut`, `cancelled`, `responseCode`, `errorCode`, `errorInfo`, `header`, `data` |
 
 A missing field means nil (`v` of a `PersistentDB:Get` of an unset key, say).
@@ -544,6 +544,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | `InventoryAdded`/`Updated` (`slotsUpdated`)/`Removed` carry the `InvType` | core/events.html#inventoryadded and below |
 | PersistentDB: Get nil when unset; typed getters nil on a type mismatch; Set returns a Bool; unsupported table fields are dropped; `IterateEntries` stops on `true` and returns the count; persists across reload | core/persistentdb.html |
 | `PersistentDBType` values 0–4 (the stub has strings) | core/persistentdb.html#persistentdbtype |
+| `PluginPermissions` values are opaque (`sol.jag::scripting::PluginPermission`, a pointer `tostring`, the same object on every read, not `==` the name), and `Plugin.HasPermission` takes only them: a name string faults with the client's `expected userdata, received string` error. So turn `OptionalPermissionChanged`'s `permissionName` into one with `PluginPermissions[ev.permissionName]` (that the name is the key, e.g. `httpAccess`, is unconfirmed) | dev-bridge eval, 2026-10-26: `type(PluginPermissions.httpAccess)` userdata, `Plugin.HasPermission("httpAccess")` raised |
 | `Plugin.HasPermission`, `Plugin.urls.<name>` from the manifest; a name the manifest lacks reads nil, without an error (and `HTTPRequest.new` faults on that nil) | core/plugin.html; dev-bridge eval, 2026-10-26 (`Plugin.urls.nope`) |
 | `OptionalPermissionChanged` (`permissionName`, `enabled`) fires for optional permissions | core/events.html#optionalpermissionchanged |
 | HTTP needs httpAccess, and a base URL from the manifest's `urls`; `Get`/`Post`/`AddHeader` on an active request raise (`This request is already being executed`); the completion callback receives the request (`==` it) | core/http.html; dev-bridge eval against the rsdev daemon, 2026-10-26 (beta 951-1) |

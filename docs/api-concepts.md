@@ -424,6 +424,17 @@ The probe sources aren't kept; each finding says what was called.
 - **`Inv:GetSlot` never returns nil for an index.** An empty backpack slot, slot 0 and slot 9999
   all gave an `InventorySlot` of obj -1, count 0, with no error. `inv.valid` (the stub's name for
   `isValid`) reads nil without an error.
+- **`PluginPermissions` values are userdata, not strings.** `PluginPermissions.httpAccess` is a
+  `sol.jag::scripting::PluginPermission` (`tostring` a pointer, the same object on every read,
+  `pairs(PluginPermissions)` lists the three by name), and isn't `==` `"httpAccess"`.
+  `Plugin.HasPermission("httpAccess")` raises `stack index 1, expected userdata, received
+  string: value is not a valid userdata (bad argument into 'bool(const
+  jag::scripting::PluginPermission&)')`; pass `PluginPermissions.httpAccess`. The stubs give the
+  enum string values, so LuaLS can't catch a string. The stub types
+  `OptionalPermissionChanged.permissionName` as a String, so it can't be passed on either: look
+  it up with `PluginPermissions[ev.permissionName]`, assuming it holds the key (unconfirmed).
+  The dev recorder used to record a permission by `tostring`, which gave the pointer text; it
+  now records the name.
 - **`Plugin` holds more than the page lists**: `HasPermission`, `urls`, `resources` (an empty
   table for a plugin without resources), and the undocumented `Name` and `Version` (the
   manifest's `name` and `version`) and `RemoteID` (-7 for dev-bridge loaded from `dev_plugins`).

@@ -488,6 +488,18 @@ local function wrapPersistentDB(db)
     )
 end
 
+-- A permission's name, as OptionalPermissionChanged and the harness give it. Live, a
+-- PluginPermissions value is a userdata whose tostring is a pointer (docs/api-concepts.md), so
+-- the name comes from the table.
+---@param permission any
+---@return string
+local function permissionName(permission)
+    for name, value in pairs(PluginPermissions) do
+        if rawequal(value, permission) then return name end
+    end
+    return recording.text(permission)
+end
+
 -- Plugin, with HasPermission recorded as { k = "perm", permission, v } when its answer changes.
 ---@param plugin any the real Plugin
 ---@return table
@@ -500,7 +512,7 @@ local function wrapPlugin(plugin)
                 return function(permission, ...)
                     local granted = value(permission, ...)
                     guard(function()
-                        local name = tostring(permission)
+                        local name = permissionName(permission)
                         pushIfChanged(
                             "perm:" .. name,
                             granted,

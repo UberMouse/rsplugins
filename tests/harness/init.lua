@@ -226,7 +226,8 @@ function Harness:fire(event, fields)
     events.dispatch(self, event, events.payload(event, fields))
 end
 
--- Answer an HTTP request (an entry of h.requests); it arrives on the next logic step.
+-- Answer an HTTP request (an entry of h.requests); it arrives on the next logic step. A
+-- status of 400 or more arrives failed, as in the client.
 ---@param record table
 ---@param response table { status = 200, body = "", header = "" } | { timedOut = true } |
 ---  { error = "info", errorCode = n }

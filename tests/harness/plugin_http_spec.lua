@@ -115,10 +115,59 @@ describe("HTTPRequest", function()
 
     it("reports a timeout", function()
         local h = harness.load(plugin(SENDER), { grant = { "httpAccess" } })
-        h.env.send("{}")
+        local req = h.env.send("{}")
         h:respond(h.requests[1], { timedOut = true })
         h:advance(20)
         assert.are.equal("done false 0  true", h:output())
+        assert.are.same(
+            { true, 28, "ErrorOperation timed out after 10001 milliseconds with 0 bytes received" },
+            { req.failed, req.errorCode, req.errorInfo }
+        )
+    end)
+
+    it("times out a request left unanswered for 10 s, as the client does", function()
+        local h = harness.load(plugin(SENDER), { grant = { "httpAccess" } })
+        h.env.send("{}")
+        h:advance(9980)
+        assert.are.equal("", h:output())
+        h:advance(20)
+        assert.are.equal("done false 0  true", h:output())
+    end)
+
+    it("fails a 4xx reply, keeping its code but not its body", function()
+        local h = harness.load(plugin(SENDER), { grant = { "httpAccess" } })
+        local req = h.env.send("{}")
+        h:respond(h.requests[1], { status = 404, body = "nope", header = "HTTP/1.0 404" })
+        h:advance(20)
+        assert.are.equal("done false 404  false", h:output())
+        assert.are.same(
+            { true, 0, "", "HTTP/1.0 404", 0 },
+            { req.failed, req.errorCode, req.errorInfo, req.header, req.downloadedBytes }
+        )
+        assert.is_nil(req.progress)
+    end)
+
+    it("never calls back a cancelled request, which finishes failed on the next step", function()
+        local h = harness.load(plugin(SENDER), { grant = { "httpAccess" } })
+        local req = h.env.send("{}")
+        req:Cancel()
+        assert.are.same({ true, false, false }, { req.cancelled, req.finished, req.failed })
+        h:respond(h.requests[1], { status = 200 })
+        h:advance(20)
+        assert.are.same({ true, true, false }, { req.finished, req.failed, req.successful })
+        h:advance(20000)
+        assert.are.equal("", h:output())
+    end)
+
+    it("refuses a response field it doesn't know", function()
+        local h = harness.load(plugin(SENDER), { grant = { "httpAccess" } })
+        h.env.send("{}")
+        assert.matches(
+            "unknown response field successful",
+            harness.errorOf(function()
+                h:respond(h.requests[1], { status = 400, successful = false })
+            end)
+        )
     end)
 
     it("faults without httpAccess, or for a base url not in the manifest", function()
@@ -140,12 +189,18 @@ describe("HTTPRequest", function()
     it("faults on Post or AddHeader while the request is active", function()
         local h = harness.load(plugin(SENDER), { grant = { "httpAccess" } })
         local req = h.env.send("{}")
-        assert.has_error(function()
-            req:Post("again")
-        end)
-        assert.has_error(function()
-            req:AddHeader("X", "y")
-        end)
+        assert.matches(
+            "This request is already being executed",
+            harness.errorOf(function()
+                req:Post("again")
+            end)
+        )
+        assert.matches(
+            "This request is already being executed",
+            harness.errorOf(function()
+                req:AddHeader("X", "y")
+            end)
+        )
     end)
 
     it("fails the test when a completion callback starts another request", function()

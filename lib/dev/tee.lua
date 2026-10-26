@@ -202,7 +202,7 @@ local function onPosted(finished)
         return
     end
     backOff()
-    -- Not gated on `successful`: the docs don't say what it holds for a non-2xx reply.
+    -- A 400 arrives failed, with responseCode 400 (live, docs/api-concepts.md).
     if finished.responseCode == 400 then
         -- The daemon applied nothing and would refuse the same lines again, so they go.
         dropped = dropped + #sent.lines

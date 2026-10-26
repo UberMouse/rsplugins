@@ -365,6 +365,31 @@ From `plugins/dev-bridge` in the beta client.
   `senderNameUnfiltered` `<img=11>UberMouse894`, `senderNameFiltered`
   `<img=11> <col=6d6d75>Ironman</col> UberMouse894`.
 
+## Probed with dev-bridge eval (2026-10-26)
+
+Read-only snippets sent with `rsdev.py eval` (bridge sessions 2cadd0be39 and 5082c0e41d, beta
+client 951-1), to check the test harness's guesses ([testing.md](testing.md#fidelity-ledger)).
+The probe sources aren't kept; each finding says what was called.
+
+- **HTTP failures, from requests to the rsdev daemon.** The client's HTTP is libcurl.
+  - A 404 (GET) and a 400 (POST) finish with `failed` true and `successful` false,
+    `responseCode` set, `errorCode` 0, `errorInfo` "", `data` "" and `progress` nil. `header`
+    still holds the raw status line and headers.
+  - A 200 with a 422-byte body: `successful`, `progress` 1, `downloadedBytes` and
+    `downloadTotalBytes` 422. Its progress callback was never called.
+  - The completion callback ran 1-2 Logic ticks after `Get`/`Post`, never inside the call, and
+    its argument is `==` the request. Until then the request reads `finished` false,
+    `successful` false, `data` "" and `responseCode` 0.
+  - **The client times out after 10 s.** A 100 s long-poll finished 500 Logic ticks after `Get`
+    with `timedOut` and `failed` true, `errorCode` 28 (`CURLE_OPERATION_TIMEDOUT`), `errorInfo`
+    `ErrorOperation timed out after 10001 milliseconds with 0 bytes received` and
+    `responseCode` 0. A plugin can't wait longer on one request.
+  - **`Cancel` never calls the completion callback.** Right after `Cancel` (one tick after
+    `Get`) the request read `cancelled` true and `finished`, `failed` false. Read again 20 s
+    later, `finished` and `failed` were true too.
+  - `Get` or `AddHeader` on a request that hasn't finished raises
+    `This request is already being executed`.
+
 ## Seen with rsdev shot (2026-10-26)
 
 From probing the client's window on X11 (i3, one 3840x2160 VMware monitor).

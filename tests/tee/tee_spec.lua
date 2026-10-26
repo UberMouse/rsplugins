@@ -344,19 +344,6 @@ describe("dev tee", function()
             assert.are.equal(1, support.count(h, "refused a batch"))
         end)
 
-        it("drops a 400 batch even when successful is false", function()
-            local h = loaded('print("bad")')
-            shrink(h)
-            h:step()
-            support.answer(h, { status = 400, successful = false })
-            h:step()
-            h.env.print("next")
-            stepsUntilPosts(h, 2, 30)
-            local batch = support.batches(h)[2]
-            assert.are.same({ "next" }, { batch.lines[1].text })
-            assert.are.equal(1, batch.dropped)
-        end)
-
         -- A plugin whose HTTPRequest fails as the test sets FAIL: "new" throws from new, "post"
         -- throws from Post.
         local FLAKY = [[

@@ -599,10 +599,8 @@
    "entityType": "number",
    "npcEntity": "userdata"
   },
-  "VarTransmit": {
-   "newValue": "number",
-   "oldValue": "number",
-   "var": "userdata"
+  "WindowFocusChanged": {
+   "hasFocus": "boolean"
   }
  },
  "globals": {

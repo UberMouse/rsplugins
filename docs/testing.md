@@ -606,6 +606,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Replaying, `ServerLogic` | Only the recorded ones while the recording lasts, if it has any; the harness clock's otherwise |
 | Stdlib | Provides what the client's shared table held when dev-bridge listed it (2026-10-26): the base functions, `string` (with `dump`), `table`, `math`, `coroutine`, `warn` (a no-op: Lua starts with warnings off, and where the client sends them is unknown) and `collectgarbage` (`"collect"`, `"count"`, `"step"` and `"isrunning"` only; any other option faults, since it would change busted's VM). Withholds `os` and `io` (opt-in; both absent in the client), `load` (opt-in, see its row), and `debug`, `loadfile`, `dofile`, `package` and `utf8`, all absent in the client |
 | `random(min, max)` | A seeded generator per harness (`opts.randomSeed`, default 1), uniform in `[min, max)`; whether the client's can return `max` is unknown |
+| `formatStr` | The subset a live probe covered (dev-bridge eval, 2026-10-26; the cases are in `tests/harness/helpers_spec.lua`): `{}`, `{N}`, `{{`/`}}`, and specs of fill, `<>^`, `0`, width, `.N` and `f`. Numbers go through a double (`1` prints `1`, 2^53+1 prints `9007199254740992`); a spec fmtlib refuses (`d`/`x` on a number, `q`) or too few arguments returns nil. A number that would print in exponent form, any other spec, a spec on a boolean and an API object fault as unmocked |
 | `utils.CalcTextWidth` | The test's `opts.textWidth`; it faults without one. Undocumented (only `docs/api/types.lua` declares it) |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
@@ -630,7 +631,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
   (`NPCList`, `PlayerList`, `LocList`, `ObjStackList`), `Camera`, `audio`, `Keyboard`, `Mouse`,
   `MiniMenu`, `GrandExchange`, `ClientOptions`, `ScreenConvert`, `Shapes`, the `CoordGrid`
   global (its constructors and methods; a PlayerEntity's `coordGrid` is modelled), math
-  types (bar `xyGlobal`'s `x`/`y`), `formatStr`, `id.*` beyond
+  types (bar `xyGlobal`'s `x`/`y`), `id.*` beyond
   `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP`, `config.*` beyond `Inv` and `Obj`,
   `slerp` and the Vector/Matrix forms of `lerp`,
   `Plugin.resources`, `Player.GetTrackingID` / `GetRunEnergy` / `GetWeight` / `GetCombatLevel`,

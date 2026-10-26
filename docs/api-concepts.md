@@ -390,6 +390,13 @@ The probe sources aren't kept; each finding says what was called.
   `ClientOptions`), `base` (the table itself) and `__internal` (sol proxy tables), all
   undocumented; and some 190 `sol.*` userdata, sol's own registry entries. `random(1, 10)`
   returns a float (4.27); `random()` with no arguments raises. `clamp(5, 0, 3)` is the float 3.
+- **`formatStr` is fmtlib, fed doubles, and returns nil on a format error.** `{}` of `1` and of
+  `1.0` both give `1`, `2^53 + 1` gives `9007199254740992` (an integer goes through a double),
+  `math.huge` `inf`, NaN `nan`; `true`, `nil`, `{}` and `print` give `true`, `nil`, `table` and
+  `function`. `{0} {1} {0}`, `{{}}`, `{:.2f}`, `{:5}`, `{:<5}`, `{:^5}` and `{:08.3f}` work as
+  in fmtlib. `{:d}`, `{:x}` and `{:+d}` of a number, `{:q}`, and `"{} {}"` with one argument
+  return nil without an error, so check the result; extra arguments are ignored. A non-string
+  format raises `stack index 1, expected string, received number`.
 - **Usertype members can be listed.** `getmetatable(<userdata>)` is a plain table naming every
   member, properties included, as functions, plus sol's `__eq`, `__index` and so on. For
   example, `InventoryProxy` has `GetCategoryTotal`, `GetSlot`, `GetSlots`, `GetTotal`, `config`,

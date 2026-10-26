@@ -161,7 +161,10 @@ Found in the beta client (2026-10-20), not in the official docs:
   "`Unsubscribe` inside an event callback aborts", "a subscription created at runtime can
   never be removed" and "a self-`prl` from `Logic` is only safe with stage 1's six load-time
   subscriptions". Every crash behind them used the `pcall` form. The harness faults the `pcall`
-  form (testing.md fidelity ledger).
+  form (testing.md fidelity ledger). Whether other API functions share the fault is unknown, so
+  dev-bridge passes none straight to `pcall` except `ExecuteConsoleCommand`
+  (`pcall(ExecuteConsoleCommand, cmd)` has run many times, live, without trouble);
+  `HTTPRequest:Cancel` runs from a Lua closure under `pcall` instead.
 - `pairs(id.VarPlayer)` works, but the integer ID isn't in the value slot (passing the values to
   `FromID` fails with "expected number, received string"). Scanning IDs -70000..20000 found
   ~62k VarPlayer vars (VarBits included) and ~7.8k VarClient vars.
@@ -300,12 +303,12 @@ From `plugins/dev-bridge` in the beta client.
   the direct `Unsubscribe` from inside `Logic` above; a probe disarmed on error (made a no-op);
   on 0866186, refusing a `poff dev-bridge` (exit 1). Seen working on 493f192 and f423f49, with
   probes as entries in the bridge's own table: loading with 39 load-time subscriptions
-  (493f192); a
-  `Logic` probe run through the bridge's handler (554 ticks, emitting); a `ServerLogic` probe
-  that raised removed with one `Log` line; fan-out to several probes; an `Event.Draw` probe
-  refused with its reason; `Unsubscribe` on the proxy (a table edit) stopping a probe; `eval
-  --reset` keeping the session and clearing the scratch env (`x`, `lc` nil afterwards) and the
-  probes (their emits stopped), with no reload. The bridge now calls `Unsubscribe` directly.
+  (493f192); a `Logic` probe run through the bridge's handler (554 ticks, emitting); a
+  `ServerLogic` probe that raised removed with one `Log` line; fan-out to several probes; an
+  `Event.Draw` probe refused with its reason; `Unsubscribe` on the proxy (a table edit)
+  stopping a probe; `eval --reset` keeping the session and clearing the scratch env (`x`, `lc`
+  nil afterwards) and the probes (their emits stopped), with no reload. The bridge now calls
+  `Unsubscribe` directly.
 - **`load(chunk, "=eval", "t", env)` honours the mode and env arguments.** In an eval, `x = 1`
   landed in the scratch env (`rawget(_G, 'x')` was 1, `_G == _ENV` true), not the bridge's own
   (`rawget(getmetatable(_G).__index, 'x')` was nil). `getmetatable` is exposed to plugins.

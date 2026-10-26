@@ -79,12 +79,14 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
 - **Every `Event.<X>.Unsubscribe` is a direct call.** All seven client aborts seen on
   2026-10-26 passed it straight to `pcall` (`pcall(Event[event].Unsubscribe, name)`), including
   three `prl dev-bridge` reloads whose `PluginShutdown` did; stage 1's bridge, which calls it
-  directly, reloaded cleanly (docs/api-concepts.md, "Runtime limits we've hit").
+  directly, reloaded cleanly (docs/api-concepts.md, "Runtime limits we've hit"). No other API
+  function or method goes straight to `pcall` either, but `ExecuteConsoleCommand` (seen safe).
 - Disabling or reloading it runs `PluginShutdown`: it cancels any sync in flight, then
   unsubscribes, directly, every probe event subscribed at the client and the six load-time
-  events. An internal error (in a handler or a probe fan-out) stops the bridge by making every
-  handler do nothing, clearing the probes and cancelling the sync in flight; it makes no client
-  call, and unsubscribes nothing until `PluginShutdown`.
+  events (a probe event wanted but not yet subscribed needs nothing). An internal error (in a
+  handler or a probe fan-out) stops the bridge by making every handler do nothing, clearing the
+  probes and cancelling the sync in flight; it makes no client call, and unsubscribes nothing
+  until `PluginShutdown`.
 - Every `[BRIDGE]` console line is also sent to the daemon as a `Log` event
   (`{plugin: "dev-bridge", level: "log", text}`), so `rsdev.py logs` shows it.
 
@@ -110,11 +112,11 @@ Logic tick, one command per tick, like `exec`.
 - `Event.<Name>.Subscribe(name, callback)` in a snippet installs a **probe**: `callback` is
   called with the event's payload each time the bridge's own handler for that event runs.
   A probe is an entry in a table in `eval.lua`, not a client subscription of its own, so it
-  can't touch the bridge's subscriptions whatever its name. Subscribing a name the event already has
-  replaces it: the old callback is not called again and the new one goes last. A probe's
-  returns are dropped (no probe-able event uses a subscriber's return), so it can't affect the
-  client that way; it can still edit the payload (`ChatMessage.chatMessage`, say), and
-  forwarding happens before the probes run.
+  can't touch the bridge's subscriptions whatever its name. Subscribing a name the event
+  already has replaces it: the old callback is not called again and the new one goes last. A
+  probe's returns are dropped (no probe-able event uses a subscriber's return), so it can't
+  affect the client that way; it can still edit the payload (`ChatMessage.chatMessage`, say),
+  and forwarding happens before the probes run.
 - `Event.<Name>.Unsubscribe(name)` removes the probe; an unknown name does nothing. Both are
   table edits, safe anywhere, including from inside a probe.
 - **Probe-able events** are those in `protocol.PROBE_EVENTS`: every event in the API stub
@@ -125,14 +127,16 @@ Logic tick, one command per tick, like `exec`.
   `ContentLayerReady` never fire for the bridge, which has no `hasSettingsIcon` or
   `hasRibbonIcon` in its manifest. An unknown name is refused as "no such event".
 - **Lazy subscriptions.** A probe on one of the six load-time events runs from the bridge's
-  existing handler, with no client call. The first probe on any other event makes one direct
-  client call, `Event.<X>.Subscribe("devBridgeProbe<X>", handler)`, there and then in the
-  snippet (a `Subscribe` from inside `Logic` works). When that event's last probe goes (its
-  `Unsubscribe`, its first error, or a reset), the bridge doesn't unsubscribe at once: it
-  queues the event, and its own `Logic` handler calls `Event.<X>.Unsubscribe("devBridgeProbe<X>")`
-  directly on a later tick. A new probe on the event before then cancels the removal, so the
-  subscription stays. Until then the subscription delivers to no probes, which costs a table
-  read.
+  existing handler at once, with no client call. A probe on any other event starts receiving
+  from the next `Logic` tick: its first probe only marks the event as wanted, and on the next
+  tick the bridge's own `Logic` handler, before it runs a command, makes one direct client call,
+  `Event.<X>.Subscribe("devBridgeProbe<X>", handler)`. When the event's last probe goes (its
+  `Unsubscribe`, its first error, or a reset), the same handler calls
+  `Event.<X>.Unsubscribe("devBridgeProbe<X>")` directly on the next tick. So every such call
+  runs inside `Logic` (where both were seen to work), never from a snippet or a probe callback,
+  which may be inside another event's dispatch. An event whose probes go and come back, or come
+  and go, between two ticks costs no client call. A subscription with no probes left delivers
+  to none until then, which costs a table read.
 - **Changes during a fan-out** (mark and sweep): a probe removed while its event's probes are
   being called (by itself, another probe or an error) is not called again in that pass, and is
   dropped from the table when the pass ends. One added or replaced during the pass is first
@@ -154,8 +158,9 @@ Logic tick, one command per tick, like `exec`.
   the reload means that eval's result is never reported.
 - `rsdev.py eval --reset` (kind `reset`) clears every probe and starts a fresh scratch env, then
   answers ok (no values). The bridge does not reload: same session, no console command. Probe
-  events subscribed at the client are unsubscribed on the next `Logic` tick, as above. Disabling or reloading the bridge also clears the probes and the scratch env,
-  which lives for one session and is never saved.
+  events subscribed at the client are unsubscribed on the next `Logic` tick, as above.
+  Disabling or reloading the bridge also clears the probes and the scratch env, which lives for
+  one session and is never saved.
 - Caps keep a sync under the daemon's 2 MB body limit. Values over 64 KB encoded are dropped
   (`nvalues` stays the true count), `output` keeps 200 lines of up to 2 KB each, and a result
   over 1 MB encoded loses its output. Each cut sets `truncated: true`, and `ok` is unchanged.
@@ -174,8 +179,8 @@ Logic tick, one command per tick, like `exec`.
 ## Why it isn't for submission
 
 It executes console and cheat commands and Lua sent from outside the client, which no submitted
-plugin may do, and forwards chat to a program on your machine (only your own lines and system messages:
-speech from other players is dropped, as is every chat type not on the allowlist in
+plugin may do, and forwards chat to a program on your machine (only your own lines and system
+messages: speech from other players is dropped, as is every chat type not on the allowlist in
 `protocol.lua`). `GENERAL` and the other system types are forwarded with their text as-is, so
 that text can still name other players. Residual risk: a `MiniMenuEntrySelected` that names a
 player without `playerData`, a `PLAYER` entry type or a player action type (friends-list or

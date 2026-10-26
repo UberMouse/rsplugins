@@ -14,15 +14,18 @@
 -- and unsubscribes them in PluginShutdown. Each handler forwards its event (the FORWARDED
 -- ones), does the bridge's own work (Logic), then calls the eval probes on that event
 -- (eval.lua), which are table entries. A probe on any other event in protocol.PROBE_EVENTS
--- needs that event's handler at the client: it is subscribed when the event's first probe is
--- added, and unsubscribed on a later Logic tick, from the bridge's own Logic handler, after
--- its last probe goes (that shape, a non-Logic subscription removed from inside Logic, ran
--- live). An internal error stops the bridge by making every handler a no-op; a reset just
--- clears the probes and the scratch env.
+-- needs that event's handler at the client. Adding the event's first probe or removing its
+-- last only records whether it is wanted; the bridge's own Logic handler makes the client
+-- match on its next tick (reconcileLazy), so a lazy probe receives from the next Logic tick
+-- on. Every lazy Subscribe and Unsubscribe thus runs inside Logic, the only place both were
+-- seen to work live, never inside another event's dispatch (a probe callback's). An internal
+-- error stops the bridge by making every handler a no-op; a reset just clears the probes and
+-- the scratch env.
 --
--- Every Event.<X>.Unsubscribe here is a direct call. All seven client aborts seen on
--- 2026-10-26 passed it straight to pcall instead (docs/api-concepts.md, "Runtime limits we've
--- hit"), so never write `pcall(Event.X.Unsubscribe, name)`.
+-- Every Event.<X>.Subscribe and Unsubscribe here is a direct call, and no API function or
+-- method is passed straight to pcall but ExecuteConsoleCommand (seen safe live). All seven
+-- client aborts seen on 2026-10-26 passed Unsubscribe straight to pcall (docs/api-concepts.md,
+-- "Runtime limits we've hit"), so never write `pcall(Event.X.Unsubscribe, name)`.
 --
 -- Chat forwarding is limited to the player's own lines, system messages and senderless SPAM
 -- (protocol.lua). System text is forwarded as-is, so it can still name other players. These
@@ -64,14 +67,14 @@ local inFlight = nil ---@type { request: HTTPRequest?, body: string, count: inte
 -- Stopping makes no client call; PluginShutdown unsubscribes everything.
 local stopped = false
 
--- The lazy subscriptions: probe-able events outside LOAD_EVENTS whose handler is subscribed at
--- the client because they have, or until the next Logic tick had, probes. Both are sets keyed
--- by event, so neither can grow past protocol.PROBE_EVENTS.
+-- The lazy subscriptions, for probe-able events outside LOAD_EVENTS: lazyWanted holds those
+-- with probes, lazySubscribed those whose handler is subscribed at the client. They differ only
+-- until the next Logic tick (reconcileLazy). Both are sets keyed by event, so neither can grow
+-- past protocol.PROBE_EVENTS.
+local lazyWanted = {} ---@type table<string, true>
 local lazySubscribed = {} ---@type table<string, true>
--- Events with no probes left, to unsubscribe on the next Logic tick (a later one than the
--- removal: onLogic drains this before running anything that could remove a probe).
-local lazyPending = {} ---@type table<string, true>
-local pendingCount = 0
+-- Set when lazyWanted changes, so a Logic tick with nothing to reconcile costs one read.
+local lazyChanged = false
 
 -- So the console isn't flooded: each of these is logged once (failing, once per outage).
 local warned = { waiting = false, dropped = false, forward = false }
@@ -82,6 +85,8 @@ local say ---@type fun(...) -- defined below push: say and noteDropped call each
 -- Defined with the handlers below; the evaluator calls them (eval.lua, eval.new).
 local firstProbe ---@type fun(event: string)
 local noProbes ---@type fun(event: string)
+-- Defined with the handlers below, which it subscribes; onLogic calls it.
+local reconcileLazy ---@type fun()
 
 ---@param count integer
 ---@param why string
@@ -375,24 +380,12 @@ local function probeSubscriptionName(event)
     return "devBridgeProbe" .. event
 end
 
--- Unsubscribe, directly, the lazy subscriptions whose events lost their last probe before this
--- Logic tick, in PROBE_EVENTS order.
-local function unsubscribePending()
-    for _, event in ipairs(protocol.PROBE_EVENTS) do
-        if lazyPending[event] then
-            lazyPending[event] = nil
-            pendingCount = pendingCount - 1
-            Event[event].Unsubscribe(probeSubscriptionName(event))
-            lazySubscribed[event] = nil
-        end
-    end
-end
-
--- The bridge's own work each Logic tick: drop unneeded lazy subscriptions, finish a sync, run
--- a command, start a sync.
+-- The bridge's own work each Logic tick: bring the lazy subscriptions in line with the probes
+-- (before running a command, so a probe added on one tick goes live on the next), finish a
+-- sync, run a command, start a sync.
 local function onLogic(ev)
     tick = ev.logicTick
-    if pendingCount > 0 then unsubscribePending() end
+    if lazyChanged then reconcileLazy() end
     if inFlight and inFlight.done then finishSync() end
     runOne()
     if stopped then return end
@@ -413,14 +406,20 @@ end
 
 -- Stop everything from inside a callback: our handlers become no-ops, the probes are
 -- cleared, and any sync in flight is cancelled. Nothing is unsubscribed (clearing the probes
--- only queues lazy removals, which a stopped onLogic never runs); PluginShutdown does it. Safe
--- to call twice (an error stop, then shutdown). Cancel runs under pcall so a raise can't skip
--- the "stopped" message.
+-- only empties lazyWanted, which a stopped onLogic never reconciles); PluginShutdown does it.
+-- Safe to call twice (an error stop, then shutdown). Cancel runs under pcall so a raise can't
+-- skip the "stopped" message.
 local function stop()
     if stopped then return end
     stopped = true
     evaluator.clear()
-    if inFlight and inFlight.request then pcall(inFlight.request.Cancel, inFlight.request) end
+    local request = inFlight and inFlight.request
+    -- Called from a Lua closure: an API method passed straight to pcall is the shape behind
+    -- every client abort (docs/api-concepts.md, "Runtime limits we've hit").
+    local function cancel()
+        if request then request:Cancel() end
+    end
+    pcall(cancel)
     inFlight = nil
 end
 
@@ -468,28 +467,37 @@ for _, event in ipairs(protocol.LOAD_EVENTS) do
     LOAD_SET[event] = true
 end
 
--- `event` has its first probe: subscribe its handler at the client, directly and at once (a
--- Subscribe from inside Logic, where snippets run, worked live), unless it is a load-time
--- event, is still subscribed (cancelling its pending removal), or the bridge has stopped.
+-- `event` has its first probe: want its handler at the client from the next Logic tick, unless
+-- it is a load-time event or the bridge has stopped. No client call here: this runs inside a
+-- snippet or a probe callback, which may be inside another event's dispatch.
 firstProbe = function(event)
     if stopped or LOAD_SET[event] then return end
-    if lazySubscribed[event] then
-        if lazyPending[event] then
-            lazyPending[event] = nil
-            pendingCount = pendingCount - 1
-        end
-        return
-    end
-    Event[event].Subscribe(probeSubscriptionName(event), handler(event))
-    lazySubscribed[event] = true
+    lazyWanted[event] = true
+    lazyChanged = true
 end
 
--- `event` has no probes left: queue its lazy subscription for the next Logic tick, never
--- unsubscribing here, which may be inside that event's own dispatch.
+-- `event` has no probes left: stop wanting its handler. No client call here either.
 noProbes = function(event)
-    if lazySubscribed[event] and not lazyPending[event] then
-        lazyPending[event] = true
-        pendingCount = pendingCount + 1
+    if lazyWanted[event] then
+        lazyWanted[event] = nil
+        lazyChanged = true
+    end
+end
+
+-- Make the client's lazy subscriptions match lazyWanted, by direct calls in PROBE_EVENTS order.
+-- Only onLogic calls this, so an event whose probes went and came back (or came and went)
+-- between two ticks costs no client call. lazySubscribed is set after a Subscribe and cleared
+-- before an Unsubscribe, so if one raises (stopping the bridge) PluginShutdown doesn't redo it.
+reconcileLazy = function()
+    lazyChanged = false
+    for _, event in ipairs(protocol.PROBE_EVENTS) do
+        if lazyWanted[event] and not lazySubscribed[event] then
+            Event[event].Subscribe(probeSubscriptionName(event), handler(event))
+            lazySubscribed[event] = true
+        elseif lazySubscribed[event] and not lazyWanted[event] then
+            lazySubscribed[event] = nil
+            Event[event].Unsubscribe(probeSubscriptionName(event))
+        end
     end
 end
 
@@ -510,11 +518,11 @@ for _, event in ipairs(protocol.LOAD_EVENTS) do
 end
 say("enabled, session " .. session)
 
--- Unsubscribe every live lazy subscription, then the six load-time ones, each by a direct
--- call, as stage 1's bridge did in a shutdown that survived its own `prl` from Logic. No pcall:
--- passing Unsubscribe straight to pcall is what aborted the client, and wrapping each in a
--- closure under pcall (as dev-kit does) is unverified live. One raising skips the rest, which
--- would mean a broken client anyway.
+-- Unsubscribe every live lazy subscription (one wanted but not yet reconciled was never made),
+-- then the six load-time ones, each by a direct call, as stage 1's bridge did in a shutdown
+-- that survived its own `prl` from Logic. No pcall: passing Unsubscribe straight to pcall is
+-- what aborted the client, and wrapping each in a closure under pcall (as dev-kit does) is
+-- unverified live. One raising skips the rest, which would mean a broken client anyway.
 function PluginShutdown()
     stop()
     for _, event in ipairs(protocol.PROBE_EVENTS) do

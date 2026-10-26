@@ -5,7 +5,8 @@
 -- bridge's handler for an event calls fanOut, which calls that event's probes. This module
 -- makes no client calls. It tells the host when an event gains its first probe
 -- (host.firstProbe) and when it has none left (host.noProbes); main.lua then subscribes or
--- unsubscribes that event's handler at the client, for events outside its six load-time ones.
+-- unsubscribes that event's handler at the client on its next Logic tick, for events outside
+-- its six load-time ones.
 -- So a snippet's Subscribe and Unsubscribe, a probe's removal and reset are table edits here.
 --
 -- A snippet's globals live in the scratch table (its _G too); reads fall through to the

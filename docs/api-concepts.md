@@ -427,7 +427,8 @@ The probe sources aren't kept; each finding says what was called.
   `Inventory.Find(config.Inv.INV)` results are not even `==`, although `InventoryProxy`'s
   metatable has an `__eq`. So never use one as a table key, and don't compare Invs; compare
   `inv.id` instead. `tostring` of a CoordGrid is its value, `level,mapSquareX,mapSquareZ,localX,localZ`
-  (`0,50,50,25,23`).
+  (`0,50,50,25,23`). A CoordGrid is a snapshot: one read before the player walked still held
+  the old tile afterwards, and wasn't `==` a fresh one. CoordGrids also support `<`.
 - **`Inv:GetSlot` never returns nil for an index.** An empty backpack slot, slot 0 and slot 9999
   all gave an `InventorySlot` of obj -1, count 0, with no error. `inv.valid` (the stub's name for
   `isValid`) reads nil without an error.
@@ -438,8 +439,11 @@ The probe sources aren't kept; each finding says what was called.
   string: value is not a valid userdata (bad argument into 'bool(const
   jag::scripting::PluginPermission&)')`; pass `PluginPermissions.httpAccess`. The stubs give the
   enum string values, so LuaLS can't catch a string. The stub types
-  `OptionalPermissionChanged.permissionName` as a String, so it can't be passed on either: look
-  it up with `PluginPermissions[ev.permissionName]`, assuming it holds the key (unconfirmed).
+  `OptionalPermissionChanged.permissionName` as a String, and it is one, the key
+  (`"chatAccess"`), so it can't be passed on either: look it up with
+  `PluginPermissions[ev.permissionName]`, which gives the same object. While the user ran
+  `ppd dev-bridge chatAccess` then `ppe dev-bridge chatAccess`, the bridge's probe saw two
+  deliveries, both `enabled` true and none false; why is unknown.
   The dev recorder used to record a permission by `tostring`, which gave the pointer text; it
   now records the name.
 - **`Plugin` holds more than the page lists**: `HasPermission`, `urls`, `resources` (an empty

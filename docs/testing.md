@@ -29,6 +29,7 @@ client (`prl <plugin>`).
 | `lib/dev/`, `scripts/rsdev.py` | The dev recorder and the daemon that receives it ([Recordings](#recordings)) |
 | `scripts/recording-sanitise.py`, `recording-chat-allowlist.txt`, `test_recording_sanitise.py`, `tests/fixtures/` | Recorded sessions made into committed fixtures, the game chat a fixture may keep, and the sanitiser's tests ([Turning a session into a fixture](#turning-a-session-into-a-fixture)) |
 | `tests/recorder/` | The recorder's tests, with `plugins/recorder-demo` |
+| `tests/fixtures/client-surface.json`, `tests/harness/client_surface_spec.lua`, `tests/harness/surface_report.lua`, `scripts/client-surface.py`, `plugins/dev-bridge/probes/client-surface.lua` | The live client's API surface, the spec that checks the mocks against it, and the stub-vs-client report ([below](#checking-the-mocks-against-the-live-client)) |
 
 ## Writing a plugin test
 
@@ -184,6 +185,33 @@ its call form, and fails on any the stubs lack. It doesn't take the harness's wo
 exception is listed with the official page that proves the stub wrong. A member a class inherits
 counts (`ui.Layer:SetPos` is `ui.Component`'s). The PrettyUI fake's classes are not API, so they
 are left out (`strict.class(..., { undeclared = true })`); `types/prettyui.lua` is their reference.
+
+### Checking the mocks against the live client
+
+The stubs can be wrong, so `tests/harness/client_surface_spec.lua` also checks the mocks against
+`tests/fixtures/client-surface.json`, a snapshot of the beta client's API surface: every global
+with its `type()`, the keys of each namespace, every enum's values, the members of the API types
+a read-only snapshot reaches (`PlayerEntity`, `CoordGrid`, `Inv`, `InvSlot`, `InvType`, `ObjType`,
+`VarType`, `PersistentDB`, `HTTPRequest`, `Vector2`, `ui.Interfaces`...), and the payload members
+of the events that fired while it was taken. It holds names, types and enum numbers, nothing
+about the player. The spec fails when:
+
+- the harness serves a global or member the client lacks, wherever the snapshot covers the
+  owner (a type no instance reached, like `ui.Text`, or a class table whose statics sol hides,
+  like `HTTPRequest.new`, isn't checked);
+- an enum value the harness serves differs from the client's (`PluginPermissions`, whose values
+  are userdata in the client, is checked by name);
+- a payload field the harness builds from the stubs is missing from a payload the snapshot has.
+
+To refresh it (after a client update, or to cover more), with the bridge connected:
+`scripts/client-surface.py [--wait 20]`. It runs `plugins/dev-bridge/probes/client-surface.lua`
+through `rsdev.py eval`, waits for event payloads (play a little meanwhile: open a menu, move),
+writes the fixture and ends with `eval --reset`. Review the diff before committing it.
+
+`lua tests/harness/surface_report.lua` (dev shell, repo root) prints where the stubs and the
+client disagree: per type and namespace, members only the client has (undocumented ones such as
+`World.GetPing`) and members only the stubs have (renamed or invented ones, such as `Inv.valid`).
+Check a finding against the official page before building on it.
 
 ## Lint and type-check config for tests/
 

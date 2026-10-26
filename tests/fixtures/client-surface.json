@@ -1,0 +1,1651 @@
+{
+ "captured": "2026-10-26",
+ "enums": {
+  "AchievementDescriptionType": {
+   "DEFAULT": 0,
+   "GROUP_IRONMAN_SIZE_2": 2,
+   "GROUP_IRONMAN_SIZE_3": 3,
+   "GROUP_IRONMAN_SIZE_4": 4,
+   "GROUP_IRONMAN_SIZE_5": 5,
+   "IRONMAN": 1
+  },
+  "AchievementHiddenType": {
+   "IF_LOCKED": 1,
+   "NEVER": 0,
+   "UNTIL_COMPLETE": 2
+  },
+  "AchievementProgressType": {
+   "COMPLETE": -2,
+   "DEPRECATED": -4,
+   "GRACE": -3,
+   "LOCKED": -1,
+   "READY": 0
+  },
+  "AnimationDuplicateBehaviour": {
+   "CONTINUE": 0,
+   "LOOP_RESET": 2,
+   "RESET": 1
+  },
+  "BoxCornerType": {
+   "LEFT_BOTTOM_FAR": 6,
+   "LEFT_BOTTOM_NEAR": 2,
+   "LEFT_TOP_FAR": 4,
+   "LEFT_TOP_NEAR": 0,
+   "RIGHT_BOTTOM_FAR": 7,
+   "RIGHT_BOTTOM_NEAR": 3,
+   "RIGHT_TOP_FAR": 5,
+   "RIGHT_TOP_NEAR": 1
+  },
+  "ChatType": {
+   "ALLY_REQUEST": 108,
+   "ALL_PANES": 120,
+   "ASSIST_NOTIFICATION": 104,
+   "ASSIST_REQUEST": 102,
+   "BROADCAST": 125,
+   "BROADCAST_FRIENDS": 139,
+   "BROADCAST_GLOBAL": 137,
+   "BROADCAST_WORLD": 138,
+   "CHALLENGE": 101,
+   "CLANCHANNEL_AFFINED_CHAT": 41,
+   "CLANCHANNEL_AFFINED_NOTIFICATION": 43,
+   "CLANCHANNEL_AFFINED_QUICKCHAT": 42,
+   "CLANCHANNEL_GUEST_CHAT": 44,
+   "CLANCHANNEL_GUEST_NOTIFICATION": 46,
+   "CLANCHANNEL_GUEST_QUICKCHAT": 45,
+   "CLAN_CHALLENGE": 107,
+   "CLAN_JOIN": 117,
+   "CONQUEST_REGULAR_CHALLENGE": 113,
+   "CONSOLE": 99,
+   "CONSOLE_BUFFER_REPLACE": 98,
+   "CONSOLE_ERROR": 96,
+   "DUEL_ANY_REQUEST": 132,
+   "DUNGEON_INVITE": 111,
+   "ENGINE": 4,
+   "FRIEND_CHAT": 9,
+   "FRIEND_CHAT_NOTIFICATION": 11,
+   "FRIEND_NOTIFICATION": 30,
+   "GENERAL": 0,
+   "GENERAL_LINKABLE": 145,
+   "GROUPCHAT_NOTIFICATION": 128,
+   "GROUP_ALL": 24,
+   "GROUP_IRONMAN_NOTIFICATION": 144,
+   "GROUP_SAME_TEAM": 22,
+   "HATI_FENRIR": 134,
+   "IGNORABLE_TRADE_NOTIFICATION": 119,
+   "IGNORE_NOTIFICATION": 31,
+   "INTERFACE_OPEN": 140,
+   "INTERFACE_OPEN_FILTERED": 143,
+   "LATEST_NEWSPOST": 135,
+   "LOC_EXAMINE": 29,
+   "LOGIN_LOGOUT": 5,
+   "MISC_BROADCAST": 127,
+   "MOD": 1,
+   "MOD_PRIVATE_INCOMING": 7,
+   "MOTD": 136,
+   "NPC_CHAT": 116,
+   "NPC_EXAMINE": 28,
+   "OBJ_EXAMINE": 27,
+   "PLUGIN": 33,
+   "PRIVATE_INCOMING": 3,
+   "PRIVATE_OUTGOING": 6,
+   "PUBLIC": 2,
+   "QUICKCHAT_FRIEND_CHAT": 20,
+   "QUICKCHAT_GROUP_ALL": 25,
+   "QUICKCHAT_GROUP_SAME_TEAM": 23,
+   "QUICKCHAT_PRIVATE_INCOMING": 18,
+   "QUICKCHAT_PRIVATE_OUTGOING": 19,
+   "QUICKCHAT_PUBLIC": 17,
+   "RAID_DND": 123,
+   "RAID_HIGH": 122,
+   "RATED_CLAN_WAR": 118,
+   "SNAPSHOT_FEEDBACK": 26,
+   "SPAM": 109,
+   "SYSTEM_BROADCAST": 115,
+   "TEMPORARY_EVENT": 133,
+   "TIMED_EVENT": 142,
+   "TRADE_NOTIFICATION": 103,
+   "TRADE_REQUEST": 100,
+   "WORLD_EVENT": 126
+  },
+  "EntityType": {
+   "COMBINED_LOCATION_SECTION": 12,
+   "LOCATION": 0,
+   "NONE": 127,
+   "NPC": 1,
+   "OBJSTACK": 3,
+   "PLAYER": 2,
+   "UNKNOWN": -1
+  },
+  "GameKey": {
+   "A": 48,
+   "ALT": 86,
+   "APOSTROPHE": 58,
+   "B": 68,
+   "BACKSLASH": 74,
+   "BACKSPACE": 85,
+   "C": 66,
+   "CLEAR": 91,
+   "COMMA": 71,
+   "CONSOLE": 28,
+   "CONTROL": 82,
+   "D": 50,
+   "DELETE": 101,
+   "DOWN": 99,
+   "E": 34,
+   "END": 103,
+   "ENTER": 84,
+   "EQUALS": 27,
+   "ESCAPE": 13,
+   "F": 51,
+   "F1": 1,
+   "F10": 10,
+   "F11": 11,
+   "F12": 12,
+   "F2": 2,
+   "F3": 3,
+   "F4": 4,
+   "F5": 5,
+   "F6": 6,
+   "F7": 7,
+   "F8": 8,
+   "F9": 9,
+   "FULLSTOP": 72,
+   "G": 52,
+   "H": 53,
+   "HASH": 59,
+   "HOME": 102,
+   "I": 39,
+   "INSERT": 100,
+   "J": 54,
+   "K": 55,
+   "L": 56,
+   "LEFT": 96,
+   "LEFT_BRACKET": 42,
+   "M": 70,
+   "MINUS": 26,
+   "N": 69,
+   "NUMPAD_ADD": 87,
+   "NUMPAD_DIVIDE": 90,
+   "NUMPAD_MULTIPLY": 89,
+   "NUMPAD_SUBTRACT": 88,
+   "O": 40,
+   "P": 41,
+   "PAGE_DOWN": 105,
+   "PAGE_UP": 104,
+   "Q": 32,
+   "R": 35,
+   "RIGHT": 97,
+   "RIGHT_BRACKET": 43,
+   "S": 49,
+   "SEMICOLON": 57,
+   "SHIFT": 81,
+   "SLASH": 73,
+   "SPACE": 83,
+   "T": 36,
+   "TAB": 80,
+   "U": 38,
+   "UP": 98,
+   "V": 67,
+   "W": 33,
+   "X": 65,
+   "Y": 37,
+   "Z": 64,
+   "_0": 25,
+   "_1": 16,
+   "_2": 17,
+   "_3": 18,
+   "_4": 19,
+   "_5": 20,
+   "_6": 21,
+   "_7": 22,
+   "_8": 23,
+   "_9": 24
+  },
+  "GameState": {
+   "ACCOUNT_CREATE": 23,
+   "BOOT": 0,
+   "GAME": 30,
+   "INIT": 1,
+   "LOADING": 40,
+   "LOBBY": 20,
+   "LOGINSCREEN": 10,
+   "RECONNECTING": 35,
+   "RECONNECTING_FULL": 36,
+   "SWITCH_WORLD": 37
+  },
+  "GrandExchangeOfferStage": {
+   "ABORTING": 4,
+   "ADDED": 2,
+   "ADDING": 1,
+   "EMPTY": 0,
+   "FINISHED": 5,
+   "VERIFYING": 3
+  },
+  "GrandExchangeOfferType": {
+   "BUY": 0,
+   "SELL": 1
+  },
+  "HeightOffsetType": {
+   "GROUND_DECOR": 1,
+   "LOCATION": 2,
+   "NONE": 0
+  },
+  "LocShapeType": {
+   "CENTREPIECE_DIAGONAL": 11,
+   "CENTREPIECE_STRAIGHT": 10,
+   "GROUNDDECOR": 22,
+   "ROOFEDGE_DIAGONALCORNER": 19,
+   "ROOFEDGE_L": 20,
+   "ROOFEDGE_SQUARECORNER": 21,
+   "ROOFEDGE_STRAIGHT": 18,
+   "ROOF_DIAGONAL": 14,
+   "ROOF_DIAGONAL_WITH_ROOFEDGE": 13,
+   "ROOF_FLAT": 17,
+   "ROOF_L_CONCAVE": 15,
+   "ROOF_L_CONVEX": 16,
+   "ROOF_STRAIGHT": 12,
+   "WALLDECOR_DIAGONAL_BOTH": 8,
+   "WALLDECOR_DIAGONAL_BOTH_ALT": 24,
+   "WALLDECOR_DIAGONAL_NOOFFSET": 7,
+   "WALLDECOR_DIAGONAL_OFFSET": 6,
+   "WALLDECOR_STRAIGHT_NOOFFSET": 4,
+   "WALLDECOR_STRAIGHT_OFFSET": 5,
+   "WALL_DIAGONAL": 9,
+   "WALL_DIAGONALCORNER": 1,
+   "WALL_L": 2,
+   "WALL_L_ALT": 23,
+   "WALL_SQUARECORNER": 3,
+   "WALL_STRAIGHT": 0
+  },
+  "MapElementHorizontalAlign": {
+   "CENTRE": 1,
+   "LEFT": 0,
+   "RIGHT": 2
+  },
+  "MapElementTextSize": {
+   "LARGE": 2,
+   "MEDIUM": 1,
+   "SMALL": 0
+  },
+  "MapElementVerticalAlign": {
+   "BOTTOM": 2,
+   "CENTRE": 1,
+   "TOP": 0
+  },
+  "MiniMenuActionType": {
+   "CANCEL": 1006,
+   "FACE_SQUARE": 60,
+   "IF_BUTTONT": 58,
+   "IF_BUTTONX1": 57,
+   "IF_BUTTONX2": 1007,
+   "OP_LOC1": 2,
+   "OP_LOC2": 3,
+   "OP_LOC3": 4,
+   "OP_LOC4": 5,
+   "OP_LOC5": 1001,
+   "OP_LOC6": 1002,
+   "OP_MAPELEMENT1": 1008,
+   "OP_MAPELEMENT2": 1009,
+   "OP_MAPELEMENT3": 1010,
+   "OP_MAPELEMENT4": 1011,
+   "OP_MAPELEMENT5": 1012,
+   "OP_NPC1": 9,
+   "OP_NPC1_LOWPRIORITY": 2009,
+   "OP_NPC2": 10,
+   "OP_NPC2_LOWPRIORITY": 2010,
+   "OP_NPC3": 11,
+   "OP_NPC3_LOWPRIORITY": 2011,
+   "OP_NPC4": 12,
+   "OP_NPC4_LOWPRIORITY": 2012,
+   "OP_NPC5": 13,
+   "OP_NPC5_LOWPRIORITY": 2013,
+   "OP_NPC6": 1003,
+   "OP_NPC6_LOWPRIORITY": 3003,
+   "OP_OBJ1": 18,
+   "OP_OBJ2": 19,
+   "OP_OBJ3": 20,
+   "OP_OBJ4": 21,
+   "OP_OBJ5": 22,
+   "OP_OBJ6": 1004,
+   "OP_PLAYER1": 44,
+   "OP_PLAYER10": 53,
+   "OP_PLAYER10_LOWPRIORITY": 2053,
+   "OP_PLAYER1_LOWPRIORITY": 2044,
+   "OP_PLAYER2": 45,
+   "OP_PLAYER2_LOWPRIORITY": 2045,
+   "OP_PLAYER3": 46,
+   "OP_PLAYER3_LOWPRIORITY": 2046,
+   "OP_PLAYER4": 47,
+   "OP_PLAYER4_LOWPRIORITY": 2047,
+   "OP_PLAYER5": 48,
+   "OP_PLAYER5_LOWPRIORITY": 2048,
+   "OP_PLAYER6": 49,
+   "OP_PLAYER6_LOWPRIORITY": 2049,
+   "OP_PLAYER7": 50,
+   "OP_PLAYER7_LOWPRIORITY": 2050,
+   "OP_PLAYER8": 51,
+   "OP_PLAYER8_LOWPRIORITY": 2051,
+   "OP_PLAYER9": 52,
+   "OP_PLAYER9_LOWPRIORITY": 2052,
+   "PAUSE_BUTTON": 30,
+   "PLUGIN": 3000,
+   "TGT_BUTTON": 25,
+   "TGT_GROUND": 59,
+   "TGT_LOC": 1,
+   "TGT_NPC": 8,
+   "TGT_OBJ": 17,
+   "TGT_PLAYER": 15,
+   "TGT_SELF": 16,
+   "WALK": 23,
+   "WIKI": 1005
+  },
+  "MiniMenuActionVerbType": {
+   "ATTACK": 0,
+   "EXAMINE": 1,
+   "OP": 2,
+   "UNSPECIFIED": 3
+  },
+  "MiniMenuEntryType": {
+   "INTERFACE": 1,
+   "LOC": 3,
+   "MAP": 9,
+   "MINIMENU": 6,
+   "NONE": 0,
+   "NPC": 4,
+   "OBJ": 2,
+   "OTHER": 5,
+   "PLAYER": 7,
+   "PLUGIN": 10,
+   "SELF": 8
+  },
+  "ModifierKey": {
+   "ALT": 2,
+   "ANY": 7,
+   "ANY_INC_META": 15,
+   "CONTROL": 4,
+   "META": 8,
+   "SHIFT": 1
+  },
+  "ObjStackType": {
+   "ALWAYS": 1,
+   "NEVER": 2,
+   "SOMETIMES": 0
+  },
+  "PersistentDBType": {
+   "BOOL": 0,
+   "FLOAT": 2,
+   "INT": 1,
+   "STRING": 3,
+   "STRUCTURED_DATA": 4
+  },
+  "PluginResourceLoadResult": {
+   "ERROR_CONSTRUCTION": 4,
+   "ERROR_DECODE": 2,
+   "ERROR_EXCEEDS_LIMITS": 3,
+   "ERROR_FILESYSTEM": 1,
+   "SUCCESS": 0
+  },
+  "PostAnimMove": {
+   "ABORT_ANIMATION": 1,
+   "DEFAULT": 3,
+   "DELAY_MOVE": 0,
+   "MOVE_MERGE": 2
+  },
+  "PreAnimMove": {
+   "ABORT_ANIMATION": 3,
+   "DEFAULT": 4,
+   "DELAY_ANIMATION": 1,
+   "DELAY_MOVE": 0,
+   "MOVE_MERGE": 2
+  },
+  "QuestDifficulty": {
+   "EXPERIENCED": 2,
+   "GRANDMASTER": 4,
+   "INTERMEDIATE": 1,
+   "MASTER": 3,
+   "MULTIDIFFICULTY": 5,
+   "NOVICE": 0
+  },
+  "QuestType": {
+   "NORMAL": 0,
+   "SEASONAL": 1,
+   "TUTORIAL": 2
+  },
+  "RotationType": {
+   "NINETY": 1,
+   "ONEEIGHTY": 2,
+   "TWOSEVENTY": 3,
+   "ZERO": 0
+  },
+  "ShapeEntityAlignType": {
+   "MODEL": 2,
+   "NONE": 0,
+   "OBJECT": 1
+  },
+  "SkillType": {
+   "AGILITY": 16,
+   "ARCHAEOLOGY": 27,
+   "ATTACK": 0,
+   "CONSTRUCTION": 22,
+   "COOKING": 7,
+   "CRAFTING": 12,
+   "DEFENCE": 1,
+   "DIVINATION": 25,
+   "DUNGEONEERING": 24,
+   "FARMING": 19,
+   "FIREMAKING": 11,
+   "FISHING": 10,
+   "FLETCHING": 9,
+   "HERBLORE": 15,
+   "HITPOINTS": 3,
+   "HUNTER": 21,
+   "INVENTION": 26,
+   "MAGIC": 6,
+   "MINING": 14,
+   "NECROMANCY": 28,
+   "PRAYER": 5,
+   "RANGED": 4,
+   "RUNECRAFTING": 20,
+   "SLAYER": 18,
+   "SMITHING": 13,
+   "STRENGTH": 2,
+   "SUMMONING": 23,
+   "THIEVING": 17,
+   "WOODCUTTING": 8
+  },
+  "SystemKey": {
+   "A": 97,
+   "ALT_LEFT": 1073742050,
+   "APOSTROPHE": 39,
+   "B": 98,
+   "BACKSLASH": 92,
+   "BACKSPACE": 8,
+   "C": 99,
+   "CLEAR": 1073741980,
+   "COMMA": 44,
+   "CONSOLE": 7331,
+   "CONTROL_LEFT": 1073742048,
+   "D": 100,
+   "DELETE": 127,
+   "DOWN": 1073741905,
+   "E": 101,
+   "END": 1073741901,
+   "ENTER": 1073741912,
+   "EQUALS": 61,
+   "ESCAPE": 27,
+   "F": 102,
+   "F1": 1073741882,
+   "F10": 1073741891,
+   "F11": 1073741892,
+   "F12": 1073741893,
+   "F2": 1073741883,
+   "F3": 1073741884,
+   "F4": 1073741885,
+   "F5": 1073741886,
+   "F6": 1073741887,
+   "F7": 1073741888,
+   "F8": 1073741889,
+   "F9": 1073741890,
+   "FULLSTOP": 46,
+   "G": 103,
+   "H": 104,
+   "HASH": -1,
+   "HOME": 1073741898,
+   "I": 105,
+   "INSERT": 1073741897,
+   "J": 106,
+   "K": 107,
+   "L": 108,
+   "LEFT": 1073741904,
+   "LEFT_BRACKET": 91,
+   "M": 109,
+   "MINUS": 45,
+   "N": 110,
+   "NUMPAD_ADD": 1073741911,
+   "NUMPAD_DECIMAL": 1073741923,
+   "NUMPAD_DIVIDE": 1073741908,
+   "NUMPAD_MULTIPLY": 1073741909,
+   "NUMPAD_SUBTRACT": 1073741910,
+   "O": 111,
+   "P": 112,
+   "PAGE_DOWN": 1073741902,
+   "PAGE_UP": 1073741899,
+   "Q": 113,
+   "R": 114,
+   "RETURN": 13,
+   "RIGHT": 1073741903,
+   "RIGHT_BRACKET": 93,
+   "S": 115,
+   "SEMICOLON": 59,
+   "SHIFT_LEFT": 1073742049,
+   "SLASH": 47,
+   "SPACE": 32,
+   "T": 116,
+   "TAB": 9,
+   "U": 117,
+   "UP": 1073741906,
+   "V": 118,
+   "W": 119,
+   "X": 120,
+   "Y": 121,
+   "Z": 122,
+   "_0": 48,
+   "_1": 49,
+   "_2": 50,
+   "_3": 51,
+   "_4": 52,
+   "_5": 53,
+   "_6": 54,
+   "_7": 55,
+   "_8": 56,
+   "_9": 57
+  },
+  "ValueType": {
+   "ACHIEVEMENT": 131,
+   "AREA": 16,
+   "BASEANIMSET": 44,
+   "BOOLEAN": 1,
+   "CATEGORY": 41,
+   "CHAR": 42,
+   "CHATCAT": 29,
+   "CHATPHRASE": 24,
+   "COMPONENT": 9,
+   "COORDGRID": 22,
+   "CURSOR": 5,
+   "CUTSCENE2D": 138,
+   "DBROW": 74,
+   "DBTABLE": 129,
+   "ENUM": 26,
+   "FONT": 25,
+   "HITMARK": 62,
+   "IDKIT": 10,
+   "INTEGER": 0,
+   "INV": 39,
+   "LOC": 30,
+   "LONG": 110,
+   "MAPELEMENT": 59,
+   "MATERIAL": 102,
+   "MODEL": 31,
+   "NPC": 32,
+   "NPC_UID": 38,
+   "OBJ": 33,
+   "OVERLAYINTERFACE": 99,
+   "PLAYER_UID": 34,
+   "QUEST": 3,
+   "SEQ": 6,
+   "SKILL": 17,
+   "SPOTANIM": 37,
+   "SPRITE": 23,
+   "STRING": 36,
+   "STRUCT": 73,
+   "SYNTH": 14,
+   "UNSUPPORTED": -1,
+   "VAR_INT": 209,
+   "VORBIS": 57
+  }
+ },
+ "events": {
+  "Logic": {
+   "logicTick": "number"
+  },
+  "MiniMenuEntryAdded": {
+   "entry": "userdata",
+   "miniMenu": "userdata"
+  },
+  "MiniMenuReady": {
+   "miniMenu": "userdata"
+  },
+  "NPCEntityAdded": {
+   "entityType": "number",
+   "npcEntity": "userdata"
+  },
+  "VarTransmit": {
+   "newValue": "number",
+   "oldValue": "number",
+   "var": "userdata"
+  }
+ },
+ "globals": {
+  "AABB": "table",
+  "AchievementDescriptionType": "table",
+  "AchievementHiddenType": "table",
+  "AchievementProgressType": "table",
+  "AnimationDuplicateBehaviour": "table",
+  "BoxCornerType": "table",
+  "Camera": "table",
+  "Chat": "table",
+  "ChatMessageEvent": "table",
+  "ChatType": "table",
+  "CoordFine": "table",
+  "CoordGrid": "table",
+  "CustomAPIEvent": "table",
+  "EntityType": "table",
+  "Event": "table",
+  "ExecuteConsoleCommand": "function",
+  "GameKey": "table",
+  "GameState": "table",
+  "GameStateChangedEvent": "table",
+  "GrandExchange": "table",
+  "GrandExchangeOffer": "table",
+  "GrandExchangeOfferStage": "table",
+  "GrandExchangeOfferType": "table",
+  "GrandExchangeOfferUpdatedEvent": "table",
+  "HTTPRequest": "table",
+  "HeightOffsetType": "table",
+  "HintList": "table",
+  "Inventory": "table",
+  "InventoryAddedRemovedEvent": "table",
+  "InventoryUpdatedEvent": "table",
+  "KeyTypedEvent": "table",
+  "KeyUpDownEvent": "table",
+  "Keyboard": "table",
+  "LocAddedEvent": "table",
+  "LocAnimationEvent": "table",
+  "LocCustomisedEvent": "table",
+  "LocList": "table",
+  "LocRemovedEvent": "table",
+  "LocShapeType": "table",
+  "MainDrawEvent": "table",
+  "MainLogicEvent": "table",
+  "MapElementHorizontalAlign": "table",
+  "MapElementTextSize": "table",
+  "MapElementVerticalAlign": "table",
+  "Matrix33": "table",
+  "MiniMenu": "table",
+  "MiniMenuActionType": "table",
+  "MiniMenuActionVerbType": "table",
+  "MiniMenuEntryAddedEvent": "table",
+  "MiniMenuEntrySelectedEvent": "table",
+  "MiniMenuEntryType": "table",
+  "MiniMenuOpenedClosedEvent": "table",
+  "MiniMenuReadyEvent": "table",
+  "ModifierKey": "table",
+  "Mouse": "table",
+  "NPCEntityProxyEvent": "table",
+  "NPCList": "table",
+  "ObjStackEntityAddedRemovedEvent": "table",
+  "ObjStackEntityChangedEvent": "table",
+  "ObjStackEntityProxyEvent": "table",
+  "ObjStackList": "table",
+  "ObjStackType": "table",
+  "OptionalDependencyChangedEvent": "table",
+  "OptionalPermissionChangedEvent": "table",
+  "PersistentDB": "userdata",
+  "PersistentDBType": "table",
+  "Player": "table",
+  "PlayerEntityProxyEvent": "table",
+  "PlayerList": "table",
+  "PluginPermissions": "table",
+  "PluginPersistentDB_Type": "table",
+  "PluginResourceLoadResult": "table",
+  "PostAnimMove": "table",
+  "PreAnimMove": "table",
+  "Quaternion": "table",
+  "QuestDifficulty": "table",
+  "QuestType": "table",
+  "Rect": "table",
+  "RegionCreatedEvent": "table",
+  "RotationType": "table",
+  "RunEnergyTransmitEvent": "table",
+  "RunWeightTransmitEvent": "table",
+  "ScreenConvert": "table",
+  "ShapeData": "table",
+  "ShapeEntityAlignType": "table",
+  "ShapeList": "table",
+  "SkillTransmitEvent": "table",
+  "SkillType": "table",
+  "SystemKey": "table",
+  "ValueType": "table",
+  "VarTransmitEvent": "table",
+  "Vector2": "table",
+  "Vector3": "table",
+  "Vector4": "table",
+  "WindowFocusChangedEvent": "table",
+  "WindowSizeChangedEvent": "table",
+  "World": "table",
+  "WorldCreatedEvent": "table",
+  "_G": "table",
+  "_VERSION": "string",
+  "__internal": "table",
+  "assert": "function",
+  "audio": "table",
+  "base": "table",
+  "clamp": "function",
+  "collectgarbage": "function",
+  "config": "table",
+  "coroutine": "table",
+  "error": "function",
+  "formatStr": "function",
+  "game": "table",
+  "getmetatable": "function",
+  "id": "table",
+  "ipairs": "function",
+  "lerp": "function",
+  "load": "function",
+  "log": "function",
+  "math": "table",
+  "next": "function",
+  "pairs": "function",
+  "pcall": "function",
+  "print": "function",
+  "random": "function",
+  "rawequal": "function",
+  "rawget": "function",
+  "rawlen": "function",
+  "rawset": "function",
+  "select": "function",
+  "setmetatable": "function",
+  "slerp": "function",
+  "string": "table",
+  "table": "table",
+  "tonumber": "function",
+  "tostring": "function",
+  "type": "function",
+  "ui": "table",
+  "utils": "table",
+  "var": "table",
+  "warn": "function",
+  "xpcall": "function"
+ },
+ "namespaces": {
+  "AABB": {
+   "via": "opaque"
+  },
+  "Camera": {
+   "keys": {
+    "GetFocusPosition": "function",
+    "GetPosition": "function",
+    "IsAvailable": "function"
+   },
+   "via": "pairs"
+  },
+  "Chat": {
+   "keys": {
+    "AddMessage": "function"
+   },
+   "via": "pairs"
+  },
+  "ChatMessageEvent": {
+   "via": "opaque"
+  },
+  "CoordFine": {
+   "via": "opaque"
+  },
+  "CoordGrid": {
+   "via": "opaque"
+  },
+  "CustomAPIEvent": {
+   "via": "opaque"
+  },
+  "Event": {
+   "keys": {
+    "ChatMessage": "table",
+    "ContentLayerReady": "table",
+    "Draw": "table",
+    "EntityDraw": "table",
+    "GameStateChanged": "table",
+    "GrandExchangeOfferUpdated": "table",
+    "InventoryAdded": "table",
+    "InventoryRemoved": "table",
+    "InventoryUpdated": "table",
+    "KeyDown": "table",
+    "KeyTyped": "table",
+    "KeyUp": "table",
+    "LocAdded": "table",
+    "LocAnimation": "table",
+    "LocCustomised": "table",
+    "LocRemoved": "table",
+    "Logic": "table",
+    "MiniMenuClosed": "table",
+    "MiniMenuEntryAdded": "table",
+    "MiniMenuEntrySelected": "table",
+    "MiniMenuOpened": "table",
+    "MiniMenuReady": "table",
+    "NPCEntityAdded": "table",
+    "NPCEntityRemoved": "table",
+    "ObjStackEntityAdded": "table",
+    "ObjStackEntityChanged": "table",
+    "ObjStackEntityRemoved": "table",
+    "OptionalDependencyChanged": "table",
+    "OptionalPermissionChanged": "table",
+    "PlayerEntityAdded": "table",
+    "PlayerEntityRemoved": "table",
+    "RegionCreated": "table",
+    "RegionUpdated": "table",
+    "RunEnergyTransmit": "table",
+    "RunWeightTransmit": "table",
+    "ServerLogic": "table",
+    "SettingsLayerReady": "table",
+    "SkillTransmit": "table",
+    "VarTransmit": "table",
+    "WindowFocusChanged": "table",
+    "WindowSizeChanged": "table",
+    "WorldCreated": "table",
+    "WorldUpdated": "table"
+   },
+   "via": "pairs"
+  },
+  "Event.Logic": {
+   "keys": {
+    "Subscribe": "function",
+    "Unsubscribe": "function"
+   },
+   "via": "pairs"
+  },
+  "GameStateChangedEvent": {
+   "via": "opaque"
+  },
+  "GrandExchange": {
+   "keys": {
+    "GetOffer": "function",
+    "MaxOffers": "function"
+   },
+   "via": "pairs"
+  },
+  "GrandExchangeOffer": {
+   "via": "opaque"
+  },
+  "GrandExchangeOfferUpdatedEvent": {
+   "via": "opaque"
+  },
+  "HTTPRequest": {
+   "via": "opaque"
+  },
+  "HintList": {
+   "keys": {
+    "AddArrow": "function",
+    "AddPolygon": "function",
+    "AddTrail": "function",
+    "HasArrow": "function",
+    "HasPolygon": "function",
+    "HasTrail": "function",
+    "RemoveArrow": "function",
+    "RemovePolygon": "function",
+    "RemoveTrail": "function"
+   },
+   "via": "pairs"
+  },
+  "Inventory": {
+   "keys": {
+    "Find": "function"
+   },
+   "via": "pairs"
+  },
+  "InventoryAddedRemovedEvent": {
+   "via": "opaque"
+  },
+  "InventoryUpdatedEvent": {
+   "via": "opaque"
+  },
+  "KeyTypedEvent": {
+   "via": "opaque"
+  },
+  "KeyUpDownEvent": {
+   "via": "opaque"
+  },
+  "Keyboard": {
+   "keys": {
+    "GetGameKeysDown": "function",
+    "IsAltDown": "function",
+    "IsAvailable": "function",
+    "IsBlocked": "function",
+    "IsControlDown": "function",
+    "IsGameKeyDown": "function",
+    "IsMetaDown": "function",
+    "IsShiftDown": "function"
+   },
+   "via": "pairs"
+  },
+  "LocAddedEvent": {
+   "via": "opaque"
+  },
+  "LocAnimationEvent": {
+   "via": "opaque"
+  },
+  "LocCustomisedEvent": {
+   "via": "opaque"
+  },
+  "LocList": {
+   "keys": {
+    "All": "function",
+    "ByConfig": "function",
+    "ByConfigID": "function",
+    "ByDistance": "function",
+    "ByName": "function",
+    "ByParentConfig": "function",
+    "ByParentConfigID": "function",
+    "Filter": "function"
+   },
+   "via": "pairs"
+  },
+  "LocRemovedEvent": {
+   "via": "opaque"
+  },
+  "MainDrawEvent": {
+   "via": "opaque"
+  },
+  "MainLogicEvent": {
+   "via": "opaque"
+  },
+  "Matrix33": {
+   "via": "opaque"
+  },
+  "MiniMenu": {
+   "keys": {
+    "IsOpen": "function"
+   },
+   "via": "pairs"
+  },
+  "MiniMenuEntryAddedEvent": {
+   "via": "opaque"
+  },
+  "MiniMenuEntrySelectedEvent": {
+   "via": "opaque"
+  },
+  "MiniMenuOpenedClosedEvent": {
+   "via": "opaque"
+  },
+  "MiniMenuReadyEvent": {
+   "via": "opaque"
+  },
+  "Mouse": {
+   "keys": {
+    "GetPosition": "function",
+    "GetX": "function",
+    "GetY": "function",
+    "IsAvailable": "function"
+   },
+   "via": "pairs"
+  },
+  "NPCEntityProxyEvent": {
+   "via": "opaque"
+  },
+  "NPCList": {
+   "keys": {
+    "All": "function",
+    "ByConfig": "function",
+    "ByConfigID": "function",
+    "ByDistance": "function",
+    "ByName": "function",
+    "ByParentConfig": "function",
+    "ByParentConfigID": "function",
+    "ByUID": "function",
+    "Filter": "function"
+   },
+   "via": "pairs"
+  },
+  "ObjStackEntityAddedRemovedEvent": {
+   "via": "opaque"
+  },
+  "ObjStackEntityChangedEvent": {
+   "via": "opaque"
+  },
+  "ObjStackEntityProxyEvent": {
+   "via": "opaque"
+  },
+  "ObjStackList": {
+   "keys": {
+    "All": "function",
+    "ByConfig": "function",
+    "ByConfigID": "function",
+    "ByDistance": "function",
+    "ByName": "function",
+    "Filter": "function"
+   },
+   "via": "pairs"
+  },
+  "OptionalDependencyChangedEvent": {
+   "via": "opaque"
+  },
+  "OptionalPermissionChangedEvent": {
+   "via": "opaque"
+  },
+  "Player": {
+   "keys": {
+    "GetCombatLevel": "function",
+    "GetEntity": "function",
+    "GetLevelCapped": "function",
+    "GetLevelGameplay": "function",
+    "GetLevelUncapped": "function",
+    "GetRunEnergy": "function",
+    "GetTrackingID": "function",
+    "GetWeight": "function",
+    "GetXPCapped": "function",
+    "GetXPUncapped": "function",
+    "IsAvailable": "function"
+   },
+   "via": "pairs"
+  },
+  "PlayerEntityProxyEvent": {
+   "via": "opaque"
+  },
+  "PlayerList": {
+   "keys": {
+    "All": "function",
+    "ByDistance": "function",
+    "ByName": "function",
+    "ByUID": "function",
+    "Filter": "function",
+    "Self": "function"
+   },
+   "via": "pairs"
+  },
+  "Plugin": {
+   "keys": {
+    "HasPermission": "function",
+    "Name": "string",
+    "RemoteID": "number",
+    "Version": "string",
+    "resources": "table",
+    "urls": "table"
+   },
+   "via": "pairs"
+  },
+  "PluginPermissions": {
+   "keys": {
+    "chatAccess": "userdata",
+    "httpAccess": "userdata",
+    "trackingAccess": "userdata"
+   },
+   "via": "pairs"
+  },
+  "PluginPersistentDB_Type": {
+   "via": "opaque"
+  },
+  "Quaternion": {
+   "via": "opaque"
+  },
+  "Rect": {
+   "via": "opaque"
+  },
+  "RegionCreatedEvent": {
+   "via": "opaque"
+  },
+  "RunEnergyTransmitEvent": {
+   "via": "opaque"
+  },
+  "RunWeightTransmitEvent": {
+   "via": "opaque"
+  },
+  "ScreenConvert": {
+   "keys": {
+    "CoordFineToScreen": "function",
+    "CoordGridToScreen": "function",
+    "ScreenToCoordFine": "function",
+    "ScreenToCoordGrid": "function",
+    "Vector3ToScreen": "function"
+   },
+   "via": "pairs"
+  },
+  "ShapeData": {
+   "via": "opaque"
+  },
+  "ShapeList": {
+   "keys": {
+    "CreateEntity": "function",
+    "CreateInstance": "function",
+    "DestroyEntity": "function",
+    "DestroyInstance": "function",
+    "Draw": "function",
+    "DrawLine": "function",
+    "GetAllEntities": "function",
+    "GetAllInstances": "function",
+    "GetEntity": "function",
+    "GetInstance": "function"
+   },
+   "via": "pairs"
+  },
+  "SkillTransmitEvent": {
+   "via": "opaque"
+  },
+  "VarTransmitEvent": {
+   "via": "opaque"
+  },
+  "Vector2": {
+   "via": "opaque"
+  },
+  "Vector3": {
+   "via": "opaque"
+  },
+  "Vector4": {
+   "via": "opaque"
+  },
+  "WindowFocusChangedEvent": {
+   "via": "opaque"
+  },
+  "WindowSizeChangedEvent": {
+   "via": "opaque"
+  },
+  "World": {
+   "keys": {
+    "GetGroundHeight": "function",
+    "GetMapSquareBounds": "function",
+    "GetPing": "function",
+    "GetRebootTimer": "function",
+    "GetRegionSourceForCoordGrid": "function",
+    "IsAvailable": "function",
+    "IsMembers": "function",
+    "IsRegion": "function",
+    "RemoveRoof": "table"
+   },
+   "via": "pairs"
+  },
+  "WorldCreatedEvent": {
+   "via": "opaque"
+  },
+  "__internal": {
+   "keys": {
+    "AchievementTestAchievement": "table",
+    "AchievementTestQuest": "table",
+    "AchievementTestSkill": "table",
+    "AchievementTestVarTestBit": "table",
+    "AchievementTestVarTotal": "table",
+    "AchievementTypeProxy": "table",
+    "BASTypeProxy": "table",
+    "CursorTypeProxy": "table",
+    "DBRowTypeProxy": "table",
+    "DBTableTypeProxy": "table",
+    "EnumTypeProxy": "table",
+    "FontConfigProxy": "table",
+    "HeadbarTypeProxy": "table",
+    "HitmarkTypeProxy": "table",
+    "InvConfigProxy": "table",
+    "InventoryProxy": "table",
+    "InventorySlot": "table",
+    "LocEntityProxy": "table",
+    "LocSectionEntityProxy": "table",
+    "LocTypeProxy": "table",
+    "MapElementTypeProxy": "table",
+    "MasterQuestVarPlayer": "table",
+    "MiniMenu": "table",
+    "MiniMenuEntry": "table",
+    "MiniMenuEntryDataComponent": "table",
+    "MiniMenuEntryDataGround": "table",
+    "MiniMenuEntryDataLoc": "table",
+    "MiniMenuEntryDataMapElement": "table",
+    "MiniMenuEntryDataNPC": "table",
+    "MiniMenuEntryDataObj": "table",
+    "MiniMenuEntryDataPlayer": "table",
+    "NPCEntityProxy": "table",
+    "NPCTypeProxy": "table",
+    "ObjEntry": "table",
+    "ObjStackEntityProxy": "table",
+    "ObjTypeProxy": "table",
+    "OptionProxy": "table",
+    "ParamTypeProxy": "table",
+    "PlayerEntityProxy": "table",
+    "PluginImageResource": "table",
+    "PluginResource": "table",
+    "PluginSoundResource": "table",
+    "QuestPreReqSkill": "table",
+    "QuestTypeProxy": "table",
+    "SeqTypeProxy": "table",
+    "ShapeEntityProxy": "table",
+    "ShapeInstanceProxy": "table",
+    "SoundInstanceProxy": "table",
+    "SpotAnimTypeProxy": "table",
+    "StructTypeProxy": "table",
+    "StyleSheetProxy": "table",
+    "VarProxy": "table"
+   },
+   "via": "pairs"
+  },
+  "audio": {
+   "keys": {
+    "AudioBus": "table",
+    "EmitterShape": "table",
+    "Play": "function",
+    "SoundPlaybackParams": "table",
+    "SoundType": "table",
+    "Stop": "function",
+    "StopSoundsUsingResource": "function"
+   },
+   "via": "pairs"
+  },
+  "config": {
+   "keys": {
+    "Achievement": "table",
+    "BaseAnimSet": "table",
+    "Cursor": "table",
+    "DBRow": "table",
+    "DBTable": "table",
+    "Enum": "table",
+    "Font": "table",
+    "Headbar": "table",
+    "Hitmark": "table",
+    "Inv": "table",
+    "Loc": "table",
+    "MapElement": "table",
+    "NPC": "table",
+    "Obj": "table",
+    "Param": "table",
+    "Quest": "table",
+    "Seq": "table",
+    "Struct": "table"
+   },
+   "via": "pairs"
+  },
+  "coroutine": {
+   "keys": {
+    "close": "function",
+    "create": "function",
+    "isyieldable": "function",
+    "resume": "function",
+    "running": "function",
+    "status": "function",
+    "wrap": "function",
+    "yield": "function"
+   },
+   "via": "pairs"
+  },
+  "game": {
+   "keys": {
+    "options": "table"
+   },
+   "via": "pairs"
+  },
+  "id": {
+   "keys": {
+    "Achievement": "table",
+    "BaseAnimSet": "table",
+    "Category": "table",
+    "Component": "table",
+    "Cursor": "table",
+    "DBRow": "table",
+    "DBTable": "table",
+    "Enum": "table",
+    "Font": "table",
+    "Headbar": "table",
+    "Hitmark": "table",
+    "Interface": "table",
+    "Inv": "table",
+    "Loc": "table",
+    "MapElement": "table",
+    "Material": "table",
+    "Model": "table",
+    "Music": "table",
+    "NPC": "table",
+    "Obj": "table",
+    "Param": "table",
+    "Quest": "table",
+    "Seq": "table",
+    "Sound": "table",
+    "Sprite": "table",
+    "Struct": "table",
+    "StyleSheet": "table",
+    "UIAnim": "table",
+    "UIAnimCurve": "table",
+    "VarClan": "table",
+    "VarClanSetting": "table",
+    "VarClient": "table",
+    "VarPlayer": "table",
+    "VarPlayerGroup": "table"
+   },
+   "via": "pairs"
+  },
+  "math": {
+   "keys": {
+    "abs": "function",
+    "acos": "function",
+    "asin": "function",
+    "atan": "function",
+    "ceil": "function",
+    "cos": "function",
+    "deg": "function",
+    "exp": "function",
+    "floor": "function",
+    "fmod": "function",
+    "huge": "number",
+    "log": "function",
+    "max": "function",
+    "maxinteger": "number",
+    "min": "function",
+    "mininteger": "number",
+    "modf": "function",
+    "pi": "number",
+    "rad": "function",
+    "random": "function",
+    "randomseed": "function",
+    "sin": "function",
+    "sqrt": "function",
+    "tan": "function",
+    "tointeger": "function",
+    "type": "function",
+    "ult": "function"
+   },
+   "via": "pairs"
+  },
+  "string": {
+   "keys": {
+    "byte": "function",
+    "char": "function",
+    "dump": "function",
+    "find": "function",
+    "format": "function",
+    "gmatch": "function",
+    "gsub": "function",
+    "len": "function",
+    "lower": "function",
+    "match": "function",
+    "pack": "function",
+    "packsize": "function",
+    "rep": "function",
+    "reverse": "function",
+    "sub": "function",
+    "unpack": "function",
+    "upper": "function"
+   },
+   "via": "pairs"
+  },
+  "table": {
+   "keys": {
+    "concat": "function",
+    "insert": "function",
+    "move": "function",
+    "pack": "function",
+    "remove": "function",
+    "sort": "function",
+    "unpack": "function"
+   },
+   "via": "pairs"
+  },
+  "ui": {
+   "keys": {
+    "AlignMode": "table",
+    "AspectRatioMode": "table",
+    "Button": "table",
+    "Canvas": "table",
+    "Carousel": "table",
+    "CarouselButtonDisplayMode": "table",
+    "Check": "table",
+    "CheckAlignMode": "table",
+    "CombinedID": "function",
+    "ComboEntry": "table",
+    "ComboField": "table",
+    "Component": "table",
+    "ComponentCollection": "table",
+    "ComponentCollectionBase": "table",
+    "ComponentCursorConfig": "table",
+    "ComponentDragConfig": "table",
+    "ComponentOpConfig": "table",
+    "ComponentParamsConfig": "table",
+    "ComponentPinchConfig": "table",
+    "ComponentSwipeConfig": "table",
+    "ComponentType": "table",
+    "CutscenePlaybackEndReason": "table",
+    "DragRenderBehaviour": "table",
+    "Grid": "table",
+    "GroupBox": "table",
+    "GroupBoxHeaderAlignMode": "table",
+    "Hook": "table",
+    "IFManager": "table",
+    "InputField": "table",
+    "InputFieldActionResult": "table",
+    "InputFieldFilterMode": "table",
+    "InputFieldKeyHandlingMode": "table",
+    "Interface": "table",
+    "Interfaces": "userdata",
+    "Layer": "table",
+    "Line": "table",
+    "List": "table",
+    "ListEntry": "table",
+    "Margin": "table",
+    "Model": "table",
+    "ModelCameraInfo": "table",
+    "ModelCameraTransition": "table",
+    "ModelEnvironment": "table",
+    "ModelGroup": "table",
+    "ModelType": "table",
+    "NPCCustomisation": "table",
+    "ObjectQuantityDisplayMode": "table",
+    "OpNameFilter": "table",
+    "PagedCarousel": "table",
+    "PagedLayer": "table",
+    "PagedLayerHeader": "table",
+    "Panel": "table",
+    "PinchAxisBit": "table",
+    "PlayerOpType": "table",
+    "Pos": "table",
+    "RadialProgressOverlay": "table",
+    "RadialProgressOverlayFlag": "table",
+    "RadioGroup": "table",
+    "Rectangle": "table",
+    "ScrollBar": "table",
+    "SelectionChangeEvent": "table",
+    "Size": "table",
+    "Slider": "table",
+    "Sprite": "table",
+    "SpriteData": "table",
+    "SpriteDataConfig": "table",
+    "StyleSheet": "table",
+    "StyleSheetRegistry": "table",
+    "StyleSheets": "userdata",
+    "StyleValue": "table",
+    "SwipeDirectionBit": "table",
+    "Text": "table",
+    "TextContentVisibilityMode": "table",
+    "TextData": "table",
+    "TextDataConfig": "table",
+    "TriggerMode": "table"
+   },
+   "via": "pairs"
+  },
+  "utils": {
+   "keys": {
+    "CalcTextWidth": "function"
+   },
+   "via": "pairs"
+  },
+  "var": {
+   "keys": {
+    "VarClan": "table",
+    "VarClanSetting": "table",
+    "VarClient": "table",
+    "VarPlayer": "table",
+    "VarPlayerGroup": "table"
+   },
+   "via": "pairs"
+  }
+ },
+ "pluginEnv": {
+  "Plugin": "table",
+  "PluginShutdown": "function",
+  "__PACKAGES_LOADED": "table",
+  "__PACKAGES_LOADING": "string",
+  "__THIS_PLUGIN": "userdata",
+  "require": "function"
+ },
+ "schema": 1,
+ "types": {
+  "CoordGrid": {
+   "members": {
+    "FromCoordFine": "function",
+    "ToCoordFine": "function",
+    "ToPacked": "function",
+    "level": "number",
+    "localX": "number",
+    "localZ": "number",
+    "mapSquareX": "number",
+    "mapSquareZ": "number",
+    "valid": "boolean",
+    "x": "number",
+    "z": "number"
+   },
+   "usertype": "sol.jag::game::CoordGrid"
+  },
+  "HTTPRequest": {
+   "members": {
+    "AddHeader": "function",
+    "Cancel": "function",
+    "Get": "function",
+    "Post": "function",
+    "cancelled": "boolean",
+    "data": "string",
+    "downloadTotalBytes": "number",
+    "downloadedBytes": "number",
+    "errorCode": "number",
+    "errorInfo": "string",
+    "failed": "boolean",
+    "finished": "boolean",
+    "header": "string",
+    "progress": "nil",
+    "responseCode": "number",
+    "successful": "boolean",
+    "timedOut": "boolean",
+    "url": "string"
+   },
+   "usertype": "sol.sol::d::u<jag::scripting::PluginHTTPRequest>"
+  },
+  "Inv": {
+   "members": {
+    "GetCategoryTotal": "function",
+    "GetSlot": "function",
+    "GetSlots": "function",
+    "GetTotal": "function",
+    "config": "userdata",
+    "freeSlotCount": "number",
+    "id": "number",
+    "isValid": "boolean",
+    "slotCount": "number",
+    "usedSlotCount": "number"
+   },
+   "usertype": "sol.jag::InventoryProxy"
+  },
+  "InvSlot": {
+   "members": {
+    "count": "number",
+    "obj": "userdata"
+   },
+   "usertype": "sol.jag::InventorySlot"
+  },
+  "InvType": {
+   "members": {
+    "configName": "string",
+    "id": "number",
+    "size": "number",
+    "stockCount": "number",
+    "typeName": "string"
+   },
+   "usertype": "sol.jag::ConfigTypeProxy<jag::game::InvType, jag::INVENTORY>*"
+  },
+  "LuaPlugin": {
+   "members": [],
+   "usertype": "sol.jag::scripting::LuaPlugin*"
+  },
+  "ObjType": {
+   "members": {
+    "GetGroundOpCursor": "function",
+    "GetInterfaceOpCursor": "function",
+    "GetParamValue": "function",
+    "HasParam": "function",
+    "category": "number",
+    "configName": "string",
+    "cost": "number",
+    "groundOpNames": "table",
+    "id": "number",
+    "interfaceOpNames": "table",
+    "isMembers": "number",
+    "isStockmarket": "boolean",
+    "isTradeable": "boolean",
+    "isValid": "boolean",
+    "name": "string",
+    "paramCount": "number",
+    "params": "table",
+    "quests": "table",
+    "stackCountAltObjs": "table",
+    "stackType": "number",
+    "stockmarketBuyLimit": "number",
+    "teamID": "number",
+    "typeName": "string"
+   },
+   "usertype": "sol.jag::ConfigTypeProxy<jag::game::ObjType, jag::OBJ>*"
+  },
+  "PersistentDB": {
+   "members": {
+    "CheckExists": "function",
+    "CheckExistsTyped": "function",
+    "Clear": "function",
+    "Delete": "function",
+    "Get": "function",
+    "GetBool": "function",
+    "GetFloat": "function",
+    "GetInt": "function",
+    "GetString": "function",
+    "GetStructuredData": "function",
+    "IterateEntries": "function",
+    "Set": "function",
+    "SetBool": "function",
+    "SetFloat": "function",
+    "SetInt": "function",
+    "SetString": "function",
+    "SetStructuredData": "function"
+   },
+   "usertype": "sol.jag::scripting::PluginPersistentDB*"
+  },
+  "PlayerEntity": {
+   "members": {
+    "aabb": "userdata",
+    "coordGrid": "userdata",
+    "displayName": "string",
+    "facing": "number",
+    "facingTarget": "number",
+    "isValid": "boolean",
+    "position": "userdata",
+    "route": "table",
+    "routeEnd": "userdata",
+    "uid": "number"
+   },
+   "usertype": "sol.jag::EntityProxy<jag::PlayerEntity>"
+  },
+  "PluginURL": {
+   "members": [],
+   "usertype": "sol.jag::scripting::LuaPluginMetadata::URL"
+  },
+  "VarType": {
+   "members": {
+    "baseVar": "nil",
+    "configName": "string",
+    "id": "number",
+    "isVarBit": "boolean",
+    "typeName": "string",
+    "value": "number",
+    "valueType": "number",
+    "varBitMask": "nil"
+   },
+   "usertype": "sol.jag::VarProxy*"
+  },
+  "Vector2": {
+   "members": {
+    "Abs": "function",
+    "Ceil": "function",
+    "Dot": "function",
+    "Floor": "function",
+    "Max": "function",
+    "Min": "function",
+    "Normalise": "function",
+    "NormaliseSafe": "function",
+    "invLength": "number",
+    "isNormal": "error",
+    "length": "number",
+    "lengthSq": "number",
+    "u": "number",
+    "v": "number",
+    "x": "number",
+    "y": "number"
+   },
+   "usertype": "sol.jag::math::Vector2T<float>"
+  },
+  "ui.Interfaces": {
+   "members": {
+    "GetComponent": "function",
+    "GetInterface": "function"
+   },
+   "usertype": "sol.jag::ui::InterfaceManager*"
+  },
+  "ui.Layer": {
+   "members": [],
+   "usertype": "sol.sol::d::u<jag::ui::Layer>"
+  }
+ },
+ "version": "Lua 5.4"
+}

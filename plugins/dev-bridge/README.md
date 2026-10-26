@@ -178,6 +178,13 @@ Logic tick, one command per tick, like `exec`.
   env arguments (seen 2026-10-26: a snippet's `x = 1` stayed in the scratch env). Without
   `load`, every eval fails with "this client has no load()".
 
+## Probes
+
+`probes/` holds eval snippets kept for re-use; the bridge never loads them.
+`probes/client-surface.lua` snapshots the client's API surface (names and types only) for
+`scripts/client-surface.py`, which writes `tests/fixtures/client-surface.json`
+([docs/testing.md](../../docs/testing.md#checking-the-mocks-against-the-live-client)).
+
 ## Why it isn't for submission
 
 It executes console and cheat commands and Lua sent from outside the client, which no submitted

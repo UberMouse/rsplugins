@@ -75,6 +75,7 @@ local API_MODULES = {
     "tests.harness.api.chat",
     "tests.harness.api.console",
     "tests.harness.api.ui",
+    "tests.harness.api.helpers",
 }
 
 -- The plugin dependencies the harness has a fake for, by mod.io ID. Only the object form with

@@ -83,7 +83,8 @@ end)
 eval specs), `echo = true` (also print the plugin's console output), `absent = { "load", ... }`
 (globals that read nil instead of faulting, modelling a client without them; for a plugin that
 reports what its environment has, like `plugins/dev-bridge`). A global can't be both opted in
-and absent.
+and absent. `randomSeed = 1` seeds `random()`, and `textWidth = function(fontID, text) return
+n end` gives `utils.CalcTextWidth` its font metrics (without it, the call faults).
 
 ### The harness `h`
 
@@ -553,6 +554,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | `Cancel` never calls the completion callback. Straight after it the request reads `cancelled`, not `finished` or `failed`; later it reads `finished` and `failed` (the harness: on the next step) | dev-bridge eval, 2026-10-26: cancelled one tick after `Get`; no callback after 20 s; `finished` and `failed` true when next read |
 | Starting an HTTP request inside a completion callback fails the test (it crashed the client) | [api-concepts.md](api-concepts.md#runtime-limits-weve-hit) |
 | `Event.<X>.Unsubscribe` faults (fails the test, even under the plugin's own `pcall`) when a C function is its immediate caller, i.e. it was passed straight to `pcall` or `xpcall`: "Event.X.Unsubscribe passed straight to pcall: the client aborts (SIGABRT)". The harness checks the caller's frame (`debug.getinfo`'s `what`), so a tail call `return Event.X.Unsubscribe(k)` from a function `pcall` called faults too (unverified live). A direct call is fine anywhere: at load, inside any callback (of a subscription made inside a callback too) and in `PluginShutdown`. A closure under `pcall`, `pcall(function() Event.X.Unsubscribe(k) end)` (dev-kit's form), passes in the harness but is unverified live | seven live aborts 2026-10-26 with dev-bridge (systemd coredumps), every one `pcall(Event[event].Unsubscribe, ...)` or `pcall(real.Event.Logic.Unsubscribe, ...)`: inside a probe's own `Logic` callback, from `Logic`, from an `HTTPRequest:Get` completion callback, and four times in a `PluginShutdown` run by the bridge's own `prl` from `Logic`. Direct calls survived: stage 1's `PluginShutdown` on the same self-`prl`, twice, and a runtime-made `VarTransmit` subscription unsubscribed directly from inside `Logic`. This replaces the earlier rule, withdrawn, that faulted an Unsubscribe of a subscription made inside a callback, and any Unsubscribe during a dispatch or HTTP completion. [api-concepts.md](api-concepts.md#runtime-limits-weve-hit) |
+| `clamp`, `lerp` (of Floats) and `random(min, max)` return floats; `random` with fewer than two numbers raises | math/index.html; dev-bridge eval, 2026-10-26 (`clamp(5, 0, 3)` 3.0, `lerp(0, 10, 0.25)` 2.5, `random(1, 10)` 4.27, `random()` raised) |
 | A call running past 1000 ms is aborted with `Maximum function execution time of 1000 ms exceeded` | [api-concepts.md](api-concepts.md#runtime-limits-weve-hit) |
 | `Chat` needs chatAccess; `AddMessage` is queued until the next logic update and comes back as `ChatMessage` with `ChatType.PLUGIN`; `ChatMessage` only reaches plugins with chatAccess | game/chat.html, core/events.html#chatmessage |
 | `ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)` is a 3836x2121 layer at global 0,0 | PrettyUI probe in the beta client, 2026-10-25; the ID from `docs/api/consts/Component.lua` |
@@ -603,6 +605,8 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Replaying a recording with `dropped` entries | Refused unless the test passes `{ allowDropped = true }` |
 | Replaying, `ServerLogic` | Only the recorded ones while the recording lasts, if it has any; the harness clock's otherwise |
 | Stdlib | Provides what the client's shared table held when dev-bridge listed it (2026-10-26): the base functions, `string` (with `dump`), `table`, `math`, `coroutine`, `warn` (a no-op: Lua starts with warnings off, and where the client sends them is unknown) and `collectgarbage` (`"collect"`, `"count"`, `"step"` and `"isrunning"` only; any other option faults, since it would change busted's VM). Withholds `os` and `io` (opt-in; both absent in the client), `load` (opt-in, see its row), and `debug`, `loadfile`, `dofile`, `package` and `utf8`, all absent in the client |
+| `random(min, max)` | A seeded generator per harness (`opts.randomSeed`, default 1), uniform in `[min, max)`; whether the client's can return `max` is unknown |
+| `utils.CalcTextWidth` | The test's `opts.textWidth`; it faults without one. Undocumented (only `docs/api/types.lua` declares it) |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
 | `ui.Interfaces:GetComponent` | Only the plugin layer; any other ID, or the 2- and 4-argument forms, faults. The same root object comes back on every call of one load (live, a fresh userdata each call, `==` the last: dev-bridge eval, 2026-10-26). Moving, resizing or destroying it faults |
@@ -628,6 +632,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
   global (its constructors and methods; a PlayerEntity's `coordGrid` is modelled), math
   types (bar `xyGlobal`'s `x`/`y`), `formatStr`, `id.*` beyond
   `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP`, `config.*` beyond `Inv` and `Obj`,
+  `slerp` and the Vector/Matrix forms of `lerp`,
   `Plugin.resources`, `Player.GetTrackingID` / `GetRunEnergy` / `GetWeight` / `GetCombatLevel`,
   `PlayerEntity` beyond `displayName` and `coordGrid`, `InvType.stockCount`.
 - **Vars**: BOOLEAN vars reading `true` (unconfirmed,

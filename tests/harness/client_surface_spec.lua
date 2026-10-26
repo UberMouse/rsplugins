@@ -21,6 +21,7 @@ local ALIASES = {
     ["_global.config"] = "config",
     ["_global.var"] = "var",
     ["_global.id"] = "id",
+    ["_global.utils"] = "utils",
     EventSubscription = "Event.Logic",
 }
 

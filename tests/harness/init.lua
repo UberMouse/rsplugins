@@ -54,7 +54,7 @@ Builder.__index = Builder
 ---@param plugin string|table "name" for plugins/<name>, a path containing "/", or a table of
 ---  inline files { ["main.lua"] = "...", ["plugin.json"] = "..." }
 ---@param opts table? { grant = { perm... }, budgetMs = 1000, stdlib = { os = true }, echo = false,
----  absent = { "load", ... } }
+---  absent = { "load", ... }, randomSeed = 1, textWidth = function(fontID, text) return n end }
 ---@return table h
 function M.new(plugin, opts)
     opts = opts or {}
@@ -62,6 +62,8 @@ function M.new(plugin, opts)
         budgetMs = opts.budgetMs or 1000,
         stdlib = opts.stdlib or {},
         echo = opts.echo or false,
+        randomState = opts.randomSeed or 1, -- random()'s generator (api/helpers.lua)
+        textWidth = opts.textWidth, -- utils.CalcTextWidth's metrics, from the test
         tick = 0, -- logic ticks so far; Logic payloads carry it as logicTick
         pendingMs = 0, -- advance() time not yet a whole tick
         console = {}, -- { kind = "print"|"log", text }

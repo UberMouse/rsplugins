@@ -25,8 +25,16 @@ for _, v in pairs(M.SkillType) do
 end
 
 -- A CoordGrid of world tile (x, z) on `level`, per game/coordgrid.html#properties: map
--- squares are 64 tiles, so mapSquareX = x // 64 and localX = x % 64.
+-- squares are 64 tiles, so mapSquareX = x // 64 and localX = x % 64. Live, two reads of the
+-- same tile gave two userdata that compare `==`, and tostring gave
+-- "level,mapSquareX,mapSquareZ,localX,localZ" (docs/api-concepts.md).
 local CoordGrid = strict.class("CoordGrid", {
+    eq = function(a, b)
+        return a.x == b.x and a.z == b.z and a.level == b.level
+    end,
+    tostring = function(s)
+        return string.format("%d,%d,%d,%d,%d", s.level, s.x // 64, s.z // 64, s.x % 64, s.z % 64)
+    end,
     fields = {
         level = function(s)
             return s.level
@@ -56,6 +64,10 @@ local CoordGrid = strict.class("CoordGrid", {
 -- unmocked. A replayed login may not know the name yet (h:recorded); a position comes only
 -- from h.world:setPosition, never from a recording.
 local PlayerEntity = strict.class("PlayerEntity", {
+    -- The same player, as long as the login lasts (live, two GetEntity() results are `==`).
+    eq = function(a, b)
+        return a.login == b.login
+    end,
     fields = {
         -- The tile at the time of the read, as a new CoordGrid each time.
         coordGrid = function(s)
@@ -110,14 +122,10 @@ local Player = strict.class("Player", {
         IsAvailable = function(s)
             return s.h.world.state.player.loggedIn
         end,
-        -- One entity per login, so the same object comes back until the next login.
+        -- A new object per call, as in the client, equal (`==`) to the others of one login.
         GetEntity = function(s)
             local p = loggedIn(s, "GetEntity")
-            if s.entityLogin ~= p.login then
-                s.entityLogin = p.login
-                s.entity = PlayerEntity.new({ h = s.h, displayName = p.displayName })
-            end
-            return s.entity
+            return PlayerEntity.new({ h = s.h, displayName = p.displayName, login = p.login })
         end,
         GetLevelGameplay = skillGetter("GetLevelGameplay", "gameplay"),
         GetLevelCapped = skillGetter("GetLevelCapped", "capped"),

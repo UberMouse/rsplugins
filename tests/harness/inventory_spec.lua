@@ -11,11 +11,13 @@ describe("Inventory", function()
     it("finds a loaded inventory by config or ID and reads its slots", function()
         local h = harness.new(plugin([[
             local inv = Inventory.Find(config.Inv.INV)
+            -- Live, two Finds give Invs that aren't `==`.
             same = inv == Inventory.Find(config.Inv.INV.id)
             counts = { inv.slotCount, inv.usedSlotCount, inv.freeSlotCount }
             first = inv:GetSlot(1)
             firstName, firstCount = first.obj.configName, first.count
-            emptySlot = inv:GetSlot(2) == nil
+            local function slot(i) local x = inv:GetSlot(i) return { x.obj.id, x.count } end
+            emptySlot = { slot(2), slot(0), slot(9999) }
             logs, coins = inv:GetTotal(config.Obj.LOGS), inv:GetTotal(995)
             slots = inv:GetSlots()
             empty = { slots[2].obj.id, slots[2].obj.configName, slots[2].count }
@@ -28,11 +30,12 @@ describe("Inventory", function()
         }, 28)
         h:load()
         local env = h.env
-        assert.is_true(env.same)
+        assert.is_false(env.same)
         assert.are.same({ 28, 3, 25 }, env.counts)
         assert.are.equal("LOGS", env.firstName)
         assert.are.equal(1, env.firstCount)
-        assert.is_true(env.emptySlot)
+        -- An empty slot or an index past either end is obj -1 x0, as the client gives it.
+        assert.are.same({ { -1, 0 }, { -1, 0 }, { -1, 0 } }, env.emptySlot)
         assert.are.same({ 2, 5000 }, { env.logs, env.coins })
         assert.are.equal(5000, env.slots[4].count)
         -- Dense, with empty slots as obj -1 x0, as the client gives them.

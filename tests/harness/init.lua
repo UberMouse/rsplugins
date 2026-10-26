@@ -75,7 +75,6 @@ function M.new(plugin, opts)
         dbWrites = 0, -- PersistentDB stores (Set and the typed setters) so far, across reloads
         varProxies = {},
         configProxies = {},
-        invProxies = {},
         instance = nil,
     }, Harness)
 

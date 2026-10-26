@@ -182,12 +182,12 @@ local Inv = strict.class("Inv", {
         end,
     },
     methods = {
-        -- An empty slot returns nil: the page only says "Returns nil on failure". Unconfirmed:
-        -- the client may give an obj -1 slot here, as GetSlots does.
+        -- An empty slot, and an index past either end (0, 9999), is an obj -1 x0 slot, not
+        -- the nil the page's "Returns nil on failure" suggests (live, docs/api-concepts.md).
         GetSlot = function(s, index)
             local inv = live(s)
             if math.type(index) ~= "integer" then strict.fault("Inv:GetSlot(index: Integer)") end
-            return slotCopy(s.h, inv, index)
+            return slotCopy(s.h, inv, index) or emptySlot(s.h)
         end,
         -- Dense, one InvSlot per slot, with empty slots as obj -1 x0 (seen in the client; see
         -- tests/fixtures/recorder-demo-shop.jsonl).
@@ -312,10 +312,8 @@ local Inventory = strict.class("Inventory", {
                 return RecordedInv.new({ h = s.h, id = id, path = path })
             end
             if not inv then return nil end
-            local k = id .. ":" .. inv.generation
-            s.h.invProxies[k] = s.h.invProxies[k]
-                or Inv.new({ h = s.h, id = id, generation = inv.generation })
-            return s.h.invProxies[k]
+            -- A new Inv per call that, unlike GetEntity's, isn't `==` the last (live).
+            return Inv.new({ h = s.h, id = id, generation = inv.generation })
         end,
     },
 })

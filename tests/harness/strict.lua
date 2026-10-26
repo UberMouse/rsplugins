@@ -113,6 +113,11 @@ end
 --   undeclared = true                                keep it out of M.declared: for fakes of
 --                                                    another plugin's exports (PrettyUI), which
 --                                                    the API stubs rightly lack
+--   eq = function(stateA, stateB) return bool end    `==` between two objects of the class,
+--                                                    for a client type that hands out a fresh
+--                                                    userdata per call yet compares equal
+--   tostring = function(state) return string end     the client's tostring() text, where it
+--                                                    isn't the usual type name
 -- `state` is the per-object table passed to new(); getters read the live world through it,
 -- so an object always reflects current state rather than a snapshot.
 ---@param name string the stub class name, used in error messages and the registry
@@ -163,10 +168,17 @@ function M.class(name, def)
             end
             states[proxy][key] = value
         end,
-        __tostring = function()
+        __tostring = function(proxy)
+            if def.tostring then return def.tostring(states[proxy]) end
             return name
         end,
     }
+    if def.eq then
+        mt.__eq = function(a, b)
+            local sa, sb = states[a], states[b]
+            return sa ~= nil and sb ~= nil and def.eq(sa, sb)
+        end
+    end
 
     ---@param state table?
     ---@return table proxy

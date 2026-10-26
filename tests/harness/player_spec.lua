@@ -66,7 +66,7 @@ describe("Player", function()
         )
     end)
 
-    it("returns the same entity until the next login", function()
+    it("hands out a new entity per call, `==` to the others of one login", function()
         local h = harness.new(plugin([[
             function entity() return Player.GetEntity() end
         ]]))
@@ -74,9 +74,21 @@ describe("Player", function()
         h:load()
         local first = h.env.entity()
         assert.are.equal(first, h.env.entity())
+        assert.is_false(rawequal(first, h.env.entity())) -- so not one table key, as live
         h.world:logout()
         h.world:login("Zezima")
         assert.are_not.equal(first, h.env.entity())
+    end)
+
+    it("compares CoordGrids by tile and prints them as the client does", function()
+        local h = harness.new(plugin([[
+            local a, b = Player.GetEntity().coordGrid, Player.GetEntity().coordGrid
+            same, raw, text = a == b, rawequal(a, b), tostring(a)
+        ]]))
+        h.world:login("Zezima")
+        h.world:setPosition(3225, 3223)
+        h:load()
+        assert.are.same({ true, false, "0,50,50,25,23" }, { h.env.same, h.env.raw, h.env.text })
     end)
 
     it("serves levels and XP, defaulting boosted and capped to the base values", function()

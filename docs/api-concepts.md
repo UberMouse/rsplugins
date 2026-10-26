@@ -389,6 +389,16 @@ The probe sources aren't kept; each finding says what was called.
     later, `finished` and `failed` were true too.
   - `Get` or `AddHeader` on a request that hasn't finished raises
     `This request is already being executed`.
+- **API objects are fresh userdata per call, and only some compare equal.** Two
+  `Player.GetEntity()` results, two reads of `.coordGrid` and two
+  `ui.Interfaces:GetComponent(<plugin layer>)` results are `==` but not `rawequal`. Two
+  `Inventory.Find(config.Inv.INV)` results are not even `==`, although `InventoryProxy`'s
+  metatable has an `__eq`. So never use one as a table key, and don't compare Invs; compare
+  `inv.id` instead. `tostring` of a CoordGrid is its value, `level,mapSquareX,mapSquareZ,localX,localZ`
+  (`0,50,50,25,23`).
+- **`Inv:GetSlot` never returns nil for an index.** An empty backpack slot, slot 0 and slot 9999
+  all gave an `InventorySlot` of obj -1, count 0, with no error. `inv.valid` (the stub's name for
+  `isValid`) reads nil without an error.
 
 ## Seen with rsdev shot (2026-10-26)
 

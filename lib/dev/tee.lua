@@ -1,3 +1,4 @@
+-- TEMP [TEE-DBG]: diagnostic logging for the chore-tracker live check; remove once answered.
 -- Dev log tee (a dev tool, not for submission): sends a plugin's own console output (print and
 -- log) and the errors its event callbacks raise to scripts/rsdev.py on this machine, so
 -- `rsdev.py logs --plugin <name>` can show them. The client delivers console output only to
@@ -53,6 +54,12 @@ local realLog = log
 
 local function say(...)
     realLog("[TEE]", ...)
+end
+
+-- TEMP [TEE-DBG]: real log only, so a debug line is never queued or POSTed.
+---@param text string
+local function dbg(text)
+    realLog("[TEE-DBG] " .. text)
 end
 
 ---------------------------------------------------------------------------
@@ -181,6 +188,19 @@ end
 -- so it only settles the books; the next Logic tick posts again.
 ---@param finished HTTPRequest
 local function onPosted(finished)
+    -- TEMP [TEE-DBG]
+    pcall(function()
+        dbg(
+            string.format(
+                "POST done code=%s ok=%s timedOut=%s err=%s %s",
+                tostring(finished.responseCode),
+                tostring(finished.successful),
+                tostring(finished.timedOut),
+                tostring(finished.errorCode),
+                tostring(finished.errorInfo)
+            )
+        )
+    end)
     local sent = assert(inFlight, "a batch is in flight")
     inFlight = nil -- the request has finished, so its body may go
     if finished.successful and finished.responseCode == 200 then
@@ -222,6 +242,7 @@ local function flush()
         seq = seq,
         dropped = dropped,
     }, lines)
+    dbg(string.format("POST start seq=%s lines=%s bytes=%s", seq, #lines, #body)) -- TEMP [TEE-DBG]
     -- A closure, never an API function straight to pcall (that aborts the client).
     local started, err = pcall(function()
         local request = http.new(url, PATH)
@@ -231,6 +252,7 @@ local function flush()
         inFlight = { request = request, body = body, lines = lines }
         request:Post(body, onPosted)
     end)
+    dbg(string.format("POST started=%s err=%s", tostring(started), tostring(err))) -- TEMP [TEE-DBG]
     if started then return end
     -- The request never started, so no completion callback will come: free the slot, keep the
     -- lines for a later tick and wait out a retry.
@@ -242,10 +264,26 @@ end
 
 local function onLogic()
     tick = tick + 1
+    -- TEMP [TEE-DBG]
+    if tick == 1 then dbg("first Logic tick") end
+    if tick % 250 == 0 then
+        dbg(
+            string.format(
+                "tick=%s queued=%s inFlight=%s nextPost=%s failures=%s seq=%s",
+                tick,
+                teelog.count(queue),
+                tostring(inFlight ~= nil),
+                nextPost,
+                failures,
+                seq
+            )
+        )
+    end
     -- A failure here must not break the plugin's Logic event (and it would repeat every tick),
     -- so it waits out a retry. (A failed request start puts its own lines back, in flush.)
     local ok, err = pcall(flush)
     if not ok then
+        dbg("flush raised: " .. tostring(err)) -- TEMP [TEE-DBG]
         nextPost = tick + tee.limits.maxRetryTicks
         warnOnce("sending failed: " .. tostring(err))
     end
@@ -288,6 +326,7 @@ function tee.install(env, plugin)
     local realEvent = env.Event
     -- Subscribed through the real Event, so the flush isn't wrapped (and can't tee itself).
     realEvent.Logic.Subscribe(FLUSH_NAME, onLogic)
+    dbg("subscribed devTeeFlush") -- TEMP [TEE-DBG]
     env.print = consoleStandIn("print", env.print)
     env.log = consoleStandIn("log", env.log)
     env.Event = wrapEvent(realEvent)

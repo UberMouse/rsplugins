@@ -121,10 +121,10 @@ describe("strict environment", function()
 end)
 
 describe("stdlib", function()
-    it("provides string, table, math, utf8 and the base functions", function()
+    it("provides string, table, math and the base functions, but no utf8", function()
         local h = harness.load(plugin([[
             ok = string.format("%d", 3) == "3" and table.concat({ "a", "b" }) == "ab"
-                and math.max(1, 2) == 2 and utf8.char(65) == "A" and select("#", 1, 2) == 2
+                and math.max(1, 2) == 2 and select("#", 1, 2) == 2 and rawget(_G, "utf8") == nil
                 and type(pcall) == "function" and type(error) == "function"
                 and math.type(1) == "integer" and _G == _ENV
         ]]))

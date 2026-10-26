@@ -263,7 +263,8 @@ them local.
 
 The log tee (`lib/dev/tee.lua`) is a separate dev module from the recorder: it ships a plugin's
 `print`/`log` output and callback errors to `rsdev.py logs`, not recordings. Opt a plugin in
-the same way (a `dev/` link, two lines at the top of `main.lua`, `httpAccess` and a url), but
+the same way (a `dev/` link, two lines at the top of `main.lua`, a `tee.shutdown()` call in
+`PluginShutdown`, `httpAccess` and a url), but
 with `require("dev/tee")`, `tee.install(_ENV, "<name>")` and `urls.rsdev`; docs/dev-environment.md
 ("Log tee") has the steps and behaviour. In the harness, a plugin with the link installs the
 tee too: without `httpAccess` granted it is a no-op (one `[TEE]` console line), so existing specs
@@ -540,6 +541,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | `var.<Domain>.FromID` for an ID that isn't in the catalog | nil (the catalog holds every ID `FromID` returned a var for in `plugins/var-dump`; the client may raise instead) |
 | `Plugin.urls.<name>` missing from the manifest | Faults. Unlike other faults, a `pcall` around the lookup catches it for good, so a plugin can probe for an optional url |
 | `Plugin.urls` values | Opaque proxies (a table whose `..` raises `attempt to concatenate a ...LuaPluginMetadata::URL value` and whose `tostring` is a pointer-style string), and `HTTPRequest.new` takes only those, not a plain string. Live, 2026-10-26 (beta client 951-1, eval in the dev bridge): the value is a userdata, `..` raises that error, `tostring` is `sol.jag::scripting::LuaPluginMetadata::URL: 0x...`, and `HTTPRequest.new` accepts it. The proxy is a table, so `type()` says `table` where the client's says `userdata`. A string-typed stand-in let the tee's `..` on a url pass 520 specs and fail in the client |
+| `utf8` | Absent from a plugin's environment. Live, 2026-10-26 (beta client 951-1): `type(utf8)` is `nil` (`string.pack`, `math.tointeger`, `table.move` and `string.format` are functions). The tee's `utf8.len` raised in every `teelog.encode` while 520+ specs passed on a harness that provided it; `lib/dev/teelog.lua` now checks UTF-8 by hand |
 | `pairs(Plugin.urls)` | Lists the manifest's urls (name -> proxy). Live, 2026-10-26: `type(Plugin.urls)` is `table` and `pairs` iterates it. The dev recorder and tee still look for their url this way first, then by a `pcall`'d lookup |
 | Granting a permission the manifest doesn't request | The builder errors |
 | A `require`d file that errors | Fails the test (the client returns nil) |
@@ -563,7 +565,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Replaying: a permission check or PersistentDB key nothing accounts for | Faults `unrecorded: ...` instead of answering the scripted default (not granted, unset). `IterateEntries` visits only the keys the store holds (seeded, stored during the replay, or put in `h.db`), since the recorder logs only its count |
 | Replaying a recording with `dropped` entries | Refused unless the test passes `{ allowDropped = true }` |
 | Replaying, `ServerLogic` | Only the recorded ones while the recording lasts, if it has any; the harness clock's otherwise |
-| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `utf8`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), `load` (opt-in, see its row), and `debug`, `loadfile`, `dofile`, `package`, `collectgarbage` |
+| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), `load` (opt-in, see its row), and `debug`, `loadfile`, `dofile`, `package`, `collectgarbage` |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
 | `ui.Interfaces:GetComponent` | Only the plugin layer; any other ID, or the 2- and 4-argument forms, faults. The same root object comes back on every call of one load (the client may hand out a fresh one). Moving, resizing or destroying it faults |

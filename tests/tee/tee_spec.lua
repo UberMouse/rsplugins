@@ -74,6 +74,57 @@ describe("dev tee", function()
         end)
     end)
 
+    describe("without the utf8 library", function()
+        it("is not there, and a print with non-ASCII text still reaches a POST", function()
+            local h = loaded('HAS_UTF8 = rawget(_G, "utf8") ~= nil\nprint("caf\195\169 \255")')
+            assert.is_false(h.env.HAS_UTF8)
+            h:step()
+            assert.are.same({ "caf\195\169 ?" }, support.texts(h))
+        end)
+    end)
+
+    describe("shutdown", function()
+        local function logicNames(h)
+            local names = {}
+            for i, entry in ipairs(h.instance.subs.Logic) do
+                names[i] = entry.name
+            end
+            return names
+        end
+
+        it("unsubscribes the flush", function()
+            local h = loaded("Event.Logic.Subscribe('mine', function() end)")
+            assert.are.same({ "devTeeFlush", "mine" }, logicNames(h))
+            h.env.require("dev/tee").shutdown()
+            assert.are.same({ "mine" }, logicNames(h))
+        end)
+
+        it("cancels a request in flight", function()
+            local h = loaded('print("a")')
+            h:step()
+            assert.are.equal(1, #support.posts(h))
+            h.env.require("dev/tee").shutdown()
+            assert.is_true(support.posts(h)[1].request.cancelled)
+        end)
+
+        it("is safe twice and starts nothing afterwards", function()
+            local h = loaded("")
+            local tee = h.env.require("dev/tee")
+            tee.shutdown()
+            tee.shutdown()
+            h.env.print("late")
+            h:advance(5000)
+            assert.are.equal(0, #support.posts(h))
+        end)
+
+        it("does nothing when install did not install", function()
+            local h = loaded("", { grant = {} })
+            h.env.require("dev/tee").shutdown()
+            h:advance(100)
+            assert.are.equal(0, #h.requests)
+        end)
+    end)
+
     describe("callback errors", function()
         it("ships the error and raises the original value again", function()
             local h = loaded([[

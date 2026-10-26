@@ -314,7 +314,11 @@ never for submission. A plugin opts in like the recorder does:
    if tee then tee.install(_ENV, "<name>") end
    ```
 
-3. In `plugin.json`: `"httpAccess"` in `optionalPermissions` and
+3. In `PluginShutdown`, after the plugin's own `Unsubscribe`s: `if tee then tee.shutdown() end`.
+   It unsubscribes the tee's own `devTeeFlush` Logic subscription and cancels a request in
+   flight. Skipping it leaves a subscription registered at unload, the suspected cause of a
+   client segfault on `prl` (docs/api-concepts.md, crash 8).
+4. In `plugin.json`: `"httpAccess"` in `optionalPermissions` and
    `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the dev bridge's url name, so one entry
    serves both).
 
@@ -336,6 +340,6 @@ both modules first, then call `tee.install`, then `recorder.install` (spec in
 `tests/tee/tee_spec.lua`).
 
 **Moderation.** The tee sends only the plugin's own console output and errors, to 127.0.0.1. A
-plugin for submission ships without `dev/`, the two lines above, httpAccess (unless a feature of
+plugin for submission ships without `dev/`, the lines above (install and shutdown), httpAccess (unless a feature of
 its own needs it) and `urls.rsdev`. Chore Tracker is the first plugin opted in; its README lists
 what to strip.

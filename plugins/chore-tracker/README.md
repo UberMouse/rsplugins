@@ -167,6 +167,7 @@ same machine. None of it ships. Remove all of it first:
 - the `dev/` symlink in this folder,
 - the two tee lines at the top of `main.lua` (`local tee = require("dev/tee")` and
   `if tee then tee.install(...) end`, with the comment above them),
+- the `if tee then tee.shutdown() end` line in `PluginShutdown` (with its comment),
 - `"httpAccess"` from `optionalPermissions` in `plugin.json`, and
 - `urls.rsdev` from `plugin.json` (leaving no `urls` and no `optionalPermissions`).
 

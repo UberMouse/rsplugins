@@ -32,7 +32,7 @@ local BASE = {
     "xpcall",
     "_VERSION",
 }
-local LIBS = { "string", "table", "math", "utf8", "coroutine" }
+local LIBS = { "string", "table", "math", "coroutine" }
 
 -- Why each opt-in global (OPT_IN, below) is withheld by default.
 local OPT_IN_WHY = {

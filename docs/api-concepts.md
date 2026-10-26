@@ -300,6 +300,18 @@ From `plugins/dev-bridge` in the beta client.
   live kept the session and cleared the scratch environment (`x` and `sl2` read nil afterwards).
   `exec "prl dev-bridge"` with a lazy probe live reloaded cleanly onto a new session
   (cbb88037d4): the self-reload that aborted the client seven times with the `pcall` form (below).
+- **`utf8` is nil in the client** (2026-10-26, beta client 951-1): `type(utf8)` is `nil`, while
+  `string.pack`, `math.tointeger`, `table.move` and `string.format` are functions. The tee's
+  `utf8.len` raised on every line until `lib/dev/teelog.lua` checked UTF-8 by hand.
+- **Crash 8 (SIGSEGV, coredump 2600170, 2026-10-26 14:48)**: `prl chore-tracker`, sent from
+  the dev-bridge, unloaded a chore-tracker with the log tee on. The fault was in a shallow
+  main-loop stack with no Lua frames running, and no POST was in flight. Every reload that
+  survived unloaded an instance whose subscriptions were all unsubscribed in `PluginShutdown`;
+  the tee-on instance also held the tee's `devTeeFlush` Logic subscription, which nothing
+  unsubscribed. Hypothesis, unconfirmed: a subscription left registered at unload is
+  dispatched into the dead Lua state. The rule we follow: unsubscribe every subscription in
+  `PluginShutdown`, including ones a `lib/dev` module made (`tee.shutdown()`). The dev
+  recorder's `devRecorderFlush` has the same gap and isn't fixed yet.
 - **Seven client aborts (rs2client SIGABRT, systemd coredumps), 2026-10-26**, the conductor
   driving the beta client through the bridge. Every one passed `Event.<X>.Unsubscribe`
   straight to `pcall` (the rule is under "Runtime limits we've hit"):

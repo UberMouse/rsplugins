@@ -1,4 +1,3 @@
--- TEMP [TEE-DBG]: diagnostic logging for the chore-tracker live check; remove once answered.
 -- Dev log tee (a dev tool, not for submission): sends a plugin's own console output (print and
 -- log) and the errors its event callbacks raise to scripts/rsdev.py on this machine, so
 -- `rsdev.py logs --plugin <name>` can show them. The client delivers console output only to
@@ -9,6 +8,7 @@
 --     local tee = require("dev/tee") -- nil when dev/ isn't there
 --     if tee then tee.install(_ENV, "my-plugin") end
 --
+-- and `if tee then tee.shutdown() end` in its PluginShutdown (see below),
 -- and lists "httpAccess" in optionalPermissions and "rsdev": "http://127.0.0.1:8766" in urls.
 -- install() swaps `print`, `log` and `Event` in that environment for stand-ins. print and
 -- log still reach the console, and each call is also queued as a line. Event.<X>.Subscribe
@@ -17,6 +17,11 @@
 -- only, never from an HTTP callback (starting a request in one crashed the client). With the
 -- daemon down the lines stay queued, up to a cap (the oldest are dropped and counted), and
 -- the tee retries with a growing wait.
+--
+-- The plugin must call tee.shutdown() from its PluginShutdown, after its own Unsubscribes. It
+-- unsubscribes the tee's devTeeFlush Logic subscription and cancels a request in flight. A
+-- subscription left registered at unload is the suspected cause of a client segfault on
+-- `prl` (docs/api-concepts.md, crash 8; unconfirmed).
 --
 -- Without urls.rsdev or httpAccess it logs one [TEE] line and changes nothing. A permission
 -- granted later does nothing until the plugin is reloaded (`prl <name>`), which keeps the
@@ -56,17 +61,13 @@ local function say(...)
     realLog("[TEE]", ...)
 end
 
--- TEMP [TEE-DBG]: real log only, so a debug line is never queued or POSTed.
----@param text string
-local function dbg(text)
-    realLog("[TEE-DBG] " .. text)
-end
-
 ---------------------------------------------------------------------------
 -- State (one per plugin enable: the client loads modules afresh each time)
 ---------------------------------------------------------------------------
 
 local installed = false
+local active = false -- install() finished and shutdown() hasn't run
+local realEvent = nil ---@type table? the real Event table, taken at install
 local url = nil ---@type string?
 local pluginName, session = "", ""
 local http = nil ---@type table? the HTTPRequest table, taken at install
@@ -139,8 +140,8 @@ local function guarded(event, name, callback)
     end
 end
 
--- Event.<Name>, with Subscribe wrapped by guarded() and everything else passed to the real
--- API directly (Unsubscribe especially: handing it to pcall aborts the client).
+-- Event.<Name>, with Subscribe wrapped by guarded() and the calls passed on to the real API
+-- (Unsubscribe especially is never handed to pcall: that aborts the client).
 ---@param real any the real Event table
 ---@return table
 local function wrapEvent(real)
@@ -152,13 +153,18 @@ local function wrapEvent(real)
             if sub == nil then return nil end
             local handle = {
                 Subscribe = function(name, callback, ...)
+                    -- Not tail calls: those would drop this Lua frame, which the client
+                    -- seems to use to identify the calling plugin (docs/api-concepts.md).
                     if type(name) ~= "string" or type(callback) ~= "function" then
-                        return sub.Subscribe(name, callback, ...) -- the API reports it
+                        local r = table.pack(sub.Subscribe(name, callback, ...)) -- the API reports it
+                        return table.unpack(r, 1, r.n)
                     end
-                    return sub.Subscribe(name, guarded(event, name, callback), ...)
+                    local r = table.pack(sub.Subscribe(name, guarded(event, name, callback), ...))
+                    return table.unpack(r, 1, r.n)
                 end,
                 Unsubscribe = function(name, ...)
-                    return sub.Unsubscribe(name, ...)
+                    local r = table.pack(sub.Unsubscribe(name, ...))
+                    return table.unpack(r, 1, r.n)
                 end,
             }
             handles[event] = handle
@@ -188,19 +194,7 @@ end
 -- so it only settles the books; the next Logic tick posts again.
 ---@param finished HTTPRequest
 local function onPosted(finished)
-    -- TEMP [TEE-DBG]
-    pcall(function()
-        dbg(
-            string.format(
-                "POST done code=%s ok=%s timedOut=%s err=%s %s",
-                tostring(finished.responseCode),
-                tostring(finished.successful),
-                tostring(finished.timedOut),
-                tostring(finished.errorCode),
-                tostring(finished.errorInfo)
-            )
-        )
-    end)
+    if not active then return end -- shutdown() cancelled the batch
     local sent = assert(inFlight, "a batch is in flight")
     inFlight = nil -- the request has finished, so its body may go
     if finished.successful and finished.responseCode == 200 then
@@ -230,7 +224,7 @@ end
 -- Send the next batch when one is due and none is in flight.
 local function flush()
     assert(url and http, "install() found urls.rsdev and took HTTPRequest")
-    if inFlight or tick < nextPost or teelog.count(queue) == 0 then return end
+    if not active or inFlight or tick < nextPost or teelog.count(queue) == 0 then return end
     nextPost = tick + tee.limits.postEveryTicks
     if not Plugin.HasPermission(PluginPermissions.httpAccess) then return end
     local lines = teelog.take(queue, tee.limits.batchLines, tee.limits.batchBytes)
@@ -242,7 +236,6 @@ local function flush()
         seq = seq,
         dropped = dropped,
     }, lines)
-    dbg(string.format("POST start seq=%s lines=%s bytes=%s", seq, #lines, #body)) -- TEMP [TEE-DBG]
     -- A closure, never an API function straight to pcall (that aborts the client).
     local started, err = pcall(function()
         local request = http.new(url, PATH)
@@ -252,7 +245,6 @@ local function flush()
         inFlight = { request = request, body = body, lines = lines }
         request:Post(body, onPosted)
     end)
-    dbg(string.format("POST started=%s err=%s", tostring(started), tostring(err))) -- TEMP [TEE-DBG]
     if started then return end
     -- The request never started, so no completion callback will come: free the slot, keep the
     -- lines for a later tick and wait out a retry.
@@ -264,33 +256,18 @@ end
 
 local function onLogic()
     tick = tick + 1
-    -- TEMP [TEE-DBG]
-    if tick == 1 then dbg("first Logic tick") end
-    if tick % 250 == 0 then
-        dbg(
-            string.format(
-                "tick=%s queued=%s inFlight=%s nextPost=%s failures=%s seq=%s",
-                tick,
-                teelog.count(queue),
-                tostring(inFlight ~= nil),
-                nextPost,
-                failures,
-                seq
-            )
-        )
-    end
+    if not active then return end -- after shutdown() nothing may start
     -- A failure here must not break the plugin's Logic event (and it would repeat every tick),
     -- so it waits out a retry. (A failed request start puts its own lines back, in flush.)
     local ok, err = pcall(flush)
     if not ok then
-        dbg("flush raised: " .. tostring(err)) -- TEMP [TEE-DBG]
         nextPost = tick + tee.limits.maxRetryTicks
         warnOnce("sending failed: " .. tostring(err))
     end
 end
 
 ---------------------------------------------------------------------------
--- Install
+-- Install and shutdown
 ---------------------------------------------------------------------------
 
 -- Start teeing the plugin whose global environment is `env` (pass `_ENV` from main.lua, in its
@@ -323,15 +300,34 @@ function tee.install(env, plugin)
     session = recording.newSession()
     http = env.HTTPRequest
     realLog = env.log
-    local realEvent = env.Event
+    realEvent = env.Event
     -- Subscribed through the real Event, so the flush isn't wrapped (and can't tee itself).
     realEvent.Logic.Subscribe(FLUSH_NAME, onLogic)
-    dbg("subscribed devTeeFlush") -- TEMP [TEE-DBG]
+    active = true
     env.print = consoleStandIn("print", env.print)
     env.log = consoleStandIn("log", env.log)
     env.Event = wrapEvent(realEvent)
     -- Names the manifest key, not the url: a Plugin.urls value is opaque and can't be concatenated.
     say("sending this plugin's console output to urls." .. URL_NAME .. " as session " .. session)
+end
+
+-- Stop teeing: unsubscribe the tee's own Logic subscription and cancel a request in flight.
+-- Safe to call twice, and a no-op if install() didn't finish. Call it from the plugin's
+-- PluginShutdown, after its own Unsubscribes.
+function tee.shutdown()
+    if not active then return end
+    active = false
+    assert(realEvent, "install() took the real Event")
+    -- A plain call statement: not passed to pcall and not a tail call (docs/api-concepts.md).
+    realEvent.Logic.Unsubscribe(FLUSH_NAME)
+    local sent = inFlight
+    inFlight = nil
+    if sent then
+        -- A Lua closure around the API call, never the API function itself.
+        pcall(function()
+            sent.request:Cancel()
+        end)
+    end
 end
 
 return tee

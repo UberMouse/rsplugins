@@ -22,13 +22,28 @@ describe("dev tee core", function()
     it("cuts long text with a marker, without splitting a character", function()
         assert.are.equal("short", t.cut("short", 10))
         assert.are.equal("abcde...[cut]", t.cut("abcdefgh", 5))
-        local cut = t.cut("ab" .. utf8.char(233, 233), 3) -- the cut lands inside the first e-acute
-        assert.are.equal("ab...[cut]", cut)
-        assert.is_not_nil(utf8.len(cut))
+        -- The cut lands inside the first e-acute (2 bytes), a euro sign (3) or a G clef (4).
+        assert.are.equal("ab...[cut]", t.cut("ab\195\169\195\169", 3))
+        assert.are.equal("ab...[cut]", t.cut("ab\226\130\172", 4))
+        assert.are.equal("ab...[cut]", t.cut("ab\240\157\132\158", 5))
+        assert.are.equal("ab\240\157\132\158...[cut]", t.cut("ab\240\157\132\158cd", 6))
+    end)
+
+    it("keeps valid multibyte text as it is", function()
+        local text = "a\195\169\226\130\172\240\157\132\158z"
+        assert.are.equal(text, t.cut(text, 100))
     end)
 
     it("replaces bytes that aren't UTF-8", function()
         assert.are.equal("a?b", t.cut("a\255b", 10))
+        assert.are.equal("????", t.cut("\255\255\255\255", 10))
+        assert.are.equal("a?", t.cut("a\195", 10)) -- a lone lead byte at the end
+        assert.are.equal("?a", t.cut("\169a", 10)) -- a stray continuation byte
+        assert.are.equal("??", t.cut("\192\128", 10)) -- overlong NUL
+        assert.are.equal("???", t.cut("\224\128\128", 10)) -- overlong 3-byte form
+        assert.are.equal("???", t.cut("\237\160\128", 10)) -- surrogate D800
+        assert.are.equal("????", t.cut("\244\144\128\128", 10)) -- U+110000
+        assert.are.equal("\244\143\191\191", t.cut("\244\143\191\191", 10)) -- U+10FFFF
     end)
 
     it("keeps the newest lines within the line and byte caps and counts the drops", function()

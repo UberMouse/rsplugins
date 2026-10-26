@@ -59,7 +59,7 @@
 -- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
 
 -- Dev only (remove before submitting, see the README): forwards console output to rsdev.py.
-local tee = require("dev/tee") -- nil when dev/ isn't there
+local tee = require("dev/tee") -- nil when dev/ isn't there; see PluginShutdown
 if tee then tee.install(_ENV, "chore-tracker") end
 
 local chores = require("data/chores")
@@ -638,6 +638,7 @@ function PluginShutdown()
     Event.InventoryAdded.Unsubscribe("chore-tracker")
     Event.InventoryUpdated.Unsubscribe("chore-tracker")
     Event.InventoryRemoved.Unsubscribe("chore-tracker")
+    if tee then tee.shutdown() end -- dev only: the tee's own Logic subscription
     if win then
         saveLayoutIfChanged()
         win:Destroy()

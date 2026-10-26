@@ -6,6 +6,7 @@
 local dkjson = require("dkjson")
 local support = require("tests.dev-bridge.support")
 local protocol = require("protocol")
+local recording = require("dev/recording")
 
 describe("protocol.syncBody", function()
     it("holds the schema-1 fields with the encoded events spliced in", function()
@@ -345,8 +346,8 @@ end)
 
 describe("protocol text", function()
     it("joins arguments with spaces, as print and log do, nils included", function()
-        assert.are.equal("a 1 nil true", protocol.joinText("a", 1, nil, true))
-        assert.are.equal("", protocol.joinText())
+        assert.are.equal("a 1 nil true", recording.joined("a", 1, nil, true))
+        assert.are.equal("", recording.joined())
     end)
 
     it("never raises on a value whose tostring fails", function()
@@ -355,8 +356,8 @@ describe("protocol text", function()
                 error("no")
             end,
         })
-        assert.are.equal("<a table that tostring() fails on>", protocol.text(bad))
-        assert.are.equal("x <a table that tostring() fails on>", protocol.joinText("x", bad))
+        assert.are.equal("<a table that tostring() fails on>", recording.text(bad))
+        assert.are.equal("x <a table that tostring() fails on>", recording.joined("x", bad))
     end)
 end)
 
@@ -532,7 +533,7 @@ describe("protocol probe-able events", function()
         return names
     end
 
-    it("subscribes stage 1's six at load, in its order, all of them probe-able", function()
+    it("subscribes the six load events in order, all of them probe-able", function()
         assert.are.same({
             "Logic",
             "ChatMessage",

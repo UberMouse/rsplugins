@@ -50,14 +50,15 @@ protocol.ENV_NAMES = {
 }
 
 ---------------------------------------------------------------------------
--- Privacy: which chat and menu data may leave the client. CLAUDE.md forbids exporting other
--- players' info, and the daemon writes what it receives to disk, so both filters fail closed.
+-- Privacy: which chat and menu data may leave the client. Other players' info must not be
+-- exported (docs/guidelines.md), and the daemon writes what it receives to disk, so both
+-- filters fail closed.
 ---------------------------------------------------------------------------
 
--- ChatType values (core/events.lua), by name; a spec checks them against the stub. These
--- carry no player speech and pass whatever their sender (SPAM, below, is not one of them).
--- Examines were seen arriving as GENERAL (0) in the client; the *_EXAMINE types stay in case
--- they are used.
+-- ChatType values (docs/api/generated/core/events.lua), by name; a spec checks them against
+-- the stub. These carry no player speech and pass whatever their sender (SPAM, below, is not
+-- one of them). Examines were seen arriving as GENERAL (0) in the client; the *_EXAMINE types
+-- stay in case they are used.
 protocol.SYSTEM_CHAT = {
     GENERAL = 0,
     ENGINE = 4,
@@ -272,26 +273,6 @@ end
 -- Eval results and the Log and Emit events
 ---------------------------------------------------------------------------
 
--- Any value as text, never raising: tostring() can, through a bad __tostring.
----@param v any
----@return string
-function protocol.text(v)
-    if type(v) == "string" then return v end
-    local ok, text = pcall(tostring, v)
-    if ok then return text end
-    return "<a " .. type(v) .. " that tostring() fails on>"
-end
-
--- print's and log's text: their arguments separated by a space (docs/api/generated/core.lua).
----@return string
-function protocol.joinText(...)
-    local parts = table.pack(...)
-    for i = 1, parts.n do
-        parts[i] = protocol.text(parts[i])
-    end
-    return table.concat(parts, " ", 1, parts.n)
-end
-
 -- `text` cut to lineBytes, ending in "<+N bytes>" when cut, and whether it was.
 ---@param text string
 ---@return string
@@ -335,7 +316,7 @@ function protocol.resultEntry(r)
     local truncated = r.output ~= nil and r.output.truncated
     if not r.ok then
         local cut
-        meta.error, cut = capText(protocol.text(r.error))
+        meta.error, cut = capText(recording.text(r.error))
         truncated = truncated or cut
     end
     meta.output = r.output and r.output.lines
@@ -400,7 +381,7 @@ end
 ---@param value any
 ---@return string
 function protocol.emitEntry(t, tag, value)
-    local payload = { tag = (capText(protocol.text(tag))) }
+    local payload = { tag = (capText(recording.text(tag))) }
     local encoded = value ~= nil and json.encode(value) or nil
     if encoded and #encoded > protocol.limits.valueBytes then
         payload.truncated, encoded = true, nil
@@ -415,8 +396,8 @@ end
 ---------------------------------------------------------------------------
 
 -- The bridge's own subscriptions, made at load as "devBridge<Event>" (main.lua) in this order and
--- unsubscribed only in PluginShutdown: stage 1's six (commit 684eedc), Logic for the bridge's
--- work, then the five forwarded events.
+-- unsubscribed only in PluginShutdown: Logic (the bridge's own work) first, then the five
+-- forwarded events.
 protocol.LOAD_EVENTS = {
     "Logic",
     "ChatMessage",
@@ -496,7 +477,7 @@ end
 ---@return string?
 function protocol.probeEventError(event)
     if PROBE_SET[event] then return nil end
-    local name = "Event." .. protocol.text(event)
+    local name = "Event." .. recording.text(event)
     local why = protocol.PROBE_EXCLUDED[event]
     if why then return name .. " is not probe-able: " .. why end
     return name .. " is not probe-able: no such event (dev-bridge's README lists the ones that are)"
@@ -514,7 +495,6 @@ function protocol.probeCapError(count)
     )
 end
 
--- The Log text for a probe removed after its first error.
 ---@param event string
 ---@param name string the name the snippet subscribed with
 ---@param err any
@@ -524,7 +504,7 @@ function protocol.probeErrorText(event, name, err)
         "probe Event.%s %q removed after an error: %s",
         event,
         name,
-        protocol.text(err)
+        recording.text(err)
     )
 end
 

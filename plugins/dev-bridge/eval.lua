@@ -2,8 +2,9 @@
 -- in a scratch environment kept for the bridge session, and holds the probes they install.
 --
 -- A probe is an entry in this module's table, never a client subscription of its own: the
--- bridge's handler for an event calls fanOut, which calls that event's probes. This module
--- makes no client calls. It tells the host when an event gains its first probe
+-- bridge's handler for an event calls fanOut, which calls that event's probes. It makes no
+-- Subscribe or Unsubscribe call (fanOut logs; a snippet's print, log and console commands reach
+-- the client). It tells the host when an event gains its first probe
 -- (host.firstProbe) and when it has none left (host.noProbes); main.lua then subscribes or
 -- unsubscribes that event's handler at the client on its next Logic tick, for events outside
 -- its six load-time ones.
@@ -66,7 +67,7 @@ local eval = {}
 local function serialise(v)
     local ok, data = pcall(recording.serialise, v, recording.objectData)
     if ok then return data end
-    return "<could not serialise: " .. protocol.text(data) .. ">"
+    return "<could not serialise: " .. recording.text(data) .. ">"
 end
 
 -- A new evaluator for one bridge session. `host.push(entry)` buffers an encoded Log or Emit
@@ -89,7 +90,7 @@ function eval.new(host)
     -- A print or log from scratch code: into the running snippet's output, else a Log event.
     ---@param level "print"|"log"
     local function capture(level, ...)
-        local text = protocol.joinText(...)
+        local text = recording.joined(...)
         if output then
             protocol.addOutput(output, text)
         else
@@ -189,14 +190,11 @@ function eval.new(host)
         end,
     })
 
-    -- Call `event`'s probes with `payload`, in the order added, each under pcall. Their
-    -- returns are dropped: no event in PROBE_EVENTS uses a subscriber's return, so a probe
-    -- can't affect the client that way. Mark and sweep: a probe removed during the pass (by
-    -- itself, another probe, an error or a clear) is only marked, so it isn't called later in
-    -- the pass, and the pass sweeps it at the end; a probe added during the pass lands past
-    -- the length read at its start, so it is first called on the next dispatch of that event,
-    -- including a nested one during this pass. A probe's
-    -- first error removes it, logged once on the console and as a Log event.
+    -- Call `event`'s probes with `payload`, in the order added, each under pcall; returns are
+    -- dropped (no PROBE_EVENTS event uses one). A probe removed mid-pass is only marked, so
+    -- it isn't called again this pass and is swept at the end; one added mid-pass is first
+    -- called on the next dispatch. A probe's first error removes it, logged on the console and
+    -- as a Log event.
     ---@param event string
     ---@param payload any
     function self.fanOut(event, payload)

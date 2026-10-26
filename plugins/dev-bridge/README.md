@@ -71,15 +71,14 @@ command run. Grep regex for this plugin's lines: `\[BRIDGE\]`.
   "delivered but no result" (exit 3). That is safe for non-idempotent commands, but exit 3
   means "unknown": check the client.
 - At load it subscribes the six events in `protocol.LOAD_EVENTS`: `Logic` (as
-  `devBridgeLogic`), then the five above, each as `devBridge<Event>`, the same names and order
-  as stage 1's bridge. Each handler forwards its event if it is one of the five above, does the
-  bridge's own work on `Logic`, then runs the eval probes on that event. With none, that costs
-  one table read per delivery. Other events are subscribed only while an eval probe needs them
-  ("Eval" below).
+  `devBridgeLogic`), then the five above, each as `devBridge<Event>`. Each handler forwards
+  its event if it is one of the five above, does the bridge's own work on `Logic`, then runs
+  the eval probes on that event. With none, that costs one table read per delivery. Other
+  events are subscribed only while an eval probe needs them ("Eval" below).
 - **Every `Event.<X>.Unsubscribe` is a direct call.** All seven client aborts seen on
   2026-10-26 passed it straight to `pcall` (`pcall(Event[event].Unsubscribe, name)`), including
-  three `prl dev-bridge` reloads whose `PluginShutdown` did; stage 1's bridge, which calls it
-  directly, reloaded cleanly (docs/api-concepts.md, "Runtime limits we've hit"). No other API
+  three `prl dev-bridge` reloads whose `PluginShutdown` did; an earlier bridge that called it
+  directly reloaded cleanly (docs/api-concepts.md, "Runtime limits we've hit"). No other API
   function or method goes straight to `pcall` either, but `ExecuteConsoleCommand` (seen safe).
 - Disabling or reloading it runs `PluginShutdown`: it cancels any sync in flight, then
   unsubscribes, directly, every probe event subscribed at the client and the six load-time
@@ -107,6 +106,9 @@ Logic tick, one command per tick, like `exec`.
 - `print` and `log` in a snippet go into the result's `output`, and to the console. Called
   later, from a probe's callback, they become `Log` events with `source: "eval"`, and still
   reach the console.
+- A probe's callback must be a Lua function. Registering a client API function directly as a
+  callback would have `fanOut` call it under `pcall`, the shape that aborts the client
+  (docs/api-concepts.md).
 - `emit(tag, value)` sends an `Emit` event `{tag, value}` (the tag as text, the value serialised
   like the result's values). Read them with `rsdev.py events --name Emit`.
 - `Event.<Name>.Subscribe(name, callback)` in a snippet installs a **probe**: `callback` is

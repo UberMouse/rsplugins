@@ -10,11 +10,11 @@
 -- Logic tick. Requests start only from Logic, never from a completion callback (that crashed
 -- the client; docs/api-concepts.md). The protocol itself is in protocol.lua, the pure core.
 --
--- The bridge subscribes each event in protocol.LOAD_EVENTS (stage 1's six) once, here at load,
--- and unsubscribes them in PluginShutdown. Each handler forwards its event (the FORWARDED
--- ones), does the bridge's own work (Logic), then calls the eval probes on that event
--- (eval.lua), which are table entries. A probe on any other event in protocol.PROBE_EVENTS
--- needs that event's handler at the client. Adding the event's first probe or removing its
+-- The bridge subscribes each event in protocol.LOAD_EVENTS once, here at load, and unsubscribes
+-- them in PluginShutdown. Each handler forwards its event (the FORWARDED ones), does the
+-- bridge's own work (Logic), then calls the eval probes on that event (eval.lua), which are
+-- table entries. A probe on any other event in protocol.PROBE_EVENTS needs that event's
+-- handler at the client. Adding the event's first probe or removing its
 -- last only records whether it is wanted; the bridge's own Logic handler makes the client
 -- match on its next tick (reconcileLazy), so a lazy probe receives from the next Logic tick
 -- on. Every lazy Subscribe and Unsubscribe thus runs inside Logic, the only place both were
@@ -51,7 +51,8 @@ local FORWARDED = {
 -- State (one per enable: the client runs main.lua afresh each time)
 ---------------------------------------------------------------------------
 
-local url = Plugin.urls.rsdev
+-- An opaque userdata in the client: never concatenated or formatted.
+local url = recording.manifestUrl(Plugin.urls, "rsdev") ---@type PluginURL?
 -- Tells this enable's syncs apart from another's.
 local session = recording.newSession()
 
@@ -111,7 +112,7 @@ end
 -- Log a tagged console line, and send it to the daemon as a Log event too.
 say = function(...)
     log(protocol.TAG, ...)
-    push(protocol.logEntry(tick, "log", protocol.joinText(...)))
+    push(protocol.logEntry(tick, "log", recording.joined(...)))
 end
 
 local evaluator = eval.new({
@@ -272,7 +273,7 @@ local function runOne()
     end
     result.id = command.id
     if not result.ok then
-        say("command " .. command.id .. " failed: " .. protocol.text(result.error))
+        say("command " .. command.id .. " failed: " .. recording.text(result.error))
     end
     results[#results + 1] = protocol.resultEntry(result)
 end
@@ -281,13 +282,18 @@ end
 -- Syncing with the daemon
 ---------------------------------------------------------------------------
 
--- A sync that failed. Unless the daemon took it (`delivered`: a 200 with an unreadable
--- reply), its events count as dropped and its results go back to be sent again.
+-- A sync that failed. If the daemon took it (`delivered`: a 200 with an unreadable reply), its
+-- events and results are done with. If it refused it (`refused`: a 400, which applies nothing
+-- and would refuse the same body again), they are dropped. Otherwise its events count as
+-- dropped and its results go back to be sent again.
 ---@param sent table
 ---@param why string
 ---@param delivered boolean
-local function syncFailed(sent, why, delivered)
-    if not delivered then
+---@param refused boolean?
+local function syncFailed(sent, why, delivered, refused)
+    if refused then
+        if sent.count > 0 then noteDropped(sent.count, "daemon refused the sync (400)") end
+    elseif not delivered then
         if sent.count > 0 then noteDropped(sent.count, "sync failed") end
         local again = sent.results
         for _, result in ipairs(results) do
@@ -321,8 +327,9 @@ local function finishSync()
                 tostring(request.errorCode),
                 tostring(request.errorInfo)
             )
-        return syncFailed(sent, why, false)
+        return syncFailed(sent, why, false, request.responseCode == 400)
     end
+    if type(request.data) ~= "string" then return syncFailed(sent, "reply had no body", true) end
     local commands, problem = protocol.parseReply(request.data)
     if not commands then return syncFailed(sent, tostring(problem), true) end
     local malformed = problem --[[@as string[] ]]
@@ -359,6 +366,7 @@ local function startSync()
     -- copy it (docs/api-concepts.md). The callback only marks it done; Logic handles it.
     local pending = { body = body, count = #events, results = sending, done = false }
     local ok, err = pcall(function()
+        assert(url, "the manifest has no urls.rsdev")
         local request = HTTPRequest.new(url, SYNC_PATH)
         request:AddHeader("Content-Type", "application/json")
         pending.request = request
@@ -512,17 +520,16 @@ for _, command in ipairs({
     if not ok then say("`" .. command .. "` failed:", err) end
 end
 
--- The bridge's own subscriptions, in stage 1's order and names.
+-- The bridge's own subscriptions, in protocol.LOAD_EVENTS order.
 for _, event in ipairs(protocol.LOAD_EVENTS) do
     Event[event].Subscribe(subscriptionName(event), handler(event))
 end
 say("enabled, session " .. session)
 
 -- Unsubscribe every live lazy subscription (one wanted but not yet reconciled was never made),
--- then the six load-time ones, each by a direct call, as stage 1's bridge did in a shutdown
--- that survived its own `prl` from Logic. No pcall: passing Unsubscribe straight to pcall is
--- what aborted the client, and wrapping each in a closure under pcall (as dev-kit does) is
--- unverified live. One raising skips the rest, which would mean a broken client anyway.
+-- then the six load-time ones. Each is a direct call, never under pcall: Unsubscribe passed to
+-- pcall aborts the client (docs/api-concepts.md). One raising skips the rest, which would mean
+-- a broken client anyway.
 function PluginShutdown()
     stop()
     for _, event in ipairs(protocol.PROBE_EVENTS) do

@@ -44,9 +44,9 @@ local function loadRecordingSubscribes()
 end
 
 describe("dev-bridge", function()
-    it("subscribes stage 1's six events at load, in stage 1's order and names", function()
-        -- Stage 1's bridge (commit 684eedc) ran a self-reload from Logic twice with exactly
-        -- these. The other probe-able events are subscribed only once a probe needs them.
+    it("subscribes the six load events at load, in order, as devBridge<Event>", function()
+        -- PluginShutdown and the reload path unsubscribe by these exact names. The other
+        -- probe-able events are subscribed only once a probe needs them.
         local h, calls = loadRecordingSubscribes()
         assert.are.same({
             "Logic devBridgeLogic",
@@ -445,6 +445,33 @@ describe("dev-bridge", function()
         assert.are.equal(1, support.lines(h, "[BRIDGE] sync failed (reply does not end"))
         h:advance(20 * 250)
         assert.are.equal(0, support.last(h).dropped)
+    end)
+
+    it("drops a sync the daemon refuses with 400 and sends later results", function()
+        local h = support.load()
+        h:step()
+        support.answer(h, { status = 200, body = support.line("r1", "exec", "plist") })
+        h:advance(20 * 10)
+        h.world:chat("refused")
+        support.answer(h, { status = 400, body = "bad" }) -- carries r1's result and the chat
+        assert.are.equal(1, support.lines(h, "[BRIDGE] sync failed"))
+        h:advance(20 * 250)
+        local body = support.last(h)
+        assert.are.same({}, body.results)
+        assert.is_true(body.dropped >= 1)
+        support.answer(h)
+        assert.are.equal(1, support.lines(h, "[BRIDGE] sync failed"))
+    end)
+
+    it("keeps the bridge running when a 200 reply has no body", function()
+        local h = support.load()
+        h:step()
+        support.answer(h, { status = 200, noBody = true })
+        assert.are.equal(1, support.lines(h, "[BRIDGE] sync failed (reply had no body"))
+        assert.are.equal(0, support.lines(h, "[BRIDGE] stopped after an error"))
+        h:advance(20 * 250)
+        support.answer(h)
+        assert.are.equal(1, support.lines(h, "[BRIDGE] connected to rsdev"))
     end)
 
     it("cancels the sync in flight when an internal error stops it", function()

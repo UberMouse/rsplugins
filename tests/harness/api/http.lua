@@ -152,6 +152,7 @@ function M.deliver(h)
                 f.successful, f.responseCode = r.successful ~= false, r.status or 200
                 f.data, f.header = r.body or "", r.header or ""
                 f.downloadedBytes, f.downloadTotalBytes = #f.data, #f.data
+                if r.noBody then f.data = nil end -- a 200 whose data the client left nil
                 f.progress = 1.0
             end
             if record.onDone and record.instance.alive then

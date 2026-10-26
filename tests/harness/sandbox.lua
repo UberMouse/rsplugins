@@ -2,6 +2,11 @@
 -- the Lua stdlib, the mocked API and `require`. Reading any other global faults with
 -- `unmocked API: <name>`, so a plugin using an API the harness doesn't model fails its test
 -- instead of quietly getting nil. Plugins may still assign globals (PluginShutdown...).
+--
+-- `_G` is not that environment. In the client a plugin's env holds its own globals, `Plugin`
+-- and `require`, and falls through to one table of stdlib and API shared by every plugin,
+-- which is what `_G` names (dev-bridge eval, docs/api-concepts.md). The harness's `_G` reads
+-- like that table and faults on any write to it.
 
 local prettyui = require("tests.harness.api.prettyui")
 local runtime = require("tests.harness.runtime")
@@ -9,9 +14,8 @@ local strict = require("tests.harness.strict")
 
 local M = {}
 
--- Base functions and libraries plugins get. The client runs Lua 5.4.8; which stdlib parts it
--- exposes isn't documented, so this is the side-effect-free core of the stdlib (coroutine
--- too: an earlier plugins/var-dump ran one in the client).
+-- Base functions and libraries plugins get: the stdlib the client's shared table held when
+-- dev-bridge listed it (2026-10-26), bar load (opt-in) and collectgarbage (wrapped, below).
 local BASE = {
     "assert",
     "error",
@@ -42,17 +46,24 @@ local OPT_IN_WHY = {
     -- dev-bridge's hello, 2026-10-26. Only the dev bridge's eval should run Lua from text.
     load = "present in the client, for dev tools only; a test can opt in",
 }
--- Standard globals withheld, with a clearer message than "unmocked API".
+-- Standard globals withheld, with a clearer message than "unmocked API". All but load are
+-- absent in the client (dev-bridge listed its globals, 2026-10-26).
 local WITHHELD = {
     debug = true,
     load = true,
     loadfile = true,
     dofile = true,
     package = true,
-    collectgarbage = true,
     os = true,
     io = true,
+    utf8 = true,
 }
+
+-- The collectgarbage options that leave the host VM (busted's) as it was.
+local GC_OPTIONS = { collect = true, count = true, step = true, isrunning = true }
+
+-- Globals of the plugin's own env in the client, so not in its _G (dev-bridge, 2026-10-26).
+local PLUGIN_ENV_ONLY = { Plugin = true, require = true }
 
 local API_MODULES = {
     "tests.harness.api.plugin",
@@ -234,6 +245,46 @@ local function makeRequire(h, env)
     end
 end
 
+-- The plugin's `_G`: what the client's shared global table holds, which is `env` as built
+-- so far less PLUGIN_ENV_ONLY. Any write faults, since the client's would reach every plugin.
+-- It is an empty proxy so that no write escapes __newindex; so `rawget(_G, name)` is nil for
+-- every name, where the client finds the stdlib and API.
+---@param env table
+---@return table
+local function globalTable(env)
+    local held = {}
+    for name, v in pairs(env) do
+        if not PLUGIN_ENV_ONLY[name] then held[name] = v end
+    end
+    local proxy = {}
+    held._G = proxy -- the client's _G._G is _G
+    return setmetatable(proxy, {
+        __index = function(_, name)
+            if held[name] ~= nil then return held[name] end
+            if PLUGIN_ENV_ONLY[name] or rawget(env, name) ~= nil then
+                strict.fault(
+                    "_G."
+                        .. tostring(name)
+                        .. ": the client's _G is the table every plugin shares, not this "
+                        .. "plugin's globals; read it plainly, or with rawget(_ENV, name)"
+                )
+            end
+            return env[name] -- absent, withheld or unmocked, as for a plain read
+        end,
+        __newindex = function(_, name)
+            strict.fault(
+                "_G."
+                    .. tostring(name)
+                    .. " assigned: the client's _G is the table every plugin shares, so the "
+                    .. "write would reach them all; assign the plugin's own global plainly"
+            )
+        end,
+        __pairs = function()
+            return next, held, nil
+        end,
+    })
+end
+
 -- Build a fresh environment for one plugin instance.
 ---@param h table the harness
 ---@param instance table its `subs` table is filled by the Event namespace
@@ -246,17 +297,25 @@ function M.build(h, instance)
     for _, name in ipairs(LIBS) do
         env[name] = copy(_G[name])
     end
-    -- Whether the client has string.dump is unknown, so a plugin shouldn't rely on it.
-    env.string.dump = nil
     env.coroutine = budgetedCoroutine()
+    env.collectgarbage = function(opt, ...)
+        if opt ~= nil and not GC_OPTIONS[opt] then
+            strict.fault("collectgarbage(" .. tostring(opt) .. ") is not modelled in the harness")
+        end
+        return collectgarbage(opt, ...)
+    end
+    -- Lua starts with warnings off, and where the client would send them is unknown.
+    env.warn = function(...)
+        for i = 1, select("#", ...) do
+            if type((select(i, ...))) ~= "string" then strict.fault("warn(msg1: string, ...)") end
+        end
+    end
     for name, enabled in pairs(h.stdlib) do
         if enabled then
             assert(OPT_IN[name], "stdlib opt-in only covers os, io and load, not " .. name)
             env[name] = OPT_IN[name](env)
         end
     end
-    env._G = env
-
     local events = require("tests.harness.api.events")
     env.Event = events.namespace(instance)
     for _, module in ipairs(API_MODULES) do
@@ -272,12 +331,14 @@ function M.build(h, instance)
     for _, name in ipairs(LIBS) do
         stdlib[name] = true
     end
+    stdlib.collectgarbage, stdlib.warn = true, true
     for name in pairs(env) do
         local declared = strict.declared._G and strict.declared._G[name]
-        if not stdlib[name] and not OPT_IN[name] and name ~= "_G" and not declared then
+        if not stdlib[name] and not OPT_IN[name] and not declared then
             strict.declare("_G", name, "global")
         end
     end
+    env._G = globalTable(env)
     -- After the registry above: dependency globals are other plugins' exports, not API the
     -- stubs declare.
     installDependencies(h, env)
@@ -290,7 +351,7 @@ function M.build(h, instance)
             -- A global the test models as missing from the client (opts.absent) reads nil.
             if h.absent[name] then return nil end
             if WITHHELD[name] then
-                local why = OPT_IN_WHY[name] or "client availability unknown"
+                local why = OPT_IN_WHY[name] or "absent in the client"
                 strict.fault(
                     "not provided in the harness sandbox: " .. tostring(name) .. " (" .. why .. ")"
                 )

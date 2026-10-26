@@ -126,9 +126,22 @@ describe("stdlib", function()
             ok = string.format("%d", 3) == "3" and table.concat({ "a", "b" }) == "ab"
                 and math.max(1, 2) == 2 and select("#", 1, 2) == 2 and rawget(_G, "utf8") == nil
                 and type(pcall) == "function" and type(error) == "function"
-                and math.type(1) == "integer" and _G == _ENV
+                and math.type(1) == "integer" and type(string.dump) == "function"
+                and math.type(collectgarbage("count")) == "float" and warn("x") == nil
         ]]))
         assert.is_true(h.env.ok)
+        assert.matches(
+            "not provided in the harness sandbox: utf8 %(absent in the client%)",
+            harness.errorOf(function()
+                harness.load(plugin("local n = utf8.len('x')"))
+            end)
+        )
+        assert.matches(
+            "collectgarbage%(stop%) is not modelled",
+            harness.errorOf(function()
+                harness.load(plugin('collectgarbage("stop")'))
+            end)
+        )
     end)
 
     it("withholds os and io unless a test opts in", function()
@@ -166,17 +179,47 @@ describe("stdlib", function()
         )
     end)
 
-    it("withholds string.dump", function()
-        local h = harness.load(plugin("hasDump = string.dump ~= nil"))
-        assert.is_false(h.env.hasDump)
-    end)
-
     it("gives each load its own copy of a library table", function()
         local h = harness.load(plugin("string.extra = true"))
         assert.is_nil(rawget(string, "extra")) -- the host's string table is untouched
         local first = h.env.string
         h:reload()
         assert.are_not.equal(first, h.env.string)
+    end)
+end)
+
+describe("_G", function()
+    it("reads the API and stdlib but not the plugin's own globals, as the client's does", function()
+        local h = harness.load(plugin([[
+            mine = 1
+            same = _G.print == print and _G._G == _G and _G ~= _ENV
+            raw = { rawget(_G, "mine"), rawget(_ENV, "mine") }
+            names = {}
+            for name in pairs(_G) do names[name] = true end
+        ]]))
+        assert.is_true(h.env.same)
+        assert.are.same({ nil, 1 }, h.env.raw)
+        assert.is_true(h.env.names.Event and h.env.names.print)
+        assert.is_nil(h.env.names.Plugin or h.env.names.require or h.env.names.mine)
+        for _, name in ipairs({ "mine", "Plugin", "require" }) do
+            assert.matches(
+                "_G%." .. name .. ": the client's _G is the table every plugin shares",
+                harness.errorOf(function()
+                    harness.load(plugin("mine = 1 local x = _G." .. name))
+                end)
+            )
+        end
+    end)
+
+    it("faults on any write to _G, which would reach every plugin", function()
+        for _, code in ipairs({ "_G.mine = 1", "_G.print = nil", "_G['Event'] = {}" }) do
+            assert.matches(
+                "assigned: the client's _G is the table every plugin shares",
+                harness.errorOf(function()
+                    harness.load(plugin(code))
+                end)
+            )
+        end
     end)
 end)
 

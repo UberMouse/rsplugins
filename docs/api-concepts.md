@@ -371,6 +371,31 @@ Read-only snippets sent with `rsdev.py eval` (bridge sessions 2cadd0be39 and 508
 client 951-1), to check the test harness's guesses ([testing.md](testing.md#fidelity-ledger)).
 The probe sources aren't kept; each finding says what was called.
 
+- **A plugin's globals and `_G` are different tables.** The bridge's env held 6 keys: `Plugin`,
+  `require`, its own `PluginShutdown`, `__THIS_PLUGIN` (a `sol.jag::scripting::LuaPlugin*`),
+  `__PACKAGES_LOADED` (the `require`d modules by name: `dev/json`, `eval`, `protocol`...) and
+  `__PACKAGES_LOADING` (`"main"`). Its metatable's `__index` is a 291-key table with no
+  metatable that holds the stdlib and the whole API, and that is what `_G` (and `base`) names:
+  `_G._G == _G`, `_G ~= _ENV`. A key put in that table survived `prl dev-bridge` (same table,
+  new env), so it outlives a plugin's reload and is very likely shared by every plugin
+  (unproven). So `rawget(_G, "x")` never finds a plugin's own `x` (use `_ENV`), `_G.Plugin` and
+  `_G.require` are nil, and a write to `_G` may reach every plugin: never write to it.
+- **Stdlib in the client**: the base functions plus `collectgarbage` and `warn`; `string` (with
+  `dump`, which works: `#string.dump(function() return 1 end)` was 74), `table`, `math`,
+  `coroutine` and `load`. Absent: `os`, `io`, `debug`, `utf8`, `package`, `dofile`,
+  `loadfile`, `loadstring`. `getmetatable("").__index` is the `string` table.
+- **Globals beyond the stdlib**: the API namespaces and enums; a `<Name>Event` table per event
+  payload type (`ChatMessageEvent`, `MainLogicEvent`...); `clamp`, `lerp`, `slerp`, `random`
+  and `formatStr` (documented); `utils` (only `CalcTextWidth`), `game` (only `options`, the 43
+  `ClientOptions`), `base` (the table itself) and `__internal` (sol proxy tables), all
+  undocumented; and some 190 `sol.*` userdata, sol's own registry entries. `random(1, 10)`
+  returns a float (4.27); `random()` with no arguments raises. `clamp(5, 0, 3)` is the float 3.
+- **Usertype members can be listed.** `getmetatable(<userdata>)` is a plain table naming every
+  member, properties included, as functions, plus sol's `__eq`, `__index` and so on. For
+  example, `InventoryProxy` has `GetCategoryTotal`, `GetSlot`, `GetSlots`, `GetTotal`, `config`,
+  `freeSlotCount`, `id`, `isValid`, `slotCount` and `usedSlotCount`. The global class tables
+  (`CoordGrid`, `__internal.*`) refuse `pairs` ("not recognized as a container"), and so does
+  `PersistentDBType` (its values, read by name: `BOOL` 0 to `STRUCTURED_DATA` 4).
 - **HTTP failures, from requests to the rsdev daemon.** The client's HTTP is libcurl.
   - A 404 (GET) and a 400 (POST) finish with `failed` true and `successful` false,
     `responseCode` set, `errorCode` 0, `errorInfo` "", `data` "" and `progress` nil. `header`

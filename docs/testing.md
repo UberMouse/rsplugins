@@ -169,7 +169,12 @@ The harness fails loudly rather than guessing:
 - **Wrong call form**: `PersistentDB.Get(k)` (should be `:`) and `Player:IsAvailable()` (should
   be `.`) fault.
 - **Own globals**: a plugin reading one of its own globals before assigning it also faults
-  (`x = x or {}`). Use a local, or `rawget(_G, "x")`.
+  (`x = x or {}`). Use a local, or `rawget(_ENV, "x")`.
+- **`_G` is not the plugin's env.** In the client it is one table of stdlib and API shared by
+  every plugin; a plugin's own globals, `Plugin` and `require` aren't in it. So `_G.<own
+  global>`, `_G.Plugin` and `_G.require` fault, and any write to `_G` faults, since in the client
+  it would reach every plugin. `rawget(_G, name)` is nil for every name in the harness (the
+  client finds the stdlib and API names there); use `_ENV` for the plugin's own globals.
 - **With the dev recorder installed**, it reads every field of each recorded event's payload, so
   `h:fire` must pass them all and a var needs a value before `h:load()` (its first VarTransmit
   would otherwise have no `oldValue`). See [Recordings](#recordings).
@@ -494,6 +499,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 |---|---|
 | `require`: path from the plugin root, no extension; runs once per load and caches the result; nil for a missing file; circular requires are an error | [plugin-anatomy.md](plugin-anatomy.md#modules-require) |
 | A `require`d module runs in `main.lua`'s environment (same globals, same `Event`); a directory symlink inside the plugin folder is followed | recorder-demo's probe line in the beta client, 2026-10-25 |
+| A plugin's env holds its own globals, `Plugin` and `require`, and falls through to one table of stdlib and API, which is `_G` (`_G._G == _G`, `_G ~= _ENV`); that table outlives the plugin's reload. The harness's `_G` reads like it (not the plugin's own globals) and faults on writes | dev-bridge eval, 2026-10-26: the bridge's env had 6 keys (`Plugin`, `require`, `PluginShutdown`, `__THIS_PLUGIN`, `__PACKAGES_LOADED`, `__PACKAGES_LOADING`) and a metatable whose `__index` was a 291-key table equal to `_G`; a key set in it survived `prl dev-bridge`. Whether other plugins share it is unproven |
 | A global `PluginShutdown` runs on disable/reload (a `local` one doesn't); reload = fresh env, PersistentDB kept | [plugin-anatomy.md](plugin-anatomy.md#lifecycle-hooks-global-functions), [dev-environment.md](dev-environment.md#plugin-management-commands) |
 | A manifest with `requiredPermissions` doesn't run, so the harness refuses it | [plugin-anatomy.md](plugin-anatomy.md#manifest-pluginjson) |
 | Subscribers run in subscription order; reusing a name replaces it for that event only; a payload edited by one subscriber is what the next sees (fields the stub doesn't mark "(Read-only)", such as `ChatMessage.chatMessage`, are writable) | [core/events.html#overview](https://developer.runescape.com/rs/core/events.html#overview), #event-payloads |
@@ -567,7 +573,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | Replaying: a permission check or PersistentDB key nothing accounts for | Faults `unrecorded: ...` instead of answering the scripted default (not granted, unset). `IterateEntries` visits only the keys the store holds (seeded, stored during the replay, or put in `h.db`), since the recorder logs only its count |
 | Replaying a recording with `dropped` entries | Refused unless the test passes `{ allowDropped = true }` |
 | Replaying, `ServerLogic` | Only the recorded ones while the recording lasts, if it has any; the harness clock's otherwise |
-| Stdlib | Provides the base functions, `string` (without `dump`), `table`, `math`, `coroutine` (an earlier var-dump ran one in the client). Withholds `os` and `io` (opt-in; both are absent in the client, per recorder-demo's probe line, 2026-10-25), `load` (opt-in, see its row), and `debug`, `loadfile`, `dofile`, `package`, `collectgarbage` |
+| Stdlib | Provides what the client's shared table held when dev-bridge listed it (2026-10-26): the base functions, `string` (with `dump`), `table`, `math`, `coroutine`, `warn` (a no-op: Lua starts with warnings off, and where the client sends them is unknown) and `collectgarbage` (`"collect"`, `"count"`, `"step"` and `"isrunning"` only; any other option faults, since it would change busted's VM). Withholds `os` and `io` (opt-in; both absent in the client), `load` (opt-in, see its row), and `debug`, `loadfile`, `dofile`, `package` and `utf8`, all absent in the client |
 | `print` / `log` | Join `tostring` of each argument with spaces. The client prints table contents, and `log` adds a plugin prefix (core/index.html#log) |
 | The time budget | Wall time (luasystem's monotonic clock), checked every 10,000 VM instructions and when the call returns. Coroutines the plugin creates are checked too, against the call that resumes them |
 | `ui.Interfaces:GetComponent` | Only the plugin layer; any other ID, or the 2- and 4-argument forms, faults. The same root object comes back on every call of one load (live, a fresh userdata each call, `==` the last: dev-bridge eval, 2026-10-26). Moving, resizing or destroying it faults |
@@ -619,7 +625,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
   treats that as inside the callback is undocumented.
 - **String methods on string values**: `("").rep` and `getmetatable("").__index` resolve
   through the host's `string` table, not the sandbox copy (busted shares that metatable, so the
-  harness leaves it alone). The known difference is `dump`, which is reachable that way.
+  harness leaves it alone).
 
 ### Where the official page and the stubs disagree
 

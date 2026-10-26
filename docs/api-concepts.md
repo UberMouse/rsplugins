@@ -399,6 +399,12 @@ The probe sources aren't kept; each finding says what was called.
 - **`Inv:GetSlot` never returns nil for an index.** An empty backpack slot, slot 0 and slot 9999
   all gave an `InventorySlot` of obj -1, count 0, with no error. `inv.valid` (the stub's name for
   `isValid`) reads nil without an error.
+- **`Plugin` holds more than the page lists**: `HasPermission`, `urls`, `resources` (an empty
+  table for a plugin without resources), and the undocumented `Name` and `Version` (the
+  manifest's `name` and `version`) and `RemoteID` (-7 for dev-bridge loaded from `dev_plugins`).
+  The stubs lack the last three, so LuaLS flags them; don't build on them. `Plugin.urls.<name>`
+  for a name the manifest lacks reads nil, without an error, as do `var.VarPlayer.FromID` of an
+  unknown ID, `Event.<unknown name>` and `require` of a missing module.
 
 ## Seen with rsdev shot (2026-10-26)
 

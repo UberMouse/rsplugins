@@ -65,8 +65,9 @@ local Plugin = strict.class("Plugin", {
         end,
     },
     fields = {
-        -- Plugin.urls.<name> for each manifest url; an unknown name faults rather than
-        -- returning nil, so a test catches a url missing from plugin.json.
+        -- Plugin.urls.<name> for each manifest url; an unknown name is nil, as live
+        -- (docs/api-concepts.md). HTTPRequest.new faults on that nil, so a test still
+        -- catches a url missing from plugin.json.
         urls = function(s)
             return s.urls
         end,
@@ -90,10 +91,8 @@ function M.install(h, env)
     for name, text in pairs(h.manifest.urls or {}) do
         urls[name] = newUrl(text)
     end
-    -- Catchable: a plugin may pcall a lookup to probe for an optional url (dev/recorder does),
-    -- and a probe that comes back empty is not a misuse.
-    local lookup = strict.lookup(function(name)
-        strict.fault("Plugin.urls." .. tostring(name) .. " is not in plugin.json urls", true)
+    local lookup = strict.lookup(function()
+        return nil
     end, urls)
     -- The page calls urls a table, so pairs() over it lists the manifest's urls.
     getmetatable(lookup).__pairs = function()

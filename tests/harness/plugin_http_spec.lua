@@ -40,21 +40,21 @@ describe("Plugin", function()
         assert.is_nil(h.env.text:find("127.0.0.1", 1, true))
     end)
 
-    it("faults on a url the manifest lacks", function()
-        assert.matches(
-            "Plugin.urls.wiki is not in plugin.json urls",
-            harness.errorOf(function()
-                harness.load(plugin("local u = Plugin.urls.wiki"))
-            end)
-        )
+    it("reads nil for a url the manifest lacks, as the client does", function()
+        local h = harness.load(plugin("missing = Plugin.urls.wiki == nil"))
+        assert.is_true(h.env.missing)
     end)
 
-    it("lets a pcall probe for a url the manifest lacks", function()
-        local h = harness.load(plugin([[
-            found, err = pcall(function() return Plugin.urls.wiki end)
-        ]]))
-        assert.is_false(h.env.found)
-        assert.matches("Plugin.urls.wiki is not in plugin.json urls", h.env.err)
+    it("faults on a request to a url the manifest lacks", function()
+        assert.matches(
+            "is not a plugin.json url",
+            harness.errorOf(function()
+                harness.load(
+                    plugin("HTTPRequest.new(Plugin.urls.wiki)"),
+                    { grant = { "httpAccess" } }
+                )
+            end)
+        )
     end)
 
     it("lists the manifest urls with pairs", function()

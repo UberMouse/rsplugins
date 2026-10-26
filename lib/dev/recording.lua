@@ -179,10 +179,9 @@ function recording.eventOp(name, p, contents)
     return nil
 end
 
--- The manifest url called `name` (Plugin.urls), or nil. Looked for by iterating first, since
--- indexing a missing name may raise (the test harness's does). The client's urls iterate with
--- pairs (their values are opaque userdata); indexing under pcall is a fallback for a table
--- that doesn't.
+-- The manifest url called `name` (Plugin.urls), or nil. The client's urls iterate with pairs
+-- (their values are opaque userdata) and read nil for a missing name; iterating first, and
+-- indexing under pcall, guard against a client where either raises.
 ---@param urls any
 ---@param name string
 ---@return PluginURL?

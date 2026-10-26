@@ -52,6 +52,23 @@ describe("dev tee", function()
             assert.is_not_nil(h:output():find("a 1\nb nil", 1, true))
         end)
 
+        it("queues a line whose argument has a failing tostring", function()
+            -- The real print is replaced first: the harness's own would raise on the argument.
+            local h = harness.new(
+                support.plugin("print = function() end\n" .. support.INSTALL),
+                { grant = { "httpAccess" } }
+            )
+            h:load()
+            local bad = setmetatable({}, {
+                __tostring = function()
+                    error("no text")
+                end,
+            })
+            h.env.print("x", bad)
+            h:step()
+            assert.are.same({ "x <a table that tostring() fails on>" }, support.texts(h))
+        end)
+
         it("stamps each line with the Logic tick since install", function()
             local h = loaded("Event.Logic.Subscribe('p', function() end)")
             h:advance(100) -- 5 ticks
@@ -380,6 +397,7 @@ HTTPRequest = {
                     stepsUntilPosts(h, 1, 30)
                     assert.are.same({ "a", "b" }, support.texts(h))
                     assert.are.equal(1, support.count(h, "could not start a POST"))
+                    assert.are.equal(0, support.batches(h)[1].dropped)
                 end
             )
         end

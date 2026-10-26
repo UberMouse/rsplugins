@@ -180,12 +180,12 @@ function recording.eventOp(name, p, contents)
 end
 
 -- The manifest url called `name` (Plugin.urls), or nil. Looked for by iterating first, since
--- indexing a missing name may raise (the test harness's does). Whether the client's urls can be
--- iterated is undocumented, so if iterating fails or doesn't find it, it is indexed under pcall
--- too.
+-- indexing a missing name may raise (the test harness's does). The client's urls iterate with
+-- pairs (their values are opaque userdata); indexing under pcall is a fallback for a table
+-- that doesn't.
 ---@param urls any
 ---@param name string
----@return string?
+---@return PluginURL?
 function recording.manifestUrl(urls, name)
     local ok, found = pcall(function()
         for key, value in pairs(urls) do
@@ -198,6 +198,27 @@ function recording.manifestUrl(urls, name)
         return urls[name]
     end)
     return indexed and value or nil
+end
+
+-- Any value as text, never raising: tostring() can, through a bad __tostring.
+---@param v any
+---@return string
+function recording.text(v)
+    if type(v) == "string" then return v end
+    local ok, text = pcall(tostring, v)
+    if ok then return text end
+    return "<a " .. type(v) .. " that tostring() fails on>"
+end
+
+-- print's and log's text: their arguments separated by a space (docs/api/generated/core.lua).
+---@param ... any
+---@return string
+function recording.joined(...)
+    local parts = table.pack(...)
+    for i = 1, parts.n do
+        parts[i] = recording.text(parts[i])
+    end
+    return table.concat(parts, " ", 1, parts.n)
 end
 
 -- An id telling one enable's batches apart from another's: six hex digits of a fresh table's
@@ -215,7 +236,8 @@ end
 ---------------------------------------------------------------------------
 
 -- Entries sit at buffer[first..last]. An entry keeps its index until it leaves, and leaving
--- is always from the front, so everything below `first` has been taken or dropped.
+-- is normally from the front, so everything below `first` has been taken or dropped. A
+-- failed batch goes back in front of `first` (requeue).
 ---@return table
 function recording.newBuffer()
     return { first = 1, last = 0, bytes = 0 }
@@ -227,18 +249,18 @@ function recording.count(buffer)
     return buffer.last - buffer.first + 1
 end
 
--- Add an encoded entry, then drop the oldest ones until the buffer holds at most `maxBytes`
--- (always keeping the newest). Returns how many were dropped.
+-- Drop the oldest entries until at most `maxBytes` bytes and, if given, `maxLines` entries
+-- remain (always keeping the newest). Returns how many were dropped.
 ---@param buffer table
----@param entry string
 ---@param maxBytes integer
+---@param maxLines integer?
 ---@return integer
-function recording.push(buffer, entry, maxBytes)
-    buffer.last = buffer.last + 1
-    buffer[buffer.last] = entry
-    buffer.bytes = buffer.bytes + #entry
+local function trim(buffer, maxBytes, maxLines)
     local dropped = 0
-    while buffer.bytes > maxBytes and buffer.first < buffer.last do
+    while
+        buffer.first < buffer.last
+        and (buffer.bytes > maxBytes or (maxLines and recording.count(buffer) > maxLines))
+    do
         buffer.bytes = buffer.bytes - #buffer[buffer.first]
         buffer[buffer.first] = nil
         buffer.first = buffer.first + 1
@@ -247,15 +269,33 @@ function recording.push(buffer, entry, maxBytes)
     return dropped
 end
 
--- Remove and return the oldest entries, up to `maxBytes` in all (at least one, however big).
+-- Add an encoded entry, then trim to `maxBytes` (and `maxLines` if given). Returns how many
+-- were dropped.
+---@param buffer table
+---@param entry string
+---@param maxBytes integer
+---@param maxLines integer?
+---@return integer
+function recording.push(buffer, entry, maxBytes, maxLines)
+    buffer.last = buffer.last + 1
+    buffer[buffer.last] = entry
+    buffer.bytes = buffer.bytes + #entry
+    return trim(buffer, maxBytes, maxLines)
+end
+
+-- Remove and return the oldest entries, up to `maxBytes` in all and `maxLines` entries if
+-- given (at least one, however big).
 ---@param buffer table
 ---@param maxBytes integer
+---@param maxLines integer?
 ---@return string[]
-function recording.take(buffer, maxBytes)
+function recording.take(buffer, maxBytes, maxLines)
     local out, bytes = {}, 0
     while buffer.first <= buffer.last do
         local entry = buffer[buffer.first]
-        if #out > 0 and bytes + #entry > maxBytes then break end
+        if #out > 0 and (bytes + #entry > maxBytes or (maxLines and #out >= maxLines)) then
+            break
+        end
         out[#out + 1] = entry
         bytes = bytes + #entry
         buffer[buffer.first] = nil
@@ -263,6 +303,23 @@ function recording.take(buffer, maxBytes)
         buffer.bytes = buffer.bytes - #entry
     end
     return out
+end
+
+-- Put entries taken earlier back in front, oldest first, then trim: a batch that failed to
+-- send keeps its entries unless the caps say otherwise. Returns how many were dropped.
+---@param buffer table
+---@param items string[]
+---@param maxBytes integer
+---@param maxLines integer?
+---@return integer
+function recording.requeue(buffer, items, maxBytes, maxLines)
+    if #items == 0 then return 0 end
+    for i = #items, 1, -1 do
+        buffer.first = buffer.first - 1
+        buffer[buffer.first] = items[i]
+        buffer.bytes = buffer.bytes + #items[i]
+    end
+    return trim(buffer, maxBytes, maxLines)
 end
 
 -- A batch's POST body: `meta` (schema, plugin, session...) plus the already-encoded entries,

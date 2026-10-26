@@ -57,7 +57,7 @@ end
 local installed = false
 local stopped = false -- set after an internal error; the stand-ins keep forwarding
 local sendFailed = false -- set if sending a batch raised; nothing more is sent
-local url = nil ---@type string?
+local url = nil ---@type PluginURL?
 local pluginName, session = "", ""
 local tick = 0 -- Logic ticks since install
 local buffer = recording.newBuffer()

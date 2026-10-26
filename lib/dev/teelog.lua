@@ -1,5 +1,5 @@
--- The dev log tee's pure core: shaping a console line, the bounded queue of encoded lines
--- waiting to be sent, a batch's body, and the retry backoff. Nothing here calls the API or
+-- The dev log tee's pure core: shaping a console line, a batch's body, and the retry
+-- backoff. Nothing here calls the API or
 -- keeps state of its own; dev/tee.lua (the shell) does both. The wire format is
 -- docs/dev-environment.md ("Log tee").
 
@@ -15,17 +15,6 @@ teelog.SCHEMA = 1
 teelog.MAX_TEXT = 2048
 
 local CUT_MARK = "...[cut]"
-
--- The text of a print/log call's arguments: each tostring'd, joined with a space.
----@param ... any
----@return string
-function teelog.joined(...)
-    local parts = table.pack(...)
-    for i = 1, parts.n do
-        parts[i] = tostring(parts[i])
-    end
-    return table.concat(parts, " ", 1, parts.n)
-end
 
 -- How many bytes the UTF-8 sequence starting at byte `i` of `s` takes, or nil if the bytes
 -- there are not a valid one (a stray continuation byte, an overlong form, a surrogate, a
@@ -123,88 +112,6 @@ end
 ---@return string
 function teelog.encode(tick, level, text)
     return json.encode({ t = tick, level = level, text = teelog.cut(text, teelog.MAX_TEXT) })
-end
-
----------------------------------------------------------------------------
--- The queue: encoded lines waiting to be sent, oldest first
----------------------------------------------------------------------------
-
--- Lines sit at queue[first..last]; a failed batch goes back in front of `first`.
----@return table
-function teelog.newQueue()
-    return { first = 1, last = 0, bytes = 0 }
-end
-
----@param queue table
----@return integer
-function teelog.count(queue)
-    return queue.last - queue.first + 1
-end
-
--- Drop the oldest lines until at most `maxLines` lines and `maxBytes` bytes remain (always
--- keeping the newest). Returns how many were dropped.
----@param queue table
----@param maxLines integer
----@param maxBytes integer
----@return integer
-local function trim(queue, maxLines, maxBytes)
-    local dropped = 0
-    while queue.first < queue.last and (teelog.count(queue) > maxLines or queue.bytes > maxBytes) do
-        queue.bytes = queue.bytes - #queue[queue.first]
-        queue[queue.first] = nil
-        queue.first = queue.first + 1
-        dropped = dropped + 1
-    end
-    return dropped
-end
-
--- Add an encoded line, then trim. Returns how many lines were dropped.
----@param queue table
----@param line string
----@param maxLines integer
----@param maxBytes integer
----@return integer
-function teelog.push(queue, line, maxLines, maxBytes)
-    queue.last = queue.last + 1
-    queue[queue.last] = line
-    queue.bytes = queue.bytes + #line
-    return trim(queue, maxLines, maxBytes)
-end
-
--- Remove and return the oldest lines, at most `maxLines` and `maxBytes` bytes (at least one).
----@param queue table
----@param maxLines integer
----@param maxBytes integer
----@return string[]
-function teelog.take(queue, maxLines, maxBytes)
-    local out, bytes = {}, 0
-    while queue.first <= queue.last do
-        local line = queue[queue.first]
-        if #out > 0 and (#out >= maxLines or bytes + #line > maxBytes) then break end
-        out[#out + 1] = line
-        bytes = bytes + #line
-        queue[queue.first] = nil
-        queue.first = queue.first + 1
-        queue.bytes = queue.bytes - #line
-    end
-    return out
-end
-
--- Put lines taken earlier back in front, oldest first, then trim: a batch that failed to send
--- keeps its lines unless the cap says otherwise. Returns how many lines were dropped.
----@param queue table
----@param lines string[]
----@param maxLines integer
----@param maxBytes integer
----@return integer
-function teelog.requeue(queue, lines, maxLines, maxBytes)
-    if #lines == 0 then return 0 end
-    for i = #lines, 1, -1 do
-        queue.first = queue.first - 1
-        queue[queue.first] = lines[i]
-        queue.bytes = queue.bytes + #lines[i]
-    end
-    return trim(queue, maxLines, maxBytes)
 end
 
 ---------------------------------------------------------------------------

@@ -190,6 +190,80 @@ describe("the entry buffer", function()
     end)
 end)
 
+describe("the entry buffer with a line cap", function()
+    it("keeps the newest entries within the line and byte caps and counts the drops", function()
+        local q = recording.newBuffer()
+        assert.are.equal(0, recording.push(q, "aa", 100, 3))
+        recording.push(q, "bb", 100, 3)
+        recording.push(q, "cc", 100, 3)
+        assert.are.equal(1, recording.push(q, "dd", 100, 3))
+        assert.are.equal(3, recording.count(q))
+        assert.are.equal(2, recording.push(q, "eeeeee", 8, 10)) -- bb and cc go: dd + eeeeee is 8 bytes
+        assert.are.equal(2, recording.push(q, "ffffffffff", 4, 10))
+        assert.are.same({ "ffffffffff" }, recording.take(q, 100, 10)) -- the newest is always kept
+    end)
+
+    it("takes batches within the line and byte limits, and at least one", function()
+        local q = recording.newBuffer()
+        for _, s in ipairs({ "a", "b", "c", "dddd" }) do
+            recording.push(q, s, 100, 10)
+        end
+        assert.are.same({ "a", "b" }, recording.take(q, 100, 2))
+        assert.are.same({ "c" }, recording.take(q, 3, 10)) -- "dddd" would pass 3 bytes
+        assert.are.same({ "dddd" }, recording.take(q, 1, 10)) -- one however big
+        assert.are.same({}, recording.take(q, 1, 10))
+    end)
+
+    it("puts a failed batch back in front, still subject to the caps", function()
+        local q = recording.newBuffer()
+        recording.push(q, "a", 100, 10)
+        recording.push(q, "b", 100, 10)
+        local batch = recording.take(q, 100, 10)
+        recording.push(q, "c", 100, 10)
+        assert.are.equal(0, recording.requeue(q, batch, 100, 10))
+        assert.are.same({ "a", "b", "c" }, recording.take(q, 100, 10))
+        recording.push(q, "c", 100, 2)
+        assert.are.equal(1, recording.requeue(q, { "a", "b" }, 100, 2)) -- a is the oldest
+        assert.are.same({ "b", "c" }, recording.take(q, 100, 10))
+    end)
+
+    it("requeues into an empty buffer, and requeues nothing", function()
+        local q = recording.newBuffer()
+        recording.push(q, "a", 100)
+        local batch = recording.take(q, 100)
+        assert.are.equal(0, recording.requeue(q, {}, 100, 10))
+        recording.requeue(q, batch, 100, 10)
+        assert.are.equal(1, recording.count(q))
+        assert.are.equal(1, q.bytes)
+        assert.are.same({ "a" }, recording.take(q, 100))
+    end)
+
+    it("ignores lines when no cap is given", function()
+        local q = recording.newBuffer()
+        for _ = 1, 50 do
+            assert.are.equal(0, recording.push(q, "x", 1000))
+        end
+        assert.are.equal(50, recording.count(q))
+        assert.are.equal(50, #recording.take(q, 1000))
+    end)
+end)
+
+describe("recording.joined", function()
+    it("joins arguments like the console: tostring'd, space separated", function()
+        assert.are.equal("a 1 nil true", recording.joined("a", 1, nil, true))
+        assert.are.equal("", recording.joined())
+    end)
+
+    it("names an argument whose tostring raises", function()
+        local bad = setmetatable({}, {
+            __tostring = function()
+                error("no text")
+            end,
+        })
+        assert.are.equal("x <a table that tostring() fails on>", recording.joined("x", bad))
+    end)
+end)
+
 describe("recording.batchBody", function()
     it("splices encoded entries into the batch", function()
         local body = recording.batchBody(

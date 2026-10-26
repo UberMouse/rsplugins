@@ -15,8 +15,8 @@
 -- wraps the callback: an error is queued as an `error` line and then raised again unchanged,
 -- so the client reports it as it would have. Lines are POSTed in batches from the Logic event
 -- only, never from an HTTP callback (starting a request in one crashed the client). With the
--- daemon down the lines stay queued, up to a cap (the oldest are dropped and counted), and
--- the tee retries with a growing wait.
+-- daemon down lines stay queued up to a cap (the oldest are dropped and counted) and the tee
+-- retries with a growing wait; a timed-out POST is resent, so its lines can show twice in logs.
 --
 -- The plugin must call tee.shutdown() from its PluginShutdown, after its own Unsubscribes. It
 -- unsubscribes the tee's devTeeFlush Logic subscription and cancels a request in flight. A
@@ -24,8 +24,7 @@
 -- `prl` (docs/api-concepts.md, crash 8; unconfirmed).
 --
 -- Without urls.rsdev or httpAccess it logs one [TEE] line and changes nothing. A permission
--- granted later does nothing until the plugin is reloaded (`prl <name>`), which keeps the
--- tee free of subscriptions made at runtime.
+-- granted later does nothing until the plugin is reloaded (`prl <name>`).
 --
 -- With the dev recorder too, require both modules first, then call tee.install, then
 -- recorder.install: the tee wraps the real API and the recorder wraps the tee's stand-ins, so
@@ -68,11 +67,11 @@ end
 local installed = false
 local active = false -- install() finished and shutdown() hasn't run
 local realEvent = nil ---@type table? the real Event table, taken at install
-local url = nil ---@type string?
+local url = nil ---@type PluginURL?
 local pluginName, session = "", ""
 local http = nil ---@type table? the HTTPRequest table, taken at install
 local tick = 0 -- Logic ticks since install
-local queue = teelog.newQueue()
+local queue = recording.newBuffer()
 local dropped = 0 -- lines lost so far (queue full, or a batch the daemon refused)
 local seq = 0 -- POSTs so far
 local nextPost = 0
@@ -83,11 +82,11 @@ local inFlight = nil ---@type { request: HTTPRequest, body: string, lines: strin
 ---@param level string
 ---@param text string
 local function push(level, text)
-    local lost = teelog.push(
+    local lost = recording.push(
         queue,
         teelog.encode(tick, level, text),
-        tee.limits.bufferLines,
-        tee.limits.bufferBytes
+        tee.limits.bufferBytes,
+        tee.limits.bufferLines
     )
     dropped = dropped + lost
 end
@@ -113,7 +112,7 @@ local function consoleStandIn(level, real)
     return function(...)
         real(...)
         pcall(function(...)
-            push(level, teelog.joined(...))
+            push(level, recording.joined(...))
         end, ...)
     end
 end
@@ -155,11 +154,11 @@ local function wrapEvent(real)
                 Subscribe = function(name, callback, ...)
                     -- Not tail calls: those would drop this Lua frame, which the client
                     -- seems to use to identify the calling plugin (docs/api-concepts.md).
-                    if type(name) ~= "string" or type(callback) ~= "function" then
-                        local r = table.pack(sub.Subscribe(name, callback, ...)) -- the API reports it
-                        return table.unpack(r, 1, r.n)
+                    -- A bad name or callback is passed on as given: the API reports it.
+                    if type(name) == "string" and type(callback) == "function" then
+                        callback = guarded(event, name, callback)
                     end
-                    local r = table.pack(sub.Subscribe(name, guarded(event, name, callback), ...))
+                    local r = table.pack(sub.Subscribe(name, callback, ...))
                     return table.unpack(r, 1, r.n)
                 end,
                 Unsubscribe = function(name, ...)
@@ -187,7 +186,8 @@ end
 -- applies, and what it drops is counted.
 ---@param lines string[]
 local function giveBack(lines)
-    dropped = dropped + teelog.requeue(queue, lines, tee.limits.bufferLines, tee.limits.bufferBytes)
+    dropped = dropped
+        + recording.requeue(queue, lines, tee.limits.bufferBytes, tee.limits.bufferLines)
 end
 
 -- The completion callback for a batch. It must not start a request (that crashed the client),
@@ -224,10 +224,10 @@ end
 -- Send the next batch when one is due and none is in flight.
 local function flush()
     assert(url and http, "install() found urls.rsdev and took HTTPRequest")
-    if not active or inFlight or tick < nextPost or teelog.count(queue) == 0 then return end
+    if not active or inFlight or tick < nextPost or recording.count(queue) == 0 then return end
     nextPost = tick + tee.limits.postEveryTicks
     if not Plugin.HasPermission(PluginPermissions.httpAccess) then return end
-    local lines = teelog.take(queue, tee.limits.batchLines, tee.limits.batchBytes)
+    local lines = recording.take(queue, tee.limits.batchBytes, tee.limits.batchLines)
     seq = seq + 1
     local body = teelog.body({
         schema = teelog.SCHEMA,

@@ -2,14 +2,17 @@
 --
 -- Event names and payload fields come from docs/api/generated/core/events.lua. Behaviour from
 -- https://developer.runescape.com/rs/core/events.html#overview: subscribers run in the order
--- they subscribed; re-using a name replaces that subscription (for that event only); a payload
--- edited by one subscriber is what the next one sees.
+-- they subscribed; a payload edited by one subscriber is what the next one sees.
 --
--- One rule from the live client (docs/testing.md fidelity ledger): Event.<X>.Unsubscribe
--- passed straight to pcall or xpcall, so that a C function calls it, aborts the client
--- (rs2client SIGABRT, which pcall can't catch). All seven aborts seen on 2026-10-26 used that
--- form, and direct calls survived, including a runtime-made subscription removed from inside
--- Logic. The fault is recorded, so the plugin's own pcall can't hide it.
+-- From the live client (docs/testing.md fidelity ledger, dev-bridge probes 2026-10-26):
+-- - Subscribe with a name the event already has does nothing: the first callback stays, where
+--   it was, though the page says the name is replaced. After an Unsubscribe the name goes last.
+-- - Unsubscribe returns true if it removed the name, false otherwise.
+-- - Event.<X>.Unsubscribe passed straight to pcall or xpcall, so that a C function calls it,
+--   aborts the client (rs2client SIGABRT, which pcall can't catch): all seven aborts used that
+--   form. A direct call, a closure under pcall and a tail call (`return Event.X.Unsubscribe(k)`
+--   from a function pcall called) all survived. The fault is recorded, so the plugin's own
+--   pcall can't hide it.
 
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
@@ -25,17 +28,11 @@ local Subscription = strict.class("EventSubscription", {
             end
             local list = s.subs[s.event]
             for _, entry in ipairs(list) do
-                -- Replacing keeps the original position: the docs don't say, so this is a guess.
-                if entry.name == name then
-                    entry.fn = callback
-                    return
-                end
+                if entry.name == name then return end
             end
             list[#list + 1] = { name = name, fn = callback }
         end,
         Unsubscribe = function(s, name)
-            -- A tail call (`return Event.X.Unsubscribe(n)`) drops the plugin's frame too, so
-            -- one made from a function pcall called counts the same (unverified live).
             if strict.callerKind() == "C" then
                 strict.fault(
                     "Event."
@@ -49,9 +46,10 @@ local Subscription = strict.class("EventSubscription", {
                 if entry.name == name then
                     table.remove(list, i)
                     entry.removed = true
-                    return
+                    return true
                 end
             end
+            return false
         end,
     },
 })

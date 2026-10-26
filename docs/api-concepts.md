@@ -151,12 +151,13 @@ Found in the beta client (2026-10-20), not in the official docs:
   `Logic` reloaded cleanly twice; and a runtime `Event.VarTransmit.Subscribe("h4probe", fn)`
   made inside `Logic`, then a direct `Event.VarTransmit.Unsubscribe("h4probe")` from inside
   `Logic`, left the client up (session ff92400823; abort 2 was the same situation with the
-  `pcall` form). Unverified: wrapping the call in a Lua closure,
-  `pcall(function() Event.X.Unsubscribe(k) end)` (dev-kit's form), and whether a tail call
-  (`return Event.X.Unsubscribe(k)`, which drops the caller's frame) counts as the `pcall` form;
-  the test harness treats it as one. A plausible mechanism, unconfirmed: the client identifies
-  the calling plugin from the calling Lua frame, and a direct `pcall` makes that frame a C
-  function. The POST crashes above (from a completion callback, and from a coroutine) may share
+  `pcall` form). Also safe, from `Logic` on real `ServerLogic` subscriptions (session
+  7bcb60d109): a Lua closure under `pcall`, `pcall(function() Event.X.Unsubscribe(k) end)`
+  (dev-kit's form), and a tail call from a function `pcall` called (`local function drop(k)
+  return Event.X.Unsubscribe(k) end; pcall(drop, k)`), although the tail call leaves `pcall`'s
+  C frame as the caller's. So the earlier guess at a mechanism, that the client reads the
+  calling plugin off the calling Lua frame, doesn't explain it; what aborts is the API function
+  itself handed to `pcall`. The POST crashes above (from a completion callback, and from a coroutine) may share
   it, also unconfirmed. This supersedes three readings recorded earlier the same day:
   "`Unsubscribe` inside an event callback aborts", "a subscription created at runtime can
   never be removed" and "a self-`prl` from `Logic` is only safe with stage 1's six load-time
@@ -403,6 +404,14 @@ The probe sources aren't kept; each finding says what was called.
   `freeSlotCount`, `id`, `isValid`, `slotCount` and `usedSlotCount`. The global class tables
   (`CoordGrid`, `__internal.*`) refuse `pairs` ("not recognized as a container"), and so does
   `PersistentDBType` (its values, read by name: `BOOL` 0 to `STRUCTURED_DATA` 4).
+- **Subscribing a name twice keeps the first** (real `ServerLogic` subscriptions made from
+  `Logic`, session 7bcb60d109, with the user's approval). `rA` and `rB` ran in the order made.
+  `Subscribe("rA", newFn)` again raised nothing and changed nothing: the old callback kept
+  running in its place, and the new one never ran. That contradicts core/events.html#overview,
+  which says the name is replaced. To replace a callback, `Unsubscribe` it first; the new one
+  then runs last. `Unsubscribe` returns true when it removed the name and false when there was
+  none. A subscriber that unsubscribes a later one of the same event during a dispatch (`rC`
+  removing `rD`) stops it being called in that same pass, and the client stayed up.
 - **HTTP failures, from requests to the rsdev daemon.** The client's HTTP is libcurl.
   - A 404 (GET) and a 400 (POST) finish with `failed` true and `successful` false,
     `responseCode` set, `errorCode` 0, `errorInfo` "", `data` "" and `progress` nil. `header`

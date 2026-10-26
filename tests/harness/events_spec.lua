@@ -17,16 +17,32 @@ describe("Event subscriptions", function()
         assert.are.equal("a\nb", h:output())
     end)
 
-    it("replaces a subscription that reuses a name, for that event only", function()
+    it("ignores a Subscribe that reuses a name, as the client does", function()
         local h = harness.load(plugin([[
             Event.WindowFocusChanged.Subscribe("x", function() print("old") end)
+            Event.WindowFocusChanged.Subscribe("z", function() print("z") end)
             Event.KeyTyped.Subscribe("x", function() print("other event") end)
             Event.WindowFocusChanged.Subscribe("x", function() print("new") end)
         ]]))
         h:fire("WindowFocusChanged", { hasFocus = true })
         h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
-        assert.are.equal("new\nother event", h:output())
+        assert.are.equal("old\nz\nother event", h:output())
     end)
+
+    it(
+        "puts a name subscribed again after Unsubscribe last, and reports what it removed",
+        function()
+            local h = harness.load(plugin([[
+            Event.WindowFocusChanged.Subscribe("x", function() print("x") end)
+            Event.WindowFocusChanged.Subscribe("z", function() print("z") end)
+            removed = { Event.WindowFocusChanged.Unsubscribe("x"), Event.WindowFocusChanged.Unsubscribe("x") }
+            Event.WindowFocusChanged.Subscribe("x", function() print("x again") end)
+        ]]))
+            h:fire("WindowFocusChanged", { hasFocus = true })
+            assert.are.equal("z\nx again", h:output())
+            assert.are.same({ true, false }, h.env.removed)
+        end
+    )
 
     it("stops calling an unsubscribed callback", function()
         local h = harness.load(plugin([[
@@ -91,15 +107,21 @@ describe("Event subscriptions", function()
         assert.are.same({}, h.instance.subs.KeyTyped)
     end)
 
-    it("allows Unsubscribe called from a closure under pcall (unverified live)", function()
+    it("allows Unsubscribe from a closure, or tail-called, under pcall (both live)", function()
         local h = harness.load(plugin([[
             Event.KeyTyped.Subscribe("x", function() end)
             Event.WindowFocusChanged.Subscribe("y", function()
                 pcall(function() Event.KeyTyped.Unsubscribe("x") end)
             end)
+            Event.KeyTyped.Subscribe("t", function() end)
+            local function drop(k) return Event.KeyTyped.Unsubscribe(k) end
+            Event.ServerLogic.Subscribe("y", function() ok, removed = pcall(drop, "t") end)
         ]]))
         h:fire("WindowFocusChanged", { hasFocus = true })
+        assert.are.equal(1, #h.instance.subs.KeyTyped)
+        h:fire("ServerLogic")
         assert.are.same({}, h.instance.subs.KeyTyped)
+        assert.are.same({ true, true }, { h.env.ok, h.env.removed })
     end)
 
     it("allows Unsubscribe in PluginShutdown from a self-reload mid-dispatch", function()

@@ -43,15 +43,20 @@ end
 
 -- debug.getinfo's `what` ("Lua", "main" or "C") for the first frame below the harness's own
 -- Lua frames: the code that called into the mocked API. "C" means the API function was handed
--- straight to a C function such as pcall (or tail-called from a function one called, since a
--- tail call drops the caller's frame). The same walk as M.fault, but a C frame stops it.
+-- straight to a C function such as pcall. "tail" means a Lua function tail-called it
+-- (`return Event.X.Unsubscribe(k)`), which drops that function's frame, so whatever called it
+-- (pcall, say) shows below. The same walk as M.fault, but a C frame stops it.
 ---@return string
 function M.callerKind()
-    local level = 2
+    local level, outermost = 2, nil
     while true do
-        local info = debug.getinfo(level, "S")
+        local info = debug.getinfo(level, "St")
         if not info then return "main" end -- nothing below the harness: no caller to blame
-        if info.what == "C" or info.source:sub(1, #HARNESS) ~= HARNESS then return info.what end
+        if info.what == "C" or info.source:sub(1, #HARNESS) ~= HARNESS then
+            if outermost and outermost.istailcall then return "tail" end
+            return info.what
+        end
+        outermost = info
         level = level + 1
     end
 end
@@ -141,6 +146,13 @@ function M.class(name, def)
     local class = { name = name }
     local states = setmetatable({}, { __mode = "k" }) -- proxy -> state
 
+    -- Returns its arguments. `return passthrough(method(...))` keeps the wrapper's frame while
+    -- the mock runs (a plain `return method(...)` would tail-call it away), so callerKind can
+    -- tell whether the plugin tail-called the wrapper.
+    local function passthrough(...)
+        return ...
+    end
+
     local mt = {
         __name = name,
         __index = function(proxy, key)
@@ -150,14 +162,14 @@ function M.class(name, def)
             if method then
                 return function(self, ...)
                     if self ~= proxy then M.fault(formatCall(name, key, ":", ".")) end
-                    return method(s, ...)
+                    return passthrough(method(s, ...))
                 end
             end
             local static = statics[key]
             if static then
                 return function(first, ...)
                     if first == proxy then M.fault(formatCall(name, key, ".", ":")) end
-                    return static(s, first, ...)
+                    return passthrough(static(s, first, ...))
                 end
             end
             M.fault("unmocked API: " .. name .. "." .. tostring(key))

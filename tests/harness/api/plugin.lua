@@ -19,6 +19,38 @@ function M.checkPermission(perm)
     end
 end
 
+-- A manifest url as the client hands it out: an opaque object, not a string. Live (beta client
+-- 951-1, 2026-10-26) `..` on it raises, tostring gives a pointer string, and only HTTPRequest.new
+-- reads it. The text lives in a side table keyed by the proxy, so a plugin can't reach it.
+local URL_TEXT = setmetatable({}, { __mode = "k" })
+local URL_META = {
+    __name = "sol.jag::scripting::LuaPluginMetadata::URL",
+    __concat = function()
+        strict.fault(
+            "attempt to concatenate a sol.jag::scripting::LuaPluginMetadata::URL value",
+            true
+        )
+    end,
+}
+URL_META.__tostring = function(self)
+    return string.format("sol.jag::scripting::LuaPluginMetadata::URL: %p", self)
+end
+
+---@param text string
+---@return table
+local function newUrl(text)
+    local proxy = setmetatable({}, URL_META)
+    URL_TEXT[proxy] = text
+    return proxy
+end
+
+-- The text behind a Plugin.urls value, or nil for anything else. For the HTTPRequest mock only.
+---@param value any
+---@return string?
+function M.urlText(value)
+    return URL_TEXT[value]
+end
+
 local Plugin = strict.class("Plugin", {
     statics = {
         -- Replaying, a permission neither the recording nor the test has decided faults rather
@@ -54,7 +86,10 @@ end
 ---@param h table the harness
 ---@param env table the sandbox being built
 function M.install(h, env)
-    local urls = h.manifest.urls or {}
+    local urls = {}
+    for name, text in pairs(h.manifest.urls or {}) do
+        urls[name] = newUrl(text)
+    end
     -- Catchable: a plugin may pcall a lookup to probe for an optional url (dev/recorder does),
     -- and a probe that comes back empty is not a misuse.
     local lookup = strict.lookup(function(name)

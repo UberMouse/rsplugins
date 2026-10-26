@@ -269,6 +269,15 @@ From `plugins/dev-bridge` in the beta client.
   three bridge sessions no console chat type (96, 98 or 99) arrived while `[BRIDGE]` log lines
   were printing. A plugin that wants its console output elsewhere has to forward it itself, which
   is what `lib/dev/tee.lua` does.
+- **`Plugin.urls` values are opaque userdata, not strings** (eval in the bridge, beta client
+  951-1). `type(Plugin.urls)` is `table` and `pairs` iterates it, but each value is a
+  `sol.jag::scripting::LuaPluginMetadata::URL` userdata with a metatable: `'x' .. Plugin.urls.rsdev`
+  raises `attempt to concatenate a ... URL value`, and `tostring` gives a pointer string
+  (`...::URL: 0x649971a92608`), not the URL text. `HTTPRequest.new(url, path)` takes it. Never
+  concatenate, format or compare one; only pass it to `HTTPRequest.new`.
+- **`prl <other plugin>` from `ExecuteConsoleCommand` runs the target's `main.lua` synchronously**
+  inside that call (the caller's frames show in the target's load traceback). A load error is caught
+  and printed by the client, and the caller's call returns normally.
 - **`VarTransmit` fires with `oldValue == newValue`** (`FARMING_CURRENT_PATCH` 161 -> 161,
   `DOUBLEXP_PERM1` 0 -> 0).
 - **A `MiniMenuEntry` payload** serialises (`tostring`) as `sol.jag::MiniMenuEntry`; read its

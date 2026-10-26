@@ -350,6 +350,14 @@ HTTPRequest = {
     end)
 
     describe("when it cannot run", function()
+        it("installs with the opaque manifest url and never prints its text", function()
+            -- The client's Plugin.urls values can't be concatenated; this raised live.
+            local h = harness.new(support.plugin(support.INSTALL), { grant = { "httpAccess" } })
+            h:load()
+            assert.are.equal(1, support.count(h, "[TEE] sending this plugin's console output"))
+            assert.are.equal(0, support.count(h, "127.0.0.1"))
+        end)
+
         it("does nothing without urls.rsdev, after one console line", function()
             local h = harness.new(
                 support.plugin(

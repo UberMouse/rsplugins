@@ -291,7 +291,8 @@ function tee.install(env, plugin)
     env.print = consoleStandIn("print", env.print)
     env.log = consoleStandIn("log", env.log)
     env.Event = wrapEvent(realEvent)
-    say("sending this plugin's console output to " .. url .. " as session " .. session)
+    -- Names the manifest key, not the url: a Plugin.urls value is opaque and can't be concatenated.
+    say("sending this plugin's console output to urls." .. URL_NAME .. " as session " .. session)
 end
 
 return tee

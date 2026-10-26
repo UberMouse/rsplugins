@@ -19,12 +19,25 @@ describe("Plugin", function()
             http = Plugin.HasPermission(PluginPermissions.httpAccess)
             chat = Plugin.HasPermission(PluginPermissions.chatAccess)
             sink = Plugin.urls.sink
+            sinkType = type(sink)
         ]]),
             { grant = { "httpAccess" } }
         )
         assert.is_true(h.env.http)
         assert.is_false(h.env.chat)
-        assert.are.equal("http://127.0.0.1:8765", h.env.sink)
+        assert.is_true(h.env.sinkType ~= "string")
+        assert.is_true(h.env.sink ~= "http://127.0.0.1:8765")
+    end)
+
+    it("hands out urls that are opaque, like the client's", function()
+        local h = harness.load(plugin([[
+            concatOk, concatErr = pcall(function() return Plugin.urls.sink .. "" end)
+            text = tostring(Plugin.urls.sink)
+        ]]))
+        assert.is_false(h.env.concatOk)
+        assert.matches("attempt to concatenate", h.env.concatErr)
+        assert.matches("LuaPluginMetadata::URL", h.env.concatErr)
+        assert.is_nil(h.env.text:find("127.0.0.1", 1, true))
     end)
 
     it("faults on a url the manifest lacks", function()
@@ -47,9 +60,9 @@ describe("Plugin", function()
     it("lists the manifest urls with pairs", function()
         local h = harness.load(plugin([[
             names = {}
-            for name, url in pairs(Plugin.urls) do names[#names + 1] = name .. "=" .. url end
+            for name, url in pairs(Plugin.urls) do names[#names + 1] = name .. ":" .. type(url) end
         ]]))
-        assert.are.same({ "sink=http://127.0.0.1:8765" }, h.env.names)
+        assert.are.same({ "sink:table" }, h.env.names)
     end)
 
     it("fires OptionalPermissionChanged when a permission is granted or revoked", function()

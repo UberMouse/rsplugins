@@ -9,6 +9,7 @@
 
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
+local plugin = require("tests.harness.api.plugin")
 
 local M = {}
 
@@ -102,19 +103,18 @@ local Namespace = strict.class("HTTPRequest", {
             if not h.world.state.permissions.granted.httpAccess then
                 strict.fault("HTTPRequest.new without the httpAccess permission")
             end
-            local known = false
-            for _, url in pairs(h.manifest.urls or {}) do
-                known = known or url == baseURL
-            end
-            if not known then
+            -- Only a Plugin.urls value is a base URL; the harness hands those out, so one the
+            -- manifest lacks (or a plain string) has no text behind it.
+            local base = plugin.urlText(baseURL)
+            if not base then
                 strict.fault(
-                    "HTTPRequest.new: " .. tostring(baseURL) .. " is not a plugin.json url"
+                    "HTTPRequest.new: the base URL is not a plugin.json url (a Plugin.urls value)"
                 )
             end
             if path ~= nil and type(path) ~= "string" then
                 strict.fault("HTTPRequest.new(baseURL, path: String?)")
             end
-            local state = { h = h, headers = {}, fields = pendingFields(baseURL .. (path or "")) }
+            local state = { h = h, headers = {}, fields = pendingFields(base .. (path or "")) }
             state.proxy = Request.new(state)
             return state.proxy
         end,

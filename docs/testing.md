@@ -539,7 +539,8 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | A subscriber error | Fails the test, naming the event and subscriber (the client logs it to the console) |
 | `var.<Domain>.FromID` for an ID that isn't in the catalog | nil (the catalog holds every ID `FromID` returned a var for in `plugins/var-dump`; the client may raise instead) |
 | `Plugin.urls.<name>` missing from the manifest | Faults. Unlike other faults, a `pcall` around the lookup catches it for good, so a plugin can probe for an optional url |
-| `pairs(Plugin.urls)` | Lists the manifest's urls. The page calls `urls` a table; whether the client's can be iterated is unconfirmed. The dev recorder looks for `urls.recorder` this way first, then by a `pcall`'d lookup |
+| `Plugin.urls` values | Opaque proxies (a table whose `..` raises `attempt to concatenate a ...LuaPluginMetadata::URL value` and whose `tostring` is a pointer-style string), and `HTTPRequest.new` takes only those, not a plain string. Live, 2026-10-26 (beta client 951-1, eval in the dev bridge): the value is a userdata, `..` raises that error, `tostring` is `sol.jag::scripting::LuaPluginMetadata::URL: 0x...`, and `HTTPRequest.new` accepts it. The proxy is a table, so `type()` says `table` where the client's says `userdata`. A string-typed stand-in let the tee's `..` on a url pass 520 specs and fail in the client |
+| `pairs(Plugin.urls)` | Lists the manifest's urls (name -> proxy). Live, 2026-10-26: `type(Plugin.urls)` is `table` and `pairs` iterates it. The dev recorder and tee still look for their url this way first, then by a `pcall`'d lookup |
 | Granting a permission the manifest doesn't request | The builder errors |
 | A `require`d file that errors | Fails the test (the client returns nil) |
 | Replacing a subscription by name | Keeps its original position in the order |

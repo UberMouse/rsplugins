@@ -302,6 +302,7 @@ function M.build(h, instance)
         if opt ~= nil and not GC_OPTIONS[opt] then
             strict.fault("collectgarbage(" .. tostring(opt) .. ") is not modelled in the harness")
         end
+        -- selene: allow(incorrect_standard_library_use) -- its std has no collectgarbage args
         return collectgarbage(opt, ...)
     end
     -- Lua starts with warnings off, and where the client would send them is unknown.

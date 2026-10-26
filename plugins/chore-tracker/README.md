@@ -130,10 +130,11 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 - **PrettyUI** (mod.io 6398181), the interface library the window is built with. It is a
   required dependency: install it too.
-- **No permissions.** The plugin reads the game clock, your own character's display name and
-  position, your backpack, the stock of an open shop it watches, and your own character's game
-  vars for the chores in the "Seen from game vars" table. Plugins can read all of these without
-  one.
+- **No permissions.** The submitted plugin requests none; the development checkout's manifest
+  asks for `httpAccess` only for the dev log tee, which is stripped before submitting. The plugin
+  reads the game clock, your own character's display name and position, your backpack, the stock
+  of an open shop it watches, and your own character's game vars for the chores in the "Seen from
+  game vars" table. Plugins can read all of these without one.
 
 ## Credits
 
@@ -171,7 +172,9 @@ same machine. None of it ships. Remove all of it first:
 - `"httpAccess"` from `optionalPermissions` in `plugin.json`, and
 - `urls.rsdev` from `plugin.json` (leaving no `urls` and no `optionalPermissions`).
 
-The Mod.io text below ("This plugin requests no permissions") is true only after that.
+Then run `scripts/check-submission.sh chore-tracker` on the prepared copy (see the script's
+header); it must pass before upload. The Mod.io text below ("This plugin requests no
+permissions") is true only after that check passes.
 
 ## Files
 

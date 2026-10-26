@@ -1,5 +1,6 @@
 -- Chore Tracker's opt-in to the dev log tee (lib/dev/tee.lua). The dev/ link, the two
--- lines in main.lua and the shutdown line are stripped before submission, so this spec goes with them.
+-- lines in main.lua and the shutdown line are stripped before submission, so this spec goes
+-- with them.
 
 local dkjson = require("dkjson")
 local helpers = require("tests.chore-tracker.helpers")

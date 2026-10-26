@@ -51,6 +51,10 @@
 -- about other players. Console lines carry [CHORES] (grep: \[CHORES\]); the display name is never
 -- logged.
 --
+-- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
+-- local daemon; scripts/check-submission.sh fails until it is stripped (README, "Before
+-- submitting").
+--
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
 -- origin, so the button covers the Panel's 4 px frame. A Panel always draws that frame, but
@@ -638,11 +642,11 @@ function PluginShutdown()
     Event.InventoryAdded.Unsubscribe("chore-tracker")
     Event.InventoryUpdated.Unsubscribe("chore-tracker")
     Event.InventoryRemoved.Unsubscribe("chore-tracker")
-    if tee then tee.shutdown() end -- dev only: the tee's own Logic subscription
     if win then
         saveLayoutIfChanged()
         win:Destroy()
     end
     if collapsed then collapsed:Destroy() end
     if retiring then retiring:Destroy() end
+    if tee then tee.shutdown() end -- dev only: the tee's own Logic subscription
 end

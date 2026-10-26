@@ -81,8 +81,8 @@ Agent(implementer, model=implModel):
        (`docs/testing.md`): scripted world-builder specs for scoped logic, recorded-timeline
        replay for integration paths. If the harness lacks an API the plugin needs, extend the mock
        (grounded in the stubs, with a fidelity-ledger row) rather than leaving the path untested.
-       If your Bash tool lacks the dev shell, run tools through `direnv exec . <cmd>`. A missing
-       tool even then means the dev shell is broken: STOP and report it.
+       Your Bash tool already has the dev shell, so run tools directly. A missing tool means the
+       dev shell failed to load: STOP and report it.
     3. Commit your work (`git add <the paths you changed> && git commit` with message
        `<COMMIT_MSG>`, ending with `<TRAILERS>`). Never `git add -A` or `git add .`: the user may
        have unrelated uncommitted edits in the tree. Do NOT push.

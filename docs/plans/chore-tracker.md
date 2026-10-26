@@ -128,7 +128,7 @@ it with location or a var. There is no interface-opened event.
 
 ## How to probe a var chore
 
-1. Start the receiver: `direnv exec . python3 -I scripts/var-dump-receiver.py`. In the client
+1. Start the receiver: `python3 -I scripts/var-dump-receiver.py`. In the client
    console: `prf`, `pon var-dump`, `ppr var-dump`, `ppe var-dump httpAccess`
    (`plugins/var-dump/README.md`).
 2. Run `python3 -I scripts/var-dump-changes.py --last-session` and note the `last seq`.

@@ -16,8 +16,8 @@ moderation accepts). Look up every API name and signature in the stubs in `docs/
 `docs/api/generated/`) before you use it. Don't call one from memory. `scripts/check-lua.sh` type-checks
 against the stubs, but only where a value is typed, and the stubs can be wrong. It also runs the
 busted suite in `tests/` against the mock API harness (`docs/testing.md`); plugin behaviour you add
-or change gets specs there. If your Bash tool lacks the Nix dev shell, run tools through
-`direnv exec . <cmd>`. Check
+or change gets specs there. Your Bash tool already has the Nix dev shell (a direnv hook loads it),
+so run tools directly; a missing tool means the shell failed to load: stop and report it. Check
 https://developer.runescape.com/rs/ when it matters, and say in your report which API calls you
 could not confirm.
 

@@ -66,9 +66,9 @@ If mid-loop the work turns out to need genuine design work, do **not** silently 
   invisible to the user's in-client testing. Every task commits to `main`.
 - **The dev shell** (direnv or `nix develop`): `scripts/check-lua.sh` needs `luac`, `selene`,
   `stylua`, `lua-language-server`, `python3` and the `docs/api/` stubs symlink the shell makes,
-  and the workflow tests need `node`. The Bash tool may not inherit the shell even when the
-  user's terminal has it (`lua: command not found`); run tools through `direnv exec . <cmd>`
-  then, and say so in every dispatch.
+  and the workflow tests need `node`. Claude Code's direnv hooks load the shell into every Bash
+  tool, subagents' included (`README.md`), so run tools directly. `lua: command not found` means
+  the hook failed (e.g. `.envrc` not allowed): stop and say so.
 - **Stop a background process by its task id or PID, never `pkill -f <pattern>`**: the shell
   running that command has the pattern in its own command line, so it kills itself (exit 144).
 - Human input comes only through `AskUserQuestion`, so this loop works in a background job.

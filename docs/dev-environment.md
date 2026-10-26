@@ -301,3 +301,41 @@ appended to `dumps/rsdev/events/tee/<plugin>/<session>.jsonl` (a directory per p
 different plugin and session pairs never share a file). A growth in `dropped` adds a marker, unlike
 a sync's, as a `Log` event with payload `{plugin, level: "dropped", text: "<n> lines lost"}`, so
 `logs` and `logs --plugin X` show which plugin lost lines.
+
+**Opting a plugin in.** `lib/dev/tee.lua` is the plugin side: it sends a plugin's own `print` and
+`log` output, and the errors its event callbacks raise, to this endpoint. It is a dev tool,
+never for submission. A plugin opts in like the recorder does:
+
+1. `ln -s ../../lib/dev plugins/<name>/dev` (commit the link).
+2. First lines of `main.lua`:
+
+   ```lua
+   local tee = require("dev/tee") -- nil when dev/ isn't there
+   if tee then tee.install(_ENV, "<name>") end
+   ```
+
+3. In `plugin.json`: `"httpAccess"` in `optionalPermissions` and
+   `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the dev bridge's url name, so one entry
+   serves both).
+
+Then `scripts/rsdev.py exec "prl <name>"` and `scripts/rsdev.py logs --plugin <name>` shows what
+the plugin printed, as `n [<name>] print|log|error: text`. An `error` line reads
+`Event.<X> subscriber '<name>': <message>`; the error is then raised again unchanged, so the
+client reports it as before. Errors outside event callbacks (a failing `main.lua`, say) are not
+caught.
+
+Behaviour: each `print`/`log` call is one line (arguments `tostring`'d and joined by a space, cut
+to 2 KB). Lines are posted from `Logic` only, one request in flight, every 50 ticks while there
+are lines. At most 500 lines or 256 KB are kept while the daemon can't be reached, the oldest
+dropped and counted in `dropped`. A failed post (daemon down, non-200) keeps its lines and
+retries after 5 s, doubling to 60 s; a 400 drops that batch (the daemon applied nothing). Each
+failure streak logs one `[TEE]` console line. Without `urls.rsdev` or without httpAccess already
+granted at load, the tee logs one `[TEE]` line and changes nothing (granting later needs a
+`prl`: `ppr <name>`, `ppe <name> httpAccess`, `prl <name>`). With the dev recorder too, require
+both modules first, then call `tee.install`, then `recorder.install` (spec in
+`tests/tee/tee_spec.lua`).
+
+**Moderation.** The tee sends only the plugin's own console output and errors, to 127.0.0.1. A
+plugin for submission ships without `dev/`, the two lines above, httpAccess (unless a feature of
+its own needs it) and `urls.rsdev`. Chore Tracker is the first plugin opted in; its README lists
+what to strip.

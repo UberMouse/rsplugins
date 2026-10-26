@@ -158,6 +158,20 @@ var the game no longer has is logged once at start as `[CHORES] unknown var <nam
 watched`, and its chores are left to tick by hand. Grep regex:
 `\[CHORES\] (purchase|collected|seen)`.
 
+## Before submitting
+
+The development checkout opts into the dev log tee (`lib/dev/tee.lua`, docs/dev-environment.md),
+which forwards the plugin's console lines and callback errors to `scripts/rsdev.py` on the
+same machine. None of it ships. Remove all of it first:
+
+- the `dev/` symlink in this folder,
+- the two tee lines at the top of `main.lua` (`local tee = require("dev/tee")` and
+  `if tee then tee.install(...) end`, with the comment above them),
+- `"httpAccess"` from `optionalPermissions` in `plugin.json`, and
+- `urls.rsdev` from `plugin.json` (leaving no `urls` and no `optionalPermissions`).
+
+The Mod.io text below ("This plugin requests no permissions") is true only after that.
+
 ## Files
 
 | File | What |

@@ -58,6 +58,10 @@
 -- The Panel is made on collapse and destroyed on expand: kept hidden while the window is
 -- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
 
+-- Dev only (remove before submitting, see the README): forwards console output to rsdev.py.
+local tee = require("dev/tee") -- nil when dev/ isn't there
+if tee then tee.install(_ENV, "chore-tracker") end
+
 local chores = require("data/chores")
 local collections = require("data/collections")
 local shops = require("data/shops")

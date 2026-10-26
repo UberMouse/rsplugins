@@ -259,6 +259,18 @@ It keeps httpAccess only if a feature of its own needs it. Recordings hold the p
 headers (an `Authorization` header included) and bodies, chat lines and display names, so keep
 them local.
 
+### Opting a plugin into the log tee
+
+The log tee (`lib/dev/tee.lua`) is a separate dev module from the recorder: it ships a plugin's
+`print`/`log` output and callback errors to `rsdev.py logs`, not recordings. Opt a plugin in
+the same way (a `dev/` link, two lines at the top of `main.lua`, `httpAccess` and a url), but
+with `require("dev/tee")`, `tee.install(_ENV, "<name>")` and `urls.rsdev`; docs/dev-environment.md
+("Log tee") has the steps and behaviour. In the harness, a plugin with the link installs the
+tee too: without `httpAccess` granted it is a no-op (one `[TEE]` console line), so existing specs
+are unaffected; grant `httpAccess` and the plugin's console lines arrive as `POST .../tee`
+requests in `h.requests` (`tests/tee/support.lua` decodes them; `tests/chore-tracker/tee_spec.lua`
+is an example). The specs for the tee itself are in `tests/tee/`.
+
 ### Recording a session
 
 1. From the repo root, run `scripts/rsdev.py start` (`--port`, `--out`; it listens on

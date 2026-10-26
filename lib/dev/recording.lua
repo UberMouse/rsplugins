@@ -179,6 +179,27 @@ function recording.eventOp(name, p, contents)
     return nil
 end
 
+-- The manifest url called `name` (Plugin.urls), or nil. Looked for by iterating first, since
+-- indexing a missing name may raise (the test harness's does). Whether the client's urls can be
+-- iterated is undocumented, so if iterating fails or doesn't find it, it is indexed under pcall
+-- too.
+---@param urls any
+---@param name string
+---@return string?
+function recording.manifestUrl(urls, name)
+    local ok, found = pcall(function()
+        for key, value in pairs(urls) do
+            if key == name then return value end
+        end
+        return nil
+    end)
+    if ok and found then return found end
+    local indexed, value = pcall(function()
+        return urls[name]
+    end)
+    return indexed and value or nil
+end
+
 -- An id telling one enable's batches apart from another's: six hex digits of a fresh table's
 -- address (differs between runs even if math.random is seeded the same) then four random ones.
 -- The random part is always there, so the id is never empty and is hex only, which the

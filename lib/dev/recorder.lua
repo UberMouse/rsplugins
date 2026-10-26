@@ -671,25 +671,6 @@ end
 -- Install
 ---------------------------------------------------------------------------
 
--- urls.recorder from the manifest, or nil. Looked for by iterating first, since indexing a
--- missing name may raise (the test harness's does). Whether the client's urls can be iterated
--- is undocumented, so if iterating fails or doesn't find it, it is indexed under pcall too.
----@param urls any
----@return string?
-local function manifestUrl(urls)
-    local ok, found = pcall(function()
-        for name, value in pairs(urls) do
-            if name == URL_NAME then return value end
-        end
-        return nil
-    end)
-    if ok and found then return found end
-    local indexed, value = pcall(function()
-        return urls[URL_NAME]
-    end)
-    return indexed and value or nil
-end
-
 -- The globals install() replaces, and how.
 local WRAPPERS = {
     Event = wrapEvent,
@@ -712,7 +693,7 @@ end
 function recorder.install(env, plugin)
     if installed then return end
     installed = true
-    url = manifestUrl(realPlugin.urls)
+    url = recording.manifestUrl(realPlugin.urls, URL_NAME)
     if not url then
         say("no urls." .. URL_NAME .. " in plugin.json, so not recording")
         return

@@ -265,7 +265,10 @@ From `plugins/dev-bridge` in the beta client.
   to `pcall` aborted the client (below).
 - **Console output isn't a ChatMessage.** `ExecuteConsoleCommand("plist")`'s output did not arrive
   as a `ChatMessage` (chatAccess granted; the player's own public chat did), so `ChatMessage` is
-  not a way to capture console output.
+  not a way to capture console output. The same holds for a plugin's own `log` and `print`: across
+  three bridge sessions no console chat type (96, 98 or 99) arrived while `[BRIDGE]` log lines
+  were printing. A plugin that wants its console output elsewhere has to forward it itself, which
+  is what `lib/dev/tee.lua` does.
 - **`VarTransmit` fires with `oldValue == newValue`** (`FARMING_CURRENT_PATCH` 161 -> 161,
   `DOUBLEXP_PERM1` 0 -> 0).
 - **A `MiniMenuEntry` payload** serialises (`tostring`) as `sol.jag::MiniMenuEntry`; read its
@@ -281,6 +284,13 @@ From `plugins/dev-bridge` in the beta client.
   an `Event.Logic.Subscribe` probe made the same way counted 544 ticks, emitting every 50). And
   it can be removed: a direct `Event.VarTransmit.Unsubscribe` of one, called from inside
   `Logic`, left the client up (session ff92400823).
+- **A lazy `ServerLogic` probe subscribed from the bridge's own `Logic` tick works**
+  (2026-10-26, commit a0df251): it went live (6 calls in 3 s, about one per 0.6 s server tick)
+  and emitted. Removing it, by a direct `Unsubscribe` of the runtime subscription from inside
+  `Logic` on the next tick, stopped it and the client stayed up. `eval --reset` with a lazy probe
+  live kept the session and cleared the scratch environment (`x` and `sl2` read nil afterwards).
+  `exec "prl dev-bridge"` with a lazy probe live reloaded cleanly onto a new session
+  (cbb88037d4): the self-reload that aborted the client seven times with the `pcall` form (below).
 - **Seven client aborts (rs2client SIGABRT, systemd coredumps), 2026-10-26**, the conductor
   driving the beta client through the bridge. Every one passed `Event.<X>.Unsubscribe`
   straight to `pcall` (the rule is under "Runtime limits we've hit"):

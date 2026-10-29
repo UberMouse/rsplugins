@@ -8,8 +8,8 @@
 -- Modelled: Window (titled, resizable, close button, AddText/AddTitle/AddCheckboxButton/
 -- AddDivider/AddSpriteButton, SetScrollPosition and the `_scroll.scrollY` it sets, the
 -- `content` layer for a plugin's own components and the `viewport` it scrolls in,
--- SetContentHeight, the wheel handler, and the title-bar drag layer `titleDrag`'s stacking and
--- `isClicked`),
+-- SetContentHeight, the wheel handler, the title-bar drag layer `titleDrag`'s stacking, and the
+-- overlays registered with the internal `_RegisterOverlay` and when they are synced),
 -- standalone Panel (AddSpriteButton, Alt-drag), SpriteButton and Tooltip.attach. Any other library member,
 -- method or option faults as unmocked; extend the fake, with a ledger row, when a plugin
 -- needs more.
@@ -658,8 +658,34 @@ local function syncContent(s)
     s.viewportState.scrollY = s.scrollY
 end
 
+-- 1.2.0's Window:_SyncOverlays(hidden) (src/window.lua): unless `hidden`, each registered
+-- overlay's layout() runs; then the overlay is hidden if `hidden` or its isVisible() returns
+-- false, and raised if not. 1.2.0 skips an overlay only when its interface is gone, which a
+-- plugin-layer component shares with the window, so a destroyed one still registered is
+-- touched: here that faults, as any use of a destroyed component does.
+---@param s table
+---@param hidden boolean
+local function syncOverlays(s, hidden)
+    -- A layout() may register or unregister; go over the ones registered now.
+    for _, overlay in ipairs(table.move(s.overlays, 1, #s.overlays, 1, {})) do
+        if not hidden and overlay.layout then overlay.layout() end
+        local hide = hidden or (overlay.isVisible ~= nil and not overlay.isVisible())
+        overlay.component.hidden = hide
+        if not hide then overlay.component:MoveToFront() end
+    end
+end
+
+-- Whether the window's root is hidden, as 1.2.0 passes it to _SyncOverlays after a scroll or a
+-- resize.
+---@param s table
+---@return boolean
+local function rootHidden(s)
+    return s.rootState.hidden == true
+end
+
 -- Window:SetScrollPosition: the content's scroll, clamped to 0..(content height less the
--- viewport's), as 1.2.0 does on every scroll and resize.
+-- viewport's), as 1.2.0 does on every scroll and resize; then the overlays sync, moved or not
+-- (src/core/scroll.lua, SetScrollPosition).
 ---@param s table
 ---@param position number?
 local function windowScrollTo(s, position)
@@ -669,6 +695,7 @@ local function windowScrollTo(s, position)
     local most = math.max(0, s.flow.contentHeight - viewportHeight(s))
     s.scrollY = clamp(math.floor(position or 0), 0, most)
     syncContent(s)
+    syncOverlays(s, rootHidden(s))
 end
 
 -- Window:SetContentHeight(height): the scrollable height, floored and at least 0. It replaces
@@ -703,7 +730,8 @@ local function windowWheel(s, delta)
 end
 
 -- Window:SetSize, clamped to the window's min/max; it also makes the current position the
--- one a stray root:SetPos snaps back to, and re-clamps the scroll.
+-- one a stray root:SetPos snaps back to, and re-clamps the scroll. 1.2.0 syncs the overlays
+-- again after the scroll's sync (src/window.lua, SetSize).
 ---@param s table
 ---@param width number
 ---@param height number
@@ -714,6 +742,27 @@ local function windowSetSize(s, width, height)
     )
     if s.bounded then remember(s) end
     windowScrollTo(s, s.scrollY)
+    syncOverlays(s, rootHidden(s))
+end
+
+-- The end of a title-bar press (1.2.0's stopDrag, src/window.lua), on its release and on every
+-- Close, Destroy and resize: it syncs the overlays, shown. Only a titled window has it.
+---@param s table
+local function stopTitleDrag(s)
+    if s.title then syncOverlays(s, false) end
+end
+
+-- Window:Show: the root, then the title-bar drag layer, to the front, then the overlays sync
+-- (src/window.lua, Show).
+---@param s table
+local function windowShow(s)
+    s.root.hidden = false
+    s.root:MoveToFront()
+    if s.titleDrag then
+        s.titleDrag.hidden = false
+        s.titleDrag:MoveToFront()
+    end
+    syncOverlays(s, false)
 end
 
 -- Hide (Close) or destroy (Destroy) every tooltip of a host's content context.
@@ -726,15 +775,18 @@ local function clearContext(context, destroy)
     end
 end
 
--- Close: hide the content's tooltips, call onClose(window), then hide (the 1.2.0 order).
+-- Close: end any title-bar press, hide the content's tooltips, call onClose(window), then
+-- hide and sync the overlays hidden (the 1.2.0 order).
 ---@param s table
 local function windowClose(s)
     live(s)
+    stopTitleDrag(s)
     clearContext(s.tips, false)
     if s.onClose then s.onClose(s.proxy) end
     if not s.destroyed then
         s.root.hidden = true
         if s.titleDrag then s.titleDrag.hidden = true end
+        syncOverlays(s, true)
     end
 end
 
@@ -769,9 +821,9 @@ local Window = strict.class("prettyui.Window instance", {
             return { scrollY = s.scrollY }
         end,
         -- 1.2.0's internal title-bar drag layer (a titled window's only), a sibling of the root
-        -- on the window's parent. Only its stacking, `hidden` and `isClicked` are modelled: its
-        -- rect is left 0x0 at the origin (`lands` models the title bar it covers), and it is
-        -- not one of the plugin's own layers, so it takes no pointer actions.
+        -- on the window's parent. Only its stacking and `hidden` are modelled: its rect is left
+        -- 0x0 at the origin (`lands` models the title bar it covers), and it is not one of the
+        -- plugin's own layers, so it takes no pointer actions.
         titleDrag = function(s)
             return s.titleDrag
         end,
@@ -789,19 +841,50 @@ local Window = strict.class("prettyui.Window instance", {
             windowScrollTo(s, position)
         end,
         SetContentHeight = windowSetContentHeight,
-        -- 1.2.0 raises the root, then the title-bar drag layer (src/window.lua, Show).
         Show = function(s)
             live(s)
-            s.root.hidden = false
-            s.root:MoveToFront()
-            if s.titleDrag then
-                s.titleDrag.hidden = false
-                s.titleDrag:MoveToFront()
-            end
+            windowShow(s)
         end,
         Close = windowClose,
+        -- 1.2.0's internal overlay registry (src/window.lua): `component` is synced with the
+        -- window (syncOverlays) until unregistered or the window is destroyed. Registering
+        -- one again replaces its callbacks.
+        _RegisterOverlay = function(s, component, isVisible, layout)
+            live(s)
+            if ui.stateOf(component) == nil then
+                strict.fault("prettyui Window:_RegisterOverlay(component, ...) needs a component")
+            end
+            for _, fn in ipairs({ isVisible or false, layout or false }) do
+                if fn and type(fn) ~= "function" then
+                    strict.fault(
+                        "prettyui Window:_RegisterOverlay: isVisible and layout are functions"
+                    )
+                end
+            end
+            local entry = { component = component, isVisible = isVisible, layout = layout }
+            for i, overlay in ipairs(s.overlays) do
+                if overlay.component == component then
+                    s.overlays[i] = entry
+                    return
+                end
+            end
+            s.overlays[#s.overlays + 1] = entry
+        end,
+        _UnregisterOverlay = function(s, component)
+            for i, overlay in ipairs(s.overlays) do
+                if overlay.component == component then
+                    table.remove(s.overlays, i)
+                    return
+                end
+            end
+        end,
+        -- 1.2.0 ends any title-bar press and syncs the overlays hidden before tearing down,
+        -- then forgets them (src/window.lua, Destroy).
         Destroy = function(s)
             if s.destroyed then return end
+            stopTitleDrag(s)
+            syncOverlays(s, true)
+            s.overlays = {}
             s.destroyed = true
             clearContext(s.tips, true)
             destroyTip(s.tip)
@@ -925,10 +1008,8 @@ local WindowModule = module("Window", function(lib, parent, options)
         syncContent(s)
     end
     syncContent(s)
-    if s.title then
-        s.titleDrag, s.titleState = ui.create("Layer", ps)
-        s.titleState.isClicked = false
-    end
+    s.overlays = {}
+    if s.title then s.titleDrag = ui.create("Layer", ps) end
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
     s.closeButton:SetSize(CLOSE_SIZE, CLOSE_SIZE)
@@ -1161,21 +1242,13 @@ end
 
 -- Once per harness step, before Logic: a Window or Panel root moved by a bare root:SetPos
 -- goes back to its remembered position. The probe saw PrettyUI's drag bounds do this to a
--- Panel; when the client triggers it is unknown (docs/testing.md, fidelity ledger). And a
--- title-bar press (h.ui:dragTitle) that has been held over one Logic tick ends.
+-- Panel; when the client triggers it is unknown (docs/testing.md, fidelity ledger).
 ---@param h table
 function M.step(h)
     local lib = h.instance and h.instance.alive and h.instance.prettyui
     if not lib then return end
     for _, r in ipairs(lib.records) do
         local s = r.s
-        if r.kind == "Window" and s.titleState and s.titleState.isClicked then
-            if s.titleHeldSteps >= 1 then
-                s.titleState.isClicked = false
-            else
-                s.titleHeldSteps = s.titleHeldSteps + 1
-            end
-        end
         if (r.kind == "Window" or r.kind == "Panel") and not gone(r) and s.remembered then
             local x, y = ui.pos(s.rootState)
             if x ~= s.remembered.x or y ~= s.remembered.y then
@@ -1634,22 +1707,34 @@ function Driver:click(target, value)
     error("can't click a " .. r.kind, 2)
 end
 
--- Press a titled Window's title bar and drag it by (dx, dy) (0, 0 for a click); it stays
--- inside its parent. The press raises the root and then the title-bar drag layer, as 1.2.0's
--- ONCLICK there does (src/window.lua, titleDrag). The press is held over the next Logic
--- tick, with the drag layer's `isClicked` true, and ends before the one after, when it reads
--- false again; the window moves at once.
+-- 1.2.0's ONCLICK on the title bar (src/window.lua, titleDrag): the root to the front, then
+-- the title-bar drag layer over it.
+---@param s table
+local function pressTitle(s)
+    s.root:MoveToFront()
+    s.titleDrag:MoveToFront()
+end
+
+-- The title bar of a shown, titled Window's record state.
+---@param self table
+---@param win table
+---@return table
+local function titled(self, win)
+    local s = self:record(win, "Window").s
+    assert(s.title, "only a titled Window has a title bar")
+    assert(ui.visible(s.rootState), "the window is hidden")
+    return s
+end
+
+-- Press a titled Window's title bar, drag it by (dx, dy) and let go, all in one step: it stays
+-- inside its parent. The press raises the root and then the title-bar drag layer, and the
+-- release syncs the overlays (1.2.0's stopDrag), both before the next Logic tick.
 ---@param win table
 ---@param dx number
 ---@param dy number
 function Driver:dragTitle(win, dx, dy)
-    local s = self:record(win, "Window").s
-    assert(s.title, "only a titled Window has a title bar to drag")
-    assert(ui.visible(s.rootState), "the window is hidden")
-    s.root:MoveToFront()
-    s.titleDrag:MoveToFront()
-    s.titleState.isClicked = true
-    s.titleHeldSteps = 0
+    local s = titled(self, win)
+    pressTitle(s)
     local root = s.rootState
     local x, y = ui.pos(root)
     local nx = clamp(x + dx, 0, ui.width(root.parent) - ui.width(root))
@@ -1658,10 +1743,23 @@ function Driver:dragTitle(win, dx, dy)
         s.root:SetPos(nx, ny)
         remember(s)
     end
+    stopTitleDrag(s)
+end
+
+-- A quick click on a titled Window's title bar: press and release in one tick, which the
+-- client delivers backwards (ONRELEASE, then ONCLICK; docs/api-concepts.md, "Pointer hooks on
+-- a plain `ui.Layer`"). So the overlays sync first and then the root and title-bar drag layer
+-- are raised over them, both before the next Logic tick.
+---@param win table
+function Driver:clickTitle(win)
+    local s = titled(self, win)
+    stopTitleDrag(s)
+    pressTitle(s)
 end
 
 -- Drag a resizable Window's bottom-right corner by (dw, dh): clamped to its min/max and to
--- the parent's edge.
+-- the parent's edge. The press ends any title-bar press and shows the window (1.2.0's
+-- Resize onBegin, src/window.lua), which raises its root; each move sets its size.
 ---@param win table
 ---@param dw number
 ---@param dh number
@@ -1669,6 +1767,8 @@ function Driver:resize(win, dw, dh)
     local s = self:record(win, "Window").s
     assert(s.resizable, "the window isn't resizable")
     assert(ui.visible(s.rootState), "the window is hidden")
+    stopTitleDrag(s)
+    windowShow(s)
     local root = s.rootState
     local function axis(pos, size, delta, extent, minimum, maximum)
         local limit = math.max(minimum, math.min(maximum or math.huge, extent))

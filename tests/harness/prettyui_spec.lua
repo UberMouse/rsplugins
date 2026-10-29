@@ -146,7 +146,7 @@ describe("prettyui Window", function()
         assert.are.same({ 3536, 0 }, { h.env.win.root.x, h.env.win.root.y })
     end)
 
-    it("raises its root on a title-bar press, which reads isClicked until the next tick", function()
+    it("raises its root on a title-bar press", function()
         local h = load(WINDOW .. [[
 other = ui.Layer.new(parent)
 ]])
@@ -158,18 +158,154 @@ other = ui.Layer.new(parent)
         -- On the window's parent, after the root; a layer made later is drawn over both.
         assert.are.equal(root, titleState.parent)
         assert.are.equal(ui.stateOf(h.env.other), root.children[#root.children])
-        assert.is_false(title.isClicked)
-        h.ui:dragTitle(win, 0, 0)
-        -- 1.2.0's ONCLICK there: the root to the front, then the drag layer over it.
-        assert.are.same(
-            { rootState, titleState },
-            { table.unpack(root.children, #root.children - 1) }
+        for _, press in ipairs({ "dragTitle", "clickTitle" }) do
+            h.env.other:MoveToFront()
+            if press == "dragTitle" then
+                h.ui:dragTitle(win, 0, 0)
+            else
+                h.ui:clickTitle(win)
+            end
+            -- 1.2.0's ONCLICK there: the root to the front, then the drag layer over it.
+            assert.are.same(
+                { rootState, titleState },
+                { table.unpack(root.children, #root.children - 1) }
+            )
+        end
+    end)
+
+    -- A sentinel overlay counting its layout() calls, shown while `visible`.
+    local OVERLAY = WINDOW
+        .. [[
+overlay = ui.Layer.new(parent)
+overlay:SetSize(1, 1)
+overlay.clickthrough = true
+syncs, visible = 0, true
+win:_RegisterOverlay(overlay, function() return visible end, function() syncs = syncs + 1 end)
+]]
+
+    it(
+        "syncs its overlays when a title-bar press ends: after a drag's raise, before a click's",
+        function()
+            local h = load(OVERLAY)
+            local root = h.instance.uiRoot
+            local win, overlay = h.env.win, ui.stateOf(h.env.overlay)
+            local rootState, titleState = ui.stateOf(win.root), ui.stateOf(win.titleDrag)
+            h.ui:dragTitle(win, 10, 10)
+            assert.are.equal(1, h.env.syncs)
+            -- Raised by the press, then the release's sync raises the shown overlay over them.
+            assert.are.same(
+                { rootState, titleState, overlay },
+                { table.unpack(root.children, #root.children - 2) }
+            )
+            -- A quick click arrives release-first: the sync, then the press's raise over it.
+            h.ui:clickTitle(win)
+            assert.are.equal(2, h.env.syncs)
+            assert.are.same(
+                { overlay, rootState, titleState },
+                { table.unpack(root.children, #root.children - 2) }
+            )
+        end
+    )
+
+    it(
+        "syncs its overlays on Show, a scroll, SetSize and a resize, hidden as isVisible says",
+        function()
+            local h = load(OVERLAY)
+            local win, overlay = h.env.win, h.env.overlay
+            local function syncs(act)
+                local before = h.env.syncs
+                act()
+                return h.env.syncs - before
+            end
+            assert.are.equal(
+                1,
+                syncs(function()
+                    win:Show()
+                end)
+            )
+            assert.is_false(overlay.hidden)
+            h.env.visible = false
+            assert.are.equal(
+                1,
+                syncs(function()
+                    win:SetScrollPosition(0)
+                end)
+            )
+            assert.is_true(overlay.hidden)
+            h.env.visible = true
+            -- 1.2.0's SetSize syncs after the scroll it re-clamps does.
+            assert.are.equal(
+                2,
+                syncs(function()
+                    win:SetSize(320, 220)
+                end)
+            )
+            assert.is_false(overlay.hidden)
+            -- The resize's press ends any title press and shows the window, raising its root,
+            -- then sets its size.
+            assert.are.equal(
+                4,
+                syncs(function()
+                    h.ui:resize(win, 10, 10)
+                end)
+            )
+            local root = h.instance.uiRoot
+            assert.are.same(
+                { ui.stateOf(win.root), ui.stateOf(win.titleDrag), ui.stateOf(overlay) },
+                { table.unpack(root.children, #root.children - 2) }
+            )
+            -- The wheel scrolls through SetScrollPosition, so it syncs too, while the content
+            -- overflows.
+            win:SetContentHeight(1000)
+            assert.are.equal(
+                1,
+                syncs(function()
+                    win._onScrollWheel(win.content, 1)
+                end)
+            )
+        end
+    )
+
+    it(
+        "hides its overlays on Close without laying them out, beyond its title press ending",
+        function()
+            local h = load(OVERLAY)
+            local win, overlay = h.env.win, h.env.overlay
+            win:Close()
+            -- 1.2.0's Close ends any title press first, which syncs shown, then syncs hidden.
+            assert.are.equal(1, h.env.syncs)
+            assert.is_true(overlay.hidden)
+            h.env.visible = true
+            win:SetScrollPosition(0)
+            assert.are.equal(1, h.env.syncs)
+            assert.is_true(overlay.hidden)
+        end
+    )
+
+    it("stops syncing an overlay once unregistered, and all of them once destroyed", function()
+        local h = load(OVERLAY)
+        local win, overlay = h.env.win, h.env.overlay
+        win:_UnregisterOverlay(overlay)
+        win:Show()
+        assert.are.equal(0, h.env.syncs)
+        win:_RegisterOverlay(overlay, nil, function()
+            h.env.syncs = h.env.syncs + 1
+        end)
+        win:Destroy()
+        -- Destroy's own title-press end syncs it once, then it is forgotten.
+        assert.are.equal(1, h.env.syncs)
+        assert.is_true(overlay.hidden)
+    end)
+
+    it("faults syncing an overlay destroyed while still registered", function()
+        local h = load(OVERLAY)
+        h.env.overlay:Destroy()
+        assert.matches(
+            "used after Destroy",
+            harness.errorOf(function()
+                h.env.win:Show()
+            end)
         )
-        assert.is_true(title.isClicked)
-        h:advance(20)
-        assert.is_true(title.isClicked)
-        h:advance(20)
-        assert.is_false(title.isClicked)
     end)
 
     it("hides its title-bar drag layer on Close, and Show raises the root then it", function()

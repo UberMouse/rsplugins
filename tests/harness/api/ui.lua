@@ -330,8 +330,8 @@ local FIELDS = {
     isMouseOver = function(s)
         return s.mouseOver
     end,
-    -- Only the fake PrettyUI window's title-bar drag layer models it (api/prettyui.lua); on
-    -- any other component it faults, as when it reads true there is unprobed.
+    -- Faults on every component: when it reads true is unprobed (a quick title-bar click was
+    -- never seen with it true at a Logic tick, docs/api-concepts.md).
     isClicked = storedField("isClicked"),
     x = function(s)
         return (M.pos(s))

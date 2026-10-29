@@ -184,16 +184,35 @@ The official reference annotates Lua with pseudo-types:
       `MoveToFront()` on a hidden component has no lasting effect on the stacking.**
     - Pressing or dragging the window's title bar buried the targets again: PrettyUI 1.2.0's
       title-bar `ONCLICK` does `self.root:MoveToFront()`. PrettyUI raises the window root only
-      on creation, `Show()` and that title-bar `ONCLICK` (`src/window.lua`); resize and
-      tooltips raise only their own layers.
+      on creation, `Show()` and that title-bar `ONCLICK` (`src/window.lua`), but a resize's
+      press calls `Show()` (`Resize.new`'s `onBegin`), so it raises the root too; tooltips raise
+      only their own layers.
     - Raising every shown target every Logic tick broke the grips: the cursor flickered between
       PUSH and the hand about once a second and drags failed. Raising every 25 ticks, skipped
       while any target was hovered or clicked, worked without flicker but sometimes delayed the
       PUSH cursor on hover (a raise as the pointer arrived). So **`MoveToFront()` on a layer
       resets its hover state**.
     - Watching the title-bar layer's `isClicked` (PrettyUI's internal `win.titleDrag`) each
-      Logic tick and raising the shown targets once when it went true → false worked: grips
-      usable right after a title press, no hover delay (user-confirmed).
+      Logic tick and raising the shown targets once when it went true → false worked for title
+      drags (grips usable right after, no hover delay; user-confirmed), but **missed quick
+      clicks**: the user found "clicking the title bar breaks dragging, moving the window with
+      the titlebar is fine, closing and expanding is fine".
+    - 2026-10-29, beta client, dev bridge + user: a quick click on the title bar buries the
+      shown targets under the window (re-raising them from the bridge made them work again); a
+      click on a row does not. Subscriptions under a named hook id (`"gripProbe"`) for
+      `ONCLICK` and `ONRELEASE` on the title-drag layer, and `ONCLICK` on the window root,
+      logged nothing across several quick title clicks, a click on an empty part of the window
+      and row clicks, though an earlier named `ONCLICK` probe on the title layer fired twice
+      during title drags. PrettyUI's own title handlers are subscribed under the default id.
+      The plugin now registers a never-shown sentinel layer with the window through PrettyUI's
+      internal `win:_RegisterOverlay(component, isVisible, layout)`, whose `layout` only flags
+      that the window synced its overlays, and raises the shown targets once on the next Logic
+      tick (not yet confirmed in the client). 1.2.0 syncs (`_SyncOverlays(false)`) on
+      `Show()`, at the end of every title-bar press (`stopDrag`, on `ONRELEASE`), on every
+      scroll and on resize. A one-tick click arrives release-first (above), so its sync comes
+      before its raise, but both land before the next Logic tick. Unregister the sentinel (`_UnregisterOverlay`) before destroying it:
+      `_SyncOverlays` skips an overlay only when its interface is gone, and a plugin-layer
+      component shares the plugin layer's.
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its

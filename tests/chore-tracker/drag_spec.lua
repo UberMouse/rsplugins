@@ -284,9 +284,40 @@ local function raises(h)
     return out
 end
 
--- PrettyUI raises the window over the targets on Show and on a title-bar press; a MoveToFront
--- on a hidden target is lost, and raising a hovered one resets its hover (docs/api-concepts.md,
--- "Pressing and dragging a plain `ui.Layer`").
+-- Run `act` and then `ms` of ticks, and check each target was raised as grips.lua should:
+-- once if it went from hidden to shown, once if it was shown and the window `synced` its
+-- overlays, else not at all.
+---@param h table
+---@param synced boolean
+---@param act fun()
+---@param ms integer
+local function checkRaises(h, synced, act, ms)
+    local before, wasHidden = raises(h), {}
+    for _, t in ipairs(targets(h)) do
+        wasHidden[t] = t.hidden
+    end
+    act()
+    h:advance(ms)
+    for t, n in pairs(raises(h)) do
+        local raised = (wasHidden[t] and not t.hidden) or (synced and not wasHidden[t])
+        assert.are.equal(before[t] + (raised and 1 or 0), n)
+    end
+end
+
+-- Whether the window is drawn over `id`'s target, so a press there doesn't reach it.
+---@param h table
+---@param id string
+---@return boolean
+local function buried(h, id)
+    local ok, why = h.ui:press(assert(targetOf(h, id), "no target over " .. id))
+    if ok then h.ui:release() end
+    return not ok and why:match("covered") ~= nil
+end
+
+-- PrettyUI raises the window over the targets on Show, on a title-bar press and as a resize
+-- begins, and syncs its overlays after each; a MoveToFront on a hidden target is lost, and
+-- raising a hovered one resets its hover (docs/api-concepts.md, "Pressing and dragging a plain
+-- `ui.Layer`").
 describe("chore-tracker grips over the window", function()
     it("drag after the window is collapsed and expanded", function()
         local h = ready()
@@ -297,23 +328,31 @@ describe("chore-tracker grips over the window", function()
         dragDownTwo(h, "daily-challenge")
     end)
 
-    it("drag again on the tick a press on the title bar ends", function()
+    it("drag on the tick after a quick click on the title bar", function()
+        local h = ready()
+        local win = window(h)
+        h.ui:clickTitle(win)
+        assert.is_true(buried(h, "daily-challenge"))
+        h:advance(20)
+        dragDownTwo(h, "daily-challenge")
+        h.ui:clickTitle(win)
+        h:advance(20)
+        dragDownTwo(h, "player-owned-ports")
+    end)
+
+    it("drag on the tick after a title-bar drag, and after a resize", function()
         local h = ready()
         local win = window(h)
         h.ui:dragTitle(win, -200, 40)
         h:advance(20)
-        -- Still pressed: the window is over the targets.
-        local t = assert(targetOf(h, "daily-challenge"))
-        assert.matches("covered", select(2, h.ui:press(t)))
-        h:advance(20)
         dragDownTwo(h, "daily-challenge")
-        -- A plain click on the title bar raises the window too.
-        h.ui:dragTitle(win, 0, 0)
-        h:advance(40)
+        h.ui:resize(win, 40, 60)
+        assert.is_true(buried(h, "player-owned-ports"))
+        h:advance(20)
         dragDownTwo(h, "player-owned-ports")
     end)
 
-    it("raise a target hidden during a title press as it scrolls back into view", function()
+    it("raise a target hidden during a title click as it scrolls back into view", function()
         local h = ready()
         local win = window(h)
         h.ui:resize(win, 0, -150)
@@ -321,43 +360,58 @@ describe("chore-tracker grips over the window", function()
         win:SetScrollPosition(rowY(h, "daily-challenge") + 6 + 8)
         h:advance(20)
         assert.is_nil(targetOf(h, "daily-challenge"))
-        h.ui:dragTitle(win, 0, 0)
+        h.ui:clickTitle(win)
         h:advance(40)
         win:SetScrollPosition(0)
         h:advance(20)
         dragDownTwo(h, "daily-challenge")
     end)
 
-    it("raise a target only as it is shown: never while idle, scrolled or resized", function()
+    it("raise the shown targets once per sync, and a hidden one only as it is shown", function()
         local h = ready()
         local win = window(h)
         h.ui:resize(win, 0, -150)
         h:advance(20)
-        -- Run `act` and the ticks after it: a target is raised once if it went from hidden to
-        -- shown, else not at all.
-        local function step(act, ms)
-            local before, wasHidden = raises(h), {}
-            for _, t in ipairs(targets(h)) do
-                wasHidden[t] = t.hidden
-            end
-            act()
-            h:advance(ms)
-            for t, n in pairs(raises(h)) do
-                local shown = wasHidden[t] and not t.hidden
-                assert.are.equal(before[t] + (shown and 1 or 0), n)
-            end
-        end
-        step(function() end, 1000)
-        step(function()
+        checkRaises(h, false, function() end, 1000)
+        checkRaises(h, true, function()
             h.ui:wheel(row(h, "Player Owned Farm").layer, 1)
         end, 20)
-        step(function()
+        checkRaises(h, true, function()
             h.ui:resize(win, 40, 60)
         end, 20)
-        step(function()
+        checkRaises(h, true, function()
             win:SetScrollPosition(0)
         end, 20)
+        checkRaises(h, true, function()
+            h.ui:clickTitle(win)
+        end, 20)
+        -- Several syncs before a tick still raise once.
+        checkRaises(h, true, function()
+            win:SetScrollPosition(32)
+            h.ui:dragTitle(win, 10, 10)
+        end, 20)
+        checkRaises(h, false, function() end, 1000)
         assert.is_true(#shownTargets(h) > 0)
+    end)
+
+    it("raise none during a drag that scrolls the window, and after it drops", function()
+        local h = ready()
+        local win = window(h)
+        h.ui:resize(win, 0, -200)
+        h:advance(20)
+        local view = h.ui:layout(win.viewport)
+        local x, _ = grab(h, "daily-challenge")
+        -- Each sample past the bottom edge scrolls the window, which syncs its overlays.
+        for _ = 1, 3 do
+            checkRaises(h, false, function()
+                assert.is_true(h.ui:moveTo(x, view.globalY + view.height + 20))
+            end, 20)
+        end
+        assert.is_true(win._scroll.scrollY > 0)
+        checkRaises(h, false, function()
+            assert.is_true(h.ui:release())
+        end, 40)
+        assert.are_not.equal("daily-challenge", stored(h)[1])
     end)
 end)
 

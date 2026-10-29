@@ -26,6 +26,14 @@ your client, never does anything in game for you, and sends nothing anywhere.
   anywhere on a row when you've done the chore: it stays where it is, ticked, with its icon and
   name dimmed. Click it again to untick it. Over any row, in the list or in settings, the
   cursor becomes the hyperlink hand and the tick box lights up.
+- **Putting chores in your own order.** Each row in the list has a grip at its left, a menu
+  icon, where the cursor changes to a push cursor. Press the grip and drag the chore up or
+  down: it follows the pointer, and the other chores of its period slide apart to show where it
+  will land. Let go to drop it there. A chore stays within its own period (Daily, Weekly or
+  Monthly). Drag past the top or bottom of the list and the list scrolls. The pointer may leave
+  the window while you drag; the chore drops wherever you let go. A click on the grip ticks
+  nothing; click the rest of the row for that. A chore you pick later goes to the end of its
+  period.
 - **Long names.** A name too long for the window is shortened with "..." so it stops before
   the tick box; make the window wider and more of it shows. Hover a shortened row and its
   tooltip starts with the full name.
@@ -137,7 +145,7 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 ## What it remembers
 
-- **Your picks and ticks, per character.** They are saved each time you change them, under your
+- **Your picks, their order and your ticks, per character.** They are saved each time you change them, under your
   character's display name, so each character on the same computer has its own list. While you
   are logged out the window says "Log in to see your chores".
 - **Where the window is**, for all characters: its position, its size, whether it is collapsed,
@@ -171,8 +179,10 @@ The chore list (names, descriptions, wiki links and reset periods) comes from
 ## Console lines
 
 Everything the plugin logs carries the tag `[CHORES]`: loading, collapsing and expanding,
-character changes, waiting for the clock and each celebration popup shown
-(`[CHORES] celebrate <chore id>`, or `[CHORES] celebrate <period> cleared`). It never logs your display name. Grep regex:
+character changes, waiting for the clock, each celebration popup shown
+(`[CHORES] celebrate <chore id>`, or `[CHORES] celebrate <period> cleared`) and each chore
+dragged to a new place (`[CHORES] moved <chore id> to <n> in <period>`, `<n>` its place in
+the period from 1). It never logs your display name. Grep regex:
 `\[CHORES\]`.
 
 A purchase that ticks a chore, or is the period's first at that shop, logs
@@ -213,7 +223,8 @@ permissions") is true only after that check passes.
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
-| `shell/rows.lua` | One chore's row in the list or settings: its icon, text and tick box, changed in place |
+| `shell/rows.lua` | One chore's row in the list or settings: its icon, text and tick box (and a list row's grip), changed in place |
+| `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
@@ -222,6 +233,7 @@ permissions") is true only after that check passes.
 | `core/view.lua` | What the list shows, as plain data |
 | `core/layout.lua` | The saved window layout, read back and kept on screen |
 | `core/listlayout.lua` | Where the list's headings and rows go in the window |
+| `core/reorder.lua` | Where a dragged row and its neighbours go, and when the list scrolls under a drag |
 | `core/celebrate.lua` | Which celebrations a change to the picks and ticks earns |
 | `core/settings.lua` | The celebration settings, defaults and reading them back |
 | `data/chores.lua` | The dailyscape chore list (generated) |
@@ -248,5 +260,5 @@ This plugin requests no permissions.
 ## Data Protection
 This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites, and each chore with one of the game's own item icons or sprites.
 This information is not transmitted outside of the plugin under any circumstances.
-Your picked and ticked chores, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
+Your picked chores in your order, the ones you ticked, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
 ```

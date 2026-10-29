@@ -59,15 +59,16 @@ These are the user's calls. They aren't all visible in the code.
   - The penguin vars (`PENG_SPY_*`) may encode this week's locations. Don't use them without
     the user's go-ahead.
 - **PrettyUI has no licence:** read its source locally, never copy or vendor it. The window's
-  scroll keep reads PrettyUI 1.2.0's internal `_scroll.scrollY`, and each list row is handed the
-  window's internal `_onScrollWheel` so the wheel scrolls over it (both guarded); the user may
-  veto either.
+  scroll keep and the drag grips read PrettyUI 1.2.0's internal `_scroll.scrollY`, each list
+  row is handed the window's internal `_onScrollWheel` so the wheel scrolls over it, and the
+  grips' press targets are placed from the window's `viewport` (all guarded); the user may veto
+  any of them.
 
 ## Round 2: making the list nicer (decided 2026-10-29)
 
-The user's ideas from 2026-10-29, the calls they made, and what research found. Step 1 is built
-and user-checked in the client; step 2's list rows are built, not yet checked in the client; the
-rest is not. Staged order, with a check-in in the beta client
+The user's ideas from 2026-10-29, the calls they made, and what research found. Steps 1 and 2
+are built and user-checked in the client (step 2's ticked-box hover aside); step 3 is built, not
+yet checked in the client; the rest is not. Staged order, with a check-in in the beta client
 after each:
 
 1. **Celebration popup** (built `280a68a..c1b5a76`; `core/celebrate.lua`, `shell/popups.lua`).
@@ -104,15 +105,24 @@ after each:
    A row must forward the wheel to the window itself. Act on `ONCLICK`, since a fast click
    arrives release-first. The native drag hooks never fire, so step 3 builds its drag from
    press, hold, release and the mouse position.
-3. **Reorder by drag, within each period.** Keep the Daily/Weekly/Monthly headers and let the
-   user drag a selected chore up or down inside its own section. The order is per character.
-   The user's call: drag by a grip handle at the row's left, so a click anywhere else still
-   ticks. The client's `ONDRAG` hooks never fired in the probe, so the drag is built from
-   `ONCLICK`/`ONHOLD`/`ONRELEASE` and `Mouse.GetPosition()`, as PrettyUI's `item_grid` and title
-   bar do (PrettyUI has no reorderable list). The grip's cursor is to be picked again: the
-   user read `TOPLEVEL_V2_MOVE` 194 (PrettyUI's title-bar cursor) as a resize cursor, so
-   probe `CURSOR_MOVE` 0 and `CURSOR_TELE_GRAB` 111 with them. If drag is unreliable, the fallback is up/down buttons in
-   settings.
+3. **Reorder by drag, within each period.** Built (run R3: `5421b8c..db53909` the pure core,
+   `1470cee..63ea43a` the harness's press/hold/release driver, then the grip and drag), not yet
+   checked in the client. The order is the player's own, saved per character in
+   `state.selected`; a newly picked chore goes to the end of its period. The user's calls: a
+   grip at the row's left (`id.Sprite.HAMBURGER_MENU_ICON` 8122, 16 px) so a click anywhere
+   else still ticks; the grip's cursor `id.Cursor.CURSOR_PUSH` 196, over the grip and for the
+   whole drag (both picked in probes, docs/api-concepts.md); live shift (the row follows the
+   pointer, the period's other rows slide apart); auto-scroll past the list's edges; one press
+   target per visible grip. The client's `ONDRAG` hooks never fired, and the drag probes v1-v3
+   (docs/api-concepts.md, "Pressing and dragging a plain `ui.Layer`") showed a press ends once
+   the pointer leaves the pressed layer's rect clipped by its ancestors, so a row inside the
+   window can't carry a drag. So `shell/grips.lua` puts an invisible press target on the plugin
+   layer over each grip, re-docked every Logic tick from the window's `viewport` and
+   `_scroll.scrollY` (a dev-bridge probe showed `xyGlobal` leaves out an ancestor's scroll), and
+   on its first `ONHOLD` stretches it over the plugin layer and brings it to the front, the v3
+   pattern (PrettyUI 1.2.0's scroll-thumb drag). `core/reorder.lua` gives the slot and the rows'
+   spots; the drop calls `state.move` and saves once. The settings view has no grips. If the
+   drag proves unreliable in the client, the fallback is up/down buttons in settings.
 4. **Per-chore settings.**
    - **Shop runs:** the user picks which of a chore's shops they visit, and it ticks once every
      chosen shop has been bought from this period. The default is all listed shops.
@@ -222,6 +232,10 @@ it with location or a var. There is no interface-opened event.
   for an unknown var or config name is unconfirmed; the plugin handles both.
 - Console regex for all of the plugin's detection lines:
   `\[CHORES\] (purchase|collected|seen|unknown var)`.
+- Drag a chore by its grip (step 3): the PUSH cursor over the grip, the rows sliding apart, a
+  drag that overshoots the window and comes back, the drop kept after `prl chore-tracker`, a
+  click on the row (not the grip) still ticking, and the list scrolling while dragging past its
+  bottom edge. A drop logs `[CHORES] moved <chore id> to <n> in <period>`.
 
 ## Before submitting to Mod.io
 

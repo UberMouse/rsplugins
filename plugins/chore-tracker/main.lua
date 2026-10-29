@@ -8,6 +8,14 @@
 --     unticks them. Over any row the cursor is the hyperlink hand and the box shows a
 --     hovered sprite. Hover a chore for its description and wiki links (shown as text:
 --     plugins can't open URLs).
+--   * Each list row has a grip (the HAMBURGER_MENU_ICON sprite) at its left, under the PUSH
+--     cursor. Drag a chore by its grip to reorder it within its period: the row follows the
+--     pointer, its period's other rows slide apart to show where it will drop, and the list
+--     scrolls while the pointer is past its top or bottom edge. The release drops it there; a
+--     click on the grip ticks nothing. shell/grips.lua does this (see there for why the presses
+--     are taken by layers on the plugin layer, not by the rows). A chore picked later goes to
+--     the end of its period. A drop that changes the order logs "[CHORES] moved <chore id> to
+--     <n> in <period>".
 --   * The settings button (top left of the content) opens the settings view, which has the
 --     Celebrations switches and lists every chore to pick from, as the same icon rows under
 --     Daily / Weekly / Monthly headings: click a row to pick or unpick it (its box ticks).
@@ -56,7 +64,7 @@
 --     characters. Each popup logs "[CHORES] celebrate <chore id>" or "[CHORES] celebrate
 --     <period> cleared" (grep: \[CHORES\] (purchase|collected|seen|celebrate) for all the
 --     lines above and these).
---   * Picks and ticks are saved per character (by display name) as they change. The window's
+--   * Picks, their order and ticks are saved per character (by display name) as they change. The window's
 --     position, size and collapsed state, and the collapsed button's spot, are saved for all
 --     characters, as are the celebration settings. Logged out, the window says so; until the
 --     game clock reads, nothing can be ticked.
@@ -74,11 +82,12 @@
 -- window's content, at spots core/listlayout.lua works out, because PrettyUI 1.2.0's
 -- CheckboxButton can't show an icon, be recoloured or be retexted (only the Celebrations
 -- switches use it). Ticks, colours, counts and tooltips change in place; the window
--- is rebuilt only for a view switch, a login change or the clock starting or stopping. Two
--- reads of PrettyUI 1.2.0 internals, each guarded so a version without it loses only that:
--- `_scroll.scrollY`, to keep the scroll through such a rebuild (scrollPosition), and the
--- window's `_onScrollWheel`, handed to each row so the wheel over a row still scrolls the window
--- (wheelHandler).
+-- is rebuilt only for a view switch, a login change or the clock starting or stopping. Three
+-- reads of PrettyUI 1.2.0 state, each guarded so a version without it loses only that:
+-- `_scroll.scrollY`, to keep the scroll through such a rebuild (scrollPosition) and to put the
+-- grips' press targets over scrolled rows, the window's `_onScrollWheel`, handed to each row so
+-- the wheel over a row still scrolls the window (wheelHandler), and the window's `viewport`,
+-- where the grips' targets are placed from (without it, or the scroll, the grips don't drag).
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its

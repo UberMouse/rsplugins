@@ -53,15 +53,29 @@ function M.pos(s)
     return round(s.px + s.rx * M.width(s.parent)), round(s.py + s.ry * M.height(s.parent))
 end
 
--- Absolute position (xyGlobal). A parent scrolled down by `scrollY` (the PrettyUI fake sets
--- it on a Window's viewport, where 1.2.0 calls SetScrollPos) draws its children that much
--- higher.
+-- Absolute position as `xyGlobal` reads it: the sum of the positions up the tree, with no
+-- ancestor's scroll in it. In the client a row under a layer scrolled by SetScrollPos kept its
+-- xyGlobal (dev-bridge probe, 2026-10-29, docs/api-concepts.md), though it draws higher.
 ---@param s table
 ---@return integer x
 ---@return integer y
 function M.globalPos(s)
     if not s.parent then return 0, 0 end
     local gx, gy = M.globalPos(s.parent)
+    local x, y = M.pos(s)
+    return gx + x, gy + y
+end
+
+-- Where it is drawn and takes the pointer, in plugin-layer coordinates: like globalPos, but a
+-- parent scrolled down by `scrollY` (the PrettyUI fake sets it on a Window's viewport, where
+-- 1.2.0 calls SetScrollPos) draws its children that much higher. Hit-testing, clipping and
+-- the driver's pointer points use this one.
+---@param s table
+---@return integer x
+---@return integer y
+function M.drawnPos(s)
+    if not s.parent then return 0, 0 end
+    local gx, gy = M.drawnPos(s.parent)
     local x, y = M.pos(s)
     return gx + x, gy + y - s.parent.scrollY
 end
@@ -75,7 +89,7 @@ end
 ---@return table? # the component that clips the point away
 function M.clipper(s, x, y)
     while s do
-        local gx, gy = M.globalPos(s)
+        local gx, gy = M.drawnPos(s)
         if x < gx or y < gy or x >= gx + M.width(s) or y >= gy + M.height(s) then return s end
         s = s.parent
     end
@@ -574,7 +588,7 @@ function M.create(kind, parent)
         rh = 0,
         hidden = false,
         destroyed = false,
-        scrollY = 0, -- how far its children are scrolled up (see globalPos)
+        scrollY = 0, -- how far its children are scrolled up (see drawnPos)
         content = kind == "Text" and "" or nil,
         hooks = {}, -- ui.Hook value -> listeners, in subscription order
         mouseOver = false,

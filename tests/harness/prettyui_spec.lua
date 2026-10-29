@@ -970,9 +970,10 @@ row.clickthrough = false
 w:SetContentHeight(400)
 capture = ui.Layer.new(parent)
 capture.clickthrough = false
+-- The row's drawn spot from the viewport and the scroll: xyGlobal leaves the scroll out.
 function dock()
-    local at = row.xyGlobal
-    capture:SetPos(at.x, at.y)
+    local at = w.viewport.xyGlobal
+    capture:SetPos(at.x + row.x, at.y + row.y - w._scroll.scrollY)
     capture:SetSize(24, 28)
 end
 dock()
@@ -1091,17 +1092,22 @@ describe("prettyui driver press, hold and release", function()
         end
     )
 
-    it("scrolls a window's content and what is on it, but not its viewport", function()
+    it("draws a scrolled window's content higher, but leaves xyGlobal unscrolled", function()
         local h = load(CAPTURE)
         local w, row = h.env.w, h.env.row
         w:SetScrollPosition(20)
-        assert.are.same({ 108, 140, 28 }, { row.xyGlobal.x, row.xyGlobal.y, row.y })
-        assert.are.same({ 132, 112 }, { w.viewport.xyGlobal.y, w.content.xyGlobal.y })
+        -- As in the client (dev-bridge probe, 2026-10-29): the scroll moves neither the row's
+        -- xyGlobal nor the content's; only where they draw and take the pointer.
+        assert.are.same({ 108, 160, 28 }, { row.xyGlobal.x, row.xyGlobal.y, row.y })
+        assert.are.same({ 132, 132 }, { w.viewport.xyGlobal.y, w.content.xyGlobal.y })
+        assert.are.equal(140, h.ui:layout(row).globalY)
         row:Subscribe(h.env.ui.Hook.ONSCROLLWHEEL, w._onScrollWheel)
         assert.are.same({ true, 1 }, { h.ui:wheel(row, 1) })
         assert.are.equal(52, w._scroll.scrollY)
-        assert.are.equal(108, row.xyGlobal.y)
-        -- Docked again from xyGlobal, the capture lands over the row's new place.
+        assert.are.equal(160, row.xyGlobal.y)
+        assert.are.equal(108, h.ui:layout(row).globalY)
+        -- Docked again from the viewport and the scroll, the capture lands over the row's new
+        -- place.
         h.env.dock()
         assert.is_true(h.ui:press(h.env.capture))
         assert.are.same({ "click", 12, 14 }, h.env.log[1])

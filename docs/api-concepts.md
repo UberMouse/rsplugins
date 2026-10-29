@@ -678,6 +678,14 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
     The chore rows use the full four-state set instead, see "Row box sprites" below.
   - The window clips both drawing and the mouse: a row scrolled past the bottom edge drew
     only the part inside, and hovering and clicking just below the window reached no row.
+  - **`xyGlobal` leaves out an ancestor's scroll** (dev-bridge probe, beta client,
+    2026-10-29, raw layers). A viewport layer at plugin-layer (1200, 300), 200x100, with
+    `SetScrollSize(200, 400)`, a content child at (0, 0) 200x400 and a row on it at (10, 150):
+    the row read `xyGlobal` (1210, 450) and the content (1200, 300) both before and right after
+    `viewport:SetScrollPos(0, 120)`, and again on a later frame; the row's `y` stayed 150. PrettyUI
+    1.2.0 scrolls a window that way (`src/core/scroll.lua`) and places its own overlays from
+    the root y plus the target's y less `_scroll.scrollY` (`src/window.lua`). So a row's
+    on-screen spot is `viewport.xyGlobal` plus the row's `x`, `y`, less the scroll position.
   - **A raw row swallows the mouse wheel.** Over a row that subscribes nothing for the wheel,
     the window didn't scroll. `row:Subscribe(ui.Hook.ONSCROLLWHEEL, window._onScrollWheel)`
     (internal, read from the 1.2.0 source; PrettyUI's own content components bind the same

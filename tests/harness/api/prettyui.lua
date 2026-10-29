@@ -1279,7 +1279,7 @@ end
 ---@return number x
 ---@return number y
 local function centre(cs)
-    local x, y = ui.globalPos(cs)
+    local x, y = ui.drawnPos(cs)
     return x + ui.width(cs) / 2, y + ui.height(cs) / 2
 end
 
@@ -1303,7 +1303,7 @@ function Driver:lands(cs, cx, cy)
         local s = r.s
         if r.kind == "Window" and s.title and not gone(r) and ui.within(cs, s.rootState) then
             -- The title-bar drag layer sits over the window, short of the X's slot (probe).
-            local wx, wy = ui.globalPos(s.rootState)
+            local wx, wy = ui.drawnPos(s.rootState)
             local right = wx + ui.width(s.rootState) - DRAG_LAYER_GAP
             if cx >= wx and cx < right and cy >= wy and cy < wy + TITLE_HEIGHT then
                 return false, "covered by the window's title-bar drag layer"
@@ -1427,7 +1427,7 @@ end
 ---@return integer x
 ---@return integer y
 local function localPoint(hit, x, y)
-    local hx, hy = ui.globalPos(hit)
+    local hx, hy = ui.drawnPos(hit)
     return math.floor(x - hx), math.floor(y - hy)
 end
 
@@ -1787,7 +1787,8 @@ function Driver:altDrag(panel, dx, dy)
 end
 
 -- A component's (or a PrettyUI object's root's) layout as plain data:
--- { x, y, width, height, hidden, globalX, globalY, visible }.
+-- { x, y, width, height, hidden, globalX, globalY, visible }. globalX, globalY are where it is
+-- drawn, a window's scroll included, which its xyGlobal leaves out (as in the client).
 ---@param target any
 ---@return table
 function Driver:layout(target)
@@ -1797,7 +1798,7 @@ function Driver:layout(target)
         cs = assert(r.s.rootState or ui.stateOf(r.obj), "no root: destroyed?")
     end
     local x, y = ui.pos(cs)
-    local gx, gy = ui.globalPos(cs)
+    local gx, gy = ui.drawnPos(cs)
     return {
         x = x,
         y = y,

@@ -869,6 +869,16 @@ local ResizeController = strict.class("prettyui.Window resize", {
         handles = function(s)
             return s.handles and ResizeHandles.new(s.handles) or nil
         end,
+        -- 1.2.0's `enabled` (src/core/resize.lua): true when made. Kept on the window's state,
+        -- since the getter below makes a fresh controller on every read.
+        enabled = function(s)
+            return s.win.resizeEnabled
+        end,
+    },
+    methods = {
+        SetEnabled = function(s, enabled)
+            s.win.resizeEnabled = enabled
+        end,
     },
 })
 
@@ -907,6 +917,7 @@ local Window = strict.class("prettyui.Window instance", {
         -- 0x0 at the origin (`lands` models the title bar it covers), and it is not one of the
         -- plugin's own layers, so it takes no pointer actions.
         titleDrag = function(s)
+            if s.resizeMode == "noTitleDrag" then return nil end
             return s.titleDrag
         end,
         -- 1.2.0's internal resize controller of a resizable window: only its `handles` are
@@ -924,7 +935,7 @@ local Window = strict.class("prettyui.Window instance", {
                     if key ~= "n" then handles[key] = handle end
                 end
             end
-            return ResizeController.new({ handles = handles })
+            return ResizeController.new({ handles = handles, win = s })
         end,
         _RegisterOverlay = function(s)
             return overlayMethod(s, "_RegisterOverlay", registerOverlay)
@@ -1087,7 +1098,15 @@ local WindowModule = module("Window", function(lib, parent, options)
     syncContent(s)
     s.overlays = {}
     s.noOverlayInternals = lib.h.ui.noOverlayInternals
-    if s.title then s.titleDrag = ui.create("Layer", ps) end
+    if s.title then
+        local drag, dragState = ui.create("Layer", ps)
+        s.titleDrag = drag
+        -- A real layer's isClicked is false until the title bar is held; the generic fake
+        -- layer faults on it until set, so 1.2.0's titleDrag starts it false.
+        dragState.isClicked = false
+        s.titleDragState = dragState
+    end
+    s.resizeEnabled = true
     s.resizeMode = lib.h.ui.resizeMode
     if s.resizable then
         s.handles = {}
@@ -1388,9 +1407,10 @@ function Driver:overlayInternals(on)
 end
 
 -- Make every Window made from now on lack 1.2.0's internal `resize` ("none") or its `handles`
--- ("noHandles") or its `n` handle ("noN"), as on a PrettyUI version that lacks them; "all"
--- (the default) restores them. Set it before `h:load()` for a window made at load.
----@param mode "all"|"none"|"noHandles"|"noN"
+-- ("noHandles") or its `n` handle ("noN") or its `titleDrag` ("noTitleDrag"), as on a PrettyUI
+-- version that lacks them; "all" (the default) restores them. Set it before `h:load()` for a
+-- window made at load.
+---@param mode "all"|"none"|"noHandles"|"noN"|"noTitleDrag"
 function Driver:resizeInternals(mode)
     self.resizeMode = mode
 end
@@ -1823,11 +1843,24 @@ function Driver:click(target, value)
 end
 
 -- 1.2.0's ONCLICK on the title bar (src/window.lua, titleDrag): the root to the front, then
--- the title-bar drag layer over it.
+-- the title-bar drag layer over it, and the resize turned off. `held`: the button is still
+-- down, so the layer's isClicked reads true (a quick click never reads true afterwards).
 ---@param s table
-local function pressTitle(s)
+---@param held boolean
+local function pressTitle(s, held)
     s.root:MoveToFront()
     s.titleDrag:MoveToFront()
+    s.resizeEnabled = false
+    s.titleDragState.isClicked = held
+end
+
+-- 1.2.0's stopDrag (ONRELEASE / ONDRAGCOMPLETE): the press ends, the resize is turned back on
+-- and the overlays sync.
+---@param s table
+local function releaseTitle(s)
+    s.titleDragState.isClicked = false
+    s.resizeEnabled = true
+    stopTitleDrag(s)
 end
 
 -- The title bar of a shown, titled Window's record state.
@@ -1849,7 +1882,7 @@ end
 ---@param dy number
 function Driver:dragTitle(win, dx, dy)
     local s = titled(self, win)
-    pressTitle(s)
+    pressTitle(s, true)
     local root = s.rootState
     local x, y = ui.pos(root)
     local nx = clamp(x + dx, 0, ui.width(root.parent) - ui.width(root))
@@ -1858,18 +1891,33 @@ function Driver:dragTitle(win, dx, dy)
         s.root:SetPos(nx, ny)
         remember(s)
     end
-    stopTitleDrag(s)
+    releaseTitle(s)
+end
+
+-- Press a titled Window's title bar and keep holding it: the window's resize is off and the
+-- title-bar drag layer's isClicked reads true until `releaseTitleBar`. Nothing moves.
+---@param win table
+function Driver:holdTitleBar(win)
+    pressTitle(titled(self, win), true)
+end
+
+-- Let go of a title bar held with `holdTitleBar`: the resize is back on and the overlays sync.
+---@param win table
+function Driver:releaseTitleBar(win)
+    releaseTitle(titled(self, win))
 end
 
 -- A quick click on a titled Window's title bar: press and release in one tick, which the
 -- client delivers backwards (ONRELEASE, then ONCLICK; docs/api-concepts.md, "Pointer hooks on
 -- a plain `ui.Layer`"). So the overlays sync first and then the root and title-bar drag layer
--- are raised over them, both before the next Logic tick.
+-- are raised over them, both before the next Logic tick. The release turns the resize back on
+-- and the press then turns it off for good: the window is left with its resize disabled and
+-- the title bar not held, as PrettyUI 1.2.0 leaves it in the client.
 ---@param win table
 function Driver:clickTitle(win)
     local s = titled(self, win)
-    stopTitleDrag(s)
-    pressTitle(s)
+    releaseTitle(s)
+    pressTitle(s, false)
 end
 
 -- Drag a resizable Window's bottom-right corner by (dw, dh): clamped to its min/max and to
@@ -1886,6 +1934,7 @@ function Driver:resize(win, dw, dh, held)
     assert(s.resizable, "the window isn't resizable")
     assert(ui.visible(s.rootState), "the window is hidden")
     if not held then
+        assert(s.resizeEnabled, "the window's resize handles are hidden: its resize is disabled")
         stopTitleDrag(s)
         windowShow(s)
     end

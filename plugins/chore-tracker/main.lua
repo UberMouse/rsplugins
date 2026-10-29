@@ -96,6 +96,9 @@
 --   stay under the window after a title-bar press or a resize.
 -- - `resize.handles`: resize cursors on the window's edges and corners; without them the
 --   window shows none.
+-- - `resize.enabled` / `resize:SetEnabled` and `titleDrag` (with the client's `isClicked`):
+--   turn the window's resize back on after a quick title-bar click (reviveResize); without
+--   them the resize handles stay hidden after such a click until the title bar is dragged.
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -526,6 +529,25 @@ local RESIZE_CURSORS = {
     w = id.Cursor.TOPLEVEL_V2_MOVE,
 }
 
+-- Workaround for PrettyUI 1.2.0: it turns the window's resize off only while its title bar is
+-- pressed, but a quick click reaches it release-first (docs/api-concepts.md), so the release
+-- turns resize on and the press then turns it off, with the title bar no longer held. A
+-- disabled resize with the title bar not held is that state; turn it back on. Every read is
+-- guarded, so a PrettyUI without these internals is left alone.
+---@param w table the PrettyUI window
+local function reviveResize(w)
+    local resize, titleDrag = w.resize, w.titleDrag
+    if type(resize) ~= "table" or type(titleDrag) ~= "table" then return end
+    if resize.enabled ~= false or titleDrag.isClicked == true then return end
+    if type(resize.SetEnabled) ~= "function" then return end
+    resize:SetEnabled(true)
+end
+
+-- Keep the open window's resize on; see reviveResize.
+local function followResize()
+    if collapsed == nil and win then reviveResize(win) end
+end
+
 -- Set the resize cursors on `w`'s eight resize handles with rows.setCursor. PrettyUI only
 -- moves, sizes and hides the handles afterwards, so once per window is enough. A PrettyUI
 -- without `resize.handles` (or a handle) is skipped.
@@ -797,6 +819,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.
     followGrips()
+    followResize()
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)

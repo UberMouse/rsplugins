@@ -550,3 +550,40 @@ describe("chore-tracker resize cursors", function()
         end
     end)
 end)
+
+-- PrettyUI 1.2.0 leaves the window's resize off after a quick title-bar click (the press
+-- reaches it after the release); the plugin turns it back on once the title bar isn't held.
+describe("chore-tracker resize after a title-bar click", function()
+    it("is turned back on a tick after a quick click", function()
+        local h = loaded()
+        local win = window(h)
+        h.ui:clickTitle(win)
+        assert.is_false(win.resize.enabled)
+        h:advance(20)
+        assert.is_true(win.resize.enabled)
+        h.ui:resize(win, 60, 0)
+    end)
+
+    it("stays off while the title bar is held, and is on once it is let go", function()
+        local h = loaded()
+        local win = window(h)
+        h.ui:holdTitleBar(win)
+        h:advance(100)
+        assert.is_false(win.resize.enabled)
+        h.ui:releaseTitleBar(win)
+        assert.is_true(win.resize.enabled)
+        h:advance(20)
+        assert.is_true(win.resize.enabled)
+    end)
+
+    it("is left alone on a window without the resize or title-bar internals", function()
+        for _, mode in ipairs({ "none", "noTitleDrag" }) do
+            local h = loaded({ load = false })
+            h.ui:resizeInternals(mode)
+            h:load()
+            h.ui:clickTitle(window(h))
+            h:advance(40)
+            assert.is_true(h.ui:layout(window(h)).visible)
+        end
+    end)
+end)

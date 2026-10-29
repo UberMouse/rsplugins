@@ -222,6 +222,14 @@ The official reference annotates Lua with pseudo-types:
       targets. Since a resize or a wheel spin syncs tick after tick, the raise now waits for the
       first Logic tick with no new sync, so a hovered target isn't raised (and its hover reset)
       on every tick of the burst; not yet re-checked in the client.
+    - 2026-10-29, beta client, dev bridge + user: after a quick title-bar click all eight of
+      PrettyUI 1.2.0's resize handles were hidden (the window's resize disabled) with their
+      cursors intact; a press-drag-release on the title bar brought them back. Cause, per the
+      1.2.0 source: the title layer's `ONCLICK` calls `resize:SetEnabled(false)` and its
+      `stopDrag` (`ONRELEASE` / `ONDRAGCOMPLETE`) calls `SetEnabled(true)`, and a quick click
+      arrives release-first, so the disable lands last. The plugin's workaround (re-enable on a
+      Logic tick when `resize.enabled` is false and `titleDrag.isClicked` is not true) is not yet
+      confirmed in the client.
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its

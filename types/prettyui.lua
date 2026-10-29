@@ -50,6 +50,7 @@ function WindowModule.new(parent, options) end
 ---@field viewport ui.Layer The layer the content scrolls in, inside the window's frame: its xyGlobal, width and height are the part of the content on show (in 1.2.0 less the scrollbar's 18 px while it shows). nil after Destroy()
 ---@field _onScrollWheel fun(component: ui.Component, delta: number): boolean Internal, not API: the window's wheel handler. Subscribe it to a row's ui.Hook.ONSCROLLWHEEL so the wheel over that row still scrolls the window; it scrolls by delta * 32 px while the content overflows and returns false if the position moved, else true
 ---@field _scroll { scrollY: number }? Internal, not API: the content's scroll controller, whose `scrollY` is the only way to read the scroll position. nil after Destroy()
+---@field titleDrag ui.Layer? Internal, not API: a titled window's title-bar drag layer, a sibling of root on the window's parent. A press on it raises root, and its isClicked reads true while the press lasts. nil for an untitled window and after Destroy()
 local Window = {}
 
 ---Scroll the content to `position` px from its top, clamped to 0..(content height - viewport height).

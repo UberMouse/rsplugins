@@ -3,6 +3,7 @@
 -- 2026-10-25 (docs/testing.md, fidelity ledger).
 
 local harness = require("tests.harness")
+local ui = require("tests.harness.api.ui")
 
 local MANIFEST = [[{ "name": "t", "version": "1", "contactEmailAddress": "t@example.com",
     "requiredDependencies": { "prettyui": 6398181 } }]]
@@ -143,6 +144,52 @@ describe("prettyui Window", function()
         assert.are.same({ 3836 - 300, 0 }, { r.x, r.y })
         -- The plugin reads the new spot back from root.
         assert.are.same({ 3536, 0 }, { h.env.win.root.x, h.env.win.root.y })
+    end)
+
+    it("raises its root on a title-bar press, which reads isClicked until the next tick", function()
+        local h = load(WINDOW .. [[
+other = ui.Layer.new(parent)
+]])
+        local root = h.instance.uiRoot
+        local win = h.env.win
+        local title = assert(win.titleDrag, "a titled window has a title-bar drag layer")
+        local rootState = ui.stateOf(win.root)
+        local titleState = assert(ui.stateOf(title), "a fake component")
+        -- On the window's parent, after the root; a layer made later is drawn over both.
+        assert.are.equal(root, titleState.parent)
+        assert.are.equal(ui.stateOf(h.env.other), root.children[#root.children])
+        assert.is_false(title.isClicked)
+        h.ui:dragTitle(win, 0, 0)
+        -- 1.2.0's ONCLICK there: the root to the front, then the drag layer over it.
+        assert.are.same(
+            { rootState, titleState },
+            { table.unpack(root.children, #root.children - 1) }
+        )
+        assert.is_true(title.isClicked)
+        h:advance(20)
+        assert.is_true(title.isClicked)
+        h:advance(20)
+        assert.is_false(title.isClicked)
+    end)
+
+    it("hides its title-bar drag layer on Close, and Show raises the root then it", function()
+        local h = load(WINDOW .. [[
+other = ui.Layer.new(parent)
+]])
+        local root = h.instance.uiRoot
+        local win = h.env.win
+        local title = win.titleDrag
+        win:Close()
+        assert.is_true(title.hidden)
+        win:Show()
+        assert.is_false(title.hidden)
+        assert.are.same(
+            { ui.stateOf(win.root), ui.stateOf(title) },
+            { table.unpack(root.children, #root.children - 1) }
+        )
+        win:Destroy()
+        assert.is_true(ui.stateOf(title).destroyed)
+        assert.is_nil(win.titleDrag)
     end)
 
     it("moves a child of its root in the same step", function()

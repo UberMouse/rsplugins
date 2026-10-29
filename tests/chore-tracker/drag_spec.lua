@@ -263,6 +263,104 @@ describe("chore-tracker grips", function()
     end)
 end)
 
+-- Drag `id`'s row down two rows by its grip and let go; it must land third in its period.
+---@param h table
+---@param id string
+local function dragDownTwo(h, id)
+    local x, y = grab(h, id)
+    assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
+    assert.is_true(h.ui:release())
+    assert.are.equal(id, stored(h)[3])
+end
+
+-- MoveToFront calls on each press target so far, by target.
+---@param h table
+---@return table<table, integer>
+local function raises(h)
+    local out = {}
+    for _, t in ipairs(targets(h)) do
+        out[t] = t.frontCalls
+    end
+    return out
+end
+
+-- PrettyUI raises the window over the targets on Show and on a title-bar press; a MoveToFront
+-- on a hidden target is lost, and raising a hovered one resets its hover (docs/api-concepts.md,
+-- "Pressing and dragging a plain `ui.Layer`").
+describe("chore-tracker grips over the window", function()
+    it("drag after the window is collapsed and expanded", function()
+        local h = ready()
+        h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+        h:advance(20)
+        h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+        h:advance(20)
+        dragDownTwo(h, "daily-challenge")
+    end)
+
+    it("drag again on the tick a press on the title bar ends", function()
+        local h = ready()
+        local win = window(h)
+        h.ui:dragTitle(win, -200, 40)
+        h:advance(20)
+        -- Still pressed: the window is over the targets.
+        local t = assert(targetOf(h, "daily-challenge"))
+        assert.matches("covered", select(2, h.ui:press(t)))
+        h:advance(20)
+        dragDownTwo(h, "daily-challenge")
+        -- A plain click on the title bar raises the window too.
+        h.ui:dragTitle(win, 0, 0)
+        h:advance(40)
+        dragDownTwo(h, "player-owned-ports")
+    end)
+
+    it("raise a target hidden during a title press as it scrolls back into view", function()
+        local h = ready()
+        local win = window(h)
+        h.ui:resize(win, 0, -150)
+        h:advance(20)
+        win:SetScrollPosition(rowY(h, "daily-challenge") + 6 + 8)
+        h:advance(20)
+        assert.is_nil(targetOf(h, "daily-challenge"))
+        h.ui:dragTitle(win, 0, 0)
+        h:advance(40)
+        win:SetScrollPosition(0)
+        h:advance(20)
+        dragDownTwo(h, "daily-challenge")
+    end)
+
+    it("raise a target only as it is shown: never while idle, scrolled or resized", function()
+        local h = ready()
+        local win = window(h)
+        h.ui:resize(win, 0, -150)
+        h:advance(20)
+        -- Run `act` and the ticks after it: a target is raised once if it went from hidden to
+        -- shown, else not at all.
+        local function step(act, ms)
+            local before, wasHidden = raises(h), {}
+            for _, t in ipairs(targets(h)) do
+                wasHidden[t] = t.hidden
+            end
+            act()
+            h:advance(ms)
+            for t, n in pairs(raises(h)) do
+                local shown = wasHidden[t] and not t.hidden
+                assert.are.equal(before[t] + (shown and 1 or 0), n)
+            end
+        end
+        step(function() end, 1000)
+        step(function()
+            h.ui:wheel(row(h, "Player Owned Farm").layer, 1)
+        end, 20)
+        step(function()
+            h.ui:resize(win, 40, 60)
+        end, 20)
+        step(function()
+            win:SetScrollPosition(0)
+        end, 20)
+        assert.is_true(#shownTargets(h) > 0)
+    end)
+end)
+
 describe("chore-tracker grip clicks", function()
     it("never ticks the row; a click on the rest of the row still does", function()
         local h = ready()

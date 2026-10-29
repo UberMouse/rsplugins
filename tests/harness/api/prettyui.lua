@@ -8,7 +8,8 @@
 -- Modelled: Window (titled, resizable, close button, AddText/AddTitle/AddCheckboxButton/
 -- AddDivider/AddSpriteButton, SetScrollPosition and the `_scroll.scrollY` it sets, the
 -- `content` layer for a plugin's own components and the `viewport` it scrolls in,
--- SetContentHeight and the wheel handler),
+-- SetContentHeight, the wheel handler, and the title-bar drag layer `titleDrag`'s stacking and
+-- `isClicked`),
 -- standalone Panel (AddSpriteButton, Alt-drag), SpriteButton and Tooltip.attach. Any other library member,
 -- method or option faults as unmocked; extend the fake, with a ledger row, when a plugin
 -- needs more.
@@ -731,7 +732,10 @@ local function windowClose(s)
     live(s)
     clearContext(s.tips, false)
     if s.onClose then s.onClose(s.proxy) end
-    if not s.destroyed then s.root.hidden = true end
+    if not s.destroyed then
+        s.root.hidden = true
+        if s.titleDrag then s.titleDrag.hidden = true end
+    end
 end
 
 local Window = strict.class("prettyui.Window instance", {
@@ -764,6 +768,13 @@ local Window = strict.class("prettyui.Window instance", {
             if s.destroyed then return nil end
             return { scrollY = s.scrollY }
         end,
+        -- 1.2.0's internal title-bar drag layer (a titled window's only), a sibling of the root
+        -- on the window's parent. Only its stacking, `hidden` and `isClicked` are modelled: its
+        -- rect is left 0x0 at the origin (`lands` models the title bar it covers), and it is
+        -- not one of the plugin's own layers, so it takes no pointer actions.
+        titleDrag = function(s)
+            return s.titleDrag
+        end,
     },
     methods = {
         SetSize = function(s, width, height)
@@ -778,10 +789,15 @@ local Window = strict.class("prettyui.Window instance", {
             windowScrollTo(s, position)
         end,
         SetContentHeight = windowSetContentHeight,
+        -- 1.2.0 raises the root, then the title-bar drag layer (src/window.lua, Show).
         Show = function(s)
             live(s)
             s.root.hidden = false
             s.root:MoveToFront()
+            if s.titleDrag then
+                s.titleDrag.hidden = false
+                s.titleDrag:MoveToFront()
+            end
         end,
         Close = windowClose,
         Destroy = function(s)
@@ -789,6 +805,10 @@ local Window = strict.class("prettyui.Window instance", {
             s.destroyed = true
             clearContext(s.tips, true)
             destroyTip(s.tip)
+            if s.titleDrag then
+                s.titleDrag:Destroy()
+                s.titleDrag = nil
+            end
             s.root:Destroy()
             s.root = nil
         end,
@@ -905,6 +925,10 @@ local WindowModule = module("Window", function(lib, parent, options)
         syncContent(s)
     end
     syncContent(s)
+    if s.title then
+        s.titleDrag, s.titleState = ui.create("Layer", ps)
+        s.titleState.isClicked = false
+    end
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
     s.closeButton:SetSize(CLOSE_SIZE, CLOSE_SIZE)
@@ -1137,13 +1161,21 @@ end
 
 -- Once per harness step, before Logic: a Window or Panel root moved by a bare root:SetPos
 -- goes back to its remembered position. The probe saw PrettyUI's drag bounds do this to a
--- Panel; when the client triggers it is unknown (docs/testing.md, fidelity ledger).
+-- Panel; when the client triggers it is unknown (docs/testing.md, fidelity ledger). And a
+-- title-bar press (h.ui:dragTitle) that has been held over one Logic tick ends.
 ---@param h table
 function M.step(h)
     local lib = h.instance and h.instance.alive and h.instance.prettyui
     if not lib then return end
     for _, r in ipairs(lib.records) do
         local s = r.s
+        if r.kind == "Window" and s.titleState and s.titleState.isClicked then
+            if s.titleHeldSteps >= 1 then
+                s.titleState.isClicked = false
+            else
+                s.titleHeldSteps = s.titleHeldSteps + 1
+            end
+        end
         if (r.kind == "Window" or r.kind == "Panel") and not gone(r) and s.remembered then
             local x, y = ui.pos(s.rootState)
             if x ~= s.remembered.x or y ~= s.remembered.y then
@@ -1602,7 +1634,11 @@ function Driver:click(target, value)
     error("can't click a " .. r.kind, 2)
 end
 
--- Drag a titled Window by its title bar by (dx, dy); it stays inside its parent.
+-- Press a titled Window's title bar and drag it by (dx, dy) (0, 0 for a click); it stays
+-- inside its parent. The press raises the root and then the title-bar drag layer, as 1.2.0's
+-- ONCLICK there does (src/window.lua, titleDrag). The press is held over the next Logic
+-- tick, with the drag layer's `isClicked` true, and ends before the one after, when it reads
+-- false again; the window moves at once.
 ---@param win table
 ---@param dx number
 ---@param dy number
@@ -1610,6 +1646,10 @@ function Driver:dragTitle(win, dx, dy)
     local s = self:record(win, "Window").s
     assert(s.title, "only a titled Window has a title bar to drag")
     assert(ui.visible(s.rootState), "the window is hidden")
+    s.root:MoveToFront()
+    s.titleDrag:MoveToFront()
+    s.titleState.isClicked = true
+    s.titleHeldSteps = 0
     local root = s.rootState
     local x, y = ui.pos(root)
     local nx = clamp(x + dx, 0, ui.width(root.parent) - ui.width(root))

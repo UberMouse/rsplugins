@@ -129,6 +129,30 @@ describe("fake ui components", function()
         assert.are.equal(ui.stateOf(b), rootState.children[1])
     end)
 
+    it("stay where they are on MoveToFront while hidden, and count the calls", function()
+        local _, rootState = ui.create("Component", nil)
+        local a = ui.create("Layer", rootState)
+        ui.create("Layer", rootState)
+        a.hidden = true
+        a:MoveToFront()
+        assert.are.equal(ui.stateOf(a), rootState.children[1])
+        a.hidden = false
+        a:MoveToFront()
+        assert.are.equal(ui.stateOf(a), rootState.children[2])
+        assert.are.equal(2, ui.stateOf(a).frontCalls)
+    end)
+
+    it("fault on isClicked, unless the fake models it", function()
+        local _, rootState = ui.create("Component", nil)
+        local layer = ui.create("Layer", rootState)
+        assert.matches(
+            "isClicked read before it was set",
+            harness.errorOf(function()
+                return layer.isClicked
+            end)
+        )
+    end)
+
     it("fault on SetPos's self-percentage arguments", function()
         local _, rootState = ui.create("Component", nil)
         local layer = ui.create("Layer", rootState)

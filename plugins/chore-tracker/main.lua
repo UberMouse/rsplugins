@@ -82,12 +82,15 @@
 -- window's content, at spots core/listlayout.lua works out, because PrettyUI 1.2.0's
 -- CheckboxButton can't show an icon, be recoloured or be retexted (only the Celebrations
 -- switches use it). Ticks, colours, counts and tooltips change in place; the window
--- is rebuilt only for a view switch, a login change or the clock starting or stopping. Three
+-- is rebuilt only for a view switch, a login change or the clock starting or stopping. Four
 -- reads of PrettyUI 1.2.0 state, each guarded so a version without it loses only that:
 -- `_scroll.scrollY`, to keep the scroll through such a rebuild (scrollPosition) and to put the
 -- grips' press targets over scrolled rows, the window's `_onScrollWheel`, handed to each row so
--- the wheel over a row still scrolls the window (wheelHandler), and the window's `viewport`,
--- where the grips' targets are placed from (without it, or the scroll, the grips don't drag).
+-- the wheel over a row still scrolls the window (wheelHandler), the window's `viewport`,
+-- where the grips' targets are placed from (without it, or the scroll, the grips don't drag),
+-- and its title-bar drag layer `titleDrag`, whose `isClicked` (read only, never subscribed)
+-- says when a press on the title bar ends, to bring the grips' targets back over the window
+-- that press raised (titlePressed; without it they stay under the window after one).
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -327,6 +330,23 @@ local function wheelHandler(w)
     return nil
 end
 
+-- Whether `w`'s title bar is pressed, as a function for grips.lua to call each Logic tick, or nil
+-- if that can't be read. It reads PrettyUI 1.2.0's internal title-bar drag layer, tried once
+-- here so that the per-tick read is a bare field read.
+---@param w prettyui.Window
+---@return (fun(): boolean)?
+local function titlePressed(w)
+    local title = w.titleDrag
+    if title == nil then return nil end
+    local ok, clicked = pcall(function()
+        return title.isClicked
+    end)
+    if not ok or type(clicked) ~= "boolean" then return nil end
+    return function()
+        return title.isClicked == true
+    end
+end
+
 -- The list: the settings button and any notice in PrettyUI's flow, then a heading per period
 -- and a hand-built row per picked chore below them, at the spots core/listlayout.lua gives.
 ---@param w prettyui.Window
@@ -377,6 +397,7 @@ local function buildList(w, openSettings)
                 w:SetScrollPosition(y)
             end,
             wheel = wheel,
+            titlePressed = titlePressed(w),
             onDrop = onDrop,
         })
     end
@@ -582,9 +603,9 @@ expand = function()
     -- A bare SetPos is snapped back by PrettyUI; SetSize after it makes the spot stick.
     r:SetPos(wx, wy)
     win:SetSize(r.width, r.height)
+    -- Show brings the window to the front; followGrips below shows the grips' targets, which
+    -- brings them back over it.
     win:Show()
-    -- Show brings the window to the front, over the grips' targets.
-    grips.raise()
     collapsed.root.hidden = true
     -- An earlier panel still waiting for the tick is past its click, so it can go now.
     if retiring then retiring:Destroy() end

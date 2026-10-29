@@ -330,6 +330,9 @@ local FIELDS = {
     isMouseOver = function(s)
         return s.mouseOver
     end,
+    -- Only the fake PrettyUI window's title-bar drag layer models it (api/prettyui.lua); on
+    -- any other component it faults, as when it reads true there is unprobed.
+    isClicked = storedField("isClicked"),
     x = function(s)
         return (M.pos(s))
     end,
@@ -386,9 +389,13 @@ local METHODS = {
         end
         s.pw, s.ph, s.rw, s.rh = w, h, rw or 0, rh or 0
     end,
-    -- Last among its siblings draws on top (ui/component.html#movetofront).
+    -- Last among its siblings draws on top (ui/component.html#movetofront). On a component
+    -- that is itself hidden it does nothing: in the client such a raise left it under a window
+    -- once it was shown again (grip probe, 2026-10-29, docs/api-concepts.md). A shown one
+    -- under a hidden ancestor is unprobed and raised as usual.
     MoveToFront = function(s)
-        if not s.parent then return end
+        s.frontCalls = s.frontCalls + 1
+        if not s.parent or s.hidden then return end
         local siblings = s.parent.children
         for i, child in ipairs(siblings) do
             if child == s then
@@ -593,6 +600,7 @@ function M.create(kind, parent)
         content = kind == "Text" and "" or nil,
         hooks = {}, -- ui.Hook value -> listeners, in subscription order
         mouseOver = false,
+        frontCalls = 0, -- MoveToFront calls, effective or not, for specs that count raises
         objectID = kind == "Sprite" and -1 or nil,
     }
     if parent then parent.children[#parent.children + 1] = s end

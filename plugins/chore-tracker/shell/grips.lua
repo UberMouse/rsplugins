@@ -14,6 +14,12 @@
 -- follow() re-docks the targets every Logic tick so they track the window being moved, resized
 -- or scrolled.
 --
+-- PrettyUI raises the window over the targets when it is shown and when its title bar is
+-- pressed. A MoveToFront on a hidden layer is lost, and one on a layer under the pointer
+-- resets its hover, so raising them every tick broke the grips (docs/api-concepts.md). So a
+-- target is raised as it is shown, and the shown ones once more on the tick a title-bar press
+-- ends.
+--
 -- A held press gets ONHOLD every Logic tick, even with the pointer still (docs/api-concepts.md).
 -- A drag that goes DRAG_LOST_TICKS without one has lost its release (the pointer leaving the
 -- client window ends a drag, docs/api-concepts.md) and is dropped as a release would be: left
@@ -47,6 +53,8 @@ local DRAG_LOST_TICKS = 10
 ---@field scrollY fun(): number? how far the content is scrolled, or nil if unreadable
 ---@field scrollTo fun(y: number) scroll the content (the window clamps it)
 ---@field wheel ChoreWheelHandler? the window's wheel handler, so the wheel over a grip scrolls
+---@field titlePressed (fun(): boolean)? whether the window's title bar is pressed; without it the
+--- targets stay under the window after a title-bar press
 ---@field onDrop fun(id: string, slot: integer) a row was dropped at a new place in its period
 
 ---@class ChoreGripDrag
@@ -73,6 +81,8 @@ local pressed = nil ---@type { grip: ChoreGrip, ticks: integer }?
 local shown = false
 -- Whether the last dock hid every target but a dragging one, so a closed window needs no more.
 local allHidden = false
+-- Whether the window's title bar was pressed at the last follow.
+local titleHeld = false
 
 -- The viewport's spot and size in plugin-layer coordinates, and the scroll position; nil when
 -- the scroll can't be read. Rows are placed from these, not from their own xyGlobal, which
@@ -101,6 +111,8 @@ local function place(grip, x, y, hide)
     if hide ~= grip.hidden then
         grip.hidden = hide
         grip.target.hidden = hide
+        -- Over whatever was raised while it was hidden, which a raise then would have missed.
+        if not hide then grip.target:MoveToFront() end
     end
     if not hide and (x ~= grip.x or y ~= grip.y) then
         grip.x, grip.y = x, y
@@ -277,12 +289,13 @@ function M.clear()
     for _, grip in ipairs(grips) do
         grip.target:Destroy()
     end
-    grips, sections, drag, pressed, ctx, shown, allHidden = {}, {}, nil, nil, nil, false, false
+    grips, sections, drag, pressed, ctx = {}, {}, nil, nil, nil
+    shown, allHidden, titleHeld = false, false, false
 end
 
--- Keep the targets over their grips, and drop a drag whose release never came or whose window
--- closed (its stretched target would take clicks). Call every Logic tick, `open` false while
--- the window is closed.
+-- Keep the targets over their grips and in front of the window, and drop a drag whose release
+-- never came or whose window closed (its stretched target would take clicks). Call every Logic
+-- tick, `open` false while the window is closed.
 ---@param open boolean
 function M.follow(open)
     if pressed and not drag then
@@ -294,14 +307,18 @@ function M.follow(open)
         drag.idle = drag.idle + 1
         if not open or drag.idle > DRAG_LOST_TICKS then drop() end
     end
-    if ctx and (open or not allHidden) then dock() end
-end
-
--- Bring the targets back over the window, which a Show brings to the front.
-function M.raise()
-    for _, grip in ipairs(grips) do
-        grip.target:MoveToFront()
+    if ctx and ctx.titlePressed then
+        local held = ctx.titlePressed()
+        -- The press raised the window; bring the shown targets back over it. Hidden ones are
+        -- raised as they are shown.
+        if titleHeld and not held then
+            for _, grip in ipairs(grips) do
+                if not grip.hidden then grip.target:MoveToFront() end
+            end
+        end
+        titleHeld = held
     end
+    if ctx and (open or not allHidden) then dock() end
 end
 
 return M

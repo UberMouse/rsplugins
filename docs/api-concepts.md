@@ -175,6 +175,25 @@ The official reference annotates Lua with pseudo-types:
     Dragging the pointer out of the client window with the button held ends the drag (the row
     dropped where it was shown). Whether leaving the client sends `ONRELEASE` or only stops
     `ONHOLD` was not determined; the plugin drops a drag after 10 Logic ticks without `ONHOLD`.
+  - **Keeping plugin-layer press targets over a PrettyUI window** (chore-tracker grips, beta
+    client, dev bridge + user, 2026-10-29).
+    - After a collapse and expand the 15 shown targets were docked correctly (16x16 at the
+      grips, `hidden` false) yet took no pointer. The expand had called `MoveToFront()` on each
+      target while they were still hidden from the collapse, and unhid them after. Calling
+      `MoveToFront()` on the now-shown targets from the bridge made them work again: **a
+      `MoveToFront()` on a hidden component has no lasting effect on the stacking.**
+    - Pressing or dragging the window's title bar buried the targets again: PrettyUI 1.2.0's
+      title-bar `ONCLICK` does `self.root:MoveToFront()`. PrettyUI raises the window root only
+      on creation, `Show()` and that title-bar `ONCLICK` (`src/window.lua`); resize and
+      tooltips raise only their own layers.
+    - Raising every shown target every Logic tick broke the grips: the cursor flickered between
+      PUSH and the hand about once a second and drags failed. Raising every 25 ticks, skipped
+      while any target was hovered or clicked, worked without flicker but sometimes delayed the
+      PUSH cursor on hover (a raise as the pointer arrived). So **`MoveToFront()` on a layer
+      resets its hover state**.
+    - Watching the title-bar layer's `isClicked` (PrettyUI's internal `win.titleDrag`) each
+      Logic tick and raising the shown targets once when it went true → false worked: grips
+      usable right after a title press, no hover delay (user-confirmed).
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its

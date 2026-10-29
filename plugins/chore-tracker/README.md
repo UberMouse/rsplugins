@@ -45,9 +45,9 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Collapsing it.** The menu button at the top-right corner of the window, where
   a close button usually sits, folds the window into just that button, at the same spot. Click
   the button to open the window again: it opens leftwards and down from the button.
-- **Moving it.** Drag the window by its title bar, and resize it from its edges or corners, which show a resize cursor when you hover them.
-  While it is collapsed, hold **Alt** and drag the button to move it. Alt-dragging only works
-  with the console closed.
+- **Moving it.** Drag the window by its title bar, and resize it from its edges or corners,
+  which show a resize cursor when you hover them. While it is collapsed, hold **Alt** and drag
+  the button to move it. Alt-dragging only works with the console closed.
 
 - **Celebrations.** When the plugin ticks a chore you picked, a small popup, "CHORE COMPLETE"
   with the chore's name, shows upper-middle of the screen with a short jingle. When your picked
@@ -161,12 +161,7 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 ## Requirements
 
 - **PrettyUI** (mod.io 6398181), the interface library the window is built with. It is a
-  required dependency: install it too. The plugin reads two of PrettyUI 1.2.0's internal
-  fields, as PrettyUI has no public way to do either: the window's scroll position
-  (`_scroll.scrollY`), to keep the list where it was when the window redraws, and the window's
-  mouse-wheel handler (`_onScrollWheel`), so the wheel scrolls the list over a chore's row. A
-  PrettyUI version without them loses only that: the list starts at the top on a redraw, or
-  the wheel doesn't scroll it while the pointer is over a row.
+  required dependency: install it too.
 - **No permissions.** The submitted plugin requests none; the development checkout's manifest
   asks for `httpAccess` only for the dev log tee, which is stripped before submitting. The plugin
   reads the game clock, your own character's display name and position, your backpack, the stock

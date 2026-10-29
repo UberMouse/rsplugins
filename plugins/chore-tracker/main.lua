@@ -82,20 +82,20 @@
 -- window's content, at spots core/listlayout.lua works out, because PrettyUI 1.2.0's
 -- CheckboxButton can't show an icon, be recoloured or be retexted (only the Celebrations
 -- switches use it). Ticks, colours, counts and tooltips change in place; the window
--- is rebuilt only for a view switch, a login change or the clock starting or stopping. The
--- uses of PrettyUI 1.2.0 state and internals, each guarded so a version without it loses only
--- that: `_scroll.scrollY`, to keep the scroll through such a rebuild (scrollPosition) and to
--- put the grips' press targets over scrolled rows, the window's `_onScrollWheel`, handed to each row so
--- the wheel over a row still scrolls the window (wheelHandler), the window's `viewport`,
--- where the grips' targets are placed from (without it, or the scroll, the grips don't drag),
--- and its `_RegisterOverlay` / `_UnregisterOverlay`, to register a hidden sentinel layer whose
--- layout callback says when the window laid out its overlays, which it does at the end of
--- every title-bar press, on each show, and on every frame a resize or a scrollbar drag moves
--- and every scroll step, so the grips' targets are brought back over a window that may have
--- been raised once such a burst of syncs ends (overlaySync; without it they stay under the
--- window after a title-bar press or a resize), and its `resize.handles`, the layers of the
--- window's edges and corners, which get resize cursors (without them the window works but
--- shows none).
+-- is rebuilt only for a view switch, a login change or the clock starting or stopping.
+--
+-- PrettyUI 1.2.0 state and internals used, each guarded so a version without it loses only
+-- that:
+-- - `_scroll.scrollY`: keeps the scroll through a rebuild (scrollPosition) and places the
+--   grips' press targets over scrolled rows.
+-- - `_onScrollWheel`: lets the wheel over a row scroll the window (wheelHandler).
+-- - `viewport`: where the grips' targets are placed from; without it, or the scroll, the
+--   grips don't drag.
+-- - `_RegisterOverlay` / `_UnregisterOverlay`: to hear when the window lays out its overlays,
+--   so the grips' targets can be raised back over it (overlaySync); without them the targets
+--   stay under the window after a title-bar press or a resize.
+-- - `resize.handles`: resize cursors on the window's edges and corners; without them the
+--   window shows none.
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -340,9 +340,9 @@ end
 -- is that callback, and returns the function that unregisters and destroys it. That must run
 -- before `w` is destroyed: 1.2.0 checks only that an overlay's interface exists, which the
 -- plugin layer's always does, so it would set `hidden` on a destroyed sentinel. The sentinel
--- is never shown (PrettyUI hides it on each sync) and lets clicks through. nil for a version
--- without those internals; the registering function returns nil if the call fails, as one
--- whose internals take other arguments might.
+-- is never shown (PrettyUI hides it on each sync) and lets clicks through. Returns nil for a
+-- version without those internals; the function it returns gives nil if registering fails,
+-- as on one whose internals take other arguments.
 ---@param w prettyui.Window
 ---@return (fun(onSync: fun()): fun()?)?
 local function overlaySync(w)
@@ -363,8 +363,9 @@ local function overlaySync(w)
             return nil
         end
         return function()
-            pcall(w._UnregisterOverlay, w, sentinel)
-            sentinel:Destroy()
+            -- If it is still registered, PrettyUI would set `hidden` on it after a Destroy;
+            -- left alive it stays hidden, 1x1 and click-through.
+            if pcall(w._UnregisterOverlay, w, sentinel) then sentinel:Destroy() end
         end
     end
 end
@@ -525,9 +526,9 @@ local RESIZE_CURSORS = {
     w = id.Cursor.TOPLEVEL_V2_MOVE,
 }
 
--- Show the resize cursors on `w`'s handles, set the way PrettyUI's own cursor helper does.
--- PrettyUI only moves, sizes and hides the handles afterwards, so once per window is enough.
--- A PrettyUI without `resize.handles` (or a handle) is skipped.
+-- Set the resize cursors on `w`'s eight resize handles with rows.setCursor. PrettyUI only
+-- moves, sizes and hides the handles afterwards, so once per window is enough. A PrettyUI
+-- without `resize.handles` (or a handle) is skipped.
 ---@param w table the PrettyUI window
 local function setResizeCursors(w)
     local resize = w.resize
@@ -535,11 +536,9 @@ local function setResizeCursors(w)
     if type(handles) ~= "table" then return end
     for key, cursor in pairs(RESIZE_CURSORS) do
         local handle = handles[key]
-        if handle then
-            handle.opConfig:ClearOpCursors()
-            handle.cursorConfig.mouseOverCursor = cursor
-            handle.opConfig:SetOpCursor(0, cursor)
-        end
+        -- pcall: a handle that isn't a layer, as in another PrettyUI version, costs only its
+        -- own cursor, not the rest of the window's build.
+        if handle then pcall(rows.setCursor, handle, cursor) end
     end
 end
 

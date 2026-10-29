@@ -850,7 +850,7 @@ local RESIZE_HANDLES = { "n", "s", "e", "w", "nw", "ne", "sw", "se" }
 -- Stand-ins for 1.2.0's `resize` controller and its `handles` table. Stricter than 1.2.0's plain
 -- table on purpose: an unknown key such as `resize.handle` or `handles.nn` faults, not reads nil.
 -- `state.handles` is set for every resizable window; only the `resize` getter's `handles` field
--- reads nil under `resizeInternals("noHandles")`.
+-- reads nil under `resizeInternals("noHandles")`, and its `n` under `"noN"`.
 local ResizeHandles = strict.class("prettyui.Window resize handles", {
     undeclared = true,
     fields = (function()
@@ -911,12 +911,20 @@ local Window = strict.class("prettyui.Window instance", {
         end,
         -- 1.2.0's internal resize controller of a resizable window: only its `handles` are
         -- modelled, eight bare layers on the window's parent. A window made after
-        -- `h.ui:resizeInternals("none" or "noHandles")` reads it as nil (or without handles).
+        -- `h.ui:resizeInternals("none" or "noHandles")` reads it as nil (or without handles),
+        -- and after `"noN"` its `n` handle reads nil.
         resize = function(s)
             if s.destroyed or not s.handles or s.resizeMode == "none" then return nil end
-            return ResizeController.new({
-                handles = s.resizeMode ~= "noHandles" and s.handles or nil,
-            })
+            local handles = s.handles
+            if s.resizeMode == "noHandles" then
+                handles = nil
+            elseif s.resizeMode == "noN" then
+                handles = {}
+                for key, handle in pairs(s.handles) do
+                    if key ~= "n" then handles[key] = handle end
+                end
+            end
+            return ResizeController.new({ handles = handles })
         end,
         _RegisterOverlay = function(s)
             return overlayMethod(s, "_RegisterOverlay", registerOverlay)
@@ -1380,9 +1388,9 @@ function Driver:overlayInternals(on)
 end
 
 -- Make every Window made from now on lack 1.2.0's internal `resize` ("none") or its `handles`
--- ("noHandles"), as on a PrettyUI version that lacks them; "all" (the default) restores them.
--- Set it before `h:load()` for a window made at load.
----@param mode "all"|"none"|"noHandles"
+-- ("noHandles") or its `n` handle ("noN"), as on a PrettyUI version that lacks them; "all"
+-- (the default) restores them. Set it before `h:load()` for a window made at load.
+---@param mode "all"|"none"|"noHandles"|"noN"
 function Driver:resizeInternals(mode)
     self.resizeMode = mode
 end

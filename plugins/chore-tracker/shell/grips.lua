@@ -15,13 +15,10 @@
 -- or scrolled.
 --
 -- PrettyUI raises the window over the targets when it is shown, when its title bar is pressed
--- and when a resize begins. A MoveToFront on a hidden layer is lost, and one on a layer under
--- the pointer resets its hover, so raising them every tick broke the grips
--- (docs/api-concepts.md). So a target is raised as it is shown, and the shown ones once more
--- after the window lays out its overlays (watchSync). PrettyUI does that at the end of every
--- title-bar press, quick click or drag, on each show, and on every frame a resize or a
--- scrollbar drag moves and every scroll step, so a resize or a wheel spin syncs tick after tick:
--- the raise waits for such a burst to end, on the first Logic tick no sync came before.
+-- and when a resize begins. A MoveToFront on a hidden layer is lost and one on a layer under
+-- the pointer resets its hover (docs/api-concepts.md), so a target is raised as it is shown,
+-- and the shown ones again once the window stops syncing its overlays (watchSync): a resize or
+-- wheel spin syncs every tick, so the raise waits for the first Logic tick with no sync.
 --
 -- A held press gets ONHOLD every Logic tick, even with the pointer still (docs/api-concepts.md).
 -- A drag that goes DRAG_LOST_TICKS without one has lost its release (the pointer leaving the
@@ -87,10 +84,11 @@ local shown = false
 local allHidden = false
 -- Stops the watchSync callback; nil when there is none.
 local stopWatch = nil ---@type fun()?
--- Whether the window has laid out its overlays since the last raise, and so may be over the
--- targets.
+-- A raise is owed: a sync came since the last raise. Cleared when the raise is done or the
+-- window is closed.
 local synced = false
--- Whether it has done so since the last follow: the burst of syncs isn't over yet.
+-- A sync came since the last follow(), which clears it; while true the burst is still going
+-- and the raise waits.
 local syncedSinceFollow = false
 
 -- The viewport's spot and size in plugin-layer coordinates, and the scroll position; nil when
@@ -265,9 +263,7 @@ function M.build(opts)
             target:SetSize(GRIP_SIZE, GRIP_SIZE)
             target.clickthrough = false
             target.hidden = true
-            -- Set the way shell/rows.lua sets the rows' cursor.
-            target.cursorConfig.mouseOverCursor = GRIP_CURSOR
-            target.opConfig:SetOpCursor(0, GRIP_CURSOR)
+            rows.setCursor(target, GRIP_CURSOR)
             local grip = ---@type ChoreGrip
                 { id = rowId, period = section.period, target = target, hidden = true }
             target:Subscribe(ui.Hook.ONCLICK, function()
@@ -293,9 +289,10 @@ function M.build(opts)
     end
     if opts.watchSync then
         stopWatch = opts.watchSync(function()
-            -- During a drag only its own scrolling (or the wheel) can sync: the stretched
-            -- target takes every press, so nothing that raises the window can be reached, and
-            -- a raise after the drop would reset the hover of the target under the pointer.
+            -- During a drag only its own scrolling (or the wheel) can sync, since the
+            -- stretched target takes every press. Such a sync is dropped rather than queue a
+            -- raise onto the target under the pointer right after the drop; a raise already
+            -- pending from before the drag still runs once the drag ends.
             if not drag then
                 synced, syncedSinceFollow = true, true
             end

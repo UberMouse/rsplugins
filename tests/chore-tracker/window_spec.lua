@@ -534,4 +534,19 @@ describe("chore-tracker resize cursors", function()
             assert.is_true(h.ui:layout(window(h)).visible)
         end
     end)
+
+    it("skip only a missing handle", function()
+        local h = loaded({ load = false })
+        h.ui:resizeInternals("noN")
+        h:load()
+        assert.is_true(h.ui:layout(window(h)).visible)
+        local handles = window(h).resize.handles
+        assert.is_nil(handles.n)
+        for key, cursor in pairs(EXPECTED) do
+            if key ~= "n" then
+                assert.are.equal(cursor, handles[key].cursorConfig.mouseOverCursor, key)
+                assert.are.equal(cursor, handles[key].opConfig:GetOpCursor(0), key)
+            end
+        end
+    end)
 end)

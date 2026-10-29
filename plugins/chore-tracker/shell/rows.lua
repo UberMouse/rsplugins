@@ -120,6 +120,15 @@ function M.unhover(row)
     drawBox(row)
 end
 
+-- Show `cursor` while the mouse is over `layer`. Both settings are made: whether
+-- mouseOverCursor alone is enough is unsettled (docs/api-concepts.md).
+---@param layer ui.Layer
+---@param cursor integer an id.Cursor member
+function M.setCursor(layer, cursor)
+    layer.cursorConfig.mouseOverCursor = cursor
+    layer.opConfig:SetOpCursor(0, cursor)
+end
+
 -- Make a row at content height `y` under `content`, showing `icon` (nothing if its name doesn't
 -- resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick click can
 -- arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
@@ -137,10 +146,7 @@ function M.new(content, y, icon, onClick, opts)
     layer:SetPos(PADDING, y)
     layer:SetSize(-PADDING * 2, ROW_HEIGHT, 1.0, 0)
     layer.clickthrough = false
-    -- Set the way PrettyUI 1.2.0's src/core/cursor.lua does; whether the first alone would do
-    -- is unprobed.
-    layer.cursorConfig.mouseOverCursor = ROW_CURSOR
-    layer.opConfig:SetOpCursor(0, ROW_CURSOR)
+    M.setCursor(layer, ROW_CURSOR)
     layer:Subscribe(ui.Hook.ONCLICK, function()
         onClick()
     end)

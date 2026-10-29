@@ -790,6 +790,60 @@ local function windowClose(s)
     end
 end
 
+-- 1.2.0's internal overlay registry (src/window.lua): `component` is synced with the window
+-- (syncOverlays) until unregistered or the window is destroyed. Registering one again
+-- replaces its callbacks.
+---@param s table
+---@param component any
+---@param isVisible any
+---@param layout any
+local function registerOverlay(s, component, isVisible, layout)
+    live(s)
+    if ui.stateOf(component) == nil then
+        strict.fault("prettyui Window:_RegisterOverlay(component, ...) needs a component")
+    end
+    for _, fn in ipairs({ isVisible or false, layout or false }) do
+        if fn and type(fn) ~= "function" then
+            strict.fault("prettyui Window:_RegisterOverlay: isVisible and layout are functions")
+        end
+    end
+    local entry = { component = component, isVisible = isVisible, layout = layout }
+    for i, overlay in ipairs(s.overlays) do
+        if overlay.component == component then
+            s.overlays[i] = entry
+            return
+        end
+    end
+    s.overlays[#s.overlays + 1] = entry
+end
+
+---@param s table
+---@param component any
+local function unregisterOverlay(s, component)
+    for i, overlay in ipairs(s.overlays) do
+        if overlay.component == component then
+            table.remove(s.overlays, i)
+            return
+        end
+    end
+end
+
+-- An overlay-registry method served as a field, so a window made after
+-- `h.ui:overlayInternals(false)` reads it as nil, standing in for a PrettyUI without it.
+---@param s table
+---@param name string
+---@param fn fun(s: table, ...)
+---@return function?
+local function overlayMethod(s, name, fn)
+    if s.noOverlayInternals then return nil end
+    return function(self, ...)
+        if self ~= s.proxy then
+            strict.fault("prettyui Window." .. name .. " is a method: call it with ':'")
+        end
+        fn(s, ...)
+    end
+end
+
 local Window = strict.class("prettyui.Window instance", {
     undeclared = true,
     fields = {
@@ -827,6 +881,12 @@ local Window = strict.class("prettyui.Window instance", {
         titleDrag = function(s)
             return s.titleDrag
         end,
+        _RegisterOverlay = function(s)
+            return overlayMethod(s, "_RegisterOverlay", registerOverlay)
+        end,
+        _UnregisterOverlay = function(s)
+            return overlayMethod(s, "_UnregisterOverlay", unregisterOverlay)
+        end,
     },
     methods = {
         SetSize = function(s, width, height)
@@ -846,38 +906,6 @@ local Window = strict.class("prettyui.Window instance", {
             windowShow(s)
         end,
         Close = windowClose,
-        -- 1.2.0's internal overlay registry (src/window.lua): `component` is synced with the
-        -- window (syncOverlays) until unregistered or the window is destroyed. Registering
-        -- one again replaces its callbacks.
-        _RegisterOverlay = function(s, component, isVisible, layout)
-            live(s)
-            if ui.stateOf(component) == nil then
-                strict.fault("prettyui Window:_RegisterOverlay(component, ...) needs a component")
-            end
-            for _, fn in ipairs({ isVisible or false, layout or false }) do
-                if fn and type(fn) ~= "function" then
-                    strict.fault(
-                        "prettyui Window:_RegisterOverlay: isVisible and layout are functions"
-                    )
-                end
-            end
-            local entry = { component = component, isVisible = isVisible, layout = layout }
-            for i, overlay in ipairs(s.overlays) do
-                if overlay.component == component then
-                    s.overlays[i] = entry
-                    return
-                end
-            end
-            s.overlays[#s.overlays + 1] = entry
-        end,
-        _UnregisterOverlay = function(s, component)
-            for i, overlay in ipairs(s.overlays) do
-                if overlay.component == component then
-                    table.remove(s.overlays, i)
-                    return
-                end
-            end
-        end,
         -- 1.2.0 ends any title-bar press and syncs the overlays hidden before tearing down,
         -- then forgets them (src/window.lua, Destroy).
         Destroy = function(s)
@@ -1009,6 +1037,7 @@ local WindowModule = module("Window", function(lib, parent, options)
     end
     syncContent(s)
     s.overlays = {}
+    s.noOverlayInternals = lib.h.ui.noOverlayInternals
     if s.title then s.titleDrag = ui.create("Layer", ps) end
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
@@ -1268,7 +1297,7 @@ Driver.__index = Driver
 ---@param h table
 ---@return table
 function M.driver(h)
-    return setmetatable({ h = h, altHeld = false }, Driver)
+    return setmetatable({ h = h, altHeld = false, noOverlayInternals = false }, Driver)
 end
 
 ---@return table lib
@@ -1287,6 +1316,25 @@ function Driver:popups()
     local out = {}
     for _, r in ipairs(self:lib().records) do
         if r.kind == "AchievementPopup" then out[#out + 1] = r.s end
+    end
+    return out
+end
+
+-- Make every Window made from now on without (false) or with (true, the default) 1.2.0's
+-- internal `_RegisterOverlay` and `_UnregisterOverlay`: without, they read nil, as on a
+-- PrettyUI version that lacks them. Set it before `h:load()` for a window made at load.
+---@param on boolean
+function Driver:overlayInternals(on)
+    self.noOverlayInternals = not on
+end
+
+-- The components registered as a Window's overlays, in the order registered.
+---@param win table
+---@return table[]
+function Driver:overlays(win)
+    local out = {}
+    for i, overlay in ipairs(self:record(win, "Window").s.overlays) do
+        out[i] = overlay.component
     end
     return out
 end
@@ -1759,16 +1807,21 @@ end
 
 -- Drag a resizable Window's bottom-right corner by (dw, dh): clamped to its min/max and to
 -- the parent's edge. The press ends any title-bar press and shows the window (1.2.0's
--- Resize onBegin, src/window.lua), which raises its root; each move sets its size.
+-- Resize onBegin, src/window.lua), which raises its root; each move sets its size, which
+-- syncs the overlays. With `held`, it is a further move of a resize already pressed (one per
+-- Logic tick a held press gets, with `h:advance(20)` between): no press, so no Show.
 ---@param win table
 ---@param dw number
 ---@param dh number
-function Driver:resize(win, dw, dh)
+---@param held boolean?
+function Driver:resize(win, dw, dh, held)
     local s = self:record(win, "Window").s
     assert(s.resizable, "the window isn't resizable")
     assert(ui.visible(s.rootState), "the window is hidden")
-    stopTitleDrag(s)
-    windowShow(s)
+    if not held then
+        stopTitleDrag(s)
+        windowShow(s)
+    end
     local root = s.rootState
     local function axis(pos, size, delta, extent, minimum, maximum)
         local limit = math.max(minimum, math.min(maximum or math.huge, extent))

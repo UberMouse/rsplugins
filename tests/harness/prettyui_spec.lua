@@ -266,6 +266,38 @@ win:_RegisterOverlay(overlay, function() return visible end, function() syncs = 
         end
     )
 
+    it("syncs on each move of a held resize, without showing the window again", function()
+        local h = load(OVERLAY)
+        local win = h.env.win
+        h.ui:resize(win, 10, 10)
+        local syncs, raised = h.env.syncs, ui.stateOf(win.root).frontCalls
+        h.ui:resize(win, 10, 10, true)
+        -- 1.2.0's SetSize: the scroll's sync, then its own.
+        assert.are.equal(syncs + 2, h.env.syncs)
+        assert.are.equal(raised, ui.stateOf(win.root).frontCalls)
+        assert.are.equal(320, h.ui:layout(win.root).width)
+    end)
+
+    it(
+        "lists the overlays registered, and makes windows without the internals on request",
+        function()
+            local h = load(OVERLAY)
+            local win, prettyui, parent = h.env.win, h.env.prettyui, h.env.parent
+            assert.are.same({ h.env.overlay }, h.ui:overlays(win))
+            h.ui:overlayInternals(false)
+            local bare = prettyui.Window.new(parent, { title = "Bare" })
+            assert.is_nil(bare._RegisterOverlay)
+            assert.is_nil(bare._UnregisterOverlay)
+            -- A window made before keeps them.
+            assert.are.equal("function", type(win._RegisterOverlay))
+            h.ui:overlayInternals(true)
+            assert.are.equal(
+                "function",
+                type(prettyui.Window.new(parent, { title = "Again" })._RegisterOverlay)
+            )
+        end
+    )
+
     it(
         "hides its overlays on Close without laying them out, beyond its title press ending",
         function()

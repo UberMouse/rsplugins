@@ -90,8 +90,9 @@
 -- where the grips' targets are placed from (without it, or the scroll, the grips don't drag),
 -- and its `_RegisterOverlay` / `_UnregisterOverlay`, to register a hidden sentinel layer whose
 -- layout callback says when the window laid out its overlays, which it does at the end of
--- every title-bar press and on each show, scroll and resize, so the grips' targets are brought
--- back over a window that may have been raised (overlaySync; without it they stay under the
+-- every title-bar press, on each show, and on every frame a resize or a scrollbar drag moves
+-- and every scroll step, so the grips' targets are brought back over a window that may have
+-- been raised once such a burst of syncs ends (overlaySync; without it they stay under the
 -- window after a title-bar press or a resize).
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
@@ -338,9 +339,10 @@ end
 -- before `w` is destroyed: 1.2.0 checks only that an overlay's interface exists, which the
 -- plugin layer's always does, so it would set `hidden` on a destroyed sentinel. The sentinel
 -- is never shown (PrettyUI hides it on each sync) and lets clicks through. nil for a version
--- without those internals.
+-- without those internals; the registering function returns nil if the call fails, as one
+-- whose internals take other arguments might.
 ---@param w prettyui.Window
----@return (fun(onSync: fun()): fun())?
+---@return (fun(onSync: fun()): fun()?)?
 local function overlaySync(w)
     if type(w._RegisterOverlay) ~= "function" or type(w._UnregisterOverlay) ~= "function" then
         return nil
@@ -351,11 +353,15 @@ local function overlaySync(w)
         sentinel:SetSize(1, 1)
         sentinel.clickthrough = true
         sentinel.hidden = true
-        w:_RegisterOverlay(sentinel, function()
+        local ok = pcall(w._RegisterOverlay, w, sentinel, function()
             return false
         end, onSync)
+        if not ok then
+            sentinel:Destroy()
+            return nil
+        end
         return function()
-            w:_UnregisterOverlay(sentinel)
+            pcall(w._UnregisterOverlay, w, sentinel)
             sentinel:Destroy()
         end
     end

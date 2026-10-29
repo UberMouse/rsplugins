@@ -17,9 +17,11 @@
 -- PrettyUI raises the window over the targets when it is shown, when its title bar is pressed
 -- and when a resize begins. A MoveToFront on a hidden layer is lost, and one on a layer under
 -- the pointer resets its hover, so raising them every tick broke the grips
--- (docs/api-concepts.md). So a target is raised as it is shown, and the shown ones once more on
--- the Logic tick after the window lays out its overlays (watchSync), which PrettyUI does at the
--- end of every title-bar press, quick click or drag, and on each show, scroll and resize.
+-- (docs/api-concepts.md). So a target is raised as it is shown, and the shown ones once more
+-- after the window lays out its overlays (watchSync). PrettyUI does that at the end of every
+-- title-bar press, quick click or drag, on each show, and on every frame a resize or a
+-- scrollbar drag moves and every scroll step, so a resize or a wheel spin syncs tick after tick:
+-- the raise waits for such a burst to end, on the first Logic tick no sync came before.
 --
 -- A held press gets ONHOLD every Logic tick, even with the pointer still (docs/api-concepts.md).
 -- A drag that goes DRAG_LOST_TICKS without one has lost its release (the pointer leaving the
@@ -54,9 +56,9 @@ local DRAG_LOST_TICKS = 10
 ---@field scrollY fun(): number? how far the content is scrolled, or nil if unreadable
 ---@field scrollTo fun(y: number) scroll the content (the window clamps it)
 ---@field wheel ChoreWheelHandler? the window's wheel handler, so the wheel over a grip scrolls
----@field watchSync (fun(onSync: fun()): fun())? have onSync called each time the window lays out
---- its overlays; returns the function that stops it. Without it the targets stay under the
---- window after a title-bar press or a resize
+---@field watchSync (fun(onSync: fun()): fun()?)? have onSync called each time the window lays out
+--- its overlays; returns the function that stops it, or nil if it couldn't start. Without it
+--- the targets stay under the window after a title-bar press or a resize
 ---@field onDrop fun(id: string, slot: integer) a row was dropped at a new place in its period
 
 ---@class ChoreGripDrag
@@ -88,6 +90,8 @@ local stopWatch = nil ---@type fun()?
 -- Whether the window has laid out its overlays since the last raise, and so may be over the
 -- targets.
 local synced = false
+-- Whether it has done so since the last follow: the burst of syncs isn't over yet.
+local syncedSinceFollow = false
 
 -- The viewport's spot and size in plugin-layer coordinates, and the scroll position; nil when
 -- the scroll can't be read. Rows are placed from these, not from their own xyGlobal, which
@@ -292,7 +296,9 @@ function M.build(opts)
             -- During a drag only its own scrolling (or the wheel) can sync: the stretched
             -- target takes every press, so nothing that raises the window can be reached, and
             -- a raise after the drop would reset the hover of the target under the pointer.
-            if not drag then synced = true end
+            if not drag then
+                synced, syncedSinceFollow = true, true
+            end
         end)
     end
 end
@@ -306,7 +312,7 @@ function M.clear()
         grip.target:Destroy()
     end
     grips, sections, drag, pressed, ctx, stopWatch = {}, {}, nil, nil, nil, nil
-    shown, allHidden, synced = false, false, false
+    shown, allHidden, synced, syncedSinceFollow = false, false, false, false
 end
 
 -- Keep the targets over their grips and in front of the window, and drop a drag whose release
@@ -323,11 +329,14 @@ function M.follow(open)
         drag.idle = drag.idle + 1
         if not open or drag.idle > DRAG_LOST_TICKS then drop() end
     end
-    -- The window may have been raised over the shown targets: bring them back over it, once.
-    -- Hidden ones are raised as they are shown. A press or a drag keeps the raise waiting,
-    -- since raising the pressed target would reset it. A closed window syncs again when it is
-    -- shown.
-    if synced and not pressed and not drag then
+    -- The window may have been raised over the shown targets: bring them back over it, once,
+    -- on the first tick no sync came before, since a raise resets the hover of the target under
+    -- the pointer. Hidden ones are raised as they are shown. A press or a drag keeps the raise
+    -- waiting, since raising the pressed target would reset it. A closed window syncs again
+    -- when it is shown.
+    local quiet = not syncedSinceFollow
+    syncedSinceFollow = false
+    if synced and quiet and not pressed and not drag then
         synced = false
         if open then
             for _, grip in ipairs(grips) do

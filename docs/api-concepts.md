@@ -204,15 +204,24 @@ The official reference annotates Lua with pseudo-types:
       logged nothing across several quick title clicks, a click on an empty part of the window
       and row clicks, though an earlier named `ONCLICK` probe on the title layer fired twice
       during title drags. PrettyUI's own title handlers are subscribed under the default id.
-      The plugin now registers a never-shown sentinel layer with the window through PrettyUI's
+      The plugin registers a never-shown sentinel layer with the window through PrettyUI's
       internal `win:_RegisterOverlay(component, isVisible, layout)`, whose `layout` only flags
-      that the window synced its overlays, and raises the shown targets once on the next Logic
-      tick (not yet confirmed in the client). 1.2.0 syncs (`_SyncOverlays(false)`) on
-      `Show()`, at the end of every title-bar press (`stopDrag`, on `ONRELEASE`), on every
-      scroll and on resize. A one-tick click arrives release-first (above), so its sync comes
-      before its raise, but both land before the next Logic tick. Unregister the sentinel (`_UnregisterOverlay`) before destroying it:
-      `_SyncOverlays` skips an overlay only when its interface is gone, and a plugin-layer
-      component shares the plugin layer's.
+      that the window synced its overlays, and raises the shown targets once afterwards. 1.2.0
+      syncs (`_SyncOverlays`) on `Show()`, at the end of every title-bar press (`stopDrag`, on
+      `ONRELEASE`), on every frame a resize or a scrollbar-thumb drag moves, on every scroll
+      step (`SetScrollPosition`) and when the client window is resized; a title-bar drag syncs
+      only as it ends. A one-tick click arrives release-first (above), so its sync comes before
+      its raise, but both land before the next Logic tick. Unregister the sentinel
+      (`_UnregisterOverlay`) before destroying it: `_SyncOverlays` skips an overlay only when
+      its interface is gone, and a plugin-layer component shares the plugin layer's.
+    - 2026-10-29, beta client, user: with the raise on the Logic tick after each sync, quick
+      title clicks, a title drag, collapse and expand, a window resize and wheel scrolling were
+      each followed by a working grip hover (PUSH) and drag, with no flicker noticed. The
+      earlier trouble with resizing (handles hard to trigger, a resize stuck with its outline
+      showing) was this burial: a resize's press calls `Show()`, which raises the root over the
+      targets. Since a resize or a wheel spin syncs tick after tick, the raise now waits for the
+      first Logic tick with no new sync, so a hovered target isn't raised (and its hover reset)
+      on every tick of the burst; not yet re-checked in the client.
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its

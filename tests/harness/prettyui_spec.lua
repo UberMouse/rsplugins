@@ -578,3 +578,502 @@ describe("prettyui AchievementPopup", function()
         end
     )
 end)
+
+-- A window of hand-built rows, as the Row Probe built them (2026-10-29): 10 rows of 28 px at
+-- explicit y, an icon and a text clickthrough inside each, and the content height set to
+-- cover them. The window is 300x200 titled, so its view is 200 - 32 - 8 = 160 px: the rows
+-- reach 280, so it scrolls 120 px.
+local ROWS = [[
+w = prettyui.Window.new(parent, { title = "Rows", x = 100, y = 100, width = 300, height = 200 })
+clicks, wheels, rows = {}, {}, {}
+for i = 1, 10 do
+    local row = ui.Layer.new(w.content)
+    row:SetPos(0, (i - 1) * 28)
+    row:SetSize(-16, 28, 1.0)
+    row.clickthrough = false
+    row:Subscribe(ui.Hook.ONCLICK, function(c, x, y)
+        clicks[#clicks + 1] = { "click", i, x, y, c == row }
+    end)
+    row:Subscribe(ui.Hook.ONRELEASE, function(_, x, y)
+        clicks[#clicks + 1] = { "release", i, x, y }
+    end)
+    local icon = ui.Sprite.new(row)
+    icon:SetSize(24, 24)
+    icon:SetPos(2, 2)
+    icon.clickthrough = true
+    local text = ui.Text.new(row)
+    text:SetPos(30, 0)
+    text:SetSize(100, 28)
+    text.clickthrough = true
+    rows[i] = { row = row, icon = icon, text = text }
+end
+w:SetContentHeight(280)
+]]
+
+-- The same rows, each handing the wheel to the window's handler.
+local WHEEL_ROWS = ROWS:gsub(
+    "local icon = ",
+    "row:Subscribe(ui.Hook.ONSCROLLWHEEL, w._onScrollWheel)\n    local icon = ",
+    1
+)
+
+describe("prettyui Window content for hand-built rows", function()
+    it("is a live ui.Layer a plugin parents components to, and goes with the window", function()
+        local h = load(ROWS)
+        local row = h.env.rows[3].row
+        assert.are.same({ 8, 32, 284, 160 }, {
+            h.env.w.content.xyGlobal.x - 100,
+            h.env.w.content.xyGlobal.y - 100,
+            h.env.w.content.width,
+            h.env.w.content.height,
+        })
+        assert.are.same({ 0, 56, 268, 28 }, { row.x, row.y, row.width, row.height })
+        h.env.w:Destroy()
+        assert.matches(
+            "used after Destroy",
+            harness.errorOf(function()
+                return row.x
+            end)
+        )
+        assert.is_nil(h.env.w.content)
+    end)
+
+    it("sets the scrollable height, and clamps SetScrollPosition and the wheel to it", function()
+        local h = load(ROWS)
+        local w = h.env.w
+        w:SetScrollPosition(1000)
+        assert.are.equal(120, w._scroll.scrollY)
+        w:SetContentHeight(200)
+        assert.are.equal(40, w._scroll.scrollY)
+        w:SetContentHeight(100.9)
+        assert.are.equal(0, w._scroll.scrollY)
+        w:SetScrollPosition(50)
+        assert.are.equal(0, w._scroll.scrollY)
+        assert.matches("needs a number", harness.errorOf(w.SetContentHeight, w, "tall"))
+    end)
+
+    it(
+        "scrolls by delta * 32 through _onScrollWheel, false while it moves, true at the end",
+        function()
+            local h = load(ROWS)
+            local w = h.env.w
+            assert.are.equal(w._onScrollWheel, w._onScrollWheel)
+            assert.are.equal("function", type(w._onScrollWheel))
+            assert.is_false(w._onScrollWheel(h.env.rows[1].row, 2))
+            assert.are.equal(64, w._scroll.scrollY)
+            assert.is_false(w._onScrollWheel(h.env.rows[1].row, 5))
+            assert.are.equal(120, w._scroll.scrollY)
+            assert.is_true(w._onScrollWheel(h.env.rows[1].row, 1))
+            assert.is_false(w._onScrollWheel(h.env.rows[1].row, -1))
+            assert.are.equal(88, w._scroll.scrollY)
+        end
+    )
+
+    it("returns true, and doesn't scroll, when the content fits", function()
+        local h = load(ROWS)
+        h.env.w:SetContentHeight(100)
+        assert.is_true(h.env.w._onScrollWheel(h.env.rows[1].row, 1))
+        assert.are.equal(0, h.env.w._scroll.scrollY)
+    end)
+
+    it("faults on _onScrollWheel and SetContentHeight after Destroy", function()
+        local h = load(ROWS)
+        local w, handler = h.env.w, h.env.w._onScrollWheel
+        w:Destroy()
+        assert.matches("used after Destroy", harness.errorOf(handler, nil, 1))
+        assert.matches("used after Destroy", harness.errorOf(w.SetContentHeight, w, 10))
+    end)
+
+    it("places AddTitle and AddText at an absolute y, outside the flow", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "T", x = 0, y = 0, width = 300, height = 200 })
+            a = w:AddText("first")
+            heading = w:AddTitle({ text = "Heading", y = 300 })
+            note = w:AddText({ text = "note", y = 400 })
+            b = w:AddText("second")
+        ]])
+        local env = h.env
+        assert.are.same({ 14, 12 }, { env.a.x, env.a.y })
+        assert.are.same({ 14, 300, 28 }, { env.heading.x, env.heading.y, env.heading.height })
+        assert.are.equal(400, env.note.y)
+        -- The flow carried on from the first row, as if neither had been added.
+        assert.are.same({ 14, 12 + 24 + 2 }, { env.b.x, env.b.y })
+        env.w:SetScrollPosition(10000)
+        assert.are.equal(400 + 24 + 14 - 160, env.w._scroll.scrollY)
+    end)
+
+    it("faults on a text option that isn't modelled", function()
+        assert.matches(
+            "unmocked API: prettyui Text option 'colour'",
+            harness.errorOf(
+                load,
+                [[
+                w = prettyui.Window.new(parent, { title = "T" })
+                w:AddTitle({ text = "x", colour = 1 })
+            ]]
+            )
+        )
+    end)
+end)
+
+describe("prettyui driver on hand-built rows", function()
+    it(
+        "clicks a row: ONCLICK then ONRELEASE with the press point in the row's coordinates",
+        function()
+            local h = load(ROWS)
+            assert.is_true(h.ui:click(h.env.rows[2].row))
+            -- Row 2 is 268 x 28 (the content is 284 wide, less 16); its centre is (134, 14).
+            assert.are.same({
+                { "click", 2, 134, 14, true },
+                { "release", 2, 134, 14 },
+            }, h.env.clicks)
+        end
+    )
+
+    it("gives a click on a clickthrough child to the row, at the child's centre", function()
+        local h = load(ROWS)
+        assert.is_true(h.ui:click(h.env.rows[1].icon))
+        assert.is_true(h.ui:click(h.env.rows[1].text))
+        assert.are.same({ "click", 1, 14, 14, true }, h.env.clicks[1])
+        assert.are.same({ "click", 1, 80, 14, true }, h.env.clicks[3])
+    end)
+
+    it("lands nowhere, with a reason, on a hidden row or one under a hidden window", function()
+        local h = load(ROWS)
+        h.env.rows[1].row.hidden = true
+        assert.are.same({ false, "hidden" }, { h.ui:click(h.env.rows[1].row) })
+        assert.are.same({ false, "hidden" }, { h.ui:click(h.env.rows[1].icon) })
+        h.env.rows[1].row.hidden = false
+        h.env.w:Close()
+        assert.are.same({ false, "hidden" }, { h.ui:click(h.env.rows[2].row) })
+        assert.are.same({}, h.env.clicks)
+    end)
+
+    it("faults on a destroyed component", function()
+        local h = load(ROWS)
+        local row = h.env.rows[1].row
+        row:Destroy()
+        assert.matches("used after Destroy", harness.errorOf(h.ui.click, h.ui, row))
+        assert.matches("used after Destroy", harness.errorOf(h.ui.hover, h.ui, row))
+        assert.matches("used after Destroy", harness.errorOf(h.ui.wheel, h.ui, row, 1))
+    end)
+
+    it("lands nowhere when the component and everything above it is clickthrough", function()
+        local h = load([[
+            top = ui.Layer.new(parent)
+            top:SetSize(50, 50)
+            top.clickthrough = true
+            inner = ui.Sprite.new(top)
+            inner:SetSize(10, 10)
+            inner.clickthrough = true
+        ]])
+        for _, target in ipairs({ h.env.top, h.env.inner }) do
+            local ok, why = h.ui:click(target)
+            assert.is_false(ok)
+            assert.matches("^clickthrough", why)
+            assert.matches("^clickthrough", select(2, h.ui:hover(target)))
+            assert.matches("^clickthrough", select(2, h.ui:wheel(target, 1)))
+        end
+    end)
+
+    it("gives a clickthrough row's click to the window content under it", function()
+        local h = load(ROWS)
+        h.env.rows[1].row.clickthrough = true
+        assert.is_true(h.ui:click(h.env.rows[1].row))
+        assert.are.same({}, h.env.clicks)
+    end)
+
+    it("faults on a component whose clickthrough was never set", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "T" })
+            bare = ui.Layer.new(parent)
+            bare:SetSize(10, 10)
+        ]])
+        assert.matches("never had clickthrough set", harness.errorOf(h.ui.click, h.ui, h.env.bare))
+    end)
+
+    it("clips a row scrolled outside the window's view, for click, hover and wheel", function()
+        local h = load(WHEEL_ROWS)
+        local rows = h.env.rows
+        -- Row 6's centre is at 154 of 160; row 7's at 182.
+        assert.is_true(h.ui:click(rows[6].row))
+        local ok, why = h.ui:click(rows[7].row)
+        assert.is_false(ok)
+        assert.matches("^clipped", why)
+        assert.matches("^clipped", select(2, h.ui:hover(rows[7].icon)))
+        assert.matches("^clipped", select(2, h.ui:wheel(rows[7].row, 1)))
+        assert.are.equal(1, #h.env.clicks / 2)
+        h.env.w:SetScrollPosition(64)
+        assert.is_true(h.ui:click(rows[7].row))
+        assert.matches("^clipped", select(2, h.ui:click(rows[1].row)))
+        assert.matches("^clipped", select(2, h.ui:click(rows[1].text)))
+        assert.are.equal(2, #h.env.clicks / 2)
+        -- The positions the components report don't move with the scroll.
+        assert.are.equal(168, rows[7].row.y)
+    end)
+
+    it(
+        "scrolls the window on a wheel over a row that hands the wheel to the window's handler",
+        function()
+            local h = load(WHEEL_ROWS)
+            local ok, ran = h.ui:wheel(h.env.rows[2].icon, 1)
+            assert.is_true(ok)
+            assert.are.equal(1, ran)
+            assert.are.equal(32, h.env.w._scroll.scrollY)
+        end
+    )
+
+    it("swallows a wheel over a row with no wheel listener: the window doesn't scroll", function()
+        local h = load(ROWS)
+        local ok, ran = h.ui:wheel(h.env.rows[2].row, 1)
+        assert.is_true(ok)
+        assert.are.equal(0, ran)
+        assert.are.equal(0, h.env.w._scroll.scrollY)
+        ok, ran = h.ui:wheel(h.env.rows[2].text, 1)
+        assert.are.same({ true, 0 }, { ok, ran })
+    end)
+
+    it("scrolls the window on a wheel over its bare content, and passes the delta on", function()
+        local h = load(ROWS)
+        assert.are.same({ true, 1 }, { h.ui:wheel(h.env.w.content, 2) })
+        assert.are.equal(64, h.env.w._scroll.scrollY)
+    end)
+
+    it("calls a wheel listener as (component, delta), until one returns false", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "T" })
+            seen = {}
+            row = ui.Layer.new(w.content)
+            row:SetSize(100, 20)
+            row.clickthrough = false
+            row:Subscribe(ui.Hook.ONSCROLLWHEEL, function(c, d)
+                seen[#seen + 1] = { "a", c == row, d }
+                return false
+            end)
+            row:Subscribe(ui.Hook.ONSCROLLWHEEL, "b", function() seen[#seen + 1] = { "b" } end)
+        ]])
+        assert.are.same({ true, 1 }, { h.ui:wheel(h.env.row, -3) })
+        assert.are.same({ { "a", true, -3 } }, h.env.seen)
+    end)
+
+    it("runs the callbacks under the runtime budget", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "T" })
+            row = ui.Layer.new(w.content)
+            row:SetSize(100, 20)
+            row.clickthrough = false
+            row:Subscribe(ui.Hook.ONCLICK, function() while true do end end)
+        ]])
+        assert.matches(
+            "Maximum function execution time",
+            harness.errorOf(h.ui.click, h.ui, h.env.row)
+        )
+    end)
+
+    it("fires ONMOUSEOVER and ONMOUSELEAVE as the pointer moves between rows", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "T", width = 300, height = 200 })
+            log, rows = {}, {}
+            for i = 1, 2 do
+                local row = ui.Layer.new(w.content)
+                row:SetPos(0, (i - 1) * 28)
+                row:SetSize(-16, 28, 1.0)
+                row.clickthrough = false
+                row:Subscribe(ui.Hook.ONMOUSEOVER, function(_, x, y)
+                    log[#log + 1] = { "over", i, x, y, row.isMouseOver }
+                end)
+                row:Subscribe(ui.Hook.ONMOUSELEAVE, function(c)
+                    log[#log + 1] = { "leave", i, c == row, row.isMouseOver }
+                end)
+                local icon = ui.Sprite.new(row)
+                icon:SetSize(24, 24)
+                icon.clickthrough = true
+                rows[i] = { row = row, icon = icon }
+            end
+        ]])
+        local rows = h.env.rows
+        assert.is_true(h.ui:hover(rows[1].icon))
+        assert.is_true(h.ui:hover(rows[1].row)) -- still on row 1
+        assert.is_true(h.ui:hover(rows[2].row))
+        assert.is_false(rows[1].row.isMouseOver)
+        assert.is_true(rows[2].row.isMouseOver)
+        h.ui:leave()
+        assert.is_false(rows[2].row.isMouseOver)
+        assert.are.same({
+            { "over", 1, 12, 12, true },
+            { "leave", 1, true, false },
+            { "over", 2, 134, 14, true },
+            { "leave", 2, true, false },
+        }, h.env.log)
+    end)
+
+    it("returns false from hover, leaving the pointer, when the row is hidden", function()
+        local h = load(ROWS)
+        assert.is_true(h.ui:hover(h.env.rows[1].row))
+        h.env.rows[2].row.hidden = true
+        assert.are.same({ false, "hidden" }, { h.ui:hover(h.env.rows[2].row) })
+        assert.is_true(h.env.rows[1].row.isMouseOver)
+    end)
+end)
+
+describe("prettyui Tooltip.attach on hand-built rows", function()
+    local TIPPED = ROWS
+        .. [[
+        tips = {}
+        for i = 1, 10 do
+            tips[i] = prettyui.Tooltip.attach(rows[i].row, w.content, { text = "row " .. i, maxWidth = 360 })
+        end
+    ]]
+
+    it("shows on the row's hover and hides on its leave, drawn on the window's parent", function()
+        local h = load(TIPPED)
+        h.ui:hover(h.env.rows[3].icon)
+        assert.are.same({ "row 3" }, h.ui:tooltips())
+        h.ui:hover(h.env.rows[4].row)
+        assert.are.same({ "row 4" }, h.ui:tooltips())
+        h.ui:leave()
+        assert.are.same({}, h.ui:tooltips())
+    end)
+
+    it("takes a plain string, and returns nil for a nil value", function()
+        local h = load(ROWS .. [[
+            tip = prettyui.Tooltip.attach(rows[1].row, w.content, "plain")
+            noneIsNil = prettyui.Tooltip.attach(rows[2].row, w.content, nil) == nil
+        ]])
+        h.ui:hover(h.env.rows[1].row)
+        assert.are.same({ "plain" }, h.ui:tooltips())
+        assert.is_true(h.env.noneIsNil)
+    end)
+
+    it("is hidden by Window:Close and destroyed by Window:Destroy", function()
+        local h = load(TIPPED)
+        h.ui:hover(h.env.rows[1].row)
+        h.env.w:Close()
+        assert.are.same({}, h.ui:tooltips())
+        h.env.w:Show()
+        assert.are.same({}, h.ui:tooltips())
+        h.ui:hover(h.env.rows[2].row)
+        h.env.w:Destroy()
+        assert.are.same({}, h.ui:tooltips())
+        -- Destroying one the window already took is harmless.
+        h.env.tips[2]:Destroy()
+    end)
+
+    it(
+        "is replaced by Destroy then attach: the new one stays hidden until the next hover",
+        function()
+            local h = load(TIPPED .. [[
+            function retip(text)
+                tips[1]:Destroy()
+                tips[1] = prettyui.Tooltip.attach(rows[1].row, w.content, { text = text })
+            end
+        ]])
+            h.ui:hover(h.env.rows[1].row)
+            h.env.retip("changed")
+            assert.are.same({}, h.ui:tooltips())
+            h.ui:leave()
+            h.ui:hover(h.env.rows[1].row)
+            assert.are.same({ "changed" }, h.ui:tooltips())
+        end
+    )
+
+    it("makes the target take the mouse until Destroy gives clickthrough back", function()
+        local h = load(ROWS .. [[
+            icon = rows[1].icon
+            tip = prettyui.Tooltip.attach(icon, w.content, "icon")
+            now = icon.clickthrough
+        ]])
+        local icon = h.env.icon
+        assert.is_false(h.env.now)
+        -- The icon takes the click itself now, and the row gets none.
+        h.ui:click(icon)
+        assert.are.same({}, h.env.clicks)
+        h.env.tip:Destroy()
+        assert.is_true(icon.clickthrough)
+        h.env.tip:Destroy()
+        h.ui:click(icon)
+        assert.are.equal(2, #h.env.clicks)
+    end)
+
+    it(
+        "faults on a second tooltip, a destroyed target or parent, and unmodelled arguments",
+        function()
+            local twice = [[
+            prettyui.Tooltip.attach(rows[1].row, w.content, "a")
+            prettyui.Tooltip.attach(rows[1].row, w.content, "b")
+        ]]
+            assert.matches("already has a tooltip", harness.errorOf(load, ROWS .. twice))
+            assert.matches(
+                "target was destroyed",
+                harness.errorOf(load, ROWS .. [[
+            rows[1].row:Destroy()
+            prettyui.Tooltip.attach(rows[1].row, w.content, "a")
+        ]])
+            )
+            assert.matches(
+                "parent was destroyed",
+                harness.errorOf(load, ROWS .. [[
+            local gone = ui.Layer.new(parent)
+            gone:Destroy()
+            prettyui.Tooltip.attach(rows[1].row, gone, "a")
+        ]])
+            )
+            assert.matches(
+                "target must be a ui component",
+                harness.errorOf(load, ROWS .. [[
+            prettyui.Tooltip.attach({}, w.content, "a")
+        ]])
+            )
+            assert.matches(
+                "unmocked API: prettyui TooltipValue option 'placement'",
+                harness.errorOf(load, ROWS .. [[
+            prettyui.Tooltip.attach(rows[1].row, w.content, { text = "a", placement = "left" })
+        ]])
+            )
+            assert.matches(
+                "with hover handlers",
+                harness.errorOf(load, ROWS .. [[
+            prettyui.Tooltip.attach(rows[1].row, w.content, "a", {})
+        ]])
+            )
+            assert.matches(
+                "called with ':'",
+                harness.errorOf(load, ROWS .. [[
+            prettyui.Tooltip:attach(rows[1].row, w.content, "a")
+        ]])
+            )
+            assert.matches(
+                "unmocked API: prettyui.Tooltip.set",
+                harness.errorOf(
+                    load,
+                    [[
+            local _ = prettyui.Tooltip.set
+        ]]
+                )
+            )
+            assert.matches(
+                "unmocked API: prettyui.Tooltip attachment.Show",
+                harness.errorOf(load, ROWS .. [[
+            prettyui.Tooltip.attach(rows[1].row, w.content, "a"):Show()
+        ]])
+            )
+        end
+    )
+
+    it(
+        "draws on the parent given when it isn't a window's content, and stays out of Close",
+        function()
+            local h = load(ROWS .. [[
+            outside = ui.Layer.new(parent)
+            outside:SetSize(40, 40)
+            outside.clickthrough = false
+            prettyui.Tooltip.attach(outside, parent, "outside")
+        ]])
+            h.ui:hover(h.env.outside)
+            h.env.w:Close()
+            assert.are.same({ "outside" }, h.ui:tooltips())
+            h.env.parent.hidden = true
+            assert.are.same({}, h.ui:tooltips())
+        end
+    )
+end)

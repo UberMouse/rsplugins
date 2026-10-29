@@ -1,6 +1,8 @@
--- ui.Interfaces:GetComponent for the plugin root layer, id.Component for its name, and the
--- fake components the PrettyUI fake (api/prettyui.lua) builds on it, and id.Sound by name.
--- Nothing else under `ui` or `id` is modelled: any other member faults as unmocked.
+-- ui.Interfaces:GetComponent for the plugin root layer, id.Component for its name, the
+-- fake components the PrettyUI fake (api/prettyui.lua) builds on it, ui.Layer/Sprite/Text.new
+-- for a plugin's own components, ui.Hook and ui.AlignMode, and id.Sound, id.Font and
+-- id.Sprite by name. Nothing else under `ui` or `id` is modelled: any other member faults as
+-- unmocked.
 --
 -- A component keeps what it was given (SetPos/SetSize pixels plus fractions of the parent's
 -- size, as on ui/component.html) and works out x, y, width and height from its parent on
@@ -9,6 +11,7 @@
 
 local catalog = require("tests.harness.catalog")
 local strict = require("tests.harness.strict")
+local stubs = require("tests.harness.stubs")
 
 local M = {}
 
@@ -90,6 +93,83 @@ function M.stateOf(proxy)
     return statesByProxy[proxy]
 end
 
+-- ui.Hook and ui.AlignMode are numbers in the client, though the stubs list strings
+-- (docs/api-concepts.md, "Enums are numbers in the client"). The member names come from the
+-- stubs; the numbers are invented (sorted names, counted from `base`), so a plugin can name a
+-- member but not depend on its value.
+---@param base integer
+---@param stubValues table the stub's name -> string table
+---@return table values name -> number
+local function opaqueEnum(base, stubValues)
+    local values = {}
+    for i, name in ipairs(strict.sortedKeys(stubValues)) do
+        values[name] = base + i
+    end
+    return values
+end
+
+---@param values table name -> number
+---@return table # number -> name
+local function namesByValue(values)
+    local names = {}
+    for name, v in pairs(values) do
+        names[v] = name
+    end
+    return names
+end
+
+M.Hook = opaqueEnum(1000, stubs.value("ui/component.lua", "ui").Hook)
+M.AlignMode = opaqueEnum(2000, stubs.value("ui/common_types.lua", "ui", { ui = {} }).AlignMode)
+local hookNames, alignNames = namesByValue(M.Hook), namesByValue(M.AlignMode)
+
+-- The id of a listener subscribed without one (Subscribe(hook, fn)).
+local DEFAULT_ID = {}
+
+-- Add a listener to `s` for `hook` under `id` (nil for the default one). A second listener
+-- under an id already used for that hook is refused: what the client does is unprobed.
+---@param s table component state
+---@param hook integer
+---@param id string?
+---@param fn function
+function M.addListener(s, hook, id, fn)
+    local list = s.hooks[hook] or {}
+    s.hooks[hook] = list
+    id = id or DEFAULT_ID
+    for _, listener in ipairs(list) do
+        if listener.id == id then
+            strict.fault(
+                s.class
+                    .. ":Subscribe: "
+                    .. hookNames[hook]
+                    .. " already has a listener under that id (whether the client replaces it "
+                    .. "is unprobed): Unsubscribe it first"
+            )
+        end
+    end
+    list[#list + 1] = { id = id, fn = fn }
+end
+
+-- Run `s`'s listeners for `hook` in subscription order, each as fn(component, ...), until
+-- one returns false (the stub: the return says whether to carry on). A component destroyed
+-- by an earlier listener gets no more. Callers run this under runtime.call.
+---@param s table component state
+---@param hook integer
+---@param ... any
+---@return integer # how many listeners ran
+function M.fire(s, hook, ...)
+    local snapshot = {}
+    for i, listener in ipairs(s.hooks[hook] or {}) do
+        snapshot[i] = listener
+    end
+    local ran = 0
+    for _, listener in ipairs(snapshot) do
+        if s.destroyed then break end
+        ran = ran + 1
+        if listener.fn(s.proxy, ...) == false then break end
+    end
+    return ran
+end
+
 local Vector2 = strict.class("Vector2", {
     fields = {
         x = function(s)
@@ -127,8 +207,53 @@ local function numbers(what, ...)
     end
 end
 
+-- A member the plugin has to set before it reads it: the client's default is unprobed, so
+-- the fake doesn't invent one.
+---@param member string
+---@return fun(s: table): any
+local function storedField(member)
+    return function(s)
+        if s[member] == nil then
+            strict.fault(
+                s.class
+                    .. "."
+                    .. member
+                    .. " read before it was set: the client's default is unprobed"
+            )
+        end
+        return s[member]
+    end
+end
+
+-- Assigning `member` stores the value if `accepts` it, else faults with `expected`.
+---@param member string
+---@param accepts fun(value: any): boolean
+---@param expected string
+---@return fun(s: table, value: any)
+local function checkedSetter(member, accepts, expected)
+    return function(s, value)
+        if s.destroyed then strict.fault(s.class .. " used after Destroy()") end
+        if not accepts(value) then
+            strict.fault(s.class .. "." .. member .. " must be " .. expected)
+        end
+        s[member] = value
+    end
+end
+
+---@param value any
+---@return boolean
+local function isInteger(value)
+    return math.type(value) == "integer"
+end
+
 -- The members every fake component has (ui/component.html), each faulting once destroyed.
 local FIELDS = {
+    clickthrough = storedField("clickthrough"),
+    alpha = storedField("alpha"),
+    rgba = storedField("rgba"),
+    isMouseOver = function(s)
+        return s.mouseOver
+    end,
     x = function(s)
         return (M.pos(s))
     end,
@@ -202,14 +327,74 @@ local METHODS = {
             end
         end
     end,
+    -- Subscribe(hook, callback) or Subscribe(hook, id, callback) (ui/component.html#subscribe).
+    Subscribe = function(s, hook, first, second, ...)
+        if hookNames[hook] == nil then
+            strict.fault(s.class .. ":Subscribe: the hook must be a ui.Hook member")
+        end
+        if select("#", ...) > 0 then strict.fault(s.class .. ":Subscribe: too many arguments") end
+        if type(first) == "function" and second == nil then
+            M.addListener(s, hook, nil, first)
+        elseif type(first) == "string" and type(second) == "function" then
+            M.addListener(s, hook, first, second)
+        else
+            strict.fault(s.class .. ":Subscribe(hook, callback) or Subscribe(hook, id, callback)")
+        end
+    end,
+    -- Unsubscribe(hook) removes the default listener, Unsubscribe(hook, id) the one under that
+    -- id. The page says nothing of an id nothing used; the fake faults, as the client's
+    -- answer is unprobed.
+    Unsubscribe = function(s, hook, id, ...)
+        if hookNames[hook] == nil then
+            strict.fault(s.class .. ":Unsubscribe: the hook must be a ui.Hook member")
+        end
+        if select("#", ...) > 0 or (id ~= nil and type(id) ~= "string") then
+            strict.fault(s.class .. ":Unsubscribe(hook) or Unsubscribe(hook, id)")
+        end
+        local list = s.hooks[hook] or {}
+        for i, listener in ipairs(list) do
+            if listener.id == (id or DEFAULT_ID) then
+                table.remove(list, i)
+                return
+            end
+        end
+        strict.fault(
+            s.class
+                .. ":Unsubscribe: no "
+                .. hookNames[hook]
+                .. " listener under that id (what the client does is unprobed)"
+        )
+    end,
+}
+
+-- Assignable members shared by every component: each checks its value (ui/component.html).
+local SETTERS = {
+    clickthrough = checkedSetter("clickthrough", function(v)
+        return type(v) == "boolean"
+    end, "a boolean"),
+    alpha = checkedSetter("alpha", function(v)
+        return type(v) == "number"
+    end, "a number"),
+    rgba = checkedSetter("rgba", function(v)
+        return isInteger(v) and v >= 0 and v <= 0xFFFFFFFF
+    end, "an integer from 0 to 0xFFFFFFFF"),
 }
 
 ---@param name string the stub class
----@param extra table? more fields
+---@param extra table? more fields, plain and assignable
+---@param more { fields: table?, setters: table?, methods: table? }? members of this kind
 ---@return table class
-local function componentClass(name, extra)
+local function componentClass(name, extra, more)
+    more = more or {}
     local fields, methods, writable = {}, {}, { hidden = true }
+    local setters = {}
     for k, fn in pairs(FIELDS) do
+        fields[k] = function(s)
+            live(s)
+            return fn(s)
+        end
+    end
+    for k, fn in pairs(more.fields or {}) do
         fields[k] = function(s)
             live(s)
             return fn(s)
@@ -219,13 +404,38 @@ local function componentClass(name, extra)
         fields[k] = fn
         writable[k] = true
     end
-    for k, fn in pairs(METHODS) do
-        methods[k] = function(s, ...)
-            live(s)
-            return fn(s, ...)
+    for _, set in ipairs({ SETTERS, more.setters or {} }) do
+        for k, fn in pairs(set) do
+            setters[k] = fn
         end
     end
-    return strict.class(name, { fields = fields, methods = methods, writable = writable })
+    for _, set in ipairs({ METHODS, more.methods or {} }) do
+        for k, fn in pairs(set) do
+            methods[k] = function(s, ...)
+                live(s)
+                return fn(s, ...)
+            end
+        end
+    end
+    return strict.class(
+        name,
+        { fields = fields, methods = methods, writable = writable, setters = setters }
+    )
+end
+
+-- Text:AlignTo(horizontal[, vertical]) takes ui.AlignMode members.
+---@param s table
+---@param horizontal any
+---@param vertical any
+---@param ... any
+local function alignTo(s, horizontal, vertical, ...)
+    if
+        alignNames[horizontal] == nil
+        or (vertical ~= nil and alignNames[vertical] == nil)
+        or select("#", ...) > 0
+    then
+        strict.fault(s.class .. ":AlignTo(horizontal[, vertical]) takes ui.AlignMode members")
+    end
 end
 
 -- What GetComponent returns for the plugin layer is a ui.Component per the stub; the
@@ -233,12 +443,45 @@ end
 local CLASSES = {
     Component = componentClass("ui.Component"),
     Layer = componentClass("ui.Layer"),
-    Sprite = componentClass("ui.Sprite"),
+    Sprite = componentClass("ui.Sprite", nil, {
+        fields = {
+            spriteID = storedField("spriteID"),
+            -- -1 while none is associated (ui/decorative_components/sprite.html).
+            associatedObjectID = function(s)
+                return s.objectID
+            end,
+        },
+        setters = { spriteID = checkedSetter("spriteID", isInteger, "an integer") },
+        methods = {
+            -- SetAssociatedObject(objectID, quantity?): only an object in docs/api/consts/Obj.lua.
+            SetAssociatedObject = function(s, objectID, quantity, ...)
+                if not isInteger(objectID) or not catalog.config("Obj", objectID) then
+                    strict.fault(
+                        s.class
+                            .. ":SetAssociatedObject: no object with id "
+                            .. tostring(objectID)
+                            .. " in docs/api/consts/Obj.lua"
+                    )
+                end
+                if quantity ~= nil and not (isInteger(quantity) and quantity >= 0) then
+                    strict.fault(s.class .. ":SetAssociatedObject: quantity must be a count")
+                end
+                if select("#", ...) > 0 then
+                    strict.fault(s.class .. ":SetAssociatedObject: too many arguments")
+                end
+                s.objectID = objectID
+            end,
+        },
+    }),
     Text = componentClass("ui.Text", {
         content = function(s)
             live(s)
             return s.content
         end,
+    }, {
+        fields = { font = storedField("font") },
+        setters = { font = checkedSetter("font", isInteger, "an integer") },
+        methods = { AlignTo = alignTo },
     }),
 }
 
@@ -262,6 +505,9 @@ function M.create(kind, parent)
         hidden = false,
         destroyed = false,
         content = kind == "Text" and "" or nil,
+        hooks = {}, -- ui.Hook value -> listeners, in subscription order
+        mouseOver = false,
+        objectID = kind == "Sprite" and -1 or nil,
     }
     if parent then parent.children[#parent.children + 1] = s end
     local proxy = assert(CLASSES[kind], kind).new(s)
@@ -297,15 +543,70 @@ local Interfaces = strict.class("ui.Interfaces", {
     },
 })
 
+-- ui.Layer.new, ui.Sprite.new and ui.Text.new: a plugin's own component under a live
+-- ui.ComponentCollection (the plugin layer or a Layer, which includes a PrettyUI window's
+-- content). The optional categoryID and dynamicID aren't modelled.
+---@param kind string "Layer", "Sprite" or "Text"
+---@return table class with the static `new`
+local function constructor(kind)
+    local what = "ui." .. kind .. ".new"
+    return strict.class("ui." .. kind, {
+        statics = {
+            new = function(_, parent, categoryID, dynamicID)
+                if categoryID ~= nil or dynamicID ~= nil then
+                    strict.fault("unmocked API: " .. what .. " with a categoryID or dynamicID")
+                end
+                local ps = statesByProxy[parent]
+                if not ps then strict.fault(what .. ": parent must be a ui.ComponentCollection") end
+                assert(ps, "unreachable")
+                if ps.destroyed then strict.fault(what .. ": parent was destroyed") end
+                if ps.class == "ui.Sprite" or ps.class == "ui.Text" then
+                    strict.fault(what .. ": a " .. ps.class .. " is not a ui.ComponentCollection")
+                end
+                local proxy, s = M.create(kind, ps)
+                s.raw = true -- the plugin's own, for the h.ui driver's pointer actions
+                return proxy
+            end,
+        },
+    })
+end
+
+-- A read-only enum table of opaque numbers (ui.Hook, ui.AlignMode); other names fault.
+---@param name string
+---@param values table
+---@return table
+local function enumTable(name, values)
+    return strict.lookup(function(member)
+        strict.fault("unmocked API: " .. name .. "." .. tostring(member))
+    end, values)
+end
+
 local UiNamespace = strict.class("ui", {
     fields = {
         Interfaces = function(s)
             return s.interfaces
         end,
+        Layer = function(s)
+            return s.Layer
+        end,
+        Sprite = function(s)
+            return s.Sprite
+        end,
+        Text = function(s)
+            return s.Text
+        end,
+        Hook = function(s)
+            return s.Hook
+        end,
+        AlignMode = function(s)
+            return s.AlignMode
+        end,
     },
 })
--- The stubs declare ui.Interfaces as a class of its own, not a field of `ui`.
-strict.declare("ui", "Interfaces", "namespace")
+-- The stubs declare these as classes and enums of their own, not as fields of `ui`.
+for _, member in ipairs({ "Interfaces", "Layer", "Sprite", "Text", "Hook", "AlignMode" }) do
+    strict.declare("ui", member, "namespace")
+end
 
 local IdNamespace = strict.class("_global.id", {
     fields = {
@@ -315,8 +616,30 @@ local IdNamespace = strict.class("_global.id", {
         Sound = function(s)
             return s.sounds
         end,
+        Font = function(s)
+            return s.fonts
+        end,
+        Sprite = function(s)
+            return s.sprites
+        end,
     },
 })
+
+-- id.<kind>.NAME from docs/api/consts/<kind>.lua (loaded on first use): a plugin can only name
+-- one that exists. `label` is the singular for the fault. FromID isn't modelled.
+---@param kind string "Sound", "Font" or "Sprite"
+---@param label string
+---@return table
+local function idNames(kind, label)
+    return strict.lookup(function(name)
+        if name == "FromID" then strict.fault("unmocked API: id." .. kind .. ".FromID") end
+        local found = catalog.config(kind, name)
+        if not found then
+            strict.fault("unknown " .. label .. ": id." .. kind .. "." .. tostring(name))
+        end
+        return found
+    end)
+end
 
 ---@param h table the harness
 ---@param env table the sandbox being built
@@ -325,18 +648,21 @@ function M.install(h, env)
     -- userdata each time, as Player.GetEntity does).
     local root, rootState = M.create("Component", nil)
     h.instance.uiRoot = rootState
-    env.ui = UiNamespace.new({ interfaces = Interfaces.new({ root = root }) })
+    env.ui = UiNamespace.new({
+        interfaces = Interfaces.new({ root = root }),
+        Layer = constructor("Layer").new({}),
+        Sprite = constructor("Sprite").new({}),
+        Text = constructor("Text").new({}),
+        Hook = enumTable("ui.Hook", M.Hook),
+        AlignMode = enumTable("ui.AlignMode", M.AlignMode),
+    })
     env.id = IdNamespace.new({
         components = strict.lookup(function(name)
             strict.fault("unmocked API: id.Component." .. tostring(name))
         end, { [M.PLUGIN_LAYER_NAME] = M.PLUGIN_LAYER_ID }),
-        -- Names and ids from docs/api/consts/Sound.lua (loaded on first use); a plugin can
-        -- only name a sound that exists. The mock plays nothing.
-        sounds = strict.lookup(function(name)
-            local soundId = catalog.config("Sound", name)
-            if not soundId then strict.fault("unknown sound: id.Sound." .. tostring(name)) end
-            return soundId
-        end),
+        sounds = idNames("Sound", "sound"), -- the mock plays nothing
+        fonts = idNames("Font", "font"),
+        sprites = idNames("Sprite", "sprite"),
     })
 end
 

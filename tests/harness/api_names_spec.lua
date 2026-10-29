@@ -20,8 +20,12 @@ local function inStubs(index, owner, member, kind)
         if kind == "enum" then return index.enums[member] == true end
         return index.globals[member] ~= nil
     end
-    -- "ui.Interfaces": a table the stubs declare as its own class, not as a field of `ui`.
-    if kind == "namespace" then return index.classes[owner .. "." .. member] ~= nil end
+    -- "ui.Interfaces", "ui.Hook": a class or enum the stubs declare of its own, not as a field
+    -- of `ui`.
+    if kind == "namespace" then
+        local full = owner .. "." .. member
+        return index.classes[full] ~= nil or index.enums[full] == true
+    end
     local class = owner
     while class do
         local fields = index.classes[class] or {}

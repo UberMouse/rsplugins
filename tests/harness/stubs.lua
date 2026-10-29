@@ -80,9 +80,20 @@ end
 -- defines, e.g. the ChatType enum from core/events.lua.
 ---@param file string path under docs/api/generated, e.g. "core/events.lua"
 ---@param name string
+---@param seed table? globals the file assumes another file made, e.g. `{ ui = {} }`. A file
+--- that assigns one again (`ui = {}` after its enums) keeps the seeded table
 ---@return table
-function M.value(file, name)
+function M.value(file, name, seed)
     local env = {}
+    if seed then
+        local store = seed
+        env = setmetatable({}, {
+            __index = store,
+            __newindex = function(_, k, v)
+                if store[k] == nil then store[k] = v end
+            end,
+        })
+    end
     -- selene: allow(incorrect_standard_library_use) -- its std has the pre-5.2 load/loadfile
     local chunk = assert(loadfile(paths.repo("docs/api/generated/" .. file), "t", env))
     chunk()

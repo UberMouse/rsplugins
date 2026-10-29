@@ -115,6 +115,9 @@ end
 --   methods  = { name = function(state, ...) end }   called as obj:name(...)
 --   statics  = { name = function(state, ...) end }   called as Obj.name(...)
 --   writable = { name = true }                       field may be assigned (stored in state)
+--   setters  = { name = function(state, value) end } field assigned through a function, which
+--                                                    checks the value (list it in `fields` too,
+--                                                    for the read)
 --   undeclared = true                                keep it out of M.declared: for fakes of
 --                                                    another plugin's exports (PrettyUI), which
 --                                                    the API stubs rightly lack
@@ -131,6 +134,7 @@ end
 function M.class(name, def)
     local fields, methods, statics = def.fields or {}, def.methods or {}, def.statics or {}
     local writable = def.writable or {}
+    local setters = def.setters or {}
     if not def.undeclared then
         for k in pairs(fields) do
             M.declare(name, k, "field")
@@ -175,6 +179,10 @@ function M.class(name, def)
             M.fault("unmocked API: " .. name .. "." .. tostring(key))
         end,
         __newindex = function(proxy, key, value)
+            if setters[key] then
+                setters[key](states[proxy], value)
+                return
+            end
             if not writable[key] then
                 M.fault(name .. "." .. tostring(key) .. " is read-only in the harness")
             end

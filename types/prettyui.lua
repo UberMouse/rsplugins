@@ -14,6 +14,7 @@
 ---@field Panel prettyui.PanelModule
 ---@field SpriteButton prettyui.SpriteButtonModule
 ---@field AchievementPopup prettyui.AchievementPopupModule
+---@field Tooltip prettyui.TooltipModule
 prettyui = {}
 
 ---------------------------------------------------------------------------
@@ -45,12 +46,19 @@ function WindowModule.new(parent, options) end
 ---@class prettyui.Window
 ---@field root ui.Layer The window's own layer: read x/y/width/height for its position and size. A bare root:SetPos is snapped back unless SetSize follows. nil after Destroy()
 ---@field closeButton ui.Sprite The X at (width - 28, 7); clicking it calls Close()
+---@field content ui.Layer The scrolling layer the rows live in. Make your own ui.Layer/Sprite/Text under it at an explicit position and call SetContentHeight so the window scrolls over them. nil after Destroy()
+---@field _onScrollWheel fun(component: ui.Component, delta: number): boolean Internal, not API: the window's wheel handler. Subscribe it to a row's ui.Hook.ONSCROLLWHEEL so the wheel over that row still scrolls the window; it scrolls by delta * 32 px while the content overflows and returns false if the position moved, else true
 ---@field _scroll { scrollY: number }? Internal, not API: the content's scroll controller, whose `scrollY` is the only way to read the scroll position. nil after Destroy()
 local Window = {}
 
 ---Scroll the content to `position` px from its top, clamped to 0..(content height - viewport height).
 ---@param position number?
 function Window:SetScrollPosition(position) end
+
+---Set the scrollable height of the content. It replaces the height the rows grew it to, and
+---re-clamps the scroll position.
+---@param height number
+function Window:SetContentHeight(height) end
 
 ---Resize, clamped to the window's min/max; also makes the current position stick.
 ---@param width number
@@ -64,12 +72,17 @@ function Window:Close() end
 
 function Window:Destroy() end
 
+---@class prettyui.TextOptions
+---@field text string?
+---@field tooltip prettyui.Tooltip?
+---@field y number? Place the row at this content y instead of the next flow row; the flow doesn't move
+
 ---Add a text row; set the returned component's `content` to change it.
----@param text string|{ text: string, tooltip: prettyui.Tooltip? }
+---@param text string|prettyui.TextOptions
 ---@return ui.Text
 function Window:AddText(text) end
 
----@param text string|{ text: string, tooltip: prettyui.Tooltip? }
+---@param text string|prettyui.TextOptions
 ---@return ui.Text
 function Window:AddTitle(text) end
 
@@ -217,6 +230,30 @@ local SpriteButton = {}
 function SpriteButton:SetTooltip(value) end
 
 function SpriteButton:Destroy() end
+
+---------------------------------------------------------------------------
+-- Tooltip
+---------------------------------------------------------------------------
+
+---@class prettyui.TooltipModule
+local TooltipModule = {}
+
+---Attach a tooltip to `target`: shown on its mouse-over, hidden on its mouse-leave. It makes
+---`target` take the mouse (clickthrough false) until Destroy. With a Window's `content` as
+---`parent`, it is drawn on the window's parent, hidden by Window:Close and destroyed by
+---Window:Destroy. A string is the text; the table form takes `text` and `maxWidth`. Returns
+---nil for a nil value.
+---@param target ui.Component
+---@param parent ui.Component
+---@param value string|{ text: string, maxWidth: number? }?
+---@return prettyui.TooltipAttachment?
+function TooltipModule.attach(target, parent, value) end
+
+---@class prettyui.TooltipAttachment
+local TooltipAttachment = {}
+
+---Remove the tooltip and give `target` its clickthrough back.
+function TooltipAttachment:Destroy() end
 
 ---------------------------------------------------------------------------
 -- AchievementPopup

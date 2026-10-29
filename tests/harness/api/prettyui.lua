@@ -6,8 +6,9 @@
 -- probe on 2026-10-25; docs/testing.md's fidelity ledger says which is which.
 --
 -- Modelled: Window (titled, resizable, close button, AddText/AddTitle/AddCheckboxButton/
--- AddDivider/AddSpriteButton, SetScrollPosition and the `_scroll.scrollY` it sets),
--- standalone Panel (AddSpriteButton, Alt-drag) and SpriteButton. Any other library member,
+-- AddDivider/AddSpriteButton, SetScrollPosition and the `_scroll.scrollY` it sets, the
+-- `content` layer for a plugin's own components, SetContentHeight and the wheel handler),
+-- standalone Panel (AddSpriteButton, Alt-drag), SpriteButton and Tooltip.attach. Any other library member,
 -- method or option faults as unmocked; extend the fake, with a ledger row, when a plugin
 -- needs more.
 
@@ -39,6 +40,8 @@ local TITLE_HEIGHT_ROW, TITLE_GAP, TITLE_MARGIN = 28, 8, 16
 local CHECKBOX_ROW = 22
 local DIVIDER_HEIGHT = 60
 local SPRITE_BUTTON_SIZE = 24
+-- Pixels one wheel notch scrolls (the scroll controller's default scrollStep).
+local SCROLL_STEP = 32
 
 -- The names SpriteButton accepts (case-insensitive), from 1.2.0's sprite table.
 local SPRITE_NAMES = {}
@@ -78,7 +81,9 @@ local OPTIONS = {
     }),
     Panel = set({ "x", "y", "width", "height", "backgroundAlpha", "scrollable", "tooltip" }),
     SpriteButton = set({ "x", "y", "xAnchor", "yAnchor", "size", "width", "height", "tooltip" }),
-    Text = set({ "text", "tooltip" }),
+    Text = set({ "text", "tooltip", "y" }),
+    -- The fields of a Tooltip.attach table value; a string is the text alone.
+    TooltipValue = set({ "text", "maxWidth" }),
     CheckboxButton = set({ "onChange", "selectedValues", "y", "colour", "tooltip" }),
     -- The fields a CheckboxButton choice table may have.
     Choice = set({ "text", "label", "value", "selected", "disabled", "tooltip" }),
@@ -275,6 +280,77 @@ local function newContext(parent)
     return { parent = parent, tips = {} }
 end
 
+-- Destroy on an attachment from Tooltip.attach: gives the target's clickthrough back, as
+-- 1.2.0 does, and leaves its window's context. Calling it again does nothing.
+---@param tip table
+local function destroyAttachment(tip)
+    if tip.destroyed then return end
+    destroyTip(tip)
+    tip.shown = false
+    local lib = tip.lib
+    if lib.rawTips[tip.target] == tip then lib.rawTips[tip.target] = nil end
+    if not tip.target.destroyed then tip.target.clickthrough = tip.priorClickthrough end
+    if tip.context then
+        for i, member in ipairs(tip.context.tips) do
+            if member == tip then
+                table.remove(tip.context.tips, i)
+                break
+            end
+        end
+    end
+end
+
+local TooltipAttachment = strict.class("prettyui.Tooltip attachment", {
+    undeclared = true,
+    methods = {
+        Destroy = function(tip)
+            destroyAttachment(tip)
+        end,
+    },
+})
+
+-- Tooltip.attach(target, parent, value) (src/tooltip.lua) for a plugin's own component: the
+-- same tooltip record as every other, shown by the driver's hover on `target` and hidden on
+-- its leave. Like 1.2.0 it makes `target` take the mouse (clickthrough false). When `parent`
+-- is a Window's content, the tooltip joins that window's context: drawn on the window's
+-- parent, hidden by Close, destroyed by Destroy.
+---@param lib table
+---@param target any
+---@param parent any
+---@param value any a string, or { text, maxWidth }; nil attaches nothing
+---@param ... any
+---@return table? # the attachment, or nil for a nil value
+local function attachRawTooltip(lib, target, parent, value, ...)
+    if select("#", ...) > 0 then
+        strict.fault("unmocked API: prettyui Tooltip.attach with hover handlers")
+    end
+    local ts = ui.stateOf(target)
+    if not ts then strict.fault("prettyui Tooltip.attach: target must be a ui component") end
+    assert(ts, "unreachable")
+    if ts.destroyed then strict.fault("prettyui Tooltip.attach: target was destroyed") end
+    local ps = parentState("Tooltip.attach", parent)
+    if value == nil then return nil end
+    if type(value) == "table" then checkOptions("TooltipValue", value) end
+    local old = lib.rawTips[ts]
+    if old and not old.destroyed then
+        strict.fault(
+            "prettyui Tooltip.attach: the target already has a tooltip (whether 1.2.0 stacks "
+                .. "or replaces them is unprobed): Destroy it first"
+        )
+    end
+    local context = nil
+    for _, r in ipairs(lib.records) do
+        if r.kind == "Window" and r.s.contentState == ps and not gone(r) then context = r.s.tips end
+    end
+    local tip = attachTip(lib, ts, context and context.parent or ps, value, context)
+    assert(tip, "a non-nil value always attaches")
+    tip.lib = lib
+    tip.priorClickthrough = ts.clickthrough
+    ts.clickthrough = false
+    lib.rawTips[ts] = tip
+    return TooltipAttachment.new(tip)
+end
+
 local SpriteButton = strict.class("prettyui.SpriteButton instance", {
     undeclared = true,
     fields = {
@@ -454,7 +530,7 @@ end
 -- fonts, so text doesn't wrap: a body row is one line per <br>-separated part.
 ---@param lib table
 ---@param s table the owner (Window) state
----@param value any a string, or { text, tooltip }
+---@param value any a string, or { text, tooltip, y }
 ---@param isTitle boolean
 ---@return table
 local function addText(lib, s, value, isTitle)
@@ -464,8 +540,9 @@ local function addText(lib, s, value, isTitle)
     local _, breaks = text:gsub("<br>", "")
     local height = isTitle and TITLE_HEIGHT_ROW
         or math.max(TEXT_HEIGHT, (breaks + 1) * LINE_HEIGHT + 6)
-    local y =
-        flowRow(s.flow, height, isTitle and TITLE_GAP or TEXT_GAP, isTitle and TITLE_MARGIN or 0)
+    -- Given a y, 1.2.0 places the row there (absolute) and the flow doesn't move.
+    local y = options.y
+        or flowRow(s.flow, height, isTitle and TITLE_GAP or TEXT_GAP, isTitle and TITLE_MARGIN or 0)
     grow(s.flow, y + height)
     local label, ls = ui.create("Text", s.contentState)
     label:SetPos(PADDING, y)
@@ -575,6 +652,38 @@ local function windowScrollTo(s, position)
     s.scrollY = clamp(math.floor(position or 0), 0, most)
 end
 
+-- Window:SetContentHeight(height): the scrollable height, floored and at least 0. It replaces
+-- the height the rows grew it to (a later row placed lower grows it again), and re-clamps
+-- the scroll.
+---@param s table
+---@param height number
+local function windowSetContentHeight(s, height)
+    live(s)
+    if type(height) ~= "number" then
+        strict.fault("prettyui Window:SetContentHeight(height) needs a number")
+    end
+    s.flow.contentHeight = math.max(0, math.floor(height))
+    windowScrollTo(s, s.scrollY)
+end
+
+-- The window's wheel handler (its scroll controller's `_onScrollWheel`), as 1.2.0 binds it
+-- to the content: while the content overflows it scrolls by delta * 32 px and returns false
+-- if the position moved; otherwise it returns true. A top-level window has no parent
+-- handler to pass the wheel on to.
+---@param s table
+---@param delta number
+---@return boolean
+local function windowWheel(s, delta)
+    live(s)
+    local viewport = math.max(1, ui.height(s.rootState) - s.top - BORDER)
+    if s.flow.contentHeight > viewport then
+        local before = s.scrollY
+        windowScrollTo(s, before + delta * SCROLL_STEP)
+        if s.scrollY ~= before then return false end
+    end
+    return true
+end
+
 -- Window:SetSize, clamped to the window's min/max; it also makes the current position the
 -- one a stray root:SetPos snaps back to, and re-clamps the scroll.
 ---@param s table
@@ -617,6 +726,16 @@ local Window = strict.class("prettyui.Window instance", {
         closeButton = function(s)
             return s.closeButton
         end,
+        -- The scrolling layer the rows live in, for a plugin's own components.
+        content = function(s)
+            if s.destroyed then return nil end
+            return s.content
+        end,
+        -- 1.2.0's internal wheel handler (also set on the window by its scroll controller):
+        -- a plugin hands it to a row's ONSCROLLWHEEL so the wheel still scrolls the window.
+        _onScrollWheel = function(s)
+            return s.onWheel
+        end,
         -- 1.2.0's internal scroll controller; only its scrollY is modelled, as a snapshot.
         _scroll = function(s)
             if s.destroyed then return nil end
@@ -635,6 +754,7 @@ local Window = strict.class("prettyui.Window instance", {
             live(s)
             windowScrollTo(s, position)
         end,
+        SetContentHeight = windowSetContentHeight,
         Show = function(s)
             live(s)
             s.root.hidden = false
@@ -741,10 +861,17 @@ local WindowModule = module("Window", function(lib, parent, options)
     )
     local top = s.title and TITLE_HEIGHT or BORDER
     s.top, s.scrollY = top, 0
-    local content
-    content, s.contentState = ui.create("Layer", s.rootState)
-    content:SetPos(BORDER, top)
-    content:SetSize(-BORDER * 2, -top - BORDER, 1.0, 1.0)
+    s.content, s.contentState = ui.create("Layer", s.rootState)
+    s.content:SetPos(BORDER, top)
+    s.content:SetSize(-BORDER * 2, -top - BORDER, 1.0, 1.0)
+    -- The content takes pointer input and hands the wheel to the window's handler, as the
+    -- scroll controller sets it up; the h.ui driver treats it like a plugin's own layer.
+    s.contentState.clickthrough = false
+    s.contentState.raw = true
+    s.onWheel = function(_, delta)
+        return windowWheel(s, delta)
+    end
+    ui.addListener(s.contentState, ui.Hook.ONSCROLLWHEEL, "prettyui_scroll", s.onWheel)
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
     s.closeButton:SetSize(CLOSE_SIZE, CLOSE_SIZE)
@@ -917,6 +1044,11 @@ local AchievementPopupModule = strict.class("prettyui.AchievementPopup", {
     },
 })
 
+local TooltipModule = strict.class("prettyui.Tooltip", {
+    undeclared = true,
+    statics = { attach = attachRawTooltip },
+})
+
 local Library = strict.class("prettyui", {
     undeclared = true,
     fields = {
@@ -931,6 +1063,9 @@ local Library = strict.class("prettyui", {
         end,
         AchievementPopup = function(s)
             return s.AchievementPopup
+        end,
+        Tooltip = function(s)
+            return s.Tooltip
         end,
         version = function()
             return M.VERSION
@@ -951,6 +1086,7 @@ function M.install(h, env, global)
             byObj = setmetatable({}, { __mode = "k" }),
             closeButtons = {},
             tooltips = {},
+            rawTips = {}, -- target state -> its Tooltip.attach tooltip
             h = h,
             popupCount = 0,
         }
@@ -959,6 +1095,7 @@ function M.install(h, env, global)
             Panel = PanelModule.new(lib),
             SpriteButton = SpriteButtonModule.new(lib),
             AchievementPopup = AchievementPopupModule.new(lib),
+            Tooltip = TooltipModule.new(lib),
         })
         instance.prettyui = lib
     end
@@ -1130,10 +1267,119 @@ function Driver:lands(cs)
     return true
 end
 
+-- Whether a pointer action aimed at component `cs` is clipped by a window: the point the
+-- driver aims at (its centre) lies outside the view of a Window whose content holds it, after
+-- the content has scrolled. The client clips hit-testing as well as drawing (Row Probe,
+-- 2026-10-29). Positions the components report don't move with the scroll, so this works
+-- the scrolled position out.
+---@param cs table component state
+---@return boolean
+function Driver:clipped(cs)
+    for _, r in ipairs(self:lib().records) do
+        local s = r.s
+        if r.kind == "Window" and not gone(r) and cs ~= s.contentState then
+            if ui.within(cs, s.contentState) then
+                local top, c = 0, cs
+                while c ~= s.contentState do
+                    local _, y = ui.pos(c)
+                    top, c = top + y, c.parent
+                end
+                local centre = top + ui.height(cs) / 2 - s.scrollY
+                if centre < 0 or centre >= ui.height(s.contentState) then return true end
+            end
+        end
+    end
+    return false
+end
+
+-- Whether a component the plugin made (or a window's content) is one the raw pointer actions
+-- below apply to.
+---@param cs table?
+---@return boolean
+local function isRaw(cs)
+    return cs ~= nil and cs.raw == true
+end
+
+-- The component that takes a pointer action aimed at `cs`: itself, or its nearest ancestor
+-- that isn't clickthrough (the plugin root layer is the client's and takes none). Returns
+-- nil and why when the action doesn't land: hidden, clipped by the window it is scrolled
+-- out of, or nothing under the pointer takes it. Faults if `cs` was destroyed, or if a
+-- component on the way never had `clickthrough` set (the client's default is unprobed).
+---@param cs table component state
+---@return table? hit
+---@return string? why
+function Driver:reach(cs)
+    local ok, why = self:lands(cs)
+    if not ok then return nil, why end
+    if self:clipped(cs) then return nil, "clipped: scrolled out of the window's view" end
+    local c = cs
+    while c.parent do
+        if c.clickthrough == nil then
+            strict.fault(
+                "prettyui: "
+                    .. c.class
+                    .. " never had clickthrough set, and the client's default is unprobed"
+            )
+        end
+        if not c.clickthrough then return c end
+        c = c.parent
+    end
+    return nil, "clickthrough: nothing under the pointer takes the click"
+end
+
+-- The pointer's position over `cs`'s centre in `hit`'s own coordinates (the hooks' x, y).
+---@param cs table
+---@param hit table
+---@return integer x
+---@return integer y
+local function localPoint(cs, hit)
+    local cx, cy = ui.globalPos(cs)
+    local hx, hy = ui.globalPos(hit)
+    return math.floor(cx + ui.width(cs) / 2 - hx), math.floor(cy + ui.height(cs) / 2 - hy)
+end
+
+-- Click a component the plugin made (or a window's content): the component that takes it
+-- (see `reach`) gets ONCLICK and then ONRELEASE, both with the press point in its own
+-- coordinates. A plugin acts on ONCLICK: a quick click can arrive release first in the client,
+-- the order the fake doesn't reproduce (docs/api-concepts.md, Row Probe).
+---@param cs table
+---@return boolean
+---@return string?
+function Driver:clickComponent(cs)
+    local hit, why = self:reach(cs)
+    if not hit then return false, why end
+    local x, y = localPoint(cs, hit)
+    runtime.call(self.h.budgetMs, "component click", function()
+        ui.fire(hit, ui.Hook.ONCLICK, x, y)
+        ui.fire(hit, ui.Hook.ONRELEASE, x, y)
+    end)
+    return true
+end
+
+-- Turn the mouse wheel by `delta` over a component the plugin made (or a window's content):
+-- only the component that takes the pointer (see `reach`) gets ONSCROLLWHEEL(component, delta),
+-- so one with no wheel listener swallows it and the window doesn't scroll. Returns true and
+-- how many listeners ran (0: swallowed), or false and why it didn't land.
+---@param target any
+---@param delta number
+---@return boolean
+---@return string|integer
+function Driver:wheel(target, delta)
+    local cs = ui.stateOf(target)
+    assert(isRaw(cs), "h.ui:wheel needs a component the plugin made, or a window's content")
+    assert(cs, "unreachable")
+    local hit, why = self:reach(cs)
+    if not hit then return false, why or "did not land" end
+    local ran =
+        runtime.call(self.h.budgetMs, "mouse wheel", ui.fire, hit, ui.Hook.ONSCROLLWHEEL, delta)
+    return true, ran
+end
+
 -- Click a SpriteButton (its action gets (button, true)), a Window's closeButton (Close), or
--- one choice of a CheckboxButton (toggles it; onChange fires). Returns false and the reason
--- when the click wouldn't reach it (hidden, under a drag layer, a disabled choice); faults if
--- the target was destroyed.
+-- one choice of a CheckboxButton (toggles it; onChange fires), or a component the plugin made
+-- (ONCLICK, ONRELEASE; see `clickComponent`). Returns false and the reason when the click
+-- wouldn't reach it (hidden, under a drag layer, a disabled choice, clipped, clickthrough);
+-- faults if the target was destroyed.
 ---@param target any
 ---@param value any the choice's value, for a CheckboxButton
 ---@return boolean
@@ -1148,6 +1394,10 @@ function Driver:click(target, value)
         local ws = lib.closeButtons[cs]
         runtime.call(h.budgetMs, "PrettyUI close button", windowClose, ws)
         return true
+    end
+    if isRaw(cs) then
+        assert(cs, "unreachable")
+        return self:clickComponent(cs)
     end
     local r = self:record(target)
     if r.kind == "SpriteButton" then
@@ -1253,6 +1503,11 @@ end
 ---@return boolean
 ---@return string?
 function Driver:hover(target, value)
+    local raw = ui.stateOf(target)
+    if isRaw(raw) then
+        assert(raw, "unreachable")
+        return self:hoverComponent(raw)
+    end
     local cs, tipOf = self:hoverTarget(target, value)
     if cs.destroyed then strict.fault("prettyui: hovered a component used after Destroy()") end
     if not ui.visible(cs) then return false, "hidden" end
@@ -1263,15 +1518,55 @@ function Driver:hover(target, value)
     return true
 end
 
+-- Move the pointer onto a component the plugin made (or a window's content): the component
+-- that takes it (see `reach`) gets ONMOUSEOVER(component, x, y), reads isMouseOver true and
+-- shows its Tooltip.attach tooltip. Moving between a component and its clickthrough
+-- children stays on the same component: no events. Returns false and why, leaving the pointer
+-- where it was, if it doesn't land.
+---@param cs table component state
+---@return boolean
+---@return string?
+function Driver:hoverComponent(cs)
+    if cs.destroyed then strict.fault("prettyui: hovered a component used after Destroy()") end
+    local hit, why = self:reach(cs)
+    if not hit then return false, why end
+    if self.hovering and self.hovering.cs == hit then return true end
+    self:leave()
+    local lib = self:lib()
+    local function tipOf()
+        local tip = lib.rawTips[hit]
+        return tip and not tip.destroyed and tip or nil
+    end
+    self.hovering = { cs = hit, tipOf = tipOf, raw = true }
+    hit.mouseOver = true
+    local tip = tipOf()
+    if tip then tip.shown = true end
+    local x, y = localPoint(cs, hit)
+    runtime.call(self.h.budgetMs, "component mouse-over", ui.fire, hit, ui.Hook.ONMOUSEOVER, x, y)
+    return true
+end
+
 -- Move the pointer off whatever it is over. A target hidden (or destroyed) since it was
 -- hovered gets no mouse-leave, so its tooltip stays shown: the stuck tooltips seen in the
--- client (docs/api-concepts.md, PrettyUI in the client).
+-- client (docs/api-concepts.md, PrettyUI in the client). A component the plugin made reads
+-- isMouseOver false either way, and otherwise gets ONMOUSELEAVE(component).
 function Driver:leave()
     local hovering = self.hovering
     self.hovering = nil
-    if hovering == nil or not ui.visible(hovering.cs) then return end
+    if hovering == nil then return end
+    if hovering.raw and not hovering.cs.destroyed then hovering.cs.mouseOver = false end
+    if not ui.visible(hovering.cs) then return end
     local tip = hovering.tipOf()
     if tip then tip.shown = false end
+    if hovering.raw then
+        runtime.call(
+            self.h.budgetMs,
+            "component mouse-leave",
+            ui.fire,
+            hovering.cs,
+            ui.Hook.ONMOUSELEAVE
+        )
+    end
 end
 
 -- The text of every tooltip on screen: shown, not destroyed, and drawn in a visible component.

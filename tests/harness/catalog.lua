@@ -76,7 +76,7 @@ function M.var(domain, key)
 end
 
 -- name -> id and id -> name for one config type, from docs/api/consts/<kind>.lua.
----@param kind string "Inv", "Obj" or "Sound"
+---@param kind string "Inv", "Obj", "Sound", "Font" or "Sprite"
 ---@return table # { byName = {}, byId = {} }
 local function configTable(kind)
     if configs[kind] then return configs[kind] end
@@ -93,7 +93,7 @@ local function configTable(kind)
 end
 
 -- A config's ID and name, looked up by either.
----@param kind string "Inv", "Obj" or "Sound"
+---@param kind string "Inv", "Obj", "Sound", "Font" or "Sprite"
 ---@param key string|integer
 ---@return integer? id
 ---@return string? name

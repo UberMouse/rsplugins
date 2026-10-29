@@ -557,14 +557,24 @@ describe("prettyui AchievementPopup", function()
         assert.are.equal(1, #h.ui:popups())
     end)
 
-    it("faults on options it doesn't model, and on show without a parent", function()
-        assert.matches(
-            "option 'item'",
-            harness.errorOf(load, "prettyui.AchievementPopup.show({ parent = parent, item = 1 })")
-        )
-        assert.matches(
-            "without options.parent",
-            harness.errorOf(load, "prettyui.AchievementPopup.show({})")
-        )
-    end)
+    it(
+        "faults on options 1.2.0 doesn't read, accepts those it does, and on show without a parent",
+        function()
+            assert.matches(
+                "option 'titel'",
+                harness.errorOf(
+                    load,
+                    "prettyui.AchievementPopup.show({ parent = parent, titel = 1 })"
+                )
+            )
+            local h = load(
+                "popup = prettyui.AchievementPopup.show({ parent = parent, item = 1, shadowed = false })"
+            )
+            assert.is_not_nil(h.env.popup)
+            assert.matches(
+                "without options.parent",
+                harness.errorOf(load, "prettyui.AchievementPopup.show({})")
+            )
+        end
+    )
 end)

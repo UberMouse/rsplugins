@@ -96,6 +96,15 @@ local OPTIONS = {
         "sound",
         "soundID",
         "onComplete",
+        "titleColour",
+        "textColour",
+        "shadowed",
+        "item",
+        "quantity",
+        "quantityMode",
+        "itemInset",
+        "outlineWidth",
+        "shadowRGBA",
     }),
 }
 

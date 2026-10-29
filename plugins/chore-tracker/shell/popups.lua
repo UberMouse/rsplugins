@@ -45,9 +45,9 @@ local function show(c)
         width = size.width,
         height = size.height,
         -- Centred across the layer, and about a third of the way down by its centre.
-        x = -size.width / 2,
+        x = -(size.width // 2),
         xAnchor = 0.5,
-        y = -size.height / 2,
+        y = -(size.height // 2),
         yAnchor = Y_ANCHOR,
         sound = sound,
         soundID = c.kind == "period" and PERIOD_SOUND or CHORE_SOUND,

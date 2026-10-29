@@ -499,13 +499,11 @@ describe("chore-tracker resize cursors", function()
     ---@param h table
     local function assertCursors(h)
         local handles = window(h).resize.handles
-        local n = 0
         for key, cursor in pairs(EXPECTED) do
-            assert.are.equal(cursor, handles[key].cursorConfig.mouseOverCursor, key)
-            assert.are.equal(cursor, handles[key].opConfig:GetOpCursor(0), key)
-            n = n + 1
+            local handle = assert(handles[key], "window has no resize handle " .. key)
+            assert.are.equal(cursor, handle.cursorConfig.mouseOverCursor, key)
+            assert.are.equal(cursor, handle.opConfig:GetOpCursor(0), key)
         end
-        assert.are.equal(8, n)
     end
 
     it("are set on the handles of the window built at load", function()
@@ -529,7 +527,8 @@ describe("chore-tracker resize cursors", function()
             local h = loaded({ load = false })
             h.ui:resizeInternals(mode)
             h:load()
-            assert.is_nil(window(h).resize and window(h).resize.handles)
+            local resize = window(h).resize
+            assert.is_nil(resize and resize.handles)
             h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS", visible = true }))
             h:advance(40)
             assert.is_true(h.ui:layout(window(h)).visible)

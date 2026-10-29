@@ -82,7 +82,7 @@
 -- window's content, at spots core/listlayout.lua works out, because PrettyUI 1.2.0's
 -- CheckboxButton can't show an icon, be recoloured or be retexted (only the Celebrations
 -- switches use it). Ticks, colours, counts and tooltips change in place; the window
--- is rebuilt only for a view switch, a login change or the clock starting or stopping. Four
+-- is rebuilt only for a view switch, a login change or the clock starting or stopping. The
 -- uses of PrettyUI 1.2.0 state and internals, each guarded so a version without it loses only
 -- that: `_scroll.scrollY`, to keep the scroll through such a rebuild (scrollPosition) and to
 -- put the grips' press targets over scrolled rows, the window's `_onScrollWheel`, handed to each row so

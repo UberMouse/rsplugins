@@ -847,6 +847,30 @@ end
 -- The keys of 1.2.0's eight resize handles (src/core/resize.lua).
 local RESIZE_HANDLES = { "n", "s", "e", "w", "nw", "ne", "sw", "se" }
 
+-- Strict stand-ins for 1.2.0's `resize` controller and its `handles` table, so a typo such as
+-- `resize.handle` or `handles.nn` faults instead of reading nil. `state.handles` is the
+-- window's table of layers (nil under `resizeInternals("noHandles")`).
+local ResizeHandles = strict.class("prettyui.Window resize handles", {
+    undeclared = true,
+    fields = (function()
+        local fields = {}
+        for _, key in ipairs(RESIZE_HANDLES) do
+            fields[key] = function(s)
+                return s[key]
+            end
+        end
+        return fields
+    end)(),
+})
+local ResizeController = strict.class("prettyui.Window resize", {
+    undeclared = true,
+    fields = {
+        handles = function(s)
+            return s.handles and ResizeHandles.new(s.handles) or nil
+        end,
+    },
+})
+
 local Window = strict.class("prettyui.Window instance", {
     undeclared = true,
     fields = {
@@ -889,7 +913,9 @@ local Window = strict.class("prettyui.Window instance", {
         -- `h.ui:resizeInternals("none" or "noHandles")` reads it as nil (or without handles).
         resize = function(s)
             if s.destroyed or not s.handles or s.resizeMode == "none" then return nil end
-            return { handles = s.resizeMode ~= "noHandles" and s.handles or nil }
+            return ResizeController.new({
+                handles = s.resizeMode ~= "noHandles" and s.handles or nil,
+            })
         end,
         _RegisterOverlay = function(s)
             return overlayMethod(s, "_RegisterOverlay", registerOverlay)

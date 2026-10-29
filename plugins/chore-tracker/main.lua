@@ -155,6 +155,8 @@ local collapsedButton = nil ---@type prettyui.SpriteButton?
 -- heading. Both go with the window.
 local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
+-- The content width the rows' labels were last fitted at, so a resize re-fits them once.
+local fittedWidth = nil ---@type integer?
 -- Work left for the next Logic tick. A button's action mustn't destroy the button while
 -- PrettyUI is still handling its click, so a view switch (which rebuilds the window) and
 -- removing the collapsed panel after expanding wait a tick.
@@ -245,6 +247,18 @@ local function refreshList()
                 )
             end
         end
+    end
+end
+
+-- Re-fit the rows' names to the window's width when it has changed since they were last fitted
+-- (ui.Text can't clip, so a name is cut with "..." to stop before the tick box).
+local function refitRows()
+    assert(win, "the list is only refitted while its window exists")
+    local width = win.content.width
+    if width == fittedWidth then return end
+    fittedWidth = width
+    for _, rowView in pairs(rowViews) do
+        rows.fit(rowView)
     end
 end
 
@@ -375,7 +389,7 @@ end
 ---@param at { x: integer, y: integer, width: integer, height: integer }
 local function buildWindow(at)
     if win then win:Destroy() end
-    rowViews, headings = {}, {}
+    rowViews, headings, fittedWidth = {}, {}, nil
     local w = prettyui.Window.new(parent, {
         title = "Chores",
         x = at.x,
@@ -619,6 +633,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)
         saveLayoutIfChanged()
+        refitRows()
     end
 end)
 

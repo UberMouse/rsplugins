@@ -6,12 +6,13 @@
 -- object. The page names the validity property `isValid` (the stub says `valid`).
 --
 -- config is mocked only as far as inventories need: config.Inv and config.Obj, with names and
--- IDs from docs/api/consts/. ObjType fields beyond id/configName/typeName come from
+-- IDs from docs/api/consts/ (and config.Font, in fonts.lua). ObjType fields beyond id/configName/typeName come from
 -- h.world:defineObj and fault if a test reads one it didn't define.
 
 local recording = require("dev/recording")
 
 local catalog = require("tests.harness.catalog")
+local fonts = require("tests.harness.api.fonts")
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
 local world = require("tests.harness.world")
@@ -351,6 +352,9 @@ local Config = strict.class("_global.config", {
         Obj = function(s)
             return s.Obj
         end,
+        Font = function(s)
+            return s.Font
+        end,
     },
 })
 strict.declare("_global.config", "Inv.FromID", "inline")
@@ -360,7 +364,11 @@ strict.declare("_global.config", "Obj.FromID", "inline")
 ---@param env table the sandbox being built
 function M.install(h, env)
     env.Inventory = Inventory.new({ h = h })
-    env.config = Config.new({ Inv = configTable(h, "Inv"), Obj = configTable(h, "Obj") })
+    env.config = Config.new({
+        Inv = configTable(h, "Inv"),
+        Obj = configTable(h, "Obj"),
+        Font = fonts.table(),
+    })
 end
 
 return M

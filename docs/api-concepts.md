@@ -153,6 +153,14 @@ The official reference annotates Lua with pseudo-types:
   under `pcall`. A plugin layer component another plugin left behind can be removed by id with
   `layer:Delete(categoryID, dynamicID)` from the dev bridge.
 - Text content accepts `<br>` for line breaks.
+- **Measuring text.** `ui.Text` can't clip or ellipsise (its only size option is `maxLines`), so a
+  plugin that must keep a label out of something measures it:
+  `config.Font.MUSEO_SANS_15PT_REGULAR:GetStringWidth(text, false)` (PrettyUI 1.2.0 does the same
+  under `pcall`). Measured in the beta client, dev bridge, 2026-10-29: it returns integer pixel
+  widths ("Pure Essence from Wizard Cromperty" 271, "Daily Challenge" 109, "Rune Shop Run
+  (0/11)" 149, "W" 14, "i" 4, "..." 12); a Unicode "…" also measured 12 (the font may lack the
+  glyph), so cut with three ASCII dots; with `ignoreTags` false `<col=ff0000>red</col>` measured
+  25 (tags parsed, only "red" counted), with true 160 (tags counted as text), so pass false.
 - Some components are restricted. The guidelines also forbid unhiding hidden interface
   components and moving or resizing click zones.
 

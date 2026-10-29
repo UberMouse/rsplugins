@@ -79,14 +79,21 @@ function M.rows(h)
     return out
 end
 
--- The list row for a chore name (its text is the name, or the name and a shop count), or nil.
+-- The list row for a chore name (its text is the name, or the name and a shop count, or the start
+-- of either followed by "..."), or nil.
 ---@param h table
 ---@param name string
 ---@return table?
 function M.findRow(h, name)
     local found = nil
     for _, row in ipairs(M.rows(h)) do
-        if row.text == name or row.text:sub(1, #name + 2) == name .. " (" then
+        -- A name too long for the window is cut short and ends in "...".
+        local cut = row.text:sub(-3) == "..." and row.text:sub(1, -4) or nil
+        if
+            row.text == name
+            or row.text:sub(1, #name + 2) == name .. " ("
+            or (cut and name:sub(1, #cut) == cut)
+        then
             assert(found == nil, "two rows for " .. name)
             found = row
         end

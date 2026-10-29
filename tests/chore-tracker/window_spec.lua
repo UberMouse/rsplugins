@@ -6,6 +6,8 @@ local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
 local loaded, row, pick, ticked = helpers.loaded, helpers.row, helpers.pick, helpers.ticked
 
+local fonts = require("tests.harness.api.fonts")
+
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
 -- shell/rows.lua's text colours for a row not done and done.
 local TEXT_COLOUR, DONE_COLOUR = 0xE7D7B0FF, 0x7A7262FF
@@ -380,5 +382,99 @@ describe("chore-tracker window", function()
         h:advance(20)
         assert.is_false(h.ui:layout(h.ui:get("Window", { text = "Chores" })).visible)
         h.ui:get("Panel")
+    end)
+end)
+
+describe("chore-tracker long names", function()
+    local CROMPERTY = "Pure Essence from Wizard Cromperty"
+    -- shell/rows.lua keeps the label clear of the icon (30), the box (16) and a 6 px gap.
+    local LABEL_INSET = 52
+
+    -- The label's text, its tooltip (by hovering), and the label width available to it.
+    ---@param h table
+    ---@return string shown
+    ---@return string tooltip
+    ---@return integer avail
+    local function onlyRow(h)
+        local r = helpers.rows(h)[1]
+        local shown = r.label.content
+        assert(h.ui:hover(r.layer))
+        local tips = h.ui:tooltips()
+        h.ui:leave()
+        return shown, tips[1], r.layer.width - LABEL_INSET
+    end
+
+    it("cuts a long name with dots, leads its tooltip with the full name, and re-fits", function()
+        local h = loaded()
+        pick(h, { "cromperty-pure-essence" })
+        local shown, tip, avail = onlyRow(h)
+        assert.is_true(fonts.width(CROMPERTY, false) > avail)
+        assert.are.equal("...", shown:sub(-3))
+        assert.is_true(fonts.width(shown, false) <= avail)
+        assert.are.equal(CROMPERTY .. "<br>Weekly stock", tip:sub(1, #CROMPERTY + 16))
+
+        -- A wider window shows more of it, and all of it once it fits, with the plain tooltip.
+        h.ui:resize(window(h), 60, 0)
+        h:advance(600)
+        local wider, _, avail2 = onlyRow(h)
+        assert.is_true(#wider > #shown)
+        assert.is_true(fonts.width(wider, false) <= avail2)
+        h.ui:resize(window(h), 400, 0)
+        h:advance(600)
+        local whole, tip3 = onlyRow(h)
+        assert.are.equal(CROMPERTY, whole)
+        assert.are.equal("Weekly stock", tip3:sub(1, 12))
+
+        -- And back to narrow: cut again.
+        h.ui:resize(window(h), -460, 0)
+        h:advance(600)
+        local again, tip4 = onlyRow(h)
+        assert.are.equal(shown, again)
+        assert.are.equal(CROMPERTY .. "<br>", tip4:sub(1, #CROMPERTY + 4))
+    end)
+
+    it("leaves a short name and its tooltip alone", function()
+        local h = loaded()
+        pick(h, { "daily-challenge" })
+        local shown, tip = onlyRow(h)
+        assert.are.equal("Daily Challenge", shown)
+        assert.is_nil(tip:find("Daily Challenge", 1, true))
+    end)
+
+    it("re-fits when a shop count changes the text", function()
+        local h = loaded()
+        pick(h, { FEATHERS.id })
+        -- Make the window just wide enough for "(1/4)" but not "(0/4)": a digit '1' is
+        -- narrower than a '0' in the fake font.
+        local fits = fonts.width("Feather Shop Run (1/4)", false)
+        local r = helpers.rows(h)[1]
+        h.ui:resize(window(h), fits + LABEL_INSET - r.layer.width, 0)
+        h:advance(600)
+        local shown, tip = onlyRow(h)
+        assert.are.equal("...", shown:sub(-3))
+        assert.are.equal("Feather Shop Run (0/4)<br>", tip:sub(1, 26))
+
+        buyFeathers(h, "FISHINGSHOP")
+        h:advance(20)
+        local after, tip2 = onlyRow(h)
+        assert.are.equal("Feather Shop Run (1/4)", after)
+        assert.is_nil(tip2:find("Feather Shop Run", 1, true))
+    end)
+
+    it("shows full names and logs once when the font can't measure", function()
+        local h = loaded()
+        pick(h, { "cromperty-pure-essence", "daily-challenge" })
+        h.env.config = {
+            Font = setmetatable({}, {
+                __index = function()
+                    error("no font")
+                end,
+            }),
+        }
+        h.ui:resize(window(h), 10, 0)
+        h:advance(600)
+        assert.are.equal(CROMPERTY, helpers.rows(h)[2].label.content)
+        local _, n = h:output():gsub("%[CHORES%] cannot measure text", "")
+        assert.are.equal(1, n)
     end)
 end)

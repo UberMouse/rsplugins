@@ -126,6 +126,9 @@ The official reference annotates Lua with pseudo-types:
   - A click: `ONCLICK` and the first `ONHOLD` on the same tick, `ONRELEASE` 1-3 ticks later. A
     press held still gets `ONHOLD` every tick (42 in 42 ticks). The callbacks get the press
     point in the layer's own coordinates.
+  - A click on a `clickthrough = true` child of the row (an icon sprite, a label) reaches the
+    row layer under it as the row's own `ONCLICK`, with the row's local coordinates (icon
+    click at local (30, 19), label clicks at x 100-262).
   - **A click whose press and release land in one tick arrives backwards**: `ONRELEASE` and
     then `ONCLICK`, on the same tick, with no `ONHOLD`. Code that acts on "a press, then its
     release" misses these clicks; acting on `ONCLICK` (as PrettyUI does) catches every one.

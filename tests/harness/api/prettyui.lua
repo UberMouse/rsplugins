@@ -865,13 +865,14 @@ local WindowModule = module("Window", function(lib, parent, options)
     s.content:SetPos(BORDER, top)
     s.content:SetSize(-BORDER * 2, -top - BORDER, 1.0, 1.0)
     -- The content takes pointer input and hands the wheel to the window's handler, as the
-    -- scroll controller sets it up; the h.ui driver treats it like a plugin's own layer.
+    -- scroll controller sets it up (subscribed with no id, so it is the content's default
+    -- ONSCROLLWHEEL listener); the h.ui driver treats it like a plugin's own layer.
     s.contentState.clickthrough = false
     s.contentState.raw = true
     s.onWheel = function(_, delta)
         return windowWheel(s, delta)
     end
-    ui.addListener(s.contentState, ui.Hook.ONSCROLLWHEEL, "prettyui_scroll", s.onWheel)
+    ui.addListener(s.contentState, ui.Hook.ONSCROLLWHEEL, nil, s.onWheel)
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
     s.closeButton:SetSize(CLOSE_SIZE, CLOSE_SIZE)

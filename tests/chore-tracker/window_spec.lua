@@ -73,27 +73,6 @@ describe("chore-tracker window", function()
         assert.matches("%[CHORES%] loaded 67 chores", h:output())
     end)
 
-    it(
-        "lists every chore in settings, shop ones suffixed, in three groups, under the celebration settings",
-        function()
-            local h = loaded()
-            h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS" }))
-            h:advance(20)
-            local total, shop = 0, 0
-            local groups = h.ui:find("CheckboxButton")
-            for _, cb in ipairs(groups) do
-                for _, choice in ipairs(h.ui:choices(cb)) do
-                    total = total + 1
-                    if choice.text:find(" %(shop%)$") then shop = shop + 1 end
-                end
-            end
-            -- The two celebration settings, then the chores' three groups.
-            assert.are.equal(4, #groups)
-            assert.are.equal(67 + 2, total)
-            assert.is_true(shop > 0)
-        end
-    )
-
     it("shows each picked chore as a row with its icon, its name and an empty box", function()
         local h = loaded()
         local before = h.ui:layout(window(h))

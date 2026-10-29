@@ -62,8 +62,11 @@ describe("ui root fake", function()
             harness.errorOf(load, "ui.Interfaces.GetComponent(96797567)")
         )
         assert.matches(
-            "unmocked API: ui.Component.opConfig",
-            harness.errorOf(load, "local _ = ui.Interfaces:GetComponent(96797567).opConfig")
+            "unmocked API: ui.ComponentCursorConfig.targetValidCursor",
+            harness.errorOf(
+                load,
+                "local _ = ui.Interfaces:GetComponent(96797567).cursorConfig.targetValidCursor"
+            )
         )
     end)
 

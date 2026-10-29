@@ -5,10 +5,12 @@
 --     with how many are done. Each chore is a row with its icon (data/icons.lua: a built-in
 --     item icon or interface sprite), its name and a tick box. A click anywhere on the row
 --     ticks it; done chores stay in place, ticked, icon and name dimmed, and a second click
---     unticks them. Hover a chore for its description and wiki links (shown as text: plugins
+--     unticks them. Over any row the cursor is the hyperlink hand and an empty box shows
+--     its hovered sprite. Hover a chore for its description and wiki links (shown as text: plugins
 --     can't open URLs).
 --   * The settings button (top left of the content) opens the settings view, which has the
---     Celebrations switches and lists every chore to pick from. There, the title bar's
+--     Celebrations switches and lists every chore to pick from, as the same icon rows under
+--     Daily / Weekly / Monthly headings: click a row to pick or unpick it (its box ticks). There, the title bar's
 --     top-right slot is a back button to the list, in reach however far the settings are
 --     scrolled.
 --   * In the list, the hamburger in that slot (where PrettyUI's close X would be) collapses
@@ -68,14 +70,15 @@
 -- local daemon; scripts/check-submission.sh fails until it is stripped (README, "Before
 -- submitting").
 --
--- The list's rows are built by hand (shell/rows.lua) in the window's content, at spots
--- core/listlayout.lua works out, because PrettyUI 1.2.0's CheckboxButton can't show an icon,
--- be recoloured or be retexted. Ticks, colours, counts and tooltips change in place; the window
+-- The rows of both views, list and settings, are built by hand (shell/rows.lua) in the
+-- window's content, at spots core/listlayout.lua works out, because PrettyUI 1.2.0's
+-- CheckboxButton can't show an icon, be recoloured or be retexted (only the Celebrations
+-- switches use it). Ticks, colours, counts and tooltips change in place; the window
 -- is rebuilt only for a view switch, a login change or the clock starting or stopping. Two
 -- reads of PrettyUI 1.2.0 internals, each guarded so a version without it loses only that:
 -- `_scroll.scrollY`, to keep the scroll through such a rebuild (scrollPosition), and the
 -- window's `_onScrollWheel`, handed to each row so the wheel over a row still scrolls the window
--- (buildList).
+-- (wheelHandler).
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -151,8 +154,9 @@ local win = nil ---@type prettyui.Window?
 local openButton = nil ---@type prettyui.SpriteButton?
 local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
 local collapsedButton = nil ---@type prettyui.SpriteButton?
--- The list view's components, to update in place: chore id -> its row, and period -> its
--- heading. Both go with the window.
+-- The open view's components, to update in place: chore id -> its row (list rows or settings
+-- rows, whichever view is open; ids are the same in both), and period -> its list heading. Both
+-- go with the window.
 local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
 -- Work left for the next Logic tick. A button's action mustn't destroy the button while
@@ -278,6 +282,15 @@ local function onTick(id)
     popups.enqueue(celebrate.decide(before, tracker, chores, now, true))
 end
 
+-- A row swallows the mouse wheel unless it hands it to the window. The handler is PrettyUI
+-- 1.2.0-internal, so without it the rows are still made, just without that.
+---@param w prettyui.Window
+---@return ChoreWheelHandler?
+local function wheelHandler(w)
+    if type(w._onScrollWheel) == "function" then return w._onScrollWheel end
+    return nil
+end
+
 -- The list: the settings button and any notice in PrettyUI's flow, then a heading per period
 -- and a hand-built row per picked chore below them, at the spots core/listlayout.lua gives.
 ---@param w prettyui.Window
@@ -298,10 +311,7 @@ local function buildList(w, openSettings)
         return
     end
     local spots = listlayout.place(sections, top)
-    -- A row swallows the mouse wheel unless it hands it to the window. The handler is
-    -- PrettyUI 1.2.0-internal, so without it the rows are still made, just without that.
-    local wheel = nil ---@type ChoreWheelHandler?
-    if type(w._onScrollWheel) == "function" then wheel = w._onScrollWheel end
+    local wheel = wheelHandler(w)
     for _, section in ipairs(sections) do
         headings[section.period] =
             w:AddTitle({ text = headingText(section), y = spots.headings[section.period] })
@@ -319,19 +329,26 @@ end
 -- Settings view
 ---------------------------------------------------------------------------
 
--- A chore was picked or unpicked: save it straight away.
----@param _ prettyui.CheckboxButton
----@param _values any[]
----@param id string
----@param picked boolean
-local function onPick(_, _values, id, picked)
+-- A settings row's text: the chore's name, marked when it is a shop run.
+---@param chore Chore
+---@return string
+local function pickText(chore)
+    return chore.shop and chore.name .. " (shop)" or chore.name
+end
+
+-- A settings row was clicked: pick or unpick its chore, save it straight away and tick or
+-- empty the row's box. No celebration: picking is not completing.
+---@param chore Chore
+local function onPick(chore)
     assert(character, "settings are only built for a logged-in character")
+    local picked = not state.isSelected(tracker, chore.id)
     if picked then
-        tracker = state.select(tracker, chores, id)
+        tracker = state.select(tracker, chores, chore.id)
     else
-        tracker = state.deselect(tracker, id)
+        tracker = state.deselect(tracker, chore.id)
     end
     store.saveState(character, tracker)
+    rows.showPick(rowViews[chore.id], pickText(chore), picked)
 end
 
 -- A celebration setting was ticked or unticked: apply it and save it for all characters.
@@ -345,26 +362,35 @@ local function onCelebrationSetting(_, _values, setting, on)
     store.saveSettings(celebrations)
 end
 
+-- The settings view: the Celebrations switches in PrettyUI's flow, then a heading per period
+-- and a hand-built row per chore below them (listlayout.place wants sections of rows with ids,
+-- which a group's chores are).
 ---@param w prettyui.Window
 local function buildSettings(w)
     w:AddTitle("Celebrations")
-    w:AddCheckboxButton({
+    local switches = w:AddCheckboxButton({
         { text = "Celebration popups", value = "popups", selected = celebrations.popups },
         { text = "Popup sound", value = "sound", selected = celebrations.sound },
     }, { onChange = onCelebrationSetting })
-    for _, group in ipairs(view.byPeriod(chores)) do
-        local choices = {}
-        for _, chore in ipairs(group.chores) do
-            choices[#choices + 1] = {
-                text = chore.shop and chore.name .. " (shop)" or chore.name,
-                value = chore.id,
-                selected = state.isSelected(tracker, chore.id),
-                tooltip = tooltipFor(chore),
-            }
-        end
-        w:AddTitle(group.title)
-        w:AddCheckboxButton(choices, { onChange = onPick })
+    local groups = view.byPeriod(chores)
+    local sections = {}
+    for i, group in ipairs(groups) do
+        sections[i] = { period = group.period, rows = group.chores }
     end
+    local spots = listlayout.place(sections, switches.root.y + switches.root.height)
+    local wheel = wheelHandler(w)
+    for _, group in ipairs(groups) do
+        w:AddTitle({ text = group.title, y = spots.headings[group.period] })
+        for _, chore in ipairs(group.chores) do
+            local row = rows.new(w.content, spots.rows[chore.id], icons[chore.id], function()
+                onPick(chore)
+            end, wheel)
+            rowViews[chore.id] = row
+            rows.showPick(row, pickText(chore), state.isSelected(tracker, chore.id))
+            rows.setTooltip(row, w.content, tooltipFor(chore))
+        end
+    end
+    w:SetContentHeight(spots.height)
 end
 
 ---------------------------------------------------------------------------
@@ -429,7 +455,7 @@ end
 -- How far the window's content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
 -- can set it (SetScrollPosition) but has no getter, so this reads its internal
 -- `_scroll.scrollY`; a version without that field gives nil. (The plugin's one other read of
--- PrettyUI internals is the rows' wheel handler, `_onScrollWheel`, in buildList.)
+-- PrettyUI internals is the rows' wheel handler, `_onScrollWheel`, in wheelHandler.)
 ---@return number?
 local function scrollPosition()
     assert(win, "the window exists from load to shutdown")

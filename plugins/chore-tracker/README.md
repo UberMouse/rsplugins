@@ -14,8 +14,9 @@ your client, never does anything in game for you, and sends nothing anywhere.
   says no chores are picked yet.
 - **Picking chores.** Click the settings button at the top left of the window. Above the chores
   is a Celebrations section (see below). Every chore is listed under Daily, Weekly and Monthly;
-  ones that are bought from a shop end in "(shop)". Tick the ones you want to track: changes
-  save straight away. To return to your list, click the back button in the window's top-right
+  ones that are bought from a shop end in "(shop)". Each is a row with its icon, its name and a
+  tick box: click anywhere on a row to pick it (the box ticks) or click again to drop it.
+  Changes save straight away. To return to your list, click the back button in the window's top-right
   corner, where the menu button usually sits. It stays there however far down you have scrolled.
   (Collapse the window from the list, not from here.)
 - **Ticking chores.** The list shows the chores you picked under Daily, Weekly and Monthly
@@ -23,7 +24,8 @@ your client, never does anything in game for you, and sends nothing anywhere.
   (the reward or the thing you handle, a gold XP or skill medallion when the reward is XP, the
   General Store icon for the general shops), its name, and a tick box at the right. Click
   anywhere on a row when you've done the chore: it stays where it is, ticked, with its icon and
-  name dimmed. Click it again to untick it.
+  name dimmed. Click it again to untick it. Over any row, in the list or in settings, the
+  cursor becomes the hyperlink hand and an empty tick box lights up.
 - **Long names.** A name too long for the window is shortened with "..." so it stops before
   the tick box; make the window wider and more of it shows. Hover a shortened row and its
   tooltip starts with the full name.
@@ -211,7 +213,7 @@ permissions") is true only after that check passes.
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
-| `shell/rows.lua` | One chore's row in the list: its icon, text and tick box, changed in place |
+| `shell/rows.lua` | One chore's row in the list or settings: its icon, text and tick box, changed in place |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |

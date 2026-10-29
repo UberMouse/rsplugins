@@ -246,6 +246,49 @@ local function isInteger(value)
     return math.type(value) == "integer"
 end
 
+-- A cursor id the plugin may set: -1 (none) or a member of id.Cursor.
+---@param value any
+---@return boolean
+local function isCursor(value)
+    return value == -1 or (isInteger(value) and catalog.config("Cursor", value) ~= nil)
+end
+
+-- ui.ComponentCursorConfig: only `mouseOverCursor` is modelled. Its state is a table of the
+-- component's own (`s.cursor`), so a destroyed component's config faults on use.
+local CursorConfig = strict.class("ui.ComponentCursorConfig", {
+    fields = { mouseOverCursor = storedField("mouseOverCursor") },
+    setters = {
+        mouseOverCursor = checkedSetter("mouseOverCursor", isCursor, "-1 or an id.Cursor member"),
+    },
+})
+
+-- ui.ComponentOpConfig: the op cursors only. An op index is an integer from 0.
+local OpConfig = strict.class("ui.ComponentOpConfig", {
+    methods = {
+        SetOpCursor = function(s, opIndex, cursorID, ...)
+            if not (isInteger(opIndex) and opIndex >= 0) or select("#", ...) > 0 then
+                strict.fault(
+                    "ui.ComponentOpConfig:SetOpCursor(opIndex, cursorID) needs an op index"
+                )
+            end
+            if not (isInteger(cursorID) and catalog.config("Cursor", cursorID)) then
+                strict.fault(
+                    "ui.ComponentOpConfig:SetOpCursor: cursorID must be an id.Cursor member"
+                )
+            end
+            s.opCursors[opIndex] = cursorID
+        end,
+        -- The page says what an unset op gives only as a filter description; -1 is the
+        -- "no cursor" value mouseOverCursor uses.
+        GetOpCursor = function(s, opIndex)
+            return s.opCursors[opIndex] or -1
+        end,
+        ClearOpCursors = function(s)
+            s.opCursors = {}
+        end,
+    },
+})
+
 -- The members every fake component has (ui/component.html), each faulting once destroyed.
 local FIELDS = {
     clickthrough = storedField("clickthrough"),
@@ -268,6 +311,15 @@ local FIELDS = {
     end,
     hidden = function(s)
         return s.hidden
+    end,
+    cursorConfig = function(s)
+        s.cursorState = s.cursorState or { class = "ui.ComponentCursorConfig", destroyed = false }
+        s.cursorState.destroyed = s.destroyed
+        return CursorConfig.new(s.cursorState)
+    end,
+    opConfig = function(s)
+        s.opState = s.opState or { opCursors = {}, destroyed = false }
+        return OpConfig.new(s.opState)
     end,
     xyGlobal = function(s)
         local x, y = M.globalPos(s)
@@ -625,12 +677,15 @@ local IdNamespace = strict.class("_global.id", {
         Obj = function(s)
             return s.objs
         end,
+        Cursor = function(s)
+            return s.cursors
+        end,
     },
 })
 
 -- id.<kind>.NAME from docs/api/consts/<kind>.lua (loaded on first use): a plugin can only name
 -- one that exists. `label` is the singular for the fault. FromID isn't modelled.
----@param kind string "Sound", "Font", "Sprite" or "Obj"
+---@param kind string "Sound", "Font", "Sprite", "Obj" or "Cursor"
 ---@param label string
 ---@return table
 local function idNames(kind, label)
@@ -667,6 +722,7 @@ function M.install(h, env)
         fonts = idNames("Font", "font"),
         sprites = idNames("Sprite", "sprite"),
         objs = idNames("Obj", "object"), -- for SetAssociatedObject
+        cursors = idNames("Cursor", "cursor"), -- for the cursor configs
     })
 end
 

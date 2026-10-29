@@ -1,11 +1,12 @@
--- One chore's row in the list view, hand-built from plain components inside the window's
--- content: the chore's icon at the left, its text, and a tick box at the right edge. The row
--- layer takes the clicks; the icon, text and box let them through to it. A row is changed in
--- place (colour, dimming, tick, text, tooltip) and goes when its window is destroyed. A name
--- too long for its row is cut short with "..." (ui.Text can't clip), and its tooltip then
--- leads with the full text.
+-- One chore's row in the list or settings view, hand-built from plain components inside the
+-- window's content: the chore's icon at the left, its text, and a tick box at the right edge.
+-- The row layer takes the clicks; the icon, text and box let them through to it. While the
+-- mouse is over the row it shows the hyperlink hand, and an empty box shows its hovered
+-- sprite. A row is changed in place (colour, dimming, tick, text, tooltip) and goes when its
+-- window is destroyed. A name too long for its row is cut short with "..." (ui.Text can't
+-- clip), and its tooltip then leads with the full text.
 -- PrettyUI 1.2.0's CheckboxButton can neither show an icon nor be recoloured or retexted, so
--- the list doesn't use it.
+-- neither view uses it for chore rows.
 
 local fit = require("core/fit")
 local listlayout = require("core/listlayout")
@@ -29,6 +30,15 @@ local TEXT_COLOUR = 0xE7D7B0FF
 local DONE_COLOUR = 0x7A7262FF
 local DONE_ALPHA = 0.5
 
+-- The box's sprite by state; PrettyUI 1.2.0's CHECKBOX_BUTTON uses the same three (empty,
+-- empty and hovered, ticked).
+local BOX_EMPTY = id.Sprite.RS3_BTN_CHECKBOX_SMALL_0
+local BOX_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_SMALL_1
+local BOX_TICKED = id.Sprite.RS3_BTN_CHECKBOX_SMALL_2
+
+-- The cursor over a row. The user chose it among eight in a probe (docs/api-concepts.md).
+local ROW_CURSOR = id.Cursor.CURSOR_HYPERLINK_HAND
+
 local FONT_NAME = "MUSEO_SANS_15PT_REGULAR"
 
 local say = nil ---@type fun(...)?
@@ -50,7 +60,9 @@ local reported = {} ---@type table<string, boolean>
 ---@field shortened boolean whether the label shows less than `text`
 ---@field content ui.Layer? the layer that owns the tooltip, once it has one
 ---@field baseTooltip { text: string, maxWidth: integer }? the tooltip as given to setTooltip
----@field done boolean?
+---@field ticked boolean? whether the box is ticked
+---@field dimmed boolean? whether the icon and text are dimmed
+---@field hovered boolean whether the mouse is over the row
 ---@field tooltipText string?
 ---@field tooltip prettyui.TooltipAttachment?
 
@@ -80,6 +92,13 @@ local function resolve(icon)
     return nil
 end
 
+-- Show the box for the row's tick and hover state. A ticked box stays ticked when hovered.
+---@param row ChoreRowView
+local function drawBox(row)
+    if row.ticked == nil then return end
+    row.box.spriteID = row.ticked and BOX_TICKED or (row.hovered and BOX_HOVERED or BOX_EMPTY)
+end
+
 -- Make a row at content height `y` under `content`, showing `icon` (nothing if its name doesn't
 -- resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick click can
 -- arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
@@ -96,6 +115,10 @@ function M.new(content, y, icon, onClick, wheel)
     layer:SetPos(PADDING, y)
     layer:SetSize(-PADDING * 2, ROW_HEIGHT, 1.0, 0)
     layer.clickthrough = false
+    -- Set the way PrettyUI 1.2.0's src/core/cursor.lua does; whether the first alone would do
+    -- is unprobed.
+    layer.cursorConfig.mouseOverCursor = ROW_CURSOR
+    layer.opConfig:SetOpCursor(0, ROW_CURSOR)
     layer:Subscribe(ui.Hook.ONCLICK, function()
         onClick()
     end)
@@ -128,7 +151,26 @@ function M.new(content, y, icon, onClick, wheel)
     box:SetSize(BOX_SIZE, BOX_SIZE)
     box.clickthrough = true
 
-    return { layer = layer, icon = sprite, label = label, box = box, shortened = false }
+    local row = ---@type ChoreRowView
+        {
+            layer = layer,
+            icon = sprite,
+            label = label,
+            box = box,
+            shortened = false,
+            hovered = false,
+        }
+    -- Under the default id: Tooltip.attach subscribes the same hooks under its own id
+    -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other.
+    layer:Subscribe(ui.Hook.ONMOUSEOVER, function()
+        row.hovered = true
+        drawBox(row)
+    end)
+    layer:Subscribe(ui.Hook.ONMOUSELEAVE, function()
+        row.hovered = false
+        drawBox(row)
+    end)
+    return row
 end
 
 -- The client font's pixel width of `text`, tags parsed (ignoreTags false: only the text
@@ -201,13 +243,14 @@ function M.fit(row)
     if row.shortened ~= was then applyTooltip(row) end
 end
 
--- Show `text`, and the row as done (dimmed icon, muted text, ticked box) or not. Only what
--- changed is touched. The tooltip is left to setTooltip, which the caller runs next, so one
--- refresh replaces it once.
+-- Show `text` and the row's state: `ticked` fills the box, `dimmed` mutes the icon and text.
+-- Only what changed is touched. The tooltip is left to setTooltip, which the caller runs
+-- next, so one refresh replaces it once.
 ---@param row ChoreRowView
 ---@param text string
----@param done boolean
-function M.show(row, text, done)
+---@param ticked boolean
+---@param dimmed boolean
+local function apply(row, text, ticked, dimmed)
     if row.text ~= text then
         row.text = text
         -- Shown whole first, so a width that is still unknown leaves the full text.
@@ -215,12 +258,31 @@ function M.show(row, text, done)
         row.shortened, row.availWidth = false, nil
         fitLabel(row)
     end
-    if row.done == done then return end
-    row.done = done
-    row.label.rgba = done and DONE_COLOUR or TEXT_COLOUR
-    if row.icon then row.icon.alpha = done and DONE_ALPHA or 1 end
-    row.box.spriteID = done and id.Sprite.RS3_BTN_CHECKBOX_SMALL_2
-        or id.Sprite.RS3_BTN_CHECKBOX_SMALL_0
+    if row.dimmed ~= dimmed then
+        row.dimmed = dimmed
+        row.label.rgba = dimmed and DONE_COLOUR or TEXT_COLOUR
+        if row.icon then row.icon.alpha = dimmed and DONE_ALPHA or 1 end
+    end
+    if row.ticked ~= ticked then
+        row.ticked = ticked
+        drawBox(row)
+    end
+end
+
+-- List view: show `text`, and the row as done (dimmed icon, muted text, ticked box) or not.
+---@param row ChoreRowView
+---@param text string
+---@param done boolean
+function M.show(row, text, done)
+    apply(row, text, done, done)
+end
+
+-- Settings view: show `text`, and the box ticked when the chore is picked. Never dimmed.
+---@param row ChoreRowView
+---@param text string
+---@param picked boolean
+function M.showPick(row, text, picked)
+    apply(row, text, picked, false)
 end
 
 -- Give the row `tooltip`, drawn by the window that owns `content` (so destroying the window

@@ -8,6 +8,8 @@ require("tests.chore-tracker.support")
 local fit = require("core/fit")
 local varCore = require("core/vars")
 local varRules = require("data/vars")
+local chores = require("data/chores")
+local view = require("core/view")
 
 local M = {}
 
@@ -48,7 +50,7 @@ function M.loaded(opts)
     return h
 end
 
--- The list's rows, top to bottom: each hand-built row layer in the window's content, as
+-- The open view's rows (list or settings), top to bottom: each hand-built row layer in the window's content, as
 -- { layer, icon, label, box, text } (icon nil when the row has none). Found through the
 -- harness's component states, since the plugin keeps its rows in locals.
 ---@param h table
@@ -71,7 +73,8 @@ function M.rows(h)
                     end
                 end
             end
-            out[#out + 1] = row
+            -- The Celebrations switches are a layer too, but hold no text of ours.
+            if row.label then out[#out + 1] = row end
         end
     end
     table.sort(out, function(a, b)
@@ -122,7 +125,7 @@ function M.ticked(h, name)
     return M.row(h, name).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_SMALL_2")
 end
 
--- Click a chore's list row (on its text, which passes the click to the row).
+-- Click a chore's row, in either view (on its text, which passes the click to the row).
 ---@param h table
 ---@param name string
 function M.tick(h, name)
@@ -143,7 +146,7 @@ function M.rowShown(h, name)
     return row.text, tips[1]
 end
 
--- The settings view's CheckboxButton holding chore `id`.
+-- The settings view's Celebrations CheckboxButton holding the switch `id`.
 ---@param h table
 ---@param id string
 ---@return table
@@ -156,15 +159,34 @@ function M.group(h, id)
     error("no settings choice " .. id)
 end
 
--- Whether chore `id` is ticked in the settings view (picked).
+-- The settings view's row for chore `id`. Names repeat across periods, so it is found by
+-- position: the rows are in view.byPeriod order, one per chore.
+---@param h table
+---@param id string
+---@return table
+function M.settingsRow(h, id)
+    local list, n = M.rows(h), 0
+    for _, group in ipairs(view.byPeriod(chores)) do
+        for _, chore in ipairs(group.chores) do
+            n = n + 1
+            if chore.id == id then return assert(list[n], "no settings row " .. id) end
+        end
+    end
+    error("no chore " .. id)
+end
+
+-- Whether `id` is ticked in the settings view: a Celebrations switch by its value, else a
+-- chore (picked) by its row's box.
 ---@param h table
 ---@param id string
 ---@return boolean
 function M.picked(h, id)
-    for _, choice in ipairs(h.ui:choices(M.group(h, id))) do
-        if choice.value == id then return choice.selected end
+    for _, cb in ipairs(h.ui:find("CheckboxButton")) do
+        for _, choice in ipairs(h.ui:choices(cb)) do
+            if choice.value == id then return choice.selected end
+        end
     end
-    error("unreachable: group() found " .. id)
+    return M.settingsRow(h, id).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_SMALL_2")
 end
 
 -- Open the settings view.
@@ -179,8 +201,12 @@ end
 ---@param ids string[]
 function M.pick(h, ids)
     M.openSettings(h)
+    local win = h.ui:get("Window", { text = "Chores" })
     for _, id in ipairs(ids) do
-        click(h, M.group(h, id), id)
+        -- Settings lists every chore, so a row may be scrolled out of the view; bring it in.
+        local picking = M.settingsRow(h, id)
+        win:SetScrollPosition(picking.layer.y - 40)
+        click(h, picking.label)
     end
     click(h, h.ui:get("SpriteButton", { sprite = "BACK" }))
     h:advance(20)

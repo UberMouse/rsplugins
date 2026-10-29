@@ -142,6 +142,14 @@ The official reference annotates Lua with pseudo-types:
   - `component.dragConfig` is read-only ("sol: cannot write to a readonly property"); set its
     fields in place (`layer.dragConfig.deadZone = 10`), which reads back. A new layer's is
     `0, 0, 0`.
+- **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
+  A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
+  `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its
+  `clickthrough` text child. The user compared `CURSOR_HAND` 204, `CURSOR_HYPERLINK_HAND` 175,
+  `CURSOR_TICK` 157, `CURSOR_CROSS` 158, `CURSOR_BLANK` 41, `TOPLEVEL_V2_MOVE` 194, `CURSOR_MOVE` 0
+  and `CURSOR_TELE_GRAB` 111, and chose 175 for clickable rows; `TOPLEVEL_V2_MOVE` (PrettyUI
+  1.2.0's title-bar drag cursor) reads as a resize cursor. Whether `mouseOverCursor` alone,
+  without `SetOpCursor`, is enough was not settled.
 - **Enums are numbers in the client**, though the stubs list string values: `ui.DragRenderBehaviour`
   reads `TRANSPARENT_OVERLAY = 0` … `INVISIBLE = 3`, and `ui.DragRenderBehaviour.FromID(2)`
   gives back the name `"OPAQUE_OVERLAY"`. `pairs` over the enum table shows only `FromID`.

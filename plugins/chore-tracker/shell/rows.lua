@@ -31,7 +31,7 @@ local DONE_COLOUR = 0x7A7262FF
 local DONE_ALPHA = 0.5
 
 -- The box's sprite by state. This is the full RS3_BTN_CHECKBOX set rather than the SMALL one
--- PrettyUI 1.2.0 uses, because only the full set has a ticked-and-hovered sprite.
+-- PrettyUI 1.2.0 uses: the SMALL set has no ticked-and-hovered sprite, RS3_BTN_CHECKBOX_3 is one.
 local BOX_EMPTY = id.Sprite.RS3_BTN_CHECKBOX_0
 local BOX_EMPTY_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_1
 local BOX_TICKED = id.Sprite.RS3_BTN_CHECKBOX_2

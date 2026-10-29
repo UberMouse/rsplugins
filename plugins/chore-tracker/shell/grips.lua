@@ -11,16 +11,14 @@
 -- drop (core/reorder.lua works out where); past the list's top or bottom edge the window
 -- scrolls. The release drops the row there and hands the move to the caller to save.
 --
--- The targets are re-docked every Logic tick (follow), so they keep up with the window being
--- moved, resized or scrolled. A target is only moved when its spot changed, and hidden
--- whenever its grip isn't wholly on show.
+-- follow() re-docks the targets every Logic tick so they track the window being moved, resized
+-- or scrolled.
 --
 -- A held press gets ONHOLD every Logic tick, even with the pointer still (docs/api-concepts.md).
--- A drag that goes DRAG_LOST_TICKS without one has lost its release (what the client sends when
--- it loses focus mid-press is unprobed), and is dropped as a release would: left stretched in
--- front, its target would take the next click anywhere and move the row.
+-- A drag that goes DRAG_LOST_TICKS without one has lost its release (the pointer leaving the
+-- client window ends a drag, docs/api-concepts.md) and is dropped as a release would be: left
+-- stretched in front, its target would take the next click anywhere and move the row.
 
-local listlayout = require("core/listlayout")
 local reorder = require("core/reorder")
 local rows = require("shell/rows")
 
@@ -30,7 +28,6 @@ local M = {}
 -- (docs/api-concepts.md).
 local GRIP_CURSOR = id.Cursor.CURSOR_PUSH
 local GRIP_SIZE, GRIP_Y = rows.GRIP_SIZE, rows.GRIP_Y
-local ROW_HEIGHT = listlayout.ROW_HEIGHT
 -- About 200 ms: well clear of the every-tick ONHOLD of a held press.
 local DRAG_LOST_TICKS = 10
 
@@ -64,6 +61,8 @@ local DRAG_LOST_TICKS = 10
 
 local ctx = nil ---@type ChoreGripsOpts?
 local grips = {} ---@type ChoreGrip[]
+-- Each period's row ids, top to bottom: a copy of the built sections, kept in step with drops.
+local sections = {} ---@type { period: string, ids: string[] }[]
 local drag = nil ---@type ChoreGripDrag?
 -- A grip pressed whose drag hasn't started, and how many Logic ticks ago. A quick click can
 -- arrive release-first (docs/api-concepts.md), leaving a press with no ONHOLD or release to
@@ -169,7 +168,7 @@ end
 ---@return { period: string, ids: string[] }
 local function sectionOf(period)
     assert(ctx, "sections exist once built")
-    for _, section in ipairs(ctx.sections) do
+    for _, section in ipairs(sections) do
         if section.period == period then return section end
     end
     error("no section for " .. period)
@@ -219,8 +218,8 @@ local function drop()
     table.remove(ids, d.from)
     table.insert(ids, d.slot, d.grip.id)
     sectionOf(d.grip.period).ids = ids
-    for i, rowId in ipairs(ids) do
-        moveRow(ctx.rows[rowId], d.firstY + (i - 1) * ROW_HEIGHT)
+    for rowId, y in pairs(reorder.settle(ids, d.firstY)) do
+        moveRow(ctx.rows[rowId], y)
     end
     d.grip.target:SetSize(GRIP_SIZE, GRIP_SIZE)
     -- Forget the spot so the next dock moves it back.
@@ -237,7 +236,9 @@ function M.build(opts)
     M.clear()
     if opts.scrollY() == nil then return end
     ctx = opts
-    for _, section in ipairs(opts.sections) do
+    for i, section in ipairs(opts.sections) do
+        sections[i] =
+            { period = section.period, ids = table.move(section.ids, 1, #section.ids, 1, {}) }
         for _, rowId in ipairs(section.ids) do
             local target = ui.Layer.new(opts.parent)
             target:SetSize(GRIP_SIZE, GRIP_SIZE)
@@ -276,11 +277,12 @@ function M.clear()
     for _, grip in ipairs(grips) do
         grip.target:Destroy()
     end
-    grips, drag, pressed, ctx, shown, allHidden = {}, nil, nil, nil, false, false
+    grips, sections, drag, pressed, ctx, shown, allHidden = {}, {}, nil, nil, nil, false, false
 end
 
--- Keep the targets over their grips, and drop a drag whose release never came. Call every
--- Logic tick, `open` false while the window is closed.
+-- Keep the targets over their grips, and drop a drag whose release never came or whose window
+-- closed (its stretched target would take clicks). Call every Logic tick, `open` false while
+-- the window is closed.
 ---@param open boolean
 function M.follow(open)
     if pressed and not drag then
@@ -290,7 +292,7 @@ function M.follow(open)
     shown = open
     if drag then
         drag.idle = drag.idle + 1
-        if drag.idle > DRAG_LOST_TICKS then drop() end
+        if not open or drag.idle > DRAG_LOST_TICKS then drop() end
     end
     if ctx and (open or not allHidden) then dock() end
 end

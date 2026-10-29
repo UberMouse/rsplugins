@@ -590,6 +590,32 @@ describe("chore-tracker drag and other events", function()
         h.ui.pressing = nil
     end)
 
+    it("drops the drag as a release would when the window collapses", function()
+        local h = ready()
+        local firstY = rowY(h, "daily-challenge")
+        local writes = h.dbWrites
+        local x, y = grab(h, "daily-challenge")
+        assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
+        local target = h.ui.pressing.s.proxy
+        -- In the client the stretched target covers the hamburger; the fake doesn't model that,
+        -- so this is the one way a spec closes the window mid-drag.
+        assert.is_true(h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true })))
+        -- Docked back to grip size and hidden with the rest, so it takes no clicks.
+        assert.are.same({ 16, 16 }, { target.width, target.height })
+        assert.are.equal(0, #shownTargets(h))
+        assert.are.equal(writes + 1, h.dbWrites)
+        assert.are.equal("daily-challenge", stored(h)[3])
+        assert.are.equal(firstY + 2 * ROW, rowY(h, "daily-challenge"))
+        assert.matches("%[CHORES%] moved daily%-challenge to 3 in daily", h:output())
+        -- The fake faults on a held press whose layer was hidden (unprobed in the client); end
+        -- it here.
+        h.ui.pressing = nil
+        h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+        h:advance(20)
+        assert.are.equal(target, targetOf(h, "daily-challenge"))
+        assert.are.equal("daily-challenge", stored(h)[3])
+    end)
+
     it("keeps the drag through a clock tick, an auto tick and its popup", function()
         local h = ready()
         local firstY = rowY(h, "daily-challenge")

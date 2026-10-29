@@ -123,17 +123,16 @@ end
 -- Make a row at content height `y` under `content`, showing `icon` (nothing if its name doesn't
 -- resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick click can
 -- arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
--- `ui.Layer`"). `wheel`, when given, takes the mouse wheel over the row, which the row would
--- otherwise swallow. With `grip`, the row gets a drag grip at its left and the rest moves
--- right to make room. Call M.show to give it its text and state.
+-- `ui.Layer`"). `opts.wheel`, when given, takes the mouse wheel over the row, which the row
+-- would otherwise swallow. With `opts.grip`, the row gets a drag grip at its left and the rest
+-- moves right to make room. Call M.show to give it its text and state.
 ---@param content ui.Layer
 ---@param y integer
 ---@param icon ChoreIcon
 ---@param onClick fun()
----@param wheel ChoreWheelHandler?
----@param grip boolean?
+---@param opts { wheel: ChoreWheelHandler?, grip: boolean? }
 ---@return ChoreRowView
-function M.new(content, y, icon, onClick, wheel, grip)
+function M.new(content, y, icon, onClick, opts)
     local layer = ui.Layer.new(content)
     layer:SetPos(PADDING, y)
     layer:SetSize(-PADDING * 2, ROW_HEIGHT, 1.0, 0)
@@ -145,10 +144,10 @@ function M.new(content, y, icon, onClick, wheel, grip)
     layer:Subscribe(ui.Hook.ONCLICK, function()
         onClick()
     end)
-    if wheel then layer:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel) end
+    if opts.wheel then layer:Subscribe(ui.Hook.ONSCROLLWHEEL, opts.wheel) end
 
     local left = 0
-    if grip then
+    if opts.grip then
         local gripSprite = ui.Sprite.new(layer)
         gripSprite:SetPos(0, M.GRIP_Y)
         gripSprite:SetSize(M.GRIP_SIZE, M.GRIP_SIZE)

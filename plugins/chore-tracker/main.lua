@@ -64,10 +64,10 @@
 --     characters. Each popup logs "[CHORES] celebrate <chore id>" or "[CHORES] celebrate
 --     <period> cleared" (grep: \[CHORES\] (purchase|collected|seen|celebrate) for all the
 --     lines above and these).
---   * Picks, their order and ticks are saved per character (by display name) as they change. The window's
---     position, size and collapsed state, and the collapsed button's spot, are saved for all
---     characters, as are the celebration settings. Logged out, the window says so; until the
---     game clock reads, nothing can be ticked.
+--   * Picks, their order and ticks are saved per character (by display name) as they change.
+--     The window's position, size and collapsed state, and the collapsed button's spot, are
+--     saved for all characters, as are the celebration settings. Logged out, the window says
+--     so; until the game clock reads, nothing can be ticked.
 --
 -- It reads only what the game already gives the player's client (an open shop's stock, their
 -- own backpack, position and game vars): no permissions, nothing sent to the game, nothing
@@ -294,9 +294,7 @@ end
 
 -- How far the window's content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
 -- can set it (SetScrollPosition) but has no getter, so this reads its internal
--- `_scroll.scrollY`; a version without that field gives nil. (The plugin's other reads of
--- PrettyUI 1.2.0 state are the rows' wheel handler, `_onScrollWheel`, in wheelHandler, and the
--- window's `viewport`, which buildList hands the grips.)
+-- `_scroll.scrollY`; a version without that field gives nil.
 ---@return number?
 local function scrollPosition()
     assert(win, "the window exists from load to shutdown")
@@ -312,11 +310,11 @@ end
 ---@param slot integer
 local function onDrop(id, slot)
     if character == nil then return end
+    local chore = assert(state.find(chores, id), "a row is only made for a chore in the list")
     local moved = state.move(tracker, chores, id, slot)
     if moved == tracker then return end
     tracker = moved
     store.saveState(character, tracker)
-    local chore = assert(state.find(chores, id), "a row is only made for a chore in the list")
     say(string.format("moved %s to %d in %s", id, slot, chore.period))
 end
 
@@ -358,7 +356,7 @@ local function buildList(w, openSettings)
         for _, row in ipairs(section.rows) do
             rowViews[row.id] = rows.new(w.content, spots.rows[row.id], icons[row.id], function()
                 onTick(row.id)
-            end, wheel, true)
+            end, { wheel = wheel, grip = true })
             ids[#ids + 1] = row.id
         end
         order[#order + 1] = { period = section.period, ids = ids }
@@ -443,7 +441,7 @@ local function buildSettings(w)
         for _, chore in ipairs(group.chores) do
             local row = rows.new(w.content, spots.rows[chore.id], icons[chore.id], function()
                 onPick(chore)
-            end, wheel)
+            end, { wheel = wheel })
             rowViews[chore.id] = row
             rows.showPick(row, pickText(chore), state.isSelected(tracker, chore.id))
             rows.setTooltip(row, w.content, tooltipFor(chore))
@@ -462,6 +460,11 @@ local collapse -- defined below; the window's hamburger calls it
 -- list is scrolled. Like every view switch, it waits a tick.
 local function backToList()
     pendingMode = "list"
+end
+
+-- Keep the grips' targets over their grips, shown only while the window is open.
+local function followGrips()
+    grips.follow(collapsed == nil)
 end
 
 -- (Re)build the window at `at` for the current phase and mode. There's no PrettyUI call to
@@ -512,7 +515,7 @@ local function buildWindow(at)
             pendingMode = "settings"
         end)
     end
-    grips.follow(collapsed == nil)
+    followGrips()
 end
 
 -- Rebuild the window where it is, staying closed if collapsed. With `keepScroll`, the new
@@ -582,11 +585,11 @@ expand = function()
     win:Show()
     -- Show brings the window to the front, over the grips' targets.
     grips.raise()
-    grips.follow(true)
     collapsed.root.hidden = true
     -- An earlier panel still waiting for the tick is past its click, so it can go now.
     if retiring then retiring:Destroy() end
     retiring, collapsed, collapsedButton = collapsed, nil, nil
+    followGrips()
     say("expanded from", x, y)
 end
 
@@ -717,7 +720,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
         refitRows()
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.
-    grips.follow(collapsed == nil)
+    followGrips()
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)

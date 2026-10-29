@@ -50,6 +50,11 @@ describe("chore-tracker state", function()
             assert.are.same(s, state.deselect(s, "nope"))
         end)
 
+        it("gives back the same state when selecting an id not in the chore list", function()
+            local s = state.select(state.new(), chores, "d1")
+            assert.are.equal(s, state.select(s, chores, "nope"))
+        end)
+
         it("never changes the state it is given", function()
             local s = state.new()
             state.select(s, chores, "d1")
@@ -209,6 +214,12 @@ describe("chore-tracker state", function()
             assert.are.equal(s, state.move(s, chores, "d2", 5))
             assert.are.equal(s, state.move(s, chores, "d1", 1))
             assert.are.equal(s, state.move(s, chores, "dshop", 1))
+            assert.are.equal(s, state.move(s, chores, "gone", 1))
+        end)
+
+        it("gives back the same state for a selected id the chore list no longer has", function()
+            -- A stored pick can outlive its chore; with no period it has no group to move in.
+            local s = { selected = { "d1", "gone", "d2" }, done = {}, shops = {} }
             assert.are.equal(s, state.move(s, chores, "gone", 1))
         end)
 

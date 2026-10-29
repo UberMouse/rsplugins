@@ -73,9 +73,9 @@ local function shopLines(s, chore, listed, now)
 end
 
 -- The sections in the order Daily, Weekly, Monthly, each holding only its selected chores
--- (shop chores included), in the order the player arranged them. A period with nothing selected has no section. Without a clock
--- (`now` nil: logged out or loading) nothing shows done or bought, since no period can be
--- placed.
+-- (shop chores included), in the order the player arranged them. A period with nothing
+-- selected has no section. Without a clock (`now` nil: logged out or loading) nothing shows
+-- done or bought, since no period can be placed.
 ---@param s ChoreState
 ---@param chores Chore[]
 ---@param now integer? epoch minutes

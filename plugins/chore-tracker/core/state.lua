@@ -289,7 +289,8 @@ function M.deserialise(value, chores)
     end
 
     if type(value.selected) == "table" then
-        -- ipairs, not pairs: the stored order is the player's order.
+        -- ipairs, not pairs: the stored order is the player's order, and pairs would visit
+        -- the ids in no fixed order. A list with a hole loads only the ids before the gap.
         local seen = {}
         for _, id in ipairs(value.selected) do
             if type(id) == "string" and not seen[id] and M.find(chores, id) then

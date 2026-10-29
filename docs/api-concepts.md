@@ -638,7 +638,7 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   - `ui.Sprite:SetAssociatedObject(objId)` draws the item's icon scaled into the sprite's box:
     32 px fills a 36-high row, 24 px is smaller but clear. Coins' icon is a speck at any size
     (one coin's art). `alpha = 0.5` on the icon, muted text and
-    `id.Sprite.RS3_BTN_CHECKBOX_SMALL_2` (the ticked box; `_0` is empty) read as "done".
+    `id.Sprite.RS3_BTN_CHECKBOX_2` (the ticked box; `_0` is empty) read as "done".
   - The window clips both drawing and the mouse: a row scrolled past the bottom edge drew
     only the part inside, and hovering and clicking just below the window reached no row.
   - **A raw row swallows the mouse wheel.** Over a row that subscribes nothing for the wheel,
@@ -649,6 +649,12 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
     what PrettyUI's `ItemSlot` uses on content children. It works on a hand-built row
     (user-checked in the beta client, 2026-10-29): the tooltip shows on hover and goes on leave,
     and a shortened row's tooltip leads with the full name.
+  - **Row box sprites** (rendered in the user's client by the conductor, 2026-10-29):
+    `RS3_BTN_CHECKBOX_0/1/2/3` are empty / empty-hovered (lighter border) / ticked /
+    ticked-hovered and read well at 16 px. The SMALL set PrettyUI 1.2.0 uses has no
+    ticked-hovered sprite (its selectedHovered is the plain ticked one), so the rows use the
+    full 0-3 set, the user's choice. `RS3_BTN_CHECKBOX_4` looks like an empty box (role not
+    established).
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

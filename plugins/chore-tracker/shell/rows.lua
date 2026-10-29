@@ -1,9 +1,9 @@
 -- One chore's row in the list or settings view, hand-built from plain components inside the
 -- window's content: the chore's icon at the left, its text, and a tick box at the right edge.
 -- The row layer takes the clicks; the icon, text and box let them through to it. While the
--- mouse is over the row it shows the hyperlink hand, and an empty box shows its hovered
--- sprite. A row is changed in place (colour, dimming, tick, text, tooltip) and goes when its
--- window is destroyed. A name too long for its row is cut short with "..." (ui.Text can't
+-- mouse is over the row it shows the hyperlink hand, and its box shows a hovered sprite. A
+-- row is changed in place (colour, dimming, tick, text, tooltip) and goes when its window is
+-- destroyed. A name too long for its row is cut short with "..." (ui.Text can't
 -- clip), and its tooltip then leads with the full text.
 -- PrettyUI 1.2.0's CheckboxButton can neither show an icon nor be recoloured or retexted, so
 -- neither view uses it for chore rows.
@@ -30,11 +30,12 @@ local TEXT_COLOUR = 0xE7D7B0FF
 local DONE_COLOUR = 0x7A7262FF
 local DONE_ALPHA = 0.5
 
--- The box's sprite by state; PrettyUI 1.2.0's CHECKBOX_BUTTON uses the same three (empty,
--- empty and hovered, ticked).
-local BOX_EMPTY = id.Sprite.RS3_BTN_CHECKBOX_SMALL_0
-local BOX_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_SMALL_1
-local BOX_TICKED = id.Sprite.RS3_BTN_CHECKBOX_SMALL_2
+-- The box's sprite by state. This is the full RS3_BTN_CHECKBOX set rather than the SMALL one
+-- PrettyUI 1.2.0 uses, because only the full set has a ticked-and-hovered sprite.
+local BOX_EMPTY = id.Sprite.RS3_BTN_CHECKBOX_0
+local BOX_EMPTY_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_1
+local BOX_TICKED = id.Sprite.RS3_BTN_CHECKBOX_2
+local BOX_TICKED_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_3
 
 -- The cursor over a row. The user chose it among eight in a probe (docs/api-concepts.md).
 local ROW_CURSOR = id.Cursor.CURSOR_HYPERLINK_HAND
@@ -92,11 +93,15 @@ local function resolve(icon)
     return nil
 end
 
--- Show the box for the row's tick and hover state. A ticked box stays ticked when hovered.
+-- Show the box for the row's tick and hover state.
 ---@param row ChoreRowView
 local function drawBox(row)
     if row.ticked == nil then return end
-    row.box.spriteID = row.ticked and BOX_TICKED or (row.hovered and BOX_HOVERED or BOX_EMPTY)
+    if row.ticked then
+        row.box.spriteID = row.hovered and BOX_TICKED_HOVERED or BOX_TICKED
+    else
+        row.box.spriteID = row.hovered and BOX_EMPTY_HOVERED or BOX_EMPTY
+    end
 end
 
 -- Clear the row's hover. For a row about to be hidden, whose mouse-leave the client won't send.

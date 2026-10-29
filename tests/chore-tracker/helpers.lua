@@ -122,7 +122,7 @@ end
 ---@param name string
 ---@return boolean
 function M.ticked(h, name)
-    return M.row(h, name).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_SMALL_2")
+    return M.row(h, name).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")
 end
 
 -- Click a chore's row, in either view (on its text, which passes the click to the row).
@@ -186,7 +186,7 @@ function M.picked(h, id)
             if choice.value == id then return choice.selected end
         end
     end
-    return M.settingsRow(h, id).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_SMALL_2")
+    return M.settingsRow(h, id).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")
 end
 
 -- Open the settings view.

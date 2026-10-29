@@ -5,8 +5,8 @@
 --     with how many are done. Each chore is a row with its icon (data/icons.lua: a built-in
 --     item icon or interface sprite), its name and a tick box. A click anywhere on the row
 --     ticks it; done chores stay in place, ticked, icon and name dimmed, and a second click
---     unticks them. Over any row the cursor is the hyperlink hand and an empty box shows
---     its hovered sprite. Hover a chore for its description and wiki links (shown as text:
+--     unticks them. Over any row the cursor is the hyperlink hand and the box shows a
+--     hovered sprite. Hover a chore for its description and wiki links (shown as text:
 --     plugins can't open URLs).
 --   * The settings button (top left of the content) opens the settings view, which has the
 --     Celebrations switches and lists every chore to pick from, as the same icon rows under

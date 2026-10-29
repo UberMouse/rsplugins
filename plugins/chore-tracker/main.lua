@@ -6,13 +6,13 @@
 --     item icon or interface sprite), its name and a tick box. A click anywhere on the row
 --     ticks it; done chores stay in place, ticked, icon and name dimmed, and a second click
 --     unticks them. Over any row the cursor is the hyperlink hand and an empty box shows
---     its hovered sprite. Hover a chore for its description and wiki links (shown as text: plugins
---     can't open URLs).
+--     its hovered sprite. Hover a chore for its description and wiki links (shown as text:
+--     plugins can't open URLs).
 --   * The settings button (top left of the content) opens the settings view, which has the
 --     Celebrations switches and lists every chore to pick from, as the same icon rows under
---     Daily / Weekly / Monthly headings: click a row to pick or unpick it (its box ticks). There, the title bar's
---     top-right slot is a back button to the list, in reach however far the settings are
---     scrolled.
+--     Daily / Weekly / Monthly headings: click a row to pick or unpick it (its box ticks).
+--     There, the title bar's top-right slot is a back button to the list, in reach however far
+--     the settings are scrolled.
 --   * In the list, the hamburger in that slot (where PrettyUI's close X would be) collapses
 --     the window into a single hamburger button at the same spot. Alt-drag that
 --     button to move it (with the console closed); click it to open the window again, grown
@@ -256,7 +256,7 @@ end
 -- stop before the tick box). rows.fit returns at once for a row whose width is unchanged, so
 -- fitting every row on each poll costs nothing while the window is idle.
 local function refitRows()
-    assert(win, "the list is only refitted while its window exists")
+    assert(win, "rows are only refitted while the window exists")
     for _, rowView in pairs(rowViews) do
         rows.fit(rowView)
     end
@@ -491,6 +491,10 @@ local function collapseAt(x, y)
     -- table leaves a fresh, hidden one (a string would only retext it: PrettyUI 1.2.0's
     -- Tooltip.set, src/tooltip.lua).
     openButton:SetTooltip(COLLAPSE_TOOLTIP)
+    -- A hidden row's mouse-leave is never seen, so clear the hover here.
+    for _, rowView in pairs(rowViews) do
+        rows.unhover(rowView)
+    end
     win:Close()
     collapsed = prettyui.Panel.new(parent, {
         x = x,

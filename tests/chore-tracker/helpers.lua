@@ -50,9 +50,9 @@ function M.loaded(opts)
     return h
 end
 
--- The open view's rows (list or settings), top to bottom: each hand-built row layer in the window's content, as
--- { layer, icon, label, box, text } (icon nil when the row has none). Found through the
--- harness's component states, since the plugin keeps its rows in locals.
+-- The open view's rows (list or settings), top to bottom: each hand-built row layer in the
+-- window's content, as { layer, icon, label, box, text } (icon nil when the row has none). Found
+-- through the harness's component states, since the plugin keeps its rows in locals.
 ---@param h table
 ---@return table[]
 function M.rows(h)

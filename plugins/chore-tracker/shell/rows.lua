@@ -99,6 +99,13 @@ local function drawBox(row)
     row.box.spriteID = row.ticked and BOX_TICKED or (row.hovered and BOX_HOVERED or BOX_EMPTY)
 end
 
+-- Clear the row's hover. For a row about to be hidden, whose mouse-leave the client won't send.
+---@param row ChoreRowView
+function M.unhover(row)
+    row.hovered = false
+    drawBox(row)
+end
+
 -- Make a row at content height `y` under `content`, showing `icon` (nothing if its name doesn't
 -- resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick click can
 -- arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain

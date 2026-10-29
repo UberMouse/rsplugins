@@ -87,8 +87,15 @@ after each:
    be dragged, so build a row from `ui.Layer` + `ui.Sprite` (`SetAssociatedObject(objId)` draws
    the item's built-in icon) + text + a tick sprite. Icons come from a hand-written
    `data/icons.lua` (chore id -> an `id.Obj` or `id.Sprite` constant name, checked against
-   `docs/api/consts/` by `tests/chore-tracker/data_spec.lua`). Built (list view only:
-   `shell/rows.lua`, `core/listlayout.lua`); the settings view's rows come next. Use built-in
+   `docs/api/consts/` by `tests/chore-tracker/data_spec.lua`). Built for the list view
+   (`d2380ef..9b8cb29`: `shell/rows.lua`, `core/listlayout.lua`, `core/fit.lua`) and
+   user-checked in the client 2026-10-29: icons, a click anywhere on a row ticks it, tooltips,
+   and long names cut with "..." before the box and re-fitted on resize (the tooltip then leads
+   with the full name). The user's calls: 24 px icons in 28 px rows; an XP reward shows the XP
+   coin or the skill's medallion sprite, a lamp the lamp, a general shop the General Store map
+   icon. Next: the settings view's rows, with a pointing-hand cursor over clickable rows
+   (`cursorConfig.mouseOverCursor`; `CURSOR_HAND` 204 or `CURSOR_HYPERLINK_HAND` 175, probe
+   which). Use built-in
    sprites only, because a custom PNG puts the plugin in closer review. Probed 2026-10-29
    (`docs/api-concepts.md`, "Pointer hooks on a plain `ui.Layer`" and "Hand-built rows in a
    window"): icons draw and clip in the window, and dimmed icon plus ticked box reads as done.
@@ -96,9 +103,13 @@ after each:
    arrives release-first. The native drag hooks never fire, so step 3 builds its drag from
    press, hold, release and the mouse position.
 3. **Reorder by drag, within each period.** Keep the Daily/Weekly/Monthly headers and let the
-   user drag a selected chore up or down inside its own section. The order is per character. It
-   uses `ui.Hook.ONDRAG`/`ONDRAGCOMPLETE`, the way PrettyUI's `item_grid` does (PrettyUI has no
-   reorderable list). If drag is unreliable, the fallback is up/down buttons in settings.
+   user drag a selected chore up or down inside its own section. The order is per character.
+   The user's call: drag by a grip handle at the row's left, so a click anywhere else still
+   ticks. The client's `ONDRAG` hooks never fired in the probe, so the drag is built from
+   `ONCLICK`/`ONHOLD`/`ONRELEASE` and `Mouse.GetPosition()`, as PrettyUI's `item_grid` and title
+   bar do (PrettyUI has no reorderable list). The grip shows a move cursor (`TOPLEVEL_V2_MOVE`
+   194, PrettyUI's title-bar cursor). If drag is unreliable, the fallback is up/down buttons in
+   settings.
 4. **Per-chore settings.**
    - **Shop runs:** the user picks which of a chore's shops they visit, and it ticks once every
      chosen shop has been bought from this period. The default is all listed shops.

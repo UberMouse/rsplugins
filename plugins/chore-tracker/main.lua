@@ -103,6 +103,7 @@ local settingsCore = require("core/settings")
 local state = require("core/state")
 local view = require("core/view")
 local detect = require("shell/detect")
+local grips = require("shell/grips")
 local popups = require("shell/popups")
 local rows = require("shell/rows")
 local store = require("shell/store")
@@ -282,6 +283,34 @@ local function onTick(id)
     popups.enqueue(celebrate.decide(before, tracker, chores, now, true))
 end
 
+-- How far the window's content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
+-- can set it (SetScrollPosition) but has no getter, so this reads its internal
+-- `_scroll.scrollY`; a version without that field gives nil. (The plugin's other reads of
+-- PrettyUI 1.2.0 state are the rows' wheel handler, `_onScrollWheel`, in wheelHandler, and the
+-- window's `viewport`, which buildList hands the grips.)
+---@return number?
+local function scrollPosition()
+    assert(win, "the window exists from load to shutdown")
+    local scroll = win._scroll
+    local y = scroll and scroll.scrollY
+    if type(y) == "number" then return y end
+    return nil
+end
+
+-- A row was dragged by its grip to `slot` among its period's rows: keep that order, saved for
+-- the character. Without a character there is no order to save, so nothing changes.
+---@param id string
+---@param slot integer
+local function onDrop(id, slot)
+    if character == nil then return end
+    local moved = state.move(tracker, chores, id, slot)
+    if moved == tracker then return end
+    tracker = moved
+    store.saveState(character, tracker)
+    local chore = assert(state.find(chores, id), "a row is only made for a chore in the list")
+    say(string.format("moved %s to %d in %s", id, slot, chore.period))
+end
+
 -- A row swallows the mouse wheel unless it hands it to the window. The handler is PrettyUI
 -- 1.2.0-internal, so without it the rows are still made, just without that.
 ---@param w prettyui.Window
@@ -312,17 +341,38 @@ local function buildList(w, openSettings)
     end
     local spots = listlayout.place(sections, top)
     local wheel = wheelHandler(w)
+    local order = {} ---@type { period: string, ids: string[] }[]
     for _, section in ipairs(sections) do
         headings[section.period] =
             w:AddTitle({ text = headingText(section), y = spots.headings[section.period] })
+        local ids = {}
         for _, row in ipairs(section.rows) do
             rowViews[row.id] = rows.new(w.content, spots.rows[row.id], icons[row.id], function()
                 onTick(row.id)
-            end, wheel)
+            end, wheel, true)
+            ids[#ids + 1] = row.id
         end
+        order[#order + 1] = { period = section.period, ids = ids }
     end
     w:SetContentHeight(spots.height)
     refreshList()
+    -- The grips' press targets sit over the window, placed from its viewport (see grips.lua).
+    if w.viewport ~= nil then
+        grips.build({
+            -- The plugin layer takes children (docs/api-concepts.md, "UI"); GetComponent's
+            -- stub types it as a plain component.
+            parent = parent --[[@as ui.ComponentCollection]],
+            viewport = w.viewport,
+            rows = rowViews,
+            sections = order,
+            scrollY = scrollPosition,
+            scrollTo = function(y)
+                w:SetScrollPosition(y)
+            end,
+            wheel = wheel,
+            onDrop = onDrop,
+        })
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -410,6 +460,9 @@ end
 -- rebuilds the window where it was.
 ---@param at { x: integer, y: integer, width: integer, height: integer }
 local function buildWindow(at)
+    -- The grips' targets go first: they are the plugin layer's, not the window's, and a drag
+    -- in progress ends unsaved with its rows.
+    grips.clear()
     if win then win:Destroy() end
     rowViews, headings = {}, {}
     local w = prettyui.Window.new(parent, {
@@ -450,19 +503,7 @@ local function buildWindow(at)
             pendingMode = "settings"
         end)
     end
-end
-
--- How far the window's content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
--- can set it (SetScrollPosition) but has no getter, so this reads its internal
--- `_scroll.scrollY`; a version without that field gives nil. (The plugin's one other read of
--- PrettyUI internals is the rows' wheel handler, `_onScrollWheel`, in wheelHandler.)
----@return number?
-local function scrollPosition()
-    assert(win, "the window exists from load to shutdown")
-    local scroll = win._scroll
-    local y = scroll and scroll.scrollY
-    if type(y) == "number" then return y end
-    return nil
+    grips.follow(collapsed == nil)
 end
 
 -- Rebuild the window where it is, staying closed if collapsed. With `keepScroll`, the new
@@ -497,6 +538,7 @@ local function collapseAt(x, y)
         rows.unhover(rowView)
     end
     win:Close()
+    grips.follow(false)
     collapsed = prettyui.Panel.new(parent, {
         x = x,
         y = y,
@@ -529,6 +571,9 @@ expand = function()
     r:SetPos(wx, wy)
     win:SetSize(r.width, r.height)
     win:Show()
+    -- Show brings the window to the front, over the grips' targets.
+    grips.raise()
+    grips.follow(true)
     collapsed.root.hidden = true
     -- An earlier panel still waiting for the tick is past its click, so it can go now.
     if retiring then retiring:Destroy() end
@@ -662,6 +707,8 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
         saveLayoutIfChanged()
         refitRows()
     end
+    -- Every tick, so a grip's target keeps up with the window moving or scrolling.
+    grips.follow(collapsed == nil)
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)
@@ -691,6 +738,7 @@ function PluginShutdown()
     Event.InventoryAdded.Unsubscribe("chore-tracker")
     Event.InventoryUpdated.Unsubscribe("chore-tracker")
     Event.InventoryRemoved.Unsubscribe("chore-tracker")
+    grips.clear()
     if win then
         saveLayoutIfChanged()
         win:Destroy()

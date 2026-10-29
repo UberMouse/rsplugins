@@ -92,10 +92,12 @@ describe("chore-tracker window", function()
         assert.are.equal(1, challenge.icon.alpha)
         assert.are.equal(TEXT_COLOUR, challenge.label.rgba)
 
-        -- Icon at the left, the box at the right edge, the names in one column.
+        -- The grip at the left, then the icon, the box at the right edge, the names in one
+        -- column.
         local rowBox, box = h.ui:layout(challenge.layer), h.ui:layout(challenge.box)
         assert.are.equal(28, rowBox.height)
-        assert.are.equal(0, h.ui:layout(challenge.icon).x)
+        assert.are.equal(0, h.ui:layout(challenge.grip).x)
+        assert.are.equal(20, h.ui:layout(challenge.icon).x)
         assert.are.equal(rowBox.width - 16, box.x)
         assert.are.equal(h.ui:layout(challenge.label).x, h.ui:layout(ports.label).x)
         assert.is_true(rowBox.y < h.ui:layout(ports.layer).y)
@@ -367,8 +369,9 @@ end)
 
 describe("chore-tracker long names", function()
     local CROMPERTY = "Pure Essence from Wizard Cromperty"
-    -- shell/rows.lua keeps the label clear of the icon (30), the box (16) and a 6 px gap.
-    local LABEL_INSET = 52
+    -- shell/rows.lua keeps a list row's label clear of the grip (20), the icon (30), the box
+    -- (16) and a 6 px gap.
+    local LABEL_INSET = 72
 
     -- The label's text, its tooltip (by hovering), and the label width available to it.
     ---@param h table

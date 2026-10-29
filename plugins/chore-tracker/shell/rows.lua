@@ -1,5 +1,6 @@
 -- One chore's row in the list or settings view, hand-built from plain components inside the
 -- window's content: the chore's icon at the left, its text, and a tick box at the right edge.
+-- A list row also has a drag grip left of the icon (shell/grips.lua takes the presses on it).
 -- The row layer takes the clicks; the icon, text and box let them through to it. While the
 -- mouse is over the row it shows the hyperlink hand, and its box shows a hovered sprite. A
 -- row is changed in place (colour, dimming, tick, text, tooltip) and goes when its window is
@@ -21,6 +22,11 @@ local ROW_HEIGHT = listlayout.ROW_HEIGHT
 local ICON_SIZE = 24
 local BOX_SIZE = 16
 local TEXT_X = ICON_SIZE + 6
+-- A list row's grip: 16 px, at the row's left edge, centred vertically, with 4 px before the
+-- icon. Shared with shell/grips.lua, which docks a press target over it.
+M.GRIP_SIZE = 16
+M.GRIP_Y = (ROW_HEIGHT - M.GRIP_SIZE) // 2
+local GRIP_WIDTH = M.GRIP_SIZE + 4
 -- Space kept between the end of a label and the tick box.
 local LABEL_GAP = 6
 
@@ -36,6 +42,8 @@ local BOX_EMPTY = id.Sprite.RS3_BTN_CHECKBOX_0
 local BOX_EMPTY_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_1
 local BOX_TICKED = id.Sprite.RS3_BTN_CHECKBOX_2
 local BOX_TICKED_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_3
+-- The grip's sprite, the user's pick from a sprite probe (docs/api-concepts.md).
+local GRIP_SPRITE = id.Sprite.HAMBURGER_MENU_ICON
 
 -- The cursor over a row. The user chose it among eight in a probe (docs/api-concepts.md).
 local ROW_CURSOR = id.Cursor.CURSOR_HYPERLINK_HAND
@@ -56,6 +64,8 @@ local reported = {} ---@type table<string, boolean>
 ---@field icon ui.Sprite? nil when the icon's name didn't resolve
 ---@field label ui.Text
 ---@field box ui.Sprite
+---@field grip ui.Sprite? a list row's drag grip
+---@field textX integer where the label starts in the row
 ---@field text string? the row's full text
 ---@field availWidth integer? the label width `text` was last fitted to
 ---@field shortened boolean whether the label shows less than `text`
@@ -115,14 +125,16 @@ end
 -- resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick click can
 -- arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
 -- `ui.Layer`"). `wheel`, when given, takes the mouse wheel over the row, which the row would
--- otherwise swallow. Call M.show to give it its text and state.
+-- otherwise swallow. With `grip`, the row gets a drag grip at its left and the rest moves
+-- right to make room. Call M.show to give it its text and state.
 ---@param content ui.Layer
 ---@param y integer
 ---@param icon ChoreIcon
 ---@param onClick fun()
 ---@param wheel ChoreWheelHandler?
+---@param grip boolean?
 ---@return ChoreRowView
-function M.new(content, y, icon, onClick, wheel)
+function M.new(content, y, icon, onClick, wheel, grip)
     local layer = ui.Layer.new(content)
     layer:SetPos(PADDING, y)
     layer:SetSize(-PADDING * 2, ROW_HEIGHT, 1.0, 0)
@@ -136,11 +148,22 @@ function M.new(content, y, icon, onClick, wheel)
     end)
     if wheel then layer:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel) end
 
+    local gripSprite = nil ---@type ui.Sprite?
+    local left = 0
+    if grip then
+        gripSprite = ui.Sprite.new(layer)
+        gripSprite:SetPos(0, M.GRIP_Y)
+        gripSprite:SetSize(M.GRIP_SIZE, M.GRIP_SIZE)
+        gripSprite.clickthrough = true
+        gripSprite.spriteID = GRIP_SPRITE
+        left = GRIP_WIDTH
+    end
+
     local sprite = nil ---@type ui.Sprite?
     local found = resolve(icon)
     if found then
         sprite = ui.Sprite.new(layer)
-        sprite:SetPos(0, (ROW_HEIGHT - ICON_SIZE) // 2)
+        sprite:SetPos(left, (ROW_HEIGHT - ICON_SIZE) // 2)
         sprite:SetSize(ICON_SIZE, ICON_SIZE)
         sprite.clickthrough = true
         if icon.obj then
@@ -151,9 +174,10 @@ function M.new(content, y, icon, onClick, wheel)
     end
 
     -- At the same x whether or not there is an icon, so the names line up.
+    local textX = left + TEXT_X
     local label = ui.Text.new(layer)
-    label:SetPos(TEXT_X, 0)
-    label:SetSize(-(TEXT_X + BOX_SIZE + LABEL_GAP), ROW_HEIGHT, 1.0, 0)
+    label:SetPos(textX, 0)
+    label:SetSize(-(textX + BOX_SIZE + LABEL_GAP), ROW_HEIGHT, 1.0, 0)
     label.font = id.Font.MUSEO_SANS_15PT_REGULAR
     label:AlignTo(ui.AlignMode.TOPLEFT, ui.AlignMode.CENTRE)
     label.clickthrough = true
@@ -169,6 +193,8 @@ function M.new(content, y, icon, onClick, wheel)
             icon = sprite,
             label = label,
             box = box,
+            grip = gripSprite,
+            textX = textX,
             shortened = false,
             hovered = false,
         }
@@ -230,7 +256,7 @@ local function fitLabel(row)
     local text = row.text
     assert(text, "a row is fitted after show gave it text")
     if row.layer.width <= 0 then return end
-    local avail = row.layer.width - TEXT_X - BOX_SIZE - LABEL_GAP
+    local avail = row.layer.width - row.textX - BOX_SIZE - LABEL_GAP
     if avail == row.availWidth then return end
     local ok, shown, shortened = pcall(fit.fit, text, avail, measure)
     if not ok then

@@ -51,12 +51,14 @@ function M.loaded(opts)
 end
 
 -- The open view's rows (list or settings), top to bottom: each hand-built row layer in the
--- window's content, as { layer, icon, label, box, text } (icon nil when the row has none). Found
--- through the harness's component states, since the plugin keeps its rows in locals.
+-- window's content, as { layer, grip, icon, label, box, text } (grip nil in settings rows, icon
+-- nil when the row has none). Found through the harness's component states, since the plugin
+-- keeps its rows in locals.
 ---@param h table
 ---@return table[]
 function M.rows(h)
     local content = h.ui:get("Window", { text = "Chores" }).content
+    local grip = catalog.config("Sprite", "HAMBURGER_MENU_ICON")
     local out = {}
     for _, child in ipairs(uiFake.stateOf(content).children) do
         if child.class == "ui.Layer" then
@@ -64,6 +66,8 @@ function M.rows(h)
             for _, part in ipairs(child.children) do
                 if part.class == "ui.Text" then
                     row.label, row.text = part.proxy, part.content
+                elseif part.class == "ui.Sprite" and part.spriteID == grip then
+                    row.grip = part.proxy
                 elseif part.class == "ui.Sprite" then
                     -- The icon is left of the box, which sits at the row's right edge.
                     if row.box then

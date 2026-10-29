@@ -12,12 +12,12 @@ your client, never does anything in game for you, and sends nothing anywhere.
 
 - **Opening it.** Enable the plugin and a window titled **Chores** opens. On the first run it
   says no chores are picked yet.
-- **Picking chores.** Click the settings button at the top left of the window. Every chore is
-  listed under Daily, Weekly and Monthly; ones that are bought from a shop end in "(shop)".
-  Tick the ones you want to track: changes save straight away. To return to your list, click
-  the back button in the window's top-right corner, where the menu button usually sits. It
-  stays there however far down you have scrolled. (Collapse the window from the list, not from
-  here.)
+- **Picking chores.** Click the settings button at the top left of the window. Above the chores
+  is a Celebrations section (see below). Every chore is listed under Daily, Weekly and Monthly;
+  ones that are bought from a shop end in "(shop)". Tick the ones you want to track: changes
+  save straight away. To return to your list, click the back button in the window's top-right
+  corner, where the menu button usually sits. It stays there however far down you have scrolled.
+  (Collapse the window from the list, not from here.)
 - **Ticking chores.** The list shows the chores you picked under Daily, Weekly and Monthly
   headings, each with a count such as "Daily  2/5". Tick a chore when you've done it. It stays
   where it is, ticked and dimmed; click it again to untick it.
@@ -34,11 +34,13 @@ your client, never does anything in game for you, and sends nothing anywhere.
   with the chore's name, shows upper-middle of the screen with a short jingle. When your picked
   chores of a period are all done, a bigger one follows with a grander jingle: "DAILIES
   COMPLETE", "WEEKLIES COMPLETE" or "MONTHLIES COMPLETE". That one also shows when you tick the
-  last one by hand, but ticking a chore by hand never shows the chore's own popup, and
-  unticking, picking or unpicking chores, and logging in, show nothing. Popups appear one at a
-  time and last about four seconds, whether the window is open, collapsed or in settings. In
-  the settings view, under **Celebrations**, untick "Celebration popups" to turn them off, or
-  "Popup sound" to keep them quiet. Both are saved for all characters.
+  last one by hand, and again each time your picked chores become all done (unticking and
+  re-ticking the last one, or picking another chore and ticking it). Ticking a chore by hand
+  never shows the chore's own popup, and unticking, picking or unpicking chores, and logging in,
+  show nothing. Popups appear one at a time and last about four seconds, whether the window is
+  open, collapsed or in settings. In the settings view, under **Celebrations**, untick
+  "Celebration popups" to turn them off, or "Popup sound" to keep them quiet. Both are saved for
+  all characters.
 
 ## Chores it ticks for you
 

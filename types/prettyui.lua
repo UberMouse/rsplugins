@@ -240,7 +240,7 @@ function SpriteButton:Destroy() end
 local AchievementPopupModule = {}
 
 ---Show a popup in `options.parent`; nil when there is no parent to put it in. It ends itself
----after 200 Logic ticks (4 s).
+---after about 4 s (200 Logic ticks; it is destroyed on the 201st).
 ---@param options prettyui.AchievementPopupOptions?
 ---@return prettyui.AchievementPopup?
 function AchievementPopupModule.show(options) end

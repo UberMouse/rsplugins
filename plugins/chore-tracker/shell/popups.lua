@@ -1,18 +1,15 @@
 -- Shows the celebrations core/celebrate.lua decides on, one at a time, as PrettyUI
 -- AchievementPopups in the plugin layer. A popup lasts about four seconds and calls
--- `onComplete` as it ends, which starts the next one in the queue. The popups are only
--- messages about the player's own chore progress, with built-in sounds.
+-- `onComplete` as it ends, which starts the next one in the queue.
 
 local M = {}
 
--- Built-in sounds (id.Sound, docs/api/consts/Sound.lua): a chore, and the grander one for a
--- cleared period.
-local CHORE_SOUND = id.Sound.ARCH_INFO_POPUP
-local PERIOD_SOUND = id.Sound.LEAGUE2_HARD_TASK_COMPLETE
-
--- Popup sizes in pixels: PrettyUI's default for a chore, bigger for a period.
-local CHORE_SIZE = { width = 300, height = 92 }
-local PERIOD_SIZE = { width = 400, height = 120 }
+-- Size in pixels and built-in sound (id.Sound, docs/api/consts/Sound.lua) per kind of popup:
+-- PrettyUI's default size for a chore, bigger and a grander sound for a cleared period.
+local STYLES = {
+    chore = { width = 300, height = 92, sound = id.Sound.ARCH_INFO_POPUP },
+    period = { width = 400, height = 120, sound = id.Sound.LEAGUE2_HARD_TASK_COMPLETE },
+}
 
 -- The popup's centre sits this far down the plugin layer.
 local Y_ANCHOR = 1 / 3
@@ -22,7 +19,7 @@ local say = nil ---@type fun(...)?
 local sound = true
 local enabled = true
 local queue = {} ---@type ChoreCelebration[]
-local showing = nil ---@type table? the popup on screen
+local showing = nil ---@type prettyui.AchievementPopup? the popup on screen
 
 -- Where the popups go and where their log lines go. Call once, before anything else.
 ---@param opts { parent: ui.Component, say: fun(...) }
@@ -34,23 +31,22 @@ local showNext
 
 -- Show the popup for `c`, or nil if PrettyUI had nowhere to put it.
 ---@param c ChoreCelebration
----@return table?
+---@return prettyui.AchievementPopup?
 local function show(c)
     assert(parent, "popups.init sets the parent first")
-    local size = c.kind == "period" and PERIOD_SIZE or CHORE_SIZE
+    local style = STYLES[c.kind]
     return prettyui.AchievementPopup.show({
         parent = parent,
         title = c.title,
         text = c.text,
-        width = size.width,
-        height = size.height,
-        -- Centred across the layer, and about a third of the way down by its centre.
-        x = -(size.width // 2),
+        width = style.width,
+        height = style.height,
+        x = -(style.width // 2),
         xAnchor = 0.5,
-        y = -(size.height // 2),
+        y = -(style.height // 2),
         yAnchor = Y_ANCHOR,
         sound = sound,
-        soundID = c.kind == "period" and PERIOD_SOUND or CHORE_SOUND,
+        soundID = style.sound,
         onComplete = function(done)
             -- A popup cleared or replaced meanwhile never calls this (it has been destroyed).
             if showing == done then

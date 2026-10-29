@@ -5,9 +5,10 @@
 --     with how many are done. Tick a chore when you've done it; done chores stay in place,
 --     dimmed, and a second click unticks them. Hover a chore for its description and wiki
 --     links (shown as text: plugins can't open URLs).
---   * The settings button (top left of the content) opens the settings view, which lists
---     every chore to pick from. There, the title bar's top-right slot is a back button to the
---     list, in reach however far the settings are scrolled.
+--   * The settings button (top left of the content) opens the settings view, which has the
+--     Celebrations switches and lists every chore to pick from. There, the title bar's
+--     top-right slot is a back button to the list, in reach however far the settings are
+--     scrolled.
 --   * In the list, the hamburger in that slot (where PrettyUI's close X would be) collapses
 --     the window into a single hamburger button at the same spot. Alt-drag that
 --     button to move it (with the console closed); click it to open the window again, grown

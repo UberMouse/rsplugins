@@ -41,12 +41,9 @@ local function periodStatus(s, chores, p, now)
     return picked, picked > 0 and done == picked
 end
 
--- The celebrations for the tracker going from `old` to `new` at `now`, in the order to show
--- them: the chores first (in chore-list order), then the periods they cleared. A picked
--- chore that turned from not done to done earns a popup only if the plugin ticked it
--- (`manual` false); a period whose picked chores went from not all done to all done earns one
--- however the last was ticked. Picking and unpicking change what a period holds, not what
--- got ticked, so the shell does not ask about those.
+-- Celebrations for the tracker going from `old` to `new` at `now`: picked chores the plugin
+-- ticked (skipped when `manual`), in chore-list order, then periods whose picked chores went
+-- from not all done to all done, however the last was ticked.
 ---@param old ChoreState
 ---@param new ChoreState
 ---@param chores Chore[]

@@ -113,11 +113,12 @@ The official reference annotates Lua with pseudo-types:
 - Sizing and positioning: `SetSize(w, h)` / `SetPos(x, y)` take pixels. The 4-argument forms
   `SetSize(px, py, relW, relH)` / `SetPos(px, py, relX, relY)` add a fraction of the parent's
   size (`SetPos(0,0,0.6,0.4)` = 60 % across, 40 % down).
-- `SetPos` takes floats where the stub says `Int`, and rounds them to the nearest integer, halves away from zero (dev-bridge eval, 2026-10-29,
-  on a `ui.Layer.new` of the plugin layer, 1916x2121). `l:SetPos(-150.0, -46.0, 0.5, 1/3)` raised
-  nothing, and `l.x, l.y` then read the anchored position 808, 661 as integers (0.5 * 1916 - 150;
-  2121 / 3 - 46), not the offset passed. `l:SetPos(-150.5, -46.25)` also raised nothing and read
-  -151, -46 (-150.5 read -151, -46.25 read -46). Pass integers anyway (`//`, not `/`).
+- `SetPos` takes floats where the stub says `Int`, and rounds them to the nearest integer, halves
+  away from zero (dev-bridge eval, 2026-10-29, on a `ui.Layer.new` of the plugin layer, 1916x2121).
+  `l:SetPos(-150.0, -46.0, 0.5, 1/3)` raised nothing, and `l.x, l.y` then read the anchored position
+  808, 661 as integers (0.5 * 1916 - 150; 2121 / 3 - 46), not the offset passed.
+  `l:SetPos(-150.5, -46.25)` also raised nothing and read -151, -46. Pass integers anyway
+  (`//`, not `/`).
 - UI input uses **component hooks**, separate from `Event`:
   `button:Subscribe(ui.Hook.ONBUTTONPRESSED, fn)`, `button:Unsubscribe(ui.Hook.ONBUTTONPRESSED)`.
 - Text content accepts `<br>` for line breaks.

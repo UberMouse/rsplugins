@@ -847,9 +847,10 @@ end
 -- The keys of 1.2.0's eight resize handles (src/core/resize.lua).
 local RESIZE_HANDLES = { "n", "s", "e", "w", "nw", "ne", "sw", "se" }
 
--- Strict stand-ins for 1.2.0's `resize` controller and its `handles` table, so a typo such as
--- `resize.handle` or `handles.nn` faults instead of reading nil. `state.handles` is the
--- window's table of layers (nil under `resizeInternals("noHandles")`).
+-- Stand-ins for 1.2.0's `resize` controller and its `handles` table. Stricter than 1.2.0's plain
+-- table on purpose: an unknown key such as `resize.handle` or `handles.nn` faults, not reads nil.
+-- `state.handles` is set for every resizable window; only the `resize` getter's `handles` field
+-- reads nil under `resizeInternals("noHandles")`.
 local ResizeHandles = strict.class("prettyui.Window resize handles", {
     undeclared = true,
     fields = (function()

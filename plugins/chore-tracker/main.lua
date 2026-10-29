@@ -537,7 +537,9 @@ local RESIZE_CURSORS = {
 ---@param w table the PrettyUI window
 local function reviveResize(w)
     local resize, titleDrag = w.resize, w.titleDrag
-    if type(resize) ~= "table" or type(titleDrag) ~= "table" then return end
+    if type(resize) ~= "table" then return end
+    -- Client components are userdata; the harness's fakes are tables.
+    if type(titleDrag) ~= "userdata" and type(titleDrag) ~= "table" then return end
     if resize.enabled ~= false or titleDrag.isClicked == true then return end
     if type(resize.SetEnabled) ~= "function" then return end
     resize:SetEnabled(true)

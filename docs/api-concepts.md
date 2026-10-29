@@ -230,6 +230,9 @@ The official reference annotates Lua with pseudo-types:
       arrives release-first, so the disable lands last. The plugin's workaround (re-enable on a
       Logic tick when `resize.enabled` is false and `titleDrag.isClicked` is not true) is not yet
       confirmed in the client.
+- **`type()` of a UI component** is `"userdata"` (beta client, dev bridge, 2026-10-29): a component from
+  `ui.Interfaces:GetComponent(...)` and a `ui.Layer` made by a plugin or library (PrettyUI's title-drag
+  layer), so a `type(x) == "table"` check rejects it. `type(layer.isClicked)` is `"boolean"`.
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its

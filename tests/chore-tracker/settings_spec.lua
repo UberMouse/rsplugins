@@ -147,7 +147,6 @@ describe("chore-tracker row hover", function()
         assert.are.equal(BOX_EMPTY_HOVERED, r.box.spriteID)
         h.ui:leave()
         assert.are.equal(BOX_EMPTY, r.box.spriteID)
-        -- Ticked, then hover and leave.
         assert.is_true(h.ui:click(r.layer))
         h.ui:leave()
         assert.are.equal(BOX_TICKED, r.box.spriteID)

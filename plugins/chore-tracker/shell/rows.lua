@@ -179,8 +179,7 @@ function M.new(content, y, icon, onClick, wheel)
         drawBox(row)
     end)
     layer:Subscribe(ui.Hook.ONMOUSELEAVE, function()
-        row.hovered = false
-        drawBox(row)
+        M.unhover(row)
     end)
     return row
 end

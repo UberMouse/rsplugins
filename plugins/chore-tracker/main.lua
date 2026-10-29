@@ -491,7 +491,8 @@ local function collapseAt(x, y)
     -- table leaves a fresh, hidden one (a string would only retext it: PrettyUI 1.2.0's
     -- Tooltip.set, src/tooltip.lua).
     openButton:SetTooltip(COLLAPSE_TOOLTIP)
-    -- A hidden row's mouse-leave is never seen, so clear the hover here.
+    -- Close hides the rows, and the client sends no mouse-leave to a hidden layer, so a hovered
+    -- row would reopen with its hovered box.
     for _, rowView in pairs(rowViews) do
         rows.unhover(rowView)
     end

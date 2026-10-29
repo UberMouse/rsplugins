@@ -25,7 +25,7 @@ your client, never does anything in game for you, and sends nothing anywhere.
   General Store icon for the general shops), its name, and a tick box at the right. Click
   anywhere on a row when you've done the chore: it stays where it is, ticked, with its icon and
   name dimmed. Click it again to untick it. Over any row, in the list or in settings, the
-  cursor becomes the hyperlink hand and an empty tick box lights up.
+  cursor becomes the hyperlink hand and the tick box lights up.
 - **Long names.** A name too long for the window is shortened with "..." so it stops before
   the tick box; make the window wider and more of it shows. Hover a shortened row and its
   tooltip starts with the full name.

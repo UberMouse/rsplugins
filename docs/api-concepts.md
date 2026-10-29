@@ -132,8 +132,10 @@ The official reference annotates Lua with pseudo-types:
   - **A click whose press and release land in one tick arrives backwards**: `ONRELEASE` and
     then `ONCLICK`, on the same tick, with no `ONHOLD`. Code that acts on "a press, then its
     release" misses these clicks; acting on `ONCLICK` (as PrettyUI does) catches every one.
-  - The pressed layer keeps the press when the mouse leaves it: `ONHOLD` keeps coming, and
-    `ONRELEASE` arrives at that layer with coordinates outside it (y 37-45 on a 36-high row).
+  - `ONRELEASE` arrived at the pressed layer with coordinates outside it (y 37-45 on a 36-high
+    row). That was not the layer keeping the press, as this bullet first said: the drag probes
+    (next bullet) show a press ends as soon as the pointer leaves the layer's clipped rect, so
+    those were the real release or that early end.
   - `Mouse.GetPosition()` tracks while a press is held, and equals the layer's global origin
     plus the hook's x, y (at interface scale 1).
   - **The native drag hooks never fired.** No `ONDRAG` or `ONDRAGCOMPLETE` on any probe row,
@@ -142,6 +144,31 @@ The official reference annotates Lua with pseudo-types:
   - `component.dragConfig` is read-only ("sol: cannot write to a readonly property"); set its
     fields in place (`layer.dragConfig.deadZone = 10`), which reads back. A new layer's is
     `0, 0, 0`.
+- **Pressing and dragging a plain `ui.Layer`** (drag probes v1-v3, user-driven in the beta
+  client through the dev bridge, 2026-10-29).
+  - `ONHOLD` fires once per Logic tick while the button is down. Its x, y are the pointer in
+    the pressed layer's own coordinates, relative to where the layer is at that moment: move
+    the layer and the next sample is relative to its new place. v1 moved a bar on each
+    `ONHOLD` by the hook y less the grab y; the samples alternated between y 18 (the grab
+    point, once the bar had caught up) and other values when the mouse moved, and the mouse
+    position itself changed only every other `ONHOLD`. `Mouse.GetPosition().y` (floats, e.g.
+    703.0) equalled the bar's global y plus the hook y.
+  - **A press ends as soon as the pointer leaves the pressed layer's hit area**, which is the
+    layer's own rect clipped by every ancestor's rect: `ONRELEASE` arrives with the button
+    still held, and no more `ONHOLD`. v1: the 28-high bar got `ONRELEASE` at y 32 when one
+    sample moved the pointer 14 px past it ("as soon as the mouse leaves the drag bar it stops
+    dragging"). v2: a pressed layer inside a 320x400 panel, stretched far past the panel on
+    its first `ONHOLD`, kept getting `ONHOLD` inside the panel but got `ONRELEASE` when the
+    pointer crossed the panel's top edge (mouse y 490, panel top 500), button still held.
+  - **What holds the press** (v3, user-confirmed): make the pressed layer a direct child of
+    the plugin layer, docked over the visual at rest. On its first `ONHOLD` stretch it over the
+    whole plugin layer (`SetPos(0, 0)`, `SetSize(p.width, p.height)`, `p` the plugin layer) and
+    `MoveToFront()` it. It then gets `ONHOLD` until the real release, overshoots and re-entries
+    included, and its hook y is the pointer's y in plugin-layer space (a fixed origin,
+    independent of interface scale; equal to `Mouse.GetPosition().y` at interface scale 100).
+    Dock it back on `ONRELEASE`. This is PrettyUI 1.2.0's scroll-thumb drag
+    (`src/core/scroll.lua`, `thumbDrag`: "The first ONHOLD expands this layer across the
+    overlay parent so later events continue outside the scrollbar").
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its
@@ -149,7 +176,15 @@ The official reference annotates Lua with pseudo-types:
   `CURSOR_TICK` 157, `CURSOR_CROSS` 158, `CURSOR_BLANK` 41, `TOPLEVEL_V2_MOVE` 194, `CURSOR_MOVE` 0
   and `CURSOR_TELE_GRAB` 111, and chose 175 for clickable rows; `TOPLEVEL_V2_MOVE` (PrettyUI
   1.2.0's title-bar drag cursor) reads as a resize cursor. Whether `mouseOverCursor` alone,
-  without `SetOpCursor`, is enough was not settled.
+  without `SetOpCursor`, is enough was not settled. A second round (same day, dev bridge) chose
+  a drag grip's cursor, shown over the grip and for the whole drag: `CURSOR_PUSH` 196, over
+  `CURSOR_MOVE` 0, `CURSOR_TELE_GRAB` 111, `TOPLEVEL_V2_SCALE_VERT` 190, `CURSOR_HAND` 204,
+  `CURSOR_PULL` 197, `CURSOR_TAKE` 45 and `CURSOR_ACC_CREATE_HOVER` 187 /
+  `CURSOR_ACC_CREATE_HOVER_SMALL` 189. The grip's sprite: `id.Sprite.HAMBURGER_MENU_ICON` 8122,
+  over `ICON_HAMBURGERMENU_MAINMENU` 6900, `CURSOR_DIRECTIONAL_DRAG_UP_DOWN` 18409,
+  `CURSOR_DIRECTIONAL_MOVE_VERT_HORIZ` 18411, `RS3_ICON_SORT_0`..`4`, `SCROLLBAR_DRAGGER_V2_0`
+  789, `DEFAULT_SLIDER_HANDLE` 32435 and `AIF_ACCORDION_ARROWS_1` 7577 (all drew at 24 and 16
+  px).
 - **Enums are numbers in the client**, though the stubs list string values: `ui.DragRenderBehaviour`
   reads `TRANSPARENT_OVERLAY = 0` … `INVISIBLE = 3`, and `ui.DragRenderBehaviour.FromID(2)`
   gives back the name `"OPAQUE_OVERLAY"`. `pairs` over the enum table shows only `FromID`.

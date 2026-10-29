@@ -7,7 +7,8 @@
 --
 -- Modelled: Window (titled, resizable, close button, AddText/AddTitle/AddCheckboxButton/
 -- AddDivider/AddSpriteButton, SetScrollPosition and the `_scroll.scrollY` it sets, the
--- `content` layer for a plugin's own components, SetContentHeight and the wheel handler),
+-- `content` layer for a plugin's own components and the `viewport` it scrolls in,
+-- SetContentHeight and the wheel handler),
 -- standalone Panel (AddSpriteButton, Alt-drag), SpriteButton and Tooltip.attach. Any other library member,
 -- method or option faults as unmocked; extend the fake, with a ledger row, when a plugin
 -- needs more.
@@ -185,6 +186,7 @@ end
 ---@param bottom number
 local function grow(flow, bottom)
     flow.contentHeight = math.max(flow.contentHeight, bottom + PADDING)
+    if flow.onGrow then flow.onGrow() end
 end
 
 ---@param s table a Window or Panel state
@@ -638,18 +640,34 @@ local function addDivider(lib, s, options)
     return obj
 end
 
+-- The viewport's height: the window inside its frame.
+---@param s table
+---@return integer
+local function viewportHeight(s)
+    return math.max(1, ui.height(s.viewportState))
+end
+
+-- Size the content to the scroll height (the content height, or the viewport's if that is
+-- taller) and scroll the viewport over it, as 1.2.0's `_Layout` and `SetScrollPosition` do
+-- (content:SetSize, viewport:SetScrollPos). The content and everything on it move up by the
+-- scroll; their own x, y don't change.
+---@param s table
+local function syncContent(s)
+    s.content:SetSize(0, math.max(s.flow.contentHeight, viewportHeight(s)), 1.0)
+    s.viewportState.scrollY = s.scrollY
+end
+
 -- Window:SetScrollPosition: the content's scroll, clamped to 0..(content height less the
--- viewport's, the window inside its frame), as 1.2.0 does on every scroll and resize. Only
--- the number is kept: the content doesn't move.
+-- viewport's), as 1.2.0 does on every scroll and resize.
 ---@param s table
 ---@param position number?
 local function windowScrollTo(s, position)
     if position ~= nil and type(position) ~= "number" then
         strict.fault("prettyui Window:SetScrollPosition(position) needs a number")
     end
-    local viewport = math.max(1, ui.height(s.rootState) - s.top - BORDER)
-    local most = math.max(0, s.flow.contentHeight - viewport)
+    local most = math.max(0, s.flow.contentHeight - viewportHeight(s))
     s.scrollY = clamp(math.floor(position or 0), 0, most)
+    syncContent(s)
 end
 
 -- Window:SetContentHeight(height): the scrollable height, floored and at least 0. It replaces
@@ -675,8 +693,7 @@ end
 ---@return boolean
 local function windowWheel(s, delta)
     live(s)
-    local viewport = math.max(1, ui.height(s.rootState) - s.top - BORDER)
-    if s.flow.contentHeight > viewport then
+    if s.flow.contentHeight > viewportHeight(s) then
         local before = s.scrollY
         windowScrollTo(s, before + delta * SCROLL_STEP)
         if s.scrollY ~= before then return false end
@@ -730,6 +747,12 @@ local Window = strict.class("prettyui.Window instance", {
         content = function(s)
             if s.destroyed then return nil end
             return s.content
+        end,
+        -- The layer the content scrolls in: its rect is the part of the content on show.
+        -- Public state 1.2.0's scroll controller syncs onto the window (`syncOwner`).
+        viewport = function(s)
+            if s.destroyed then return nil end
+            return s.viewport
         end,
         -- 1.2.0's internal wheel handler (also set on the window by its scroll controller):
         -- a plugin hands it to a row's ONSCROLLWHEEL so the wheel still scrolls the window.
@@ -860,19 +883,28 @@ local WindowModule = module("Window", function(lib, parent, options)
         clamp(options.height or WINDOW_DEFAULTS.height, s.minHeight, s.maxHeight)
     )
     local top = s.title and TITLE_HEIGHT or BORDER
-    s.top, s.scrollY = top, 0
-    s.content, s.contentState = ui.create("Layer", s.rootState)
-    s.content:SetPos(BORDER, top)
-    s.content:SetSize(-BORDER * 2, -top - BORDER, 1.0, 1.0)
-    -- The content takes pointer input and hands the wheel to the window's handler, as the
-    -- scroll controller sets it up (subscribed with no id, so it is the content's default
-    -- ONSCROLLWHEEL listener); the h.ui driver treats it like a plugin's own layer.
-    s.contentState.clickthrough = false
-    s.contentState.raw = true
+    s.scrollY = 0
+    -- 1.2.0 puts the viewport at 0,0 in a scroll root inside the frame; the fake leaves out
+    -- that root (same place) and the scrollbar, so the viewport is the frame's full width.
+    s.viewport, s.viewportState = ui.create("Layer", s.rootState)
+    s.viewport:SetPos(BORDER, top)
+    s.viewport:SetSize(-BORDER * 2, -top - BORDER, 1.0, 1.0)
+    s.content, s.contentState = ui.create("Layer", s.viewportState)
+    -- Both take pointer input and hand the wheel to the window's handler, as the scroll
+    -- controller sets them up (subscribed with no id, so it is their default ONSCROLLWHEEL
+    -- listener); the h.ui driver treats them like a plugin's own layers.
     s.onWheel = function(_, delta)
         return windowWheel(s, delta)
     end
-    ui.addListener(s.contentState, ui.Hook.ONSCROLLWHEEL, nil, s.onWheel)
+    for _, layer in ipairs({ s.viewportState, s.contentState }) do
+        layer.clickthrough = false
+        layer.raw = true
+        ui.addListener(layer, ui.Hook.ONSCROLLWHEEL, nil, s.onWheel)
+    end
+    s.flow.onGrow = function()
+        syncContent(s)
+    end
+    syncContent(s)
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
     s.closeButton:SetSize(CLOSE_SIZE, CLOSE_SIZE)
@@ -1241,16 +1273,32 @@ function Driver:choices(checkbox)
     return out, r.s.colour
 end
 
--- Whether a click on component `cs` reaches it, and why not. A destroyed one faults: a
--- plugin that leaves a handle to it reachable has lost track of its UI.
+-- The point the driver aims at on `cs` when a test gives none: its centre, in plugin-layer
+-- coordinates.
 ---@param cs table component state
+---@return number x
+---@return number y
+local function centre(cs)
+    local x, y = ui.globalPos(cs)
+    return x + ui.width(cs) / 2, y + ui.height(cs) / 2
+end
+
+-- Whether a click on component `cs` at (cx, cy) (default: its centre) reaches it, and why
+-- not. A destroyed one faults: a plugin that leaves a handle to it reachable has lost track of
+-- its UI.
+---@param cs table component state
+---@param cx number?
+---@param cy number?
 ---@return boolean
 ---@return string?
-function Driver:lands(cs)
+function Driver:lands(cs, cx, cy)
     if cs.destroyed then strict.fault("prettyui: clicked a component used after Destroy()") end
     if not ui.visible(cs) then return false, "hidden" end
-    local cx, cy = ui.globalPos(cs)
-    cx, cy = cx + ui.width(cs) / 2, cy + ui.height(cs) / 2
+    if cx == nil or cy == nil then
+        cx, cy = centre(cs)
+    end
+    local clip = self:clipped(cs, cx, cy)
+    if clip then return false, clip end
     for _, r in ipairs(self:lib().records) do
         local s = r.s
         if r.kind == "Window" and s.title and not gone(r) and ui.within(cs, s.rootState) then
@@ -1268,53 +1316,91 @@ function Driver:lands(cs)
     return true
 end
 
--- Whether a pointer action aimed at component `cs` is clipped by a window: the point the
--- driver aims at (its centre) lies outside the view of a Window whose content holds it, after
--- the content has scrolled. The client clips hit-testing as well as drawing (Row Probe,
--- 2026-10-29). Positions the components report don't move with the scroll, so this works
--- the scrolled position out.
+-- Why a pointer action at (x, y) on component `cs` is clipped away, or nil if it isn't: the
+-- point must lie in `cs`'s rect clipped by every ancestor's. The client clips hit-testing as
+-- well as drawing: a row scrolled out of a window takes no click (Row Probe), and a press ends
+-- when the pointer leaves the pressed layer or a parent's rect (drag probes, 2026-10-29).
 ---@param cs table component state
----@return boolean
-function Driver:clipped(cs)
+---@param x number
+---@param y number
+---@return string?
+function Driver:clipped(cs, x, y)
+    local by = ui.clipper(cs, x, y)
+    if by == nil then return nil end
     for _, r in ipairs(self:lib().records) do
-        local s = r.s
-        if r.kind == "Window" and not gone(r) and cs ~= s.contentState then
-            if ui.within(cs, s.contentState) then
-                local top, c = 0, cs
-                while c ~= s.contentState do
-                    local _, y = ui.pos(c)
-                    top, c = top + y, c.parent
-                end
-                local centre = top + ui.height(cs) / 2 - s.scrollY
-                if centre < 0 or centre >= ui.height(s.contentState) then return true end
-            end
+        if r.kind == "Window" and not gone(r) and by == r.s.viewportState then
+            return "clipped: scrolled out of the window's view"
         end
     end
-    return false
+    if by == cs then return "clipped: the point is outside the target" end
+    return "clipped: outside the " .. by.class .. " it is in"
 end
 
--- Whether a component the plugin made (or a window's content) is one the raw pointer actions
--- below apply to.
+-- The component on top at (x, y) among those that take the pointer there: a plugin's own (or
+-- a window's content or viewport), shown, `clickthrough` false, with the point in its clipped
+-- rect. Drawing order decides: children draw over their parent, later siblings over earlier
+-- ones, and MoveToFront makes a component its parent's last child (ui/component.html). A
+-- non-clickthrough component blocks the ones below it (the `clickthrough` field). PrettyUI's
+-- own components aren't counted: the fake doesn't model their `clickthrough`. Faults on a
+-- component drawn over `below` whose `clickthrough` was never set (the default is unprobed).
+---@param x number
+---@param y number
+---@param below table the component the pointer would otherwise reach
+---@return table?
+function Driver:topAt(x, y, below)
+    local top, pastBelow = nil, false
+    local function visit(s)
+        if s.hidden or s.destroyed then return end
+        -- Ancestors have already passed, so the point is in the clipped rect iff in its own.
+        if ui.clipper(s, x, y) == s then return end
+        if s == below then pastBelow = true end
+        if s.raw then
+            if s.clickthrough == nil and pastBelow then
+                strict.fault(
+                    "prettyui: a "
+                        .. s.class
+                        .. " drawn over the target never had clickthrough set, and the "
+                        .. "client's default is unprobed"
+                )
+            end
+            if s.clickthrough == false then top = s end
+        end
+        for _, child in ipairs(s.children) do
+            visit(child)
+        end
+    end
+    visit(self.h.instance.uiRoot)
+    return top
+end
+
+-- Whether a component the plugin made (or a window's content or viewport) is one the raw
+-- pointer actions below apply to.
 ---@param cs table?
 ---@return boolean
 local function isRaw(cs)
     return cs ~= nil and cs.raw == true
 end
 
--- The component that takes a pointer action aimed at `cs`: itself, or its nearest ancestor
--- that isn't clickthrough (the plugin root layer is the client's and takes none). Returns
--- nil and why when the action doesn't land: hidden, clipped by the window it is scrolled
--- out of, or nothing under the pointer takes it. Faults if `cs` was destroyed, or if a
--- component on the way never had `clickthrough` set (the client's default is unprobed).
+-- The component that takes a pointer action aimed at `cs`, at (x, y) in plugin-layer
+-- coordinates (default: its centre): itself, or its nearest ancestor that isn't clickthrough
+-- (the plugin root layer is the client's and takes none). Returns nil and why when the action
+-- doesn't land: hidden, clipped (the point outside its clipped rect, e.g. scrolled out of a
+-- window), nothing under the pointer takes it, or another component is drawn over it there
+-- (see `topAt`). Faults if `cs` was destroyed, or if a component on the way never had
+-- `clickthrough` set (the client's default is unprobed).
 ---@param cs table component state
+---@param x number?
+---@param y number?
 ---@return table? hit
 ---@return string? why
-function Driver:reach(cs)
-    local ok, why = self:lands(cs)
+function Driver:reach(cs, x, y)
+    if x == nil or y == nil then
+        x, y = centre(cs)
+    end
+    local ok, why = self:lands(cs, x, y)
     if not ok then return nil, why end
-    if self:clipped(cs) then return nil, "clipped: scrolled out of the window's view" end
-    local c = cs
-    while c.parent do
+    local c, hit = cs, nil
+    while c.parent and not hit do
         if c.clickthrough == nil then
             strict.fault(
                 "prettyui: "
@@ -1322,21 +1408,27 @@ function Driver:reach(cs)
                     .. " never had clickthrough set, and the client's default is unprobed"
             )
         end
-        if not c.clickthrough then return c end
+        if not c.clickthrough then hit = c end
         c = c.parent
     end
-    return nil, "clickthrough: nothing under the pointer takes the click"
+    if not hit then return nil, "clickthrough: nothing under the pointer takes the click" end
+    local top = self:topAt(x, y, hit)
+    if top ~= hit then
+        return nil, "covered: a " .. assert(top).class .. " drawn over it takes the pointer"
+    end
+    return hit
 end
 
--- The pointer's position over `cs`'s centre in `hit`'s own coordinates (the hooks' x, y).
----@param cs table
+-- The point (x, y), in plugin-layer coordinates, in `hit`'s own coordinates as it sits now
+-- (the pointer hooks' x, y).
 ---@param hit table
+---@param x number
+---@param y number
 ---@return integer x
 ---@return integer y
-local function localPoint(cs, hit)
-    local cx, cy = ui.globalPos(cs)
+local function localPoint(hit, x, y)
     local hx, hy = ui.globalPos(hit)
-    return math.floor(cx + ui.width(cs) / 2 - hx), math.floor(cy + ui.height(cs) / 2 - hy)
+    return math.floor(x - hx), math.floor(y - hy)
 end
 
 -- Click a component the plugin made (or a window's content): the component that takes it
@@ -1349,11 +1441,95 @@ end
 function Driver:clickComponent(cs)
     local hit, why = self:reach(cs)
     if not hit then return false, why end
-    local x, y = localPoint(cs, hit)
+    local x, y = localPoint(hit, centre(cs))
     runtime.call(self.h.budgetMs, "component click", function()
         ui.fire(hit, ui.Hook.ONCLICK, x, y)
         ui.fire(hit, ui.Hook.ONRELEASE, x, y)
     end)
+    return true
+end
+
+-- Press the mouse button on a component the plugin made (or a window's content) at (x, y) in
+-- plugin-layer coordinates (default: its centre), and hold it. The component that takes it
+-- (see `reach`) gets ONCLICK with the point in its own coordinates, and is the pressed layer
+-- until the press ends. In the client the first ONHOLD comes on the same tick as ONCLICK (Row
+-- Probe); here it comes with the first `moveTo`, so a spec can look at the plugin's UI between
+-- the two. Returns true, or false and why it didn't land (the reasons `click` gives).
+---@param target any
+---@param x number?
+---@param y number?
+---@return boolean
+---@return string?
+function Driver:press(target, x, y)
+    assert(self.pressing == nil, "h.ui:press: a press is already held; release it first")
+    local cs = ui.stateOf(target)
+    assert(isRaw(cs), "h.ui:press needs a component the plugin made, or a window's content")
+    assert(cs, "unreachable")
+    if cs.destroyed then strict.fault("prettyui: pressed a component used after Destroy()") end
+    if x == nil or y == nil then
+        x, y = centre(cs)
+    end
+    local hit, why = self:reach(cs, x, y)
+    if not hit then return false, why end
+    self.pressing = { s = hit, x = x, y = y }
+    local lx, ly = localPoint(hit, x, y)
+    runtime.call(self.h.budgetMs, "component press", ui.fire, hit, ui.Hook.ONCLICK, lx, ly)
+    return true
+end
+
+-- The held press, after checking its layer is still on show. What the client sends a pressed
+-- layer that is hidden or destroyed mid-press is unprobed, so that faults.
+---@param self table the driver
+---@return table? # { s, x, y }, or nil when no press is held
+local function heldPress(self)
+    local p = self.pressing
+    if p and not ui.visible(p.s) then
+        strict.fault(
+            "prettyui: the pressed layer was hidden or destroyed mid-press, and what the "
+                .. "client sends it then is unprobed"
+        )
+    end
+    return p
+end
+
+-- Move the held pointer to (x, y) in plugin-layer coordinates: one Logic tick of the press.
+-- While the point is inside the pressed layer's rect clipped by every ancestor's, the layer
+-- gets ONHOLD with the point in its own coordinates as it sits now (so after a layer moves,
+-- the next ONHOLD is relative to its new place). Once the point leaves that area the press
+-- ends there: ONRELEASE with the point, and false. The client fires ONHOLD every tick even
+-- with the mouse still: moveTo the same point for that. The clock doesn't move: call
+-- h:advance(20) between moves when the plugin's Logic matters (ONHOLD's order against Logic
+-- within a tick is unprobed). Returns true, or false and why (no press held, or released).
+---@param x number
+---@param y number
+---@return boolean
+---@return string?
+function Driver:moveTo(x, y)
+    assert(type(x) == "number" and type(y) == "number", "h.ui:moveTo(x, y) needs numbers")
+    local p = heldPress(self)
+    if not p then return false, "no press held" end
+    p.x, p.y = x, y
+    local lx, ly = localPoint(p.s, x, y)
+    if ui.clipper(p.s, x, y) then
+        self.pressing = nil
+        runtime.call(self.h.budgetMs, "component release", ui.fire, p.s, ui.Hook.ONRELEASE, lx, ly)
+        return false, "released: the pointer left the pressed layer's hit area"
+    end
+    runtime.call(self.h.budgetMs, "component hold", ui.fire, p.s, ui.Hook.ONHOLD, lx, ly)
+    return true
+end
+
+-- Let go of the mouse button: the pressed layer gets ONRELEASE with the pointer's last point
+-- in its own coordinates. Returns true, or false and why when no press is held (none was made,
+-- or a `moveTo` already ended it).
+---@return boolean
+---@return string?
+function Driver:release()
+    local p = heldPress(self)
+    if not p then return false, "no press held" end
+    self.pressing = nil
+    local lx, ly = localPoint(p.s, p.x, p.y)
+    runtime.call(self.h.budgetMs, "component release", ui.fire, p.s, ui.Hook.ONRELEASE, lx, ly)
     return true
 end
 
@@ -1542,7 +1718,7 @@ function Driver:hoverComponent(cs)
     hit.mouseOver = true
     local tip = tipOf()
     if tip then tip.shown = true end
-    local x, y = localPoint(cs, hit)
+    local x, y = localPoint(hit, centre(cs))
     runtime.call(self.h.budgetMs, "component mouse-over", ui.fire, hit, ui.Hook.ONMOUSEOVER, x, y)
     return true
 end

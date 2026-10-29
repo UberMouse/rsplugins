@@ -237,15 +237,17 @@ describe("chore-tracker shop runs", function()
             pick(h, { DAILY.id, FEATHERS.id, YAK.id })
             -- Short enough that the list overflows and can scroll.
             h.ui:resize(window(h), 0, -260)
-            window(h):SetScrollPosition(40)
+            -- Scrolled, but not so far that the settings button (content y 12-32) leaves the
+            -- view: it is clicked below.
+            window(h):SetScrollPosition(20)
             local win = window(h)
-            assert.are.equal(40, win._scroll.scrollY)
+            assert.are.equal(20, win._scroll.scrollY)
             openShop(h, "FISHINGSHOP", 20)
             setFeathers(h, "FISHINGSHOP", 0)
             h:advance(20)
             assert.are.equal(win, window(h))
             assert.are.equal("Feather Shop Run (1/4)", helpers.row(h, FEATHERS.name).text)
-            assert.are.equal(40, window(h)._scroll.scrollY)
+            assert.are.equal(20, window(h)._scroll.scrollY)
 
             helpers.openSettings(h)
             assert.are.equal(0, window(h)._scroll.scrollY)

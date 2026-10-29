@@ -386,6 +386,7 @@ describe("a plugin's own components", function()
     it("subscribe with and without an id, and unsubscribe the same way", function()
         local h = loadRows([[
             log = {}
+            row:SetSize(100, 28)
             row.clickthrough = false
             row:Subscribe(ui.Hook.ONCLICK, function(c, x, y) log[#log + 1] = "default" end)
             row:Subscribe(ui.Hook.ONCLICK, "extra", function() log[#log + 1] = "extra" end)

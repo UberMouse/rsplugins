@@ -172,6 +172,8 @@ function Harness:unload()
     self.ui:holdAlt(false)
     -- Nor is anything hovered in the plugin's next UI.
     self.ui.hovering = nil
+    -- And no press is held on it.
+    self.ui.pressing = nil
     if type(shutdown) == "function" then runtime.call(self.budgetMs, "PluginShutdown", shutdown) end
 end
 

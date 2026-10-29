@@ -53,7 +53,9 @@ function M.pos(s)
     return round(s.px + s.rx * M.width(s.parent)), round(s.py + s.ry * M.height(s.parent))
 end
 
--- Absolute position (xyGlobal).
+-- Absolute position (xyGlobal). A parent scrolled down by `scrollY` (the PrettyUI fake sets
+-- it on a Window's viewport, where 1.2.0 calls SetScrollPos) draws its children that much
+-- higher.
 ---@param s table
 ---@return integer x
 ---@return integer y
@@ -61,7 +63,23 @@ function M.globalPos(s)
     if not s.parent then return 0, 0 end
     local gx, gy = M.globalPos(s.parent)
     local x, y = M.pos(s)
-    return gx + x, gy + y
+    return gx + x, gy + y - s.parent.scrollY
+end
+
+-- Whether the point (x, y), in plugin-layer coordinates, is outside the part of `s` that
+-- takes the pointer: its own rect clipped by every ancestor's (the drag probes, 2026-10-29).
+-- Returns the first of `s` and its ancestors whose rect leaves the point out, or nil.
+---@param s table
+---@param x number
+---@param y number
+---@return table? # the component that clips the point away
+function M.clipper(s, x, y)
+    while s do
+        local gx, gy = M.globalPos(s)
+        if x < gx or y < gy or x >= gx + M.width(s) or y >= gy + M.height(s) then return s end
+        s = s.parent
+    end
+    return nil
 end
 
 -- Whether it would draw: neither it nor any ancestor is hidden or destroyed.
@@ -556,6 +574,7 @@ function M.create(kind, parent)
         rh = 0,
         hidden = false,
         destroyed = false,
+        scrollY = 0, -- how far its children are scrolled up (see globalPos)
         content = kind == "Text" and "" or nil,
         hooks = {}, -- ui.Hook value -> listeners, in subscription order
         mouseOver = false,

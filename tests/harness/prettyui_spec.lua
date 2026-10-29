@@ -621,7 +621,14 @@ describe("prettyui Window content for hand-built rows", function()
     it("is a live ui.Layer a plugin parents components to, and goes with the window", function()
         local h = load(ROWS)
         local row = h.env.rows[3].row
+        -- The viewport is the view inside the frame; the content is as tall as the rows.
         assert.are.same({ 8, 32, 284, 160 }, {
+            h.env.w.viewport.xyGlobal.x - 100,
+            h.env.w.viewport.xyGlobal.y - 100,
+            h.env.w.viewport.width,
+            h.env.w.viewport.height,
+        })
+        assert.are.same({ 8, 32, 284, 280 }, {
             h.env.w.content.xyGlobal.x - 100,
             h.env.w.content.xyGlobal.y - 100,
             h.env.w.content.width,
@@ -835,6 +842,9 @@ describe("prettyui driver on hand-built rows", function()
 
     it("scrolls the window on a wheel over its bare content, and passes the delta on", function()
         local h = load(ROWS)
+        -- Row 6 (y 140-168) covers the content's centre (y 140); without it, it is bare.
+        assert.matches("^covered", select(2, h.ui:wheel(h.env.w.content, 2)))
+        h.env.rows[6].row.hidden = true
         assert.are.same({ true, 1 }, { h.ui:wheel(h.env.w.content, 2) })
         assert.are.equal(64, h.env.w._scroll.scrollY)
     end)
@@ -913,6 +923,234 @@ describe("prettyui driver on hand-built rows", function()
         h.env.rows[2].row.hidden = true
         assert.are.same({ false, "hidden" }, { h.ui:hover(h.env.rows[2].row) })
         assert.is_true(h.env.rows[1].row.isMouseOver)
+    end)
+end)
+
+-- A bar that follows the pointer as the drag probe's v1 bar did: each ONHOLD moves it by how
+-- far the pointer is from where it was grabbed.
+local BAR = [[
+bar = ui.Layer.new(parent)
+bar:SetPos(100, 500)
+bar:SetSize(200, 28)
+bar.clickthrough = false
+log = {}
+bar:Subscribe(ui.Hook.ONCLICK, function(_, x, y)
+    log[#log + 1] = { "click", x, y }
+    grabY = y
+end)
+bar:Subscribe(ui.Hook.ONHOLD, function(_, x, y)
+    log[#log + 1] = { "hold", x, y }
+    bar:SetPos(100, bar.y + y - grabY)
+end)
+bar:Subscribe(ui.Hook.ONRELEASE, function(_, x, y) log[#log + 1] = { "release", x, y } end)
+]]
+
+-- The pattern that held the press in the probe's v3 (PrettyUI's scroll-thumb drag): a capture
+-- layer on the plugin layer, docked over a row's grip; the first ONHOLD stretches it over the
+-- whole plugin layer and brings it to the front, and ONRELEASE docks it back.
+local CAPTURE = [[
+w = prettyui.Window.new(parent, { title = "Rows", x = 100, y = 100, width = 300, height = 200 })
+row = ui.Layer.new(w.content)
+row:SetPos(0, 28)
+row:SetSize(-16, 28, 1.0)
+row.clickthrough = false
+w:SetContentHeight(400)
+capture = ui.Layer.new(parent)
+capture.clickthrough = false
+function dock()
+    local at = row.xyGlobal
+    capture:SetPos(at.x, at.y)
+    capture:SetSize(24, 28)
+end
+dock()
+log, stretched = {}, false
+capture:Subscribe(ui.Hook.ONCLICK, function(_, x, y) log[#log + 1] = { "click", x, y } end)
+capture:Subscribe(ui.Hook.ONHOLD, function(_, x, y)
+    log[#log + 1] = { "hold", x, y }
+    if not stretched then
+        stretched = true
+        capture:SetPos(0, 0)
+        capture:SetSize(0, 0, 1.0, 1.0)
+        capture:MoveToFront()
+    end
+end)
+capture:Subscribe(ui.Hook.ONRELEASE, function(_, x, y)
+    log[#log + 1] = { "release", x, y }
+    stretched = false
+    dock()
+end)
+]]
+
+describe("prettyui driver press, hold and release", function()
+    it("gives ONCLICK on press, and ONHOLD per move relative to where the layer is now", function()
+        local h = load(BAR)
+        assert.is_true(h.ui:press(h.env.bar)) -- at its centre, (200, 514)
+        assert.are.same({ { "click", 100, 14 } }, h.env.log)
+        assert.is_true(h.ui:moveTo(200, 524)) -- 10 below the grab: the bar follows to 510
+        assert.is_true(h.ui:moveTo(200, 524)) -- the mouse still: back at the grab point
+        assert.is_true(h.ui:moveTo(200, 534))
+        assert.are.same({
+            { "click", 100, 14 },
+            { "hold", 100, 24 },
+            { "hold", 100, 14 },
+            { "hold", 100, 24 },
+        }, h.env.log)
+        assert.are.equal(520, h.env.bar.y)
+    end)
+
+    it("ends the press as soon as the pointer leaves the layer, button still down", function()
+        local h = load(BAR)
+        h.ui:press(h.env.bar)
+        assert.are.same(
+            { false, "released: the pointer left the pressed layer's hit area" },
+            { h.ui:moveTo(200, 528) } -- the bar is 500-527
+        )
+        assert.are.same({ "release", 100, 28 }, h.env.log[2])
+        assert.are.same({ false, "no press held" }, { h.ui:release() })
+        assert.are.equal(2, #h.env.log)
+    end)
+
+    it("ends the press when the pointer leaves a parent the layer is stretched past", function()
+        local h = load([[
+            panel = ui.Layer.new(parent)
+            panel:SetPos(400, 500)
+            panel:SetSize(320, 400)
+            panel.clickthrough = true
+            grip = ui.Layer.new(panel)
+            grip:SetPos(10, 10)
+            grip:SetSize(24, 24)
+            grip.clickthrough = false
+            log = {}
+            grip:Subscribe(ui.Hook.ONHOLD, function(_, x, y)
+                log[#log + 1] = { "hold", x, y }
+                grip:SetPos(-1000, -1000)
+                grip:SetSize(5000, 5000)
+            end)
+            grip:Subscribe(ui.Hook.ONRELEASE, function(_, x, y) log[#log + 1] = { "release", x, y } end)
+        ]])
+        assert.is_true(h.ui:press(h.env.grip)) -- (422, 522)
+        assert.is_true(h.ui:moveTo(422, 522))
+        assert.is_true(h.ui:moveTo(700, 890)) -- inside the panel, far outside the 24 px grip
+        local ok, why = h.ui:moveTo(700, 499) -- one pixel above the panel
+        assert.is_false(ok)
+        assert.matches("^released", why)
+        assert.are.same({
+            { "hold", 12, 12 },
+            { "hold", 1300, 1390 },
+            { "release", 1300, 999 },
+        }, h.env.log)
+    end)
+
+    it(
+        "keeps the press of a capture stretched over the plugin layer, overshoot and back",
+        function()
+            local h = load(CAPTURE)
+            local capture = h.env.capture
+            -- Docked over the row: the window's root (100, 100), its viewport (8, 32), row y 28.
+            assert.are.same(
+                { 108, 160, 24 },
+                { capture.xyGlobal.x, capture.xyGlobal.y, capture.width }
+            )
+            assert.is_true(h.ui:press(capture))
+            -- Still docked: the first ONHOLD, which stretches it, comes with the first move.
+            assert.are.equal(24, capture.width)
+            assert.is_true(h.ui:moveTo(120, 174))
+            assert.are.same(
+                { 0, 0, 3836, 2121 },
+                { capture.x, capture.y, capture.width, capture.height }
+            )
+            assert.is_true(h.ui:moveTo(120, 40)) -- above the window
+            assert.is_true(h.ui:moveTo(120, 2000)) -- far below it
+            assert.is_true(h.ui:moveTo(120, 200)) -- back over the list
+            assert.is_true(h.ui:release())
+            assert.are.same({
+                { "click", 12, 14 },
+                { "hold", 12, 14 },
+                { "hold", 120, 40 },
+                { "hold", 120, 2000 },
+                { "hold", 120, 200 },
+                { "release", 120, 200 },
+            }, h.env.log)
+            assert.are.same(
+                { 108, 160, 24 },
+                { capture.xyGlobal.x, capture.xyGlobal.y, capture.width }
+            )
+        end
+    )
+
+    it("scrolls a window's content and what is on it, but not its viewport", function()
+        local h = load(CAPTURE)
+        local w, row = h.env.w, h.env.row
+        w:SetScrollPosition(20)
+        assert.are.same({ 108, 140, 28 }, { row.xyGlobal.x, row.xyGlobal.y, row.y })
+        assert.are.same({ 132, 112 }, { w.viewport.xyGlobal.y, w.content.xyGlobal.y })
+        row:Subscribe(h.env.ui.Hook.ONSCROLLWHEEL, w._onScrollWheel)
+        assert.are.same({ true, 1 }, { h.ui:wheel(row, 1) })
+        assert.are.equal(52, w._scroll.scrollY)
+        assert.are.equal(108, row.xyGlobal.y)
+        -- Docked again from xyGlobal, the capture lands over the row's new place.
+        h.env.dock()
+        assert.is_true(h.ui:press(h.env.capture))
+        assert.are.same({ "click", 12, 14 }, h.env.log[1])
+    end)
+
+    it(
+        "doesn't press through a window drawn over the target, until it comes to the front",
+        function()
+            local h = load([[
+            target = ui.Layer.new(parent)
+            target:SetPos(150, 150)
+            target:SetSize(24, 24)
+            target.clickthrough = false
+            w = prettyui.Window.new(parent, { title = "T", x = 100, y = 100, width = 300, height = 200 })
+        ]])
+            local covered = { false, "covered: a ui.Layer drawn over it takes the pointer" }
+            assert.are.same(covered, { h.ui:press(h.env.target) })
+            h.env.target:MoveToFront()
+            assert.is_true(h.ui:press(h.env.target))
+            assert.is_true(h.ui:release())
+            h.env.w:Show() -- brings the window to the front
+            assert.are.same(covered, { h.ui:press(h.env.target) })
+        end
+    )
+
+    it("fails a press that wouldn't land, with a reason, and faults on a destroyed one", function()
+        local h = load(BAR)
+        assert.are.same(
+            { false, "clipped: the point is outside the target" },
+            { h.ui:press(h.env.bar, 99, 510) }
+        )
+        h.env.bar.hidden = true
+        assert.are.same({ false, "hidden" }, { h.ui:press(h.env.bar) })
+        h.env.bar:Destroy()
+        assert.matches("used after Destroy", harness.errorOf(h.ui.press, h.ui, h.env.bar))
+        assert.are.same({}, h.env.log)
+    end)
+
+    it("returns false from moveTo and release with no press held", function()
+        local h = load(BAR)
+        assert.are.same({ false, "no press held" }, { h.ui:moveTo(200, 514) })
+        assert.are.same({ false, "no press held" }, { h.ui:release() })
+        assert.are.same({}, h.env.log)
+    end)
+
+    it("faults on a second press, and on a pressed layer hidden mid-press", function()
+        local h = load(BAR)
+        h.ui:press(h.env.bar)
+        assert.matches("already held", harness.errorOf(h.ui.press, h.ui, h.env.bar))
+        h.env.bar.hidden = true
+        assert.matches("mid%-press", harness.errorOf(h.ui.moveTo, h.ui, 200, 514))
+        assert.matches("mid%-press", harness.errorOf(h.ui.release, h.ui))
+    end)
+
+    it("runs ONHOLD under the runtime budget", function()
+        local h =
+            load(BAR .. "bar:Subscribe(ui.Hook.ONHOLD, 'spin', function() while true do end end)")
+        h.ui:press(h.env.bar)
+        assert.matches(
+            "Maximum function execution time",
+            harness.errorOf(h.ui.moveTo, h.ui, 200, 514)
+        )
     end)
 end)
 

@@ -47,6 +47,7 @@ function WindowModule.new(parent, options) end
 ---@field root ui.Layer The window's own layer: read x/y/width/height for its position and size. A bare root:SetPos is snapped back unless SetSize follows. nil after Destroy()
 ---@field closeButton ui.Sprite The X at (width - 28, 7); clicking it calls Close()
 ---@field content ui.Layer The scrolling layer the rows live in. Make your own ui.Layer/Sprite/Text under it at an explicit position and call SetContentHeight so the window scrolls over them. nil after Destroy()
+---@field viewport ui.Layer The layer the content scrolls in, inside the window's frame: its xyGlobal, width and height are the part of the content on show (in 1.2.0 less the scrollbar's 18 px while it shows). nil after Destroy()
 ---@field _onScrollWheel fun(component: ui.Component, delta: number): boolean Internal, not API: the window's wheel handler. Subscribe it to a row's ui.Hook.ONSCROLLWHEEL so the wheel over that row still scrolls the window; it scrolls by delta * 32 px while the content overflows and returns false if the position moved, else true
 ---@field _scroll { scrollY: number }? Internal, not API: the content's scroll controller, whose `scrollY` is the only way to read the scroll position. nil after Destroy()
 local Window = {}

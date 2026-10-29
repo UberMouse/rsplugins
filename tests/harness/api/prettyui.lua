@@ -1687,7 +1687,9 @@ function Driver:hover(target, value)
     end
     local cs, tipOf = self:hoverTarget(target, value)
     if cs.destroyed then strict.fault("prettyui: hovered a component used after Destroy()") end
-    if not ui.visible(cs) then return false, "hidden" end
+    -- Same check as a click, so the two agree on what is hidden, clipped or covered.
+    local ok, why = self:lands(cs)
+    if not ok then return false, why end
     self:leave()
     self.hovering = { cs = cs, tipOf = tipOf }
     local tip = tipOf()

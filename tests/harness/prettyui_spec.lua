@@ -799,6 +799,19 @@ describe("prettyui driver on hand-built rows", function()
         assert.matches("never had clickthrough set", harness.errorOf(h.ui.click, h.ui, h.env.bare))
     end)
 
+    it("clips a PrettyUI button scrolled out of the window's view, for click and hover", function()
+        local h = load(ROWS .. [[
+            far = prettyui.SpriteButton.new(w.content, "MENU", function() end,
+                { x = 10, y = 250, size = 20 })
+        ]])
+        local ok, why = h.ui:hover(h.env.far)
+        assert.is_false(ok)
+        assert.matches("^clipped", why)
+        assert.matches("^clipped", select(2, h.ui:click(h.env.far)))
+        h.env.w:SetScrollPosition(120)
+        assert.is_true(h.ui:hover(h.env.far))
+    end)
+
     it("clips a row scrolled outside the window's view, for click, hover and wheel", function()
         local h = load(WHEEL_ROWS)
         local rows = h.env.rows

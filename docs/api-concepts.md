@@ -133,11 +133,11 @@ The official reference annotates Lua with pseudo-types:
     then `ONCLICK`, on the same tick, with no `ONHOLD`. Code that acts on "a press, then its
     release" misses these clicks; acting on `ONCLICK` (as PrettyUI does) catches every one.
   - `ONRELEASE` arrived at the pressed layer with coordinates outside it (y 37-45 on a 36-high
-    row). That was not the layer keeping the press, as this bullet first said: the drag probes
-    (next bullet) show a press ends as soon as the pointer leaves the layer's clipped rect, so
-    those were the real release or that early end.
+    row). The earlier note that `ONHOLD` keeps coming after the pointer leaves the pressed layer
+    did not hold in the 2026-10-29 drag probes (next bullet), and this probe did not record
+    whether the button was still down at those releases.
   - `Mouse.GetPosition()` tracks while a press is held, and equals the layer's global origin
-    plus the hook's x, y (at interface scale 1).
+    plus the hook's x, y (at interface scale 100, the client option's percentage).
   - **The native drag hooks never fired.** No `ONDRAG` or `ONDRAGCOMPLETE` on any probe row,
     including one with `dragDelayTicks = 0, deadZone = 0`, dragged 40 px. Build a drag from
     `ONCLICK`/`ONHOLD`/`ONRELEASE` and the mouse position, as PrettyUI's own drags do.
@@ -164,8 +164,9 @@ The official reference annotates Lua with pseudo-types:
     the plugin layer, docked over the visual at rest. On its first `ONHOLD` stretch it over the
     whole plugin layer (`SetPos(0, 0)`, `SetSize(p.width, p.height)`, `p` the plugin layer) and
     `MoveToFront()` it. It then gets `ONHOLD` until the real release, overshoots and re-entries
-    included, and its hook y is the pointer's y in plugin-layer space (a fixed origin,
-    independent of interface scale; equal to `Mouse.GetPosition().y` at interface scale 100).
+    included, and its hook y equalled the pointer's y in plugin-layer space and
+    `Mouse.GetPosition().y` at interface scale 100 (`game.options.InterfaceScale.setting`
+    read 100); other interface scales are unprobed.
     Dock it back on `ONRELEASE`. This is PrettyUI 1.2.0's scroll-thumb drag
     (`src/core/scroll.lua`, `thumbDrag`: "The first ONHOLD expands this layer across the
     overlay parent so later events continue outside the scrollbar").

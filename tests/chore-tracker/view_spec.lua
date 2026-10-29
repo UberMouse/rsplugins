@@ -51,7 +51,7 @@ describe("chore-tracker view", function()
         assert.are.same({}, view.view(state.new(), chores, 0))
     end)
 
-    it("orders sections Daily, Weekly, Monthly and rows in chore-list order", function()
+    it("orders sections Daily, Weekly, Monthly and rows in the player's order", function()
         local s = selecting({ "m1", "w1", "d2", "d1" })
         local sections = view.view(s, chores, 0)
         local titles, rows = {}, {}
@@ -62,7 +62,7 @@ describe("chore-tracker view", function()
             end
         end
         assert.are.same({ "Daily", "Weekly", "Monthly" }, titles)
-        assert.are.same({ "d1", "d2", "w1", "m1" }, rows)
+        assert.are.same({ "d2", "d1", "w1", "m1" }, rows)
     end)
 
     it("omits a period with nothing selected", function()
@@ -78,7 +78,7 @@ describe("chore-tracker view", function()
         assert.are.equal("dshop", sections[1].rows[1].id)
         assert.is_true(sections[1].rows[1].shop)
         assert.are.equal("weekly", sections[2].period)
-        assert.are.same({ "w1", "wshop" }, { sections[2].rows[1].id, sections[2].rows[2].id })
+        assert.are.same({ "wshop", "w1" }, { sections[2].rows[1].id, sections[2].rows[2].id })
     end)
 
     it("gives each row the chore's fields and whether it is done now", function()

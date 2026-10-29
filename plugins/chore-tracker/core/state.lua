@@ -29,7 +29,7 @@ M.VERSION = 2
 ---@field links string[]
 
 ---@class ChoreState
----@field selected string[] picked chore ids, in chore-list order
+---@field selected string[] picked chore ids, in the player's own order (new picks last)
 ---@field done table<string, integer> chore id -> epoch minute it was marked done
 ---chore id -> shop inventory name -> epoch minute of the last purchase there
 ---@field shops table<string, table<string, integer>>
@@ -94,18 +94,6 @@ function M.find(chores, id)
     return nil
 end
 
--- The ids in `chores` that pass `keep`, in chore-list order.
----@param chores Chore[]
----@param keep fun(id: string): boolean
----@return string[]
-local function inListOrder(chores, keep)
-    local out = {}
-    for _, chore in ipairs(chores) do
-        if keep(chore.id) then out[#out + 1] = chore.id end
-    end
-    return out
-end
-
 ---@param state ChoreState
 ---@param id string
 ---@return boolean
@@ -116,7 +104,8 @@ function M.isSelected(state, id)
     return false
 end
 
--- `state` with `id` selected. An id that isn't in `chores` changes nothing.
+-- `state` with `id` selected, last in `selected` so it shows last in its period. An id that
+-- isn't in `chores` changes nothing.
 ---@param state ChoreState
 ---@param chores Chore[]
 ---@param id string
@@ -124,9 +113,41 @@ end
 function M.select(state, chores, id)
     if not M.find(chores, id) or M.isSelected(state, id) then return state end
     local out = copy(state)
-    out.selected = inListOrder(chores, function(c)
-        return c == id or M.isSelected(state, c)
-    end)
+    out.selected[#out.selected + 1] = id
+    return out
+end
+
+-- `state` with `id` moved to position `index` among the selected chores of its own period
+-- (1 = first), clamped to that period's range. Other chores keep their relative order, and
+-- a chore never changes period, so the other periods' rows stay put. Gives back `state`
+-- itself when `id` isn't selected or already sits there.
+---@param state ChoreState
+---@param chores Chore[]
+---@param id string
+---@param index integer
+---@return ChoreState
+function M.move(state, chores, id, index)
+    local chore = M.find(chores, id)
+    if not chore or not M.isSelected(state, id) then return state end
+    -- The period's ids in order, and where in `selected` each of them sits.
+    local ids, slots = {}, {}
+    local from = 0
+    for i, other in ipairs(state.selected) do
+        local c = M.find(chores, other)
+        if c and c.period == chore.period then
+            ids[#ids + 1] = other
+            slots[#slots + 1] = i
+            if other == id then from = #ids end
+        end
+    end
+    local to = math.max(1, math.min(index, #ids))
+    if to == from then return state end
+    table.remove(ids, from)
+    table.insert(ids, to, id)
+    local out = copy(state)
+    for k, slot in ipairs(slots) do
+        out.selected[slot] = ids[k]
+    end
     return out
 end
 
@@ -268,13 +289,14 @@ function M.deserialise(value, chores)
     end
 
     if type(value.selected) == "table" then
-        local stored = {}
-        for _, id in pairs(value.selected) do
-            if type(id) == "string" then stored[id] = true end
+        -- ipairs, not pairs: the stored order is the player's order.
+        local seen = {}
+        for _, id in ipairs(value.selected) do
+            if type(id) == "string" and not seen[id] and M.find(chores, id) then
+                seen[id] = true
+                state.selected[#state.selected + 1] = id
+            end
         end
-        state.selected = inListOrder(chores, function(id)
-            return stored[id] == true
-        end)
     end
 
     if type(value.done) == "table" then

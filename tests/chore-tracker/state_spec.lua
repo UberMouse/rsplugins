@@ -19,13 +19,19 @@ describe("chore-tracker state", function()
             assert.are.same({}, state.new().selected)
         end)
 
-        it("keeps selected ids in chore-list order, whatever order they were picked in", function()
+        it("appends each pick, so selected is the order they were picked in", function()
             local s = state.select(state.new(), chores, "m1")
             s = state.select(s, chores, "d1")
             s = state.select(s, chores, "w1")
-            assert.are.same({ "d1", "w1", "m1" }, s.selected)
+            assert.are.same({ "m1", "d1", "w1" }, s.selected)
             assert.is_true(state.isSelected(s, "w1"))
             assert.is_false(state.isSelected(s, "d2"))
+        end)
+
+        it("puts a deselected then reselected chore last", function()
+            local s = state.select(state.select(state.new(), chores, "d1"), chores, "d2")
+            s = state.select(state.deselect(s, "d1"), chores, "d1")
+            assert.are.same({ "d2", "d1" }, s.selected)
         end)
 
         it("ignores selecting an id twice", function()
@@ -171,14 +177,56 @@ describe("chore-tracker state", function()
         end)
     end)
 
+    describe("move", function()
+        local function picked(ids)
+            local s = state.new()
+            for _, id in ipairs(ids) do
+                s = state.select(s, chores, id)
+            end
+            return s
+        end
+
+        it("moves a chore within its period, leaving other periods' places alone", function()
+            local s = picked({ "d1", "w1", "d2", "m1", "dshop" })
+            assert.are.same(
+                { "dshop", "w1", "d1", "m1", "d2" },
+                state.move(s, chores, "dshop", 1).selected
+            )
+            assert.are.same(
+                { "d2", "w1", "d1", "m1", "dshop" },
+                state.move(s, chores, "d1", 2).selected
+            )
+        end)
+
+        it("clamps the index to the period's range", function()
+            local s = picked({ "d1", "w1", "d2" })
+            assert.are.same({ "d2", "w1", "d1" }, state.move(s, chores, "d2", -5).selected)
+            assert.are.same({ "d2", "w1", "d1" }, state.move(s, chores, "d1", 99).selected)
+        end)
+
+        it("gives back the same state for an unselected id or the current place", function()
+            local s = picked({ "d1", "w1", "d2" })
+            assert.are.equal(s, state.move(s, chores, "d2", 5))
+            assert.are.equal(s, state.move(s, chores, "d1", 1))
+            assert.are.equal(s, state.move(s, chores, "dshop", 1))
+            assert.are.equal(s, state.move(s, chores, "gone", 1))
+        end)
+
+        it("never mutates the state it was given", function()
+            local s = picked({ "d1", "d2" })
+            state.move(s, chores, "d2", 1)
+            assert.are.same({ "d1", "d2" }, s.selected)
+        end)
+    end)
+
     describe("serialise", function()
-        it("gives version 2, selected ids in chore-list order, done and shop minutes", function()
+        it("gives version 2, selected ids in the player's order, done and shop minutes", function()
             local s = state.select(state.select(state.new(), chores, "w1"), chores, "d1")
             s = state.mark(s, "w1", 123)
             s = state.recordPurchase(s, byId.wshop, "SHOP_A", 456)
             assert.are.same({
                 version = 2,
-                selected = { "d1", "w1" },
+                selected = { "w1", "d1" },
                 done = { w1 = 123, wshop = 456 },
                 shops = { wshop = { SHOP_A = 456 } },
             }, state.serialise(s))
@@ -238,7 +286,12 @@ describe("chore-tracker state", function()
                 selected = { "w1", 3, "gone", "d1", true, {}, "w1" },
                 done = {},
             }
-            assert.are.same({ "d1", "w1" }, state.deserialise(stored, chores).selected)
+            assert.are.same({ "w1", "d1" }, state.deserialise(stored, chores).selected)
+        end)
+
+        it("round-trips the player's order", function()
+            local s = state.select(state.select(state.new(), chores, "m1"), chores, "d1")
+            assert.are.same({ "m1", "d1" }, state.deserialise(state.serialise(s), chores).selected)
         end)
 
         it("keeps only integer done minutes for ids in the chore list", function()
@@ -267,7 +320,7 @@ describe("chore-tracker state", function()
                 shops = { dshop = { SHOP_A = 9 } }, -- not part of version 1
             }
             assert.are.same(
-                { selected = { "d1", "dshop" }, done = { dshop = 9 }, shops = {} },
+                { selected = { "dshop", "d1" }, done = { dshop = 9 }, shops = {} },
                 state.deserialise(stored, chores)
             )
         end)

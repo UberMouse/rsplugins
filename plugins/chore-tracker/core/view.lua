@@ -29,7 +29,7 @@ M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 ---@class ChoreSection
 ---@field period ChorePeriod
 ---@field title string
----@field rows ChoreRow[] selected chores of this period, in chore-list order
+---@field rows ChoreRow[] selected chores of this period, in the player's order
 ---@field done integer how many rows are done
 ---@field total integer how many rows there are
 
@@ -73,7 +73,7 @@ local function shopLines(s, chore, listed, now)
 end
 
 -- The sections in the order Daily, Weekly, Monthly, each holding only its selected chores
--- (shop chores included). A period with nothing selected has no section. Without a clock
+-- (shop chores included), in the order the player arranged them. A period with nothing selected has no section. Without a clock
 -- (`now` nil: logged out or loading) nothing shows done or bought, since no period can be
 -- placed.
 ---@param s ChoreState
@@ -86,8 +86,9 @@ function M.view(s, chores, now, shops)
     for _, group in ipairs(M.byPeriod(chores)) do
         local section =
             { period = group.period, title = group.title, rows = {}, done = 0, total = 0 }
-        for _, chore in ipairs(group.chores) do
-            if state.isSelected(s, chore.id) then
+        for _, id in ipairs(s.selected) do
+            local chore = state.find(group.chores, id)
+            if chore then
                 local done = now ~= nil and state.isDone(s, chore, now)
                 local lines, bought = shopLines(s, chore, shops and shops[chore.id] or {}, now)
                 section.rows[#section.rows + 1] = {

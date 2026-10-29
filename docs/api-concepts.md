@@ -121,6 +121,34 @@ The official reference annotates Lua with pseudo-types:
   (`//`, not `/`).
 - UI input uses **component hooks**, separate from `Event`:
   `button:Subscribe(ui.Hook.ONBUTTONPRESSED, fn)`, `button:Unsubscribe(ui.Hook.ONBUTTONPRESSED)`.
+- **Pointer hooks on a plain `ui.Layer`** (`clickthrough = false`; the Row Probe, user-driven in
+  the beta client, 2026-10-29). Ticks below are `Event.Logic` ticks, about 20 ms each.
+  - A click: `ONCLICK` and the first `ONHOLD` on the same tick, `ONRELEASE` 1-3 ticks later. A
+    press held still gets `ONHOLD` every tick (42 in 42 ticks). The callbacks get the press
+    point in the layer's own coordinates.
+  - **A click whose press and release land in one tick arrives backwards**: `ONRELEASE` and
+    then `ONCLICK`, on the same tick, with no `ONHOLD`. Code that acts on "a press, then its
+    release" misses these clicks; acting on `ONCLICK` (as PrettyUI does) catches every one.
+  - The pressed layer keeps the press when the mouse leaves it: `ONHOLD` keeps coming, and
+    `ONRELEASE` arrives at that layer with coordinates outside it (y 37-45 on a 36-high row).
+  - `Mouse.GetPosition()` tracks while a press is held, and equals the layer's global origin
+    plus the hook's x, y (at interface scale 1).
+  - **The native drag hooks never fired.** No `ONDRAG` or `ONDRAGCOMPLETE` on any probe row,
+    including one with `dragDelayTicks = 0, deadZone = 0`, dragged 40 px. Build a drag from
+    `ONCLICK`/`ONHOLD`/`ONRELEASE` and the mouse position, as PrettyUI's own drags do.
+  - `component.dragConfig` is read-only ("sol: cannot write to a readonly property"); set its
+    fields in place (`layer.dragConfig.deadZone = 10`), which reads back. A new layer's is
+    `0, 0, 0`.
+- **Enums are numbers in the client**, though the stubs list string values: `ui.DragRenderBehaviour`
+  reads `TRANSPARENT_OVERLAY = 0` … `INVISIBLE = 3`, and `ui.DragRenderBehaviour.FromID(2)`
+  gives back the name `"OPAQUE_OVERLAY"`. `pairs` over the enum table shows only `FromID`.
+  Code that names the members (`ui.DragRenderBehaviour.OPAQUE`) works either way; comparing a
+  read-back value against a string literal never matches.
+- **A plugin whose `main.lua` raises after making UI leaves that UI behind.** The top level stops
+  before `function PluginShutdown()` is defined, so nothing destroys it, and each `prl` added
+  another window (Row Probe, 2026-10-29). Define `PluginShutdown` before building UI, or build
+  under `pcall`. A plugin layer component another plugin left behind can be removed by id with
+  `layer:Delete(categoryID, dynamicID)` from the dev bridge.
 - Text content accepts `<br>` for line breaks.
 - Some components are restricted. The guidelines also forbid unhiding hidden interface
   components and moving or resizing click zones.
@@ -585,6 +613,21 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   third of the way down. Back-to-back popups queued through `onComplete` each showed in turn.
   Its sound (`soundID`, played through `audio.Play`) is unheard: the client ran in a VM with
   no audio.
+- **Hand-built rows in a window** (Row Probe, user-checked 2026-10-29). A `ui.Layer` made on
+  the window's `content` (a field outside our typed subset) at an explicit `y`, with
+  `window:SetContentHeight(h)` covering the rows, scrolls with the window.
+  - `ui.Sprite:SetAssociatedObject(objId)` draws the item's icon scaled into the sprite's box:
+    32 px fills a 36-high row, 24 px is smaller but clear. Coins' icon is a speck at any size
+    (one coin's art). `alpha = 0.5` on the icon, muted text and
+    `id.Sprite.RS3_BTN_CHECKBOX_SMALL_2` (the ticked box; `_0` is empty) read as "done".
+  - The window clips both drawing and the mouse: a row scrolled past the bottom edge drew
+    only the part inside, and hovering and clicking just below the window reached no row.
+  - **A raw row swallows the mouse wheel.** Over a row that subscribes nothing for the wheel,
+    the window didn't scroll. `row:Subscribe(ui.Hook.ONSCROLLWHEEL, window._onScrollWheel)`
+    (internal, read from the 1.2.0 source; PrettyUI's own content components bind the same
+    handler) made it scroll.
+  - Tooltips: `prettyui.Tooltip` is exported, and `Tooltip.attach(target, parent, value)` is
+    what PrettyUI's `ItemSlot` uses on content children (read from source, not yet tried).
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

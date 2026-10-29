@@ -84,9 +84,12 @@ after each:
    be dragged, so build a row from `ui.Layer` + `ui.Sprite` (`SetAssociatedObject(objId)` draws
    the item's built-in icon) + text + a tick sprite. Icons come from a hand-written
    `data/icons.lua` (chore id -> obj id, checked against `docs/api/consts/Obj.lua`). Use built-in
-   sprites only, because a custom PNG puts the plugin in closer review. Probe: item sprites in
-   the window, and whether a drag fights scroll and click-to-tick (`dragConfig.dragDelayTicks`,
-   `deadZone`).
+   sprites only, because a custom PNG puts the plugin in closer review. Probed 2026-10-29
+   (`docs/api-concepts.md`, "Pointer hooks on a plain `ui.Layer`" and "Hand-built rows in a
+   window"): icons draw and clip in the window, and dimmed icon plus ticked box reads as done.
+   A row must forward the wheel to the window itself. Act on `ONCLICK`, since a fast click
+   arrives release-first. The native drag hooks never fire, so step 3 builds its drag from
+   press, hold, release and the mouse position.
 3. **Reorder by drag, within each period.** Keep the Daily/Weekly/Monthly headers and let the
    user drag a selected chore up or down inside its own section. The order is per character. It
    uses `ui.Hook.ONDRAG`/`ONDRAGCOMPLETE`, the way PrettyUI's `item_grid` does (PrettyUI has no

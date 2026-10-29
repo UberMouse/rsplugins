@@ -93,10 +93,12 @@ after each:
    and long names cut with "..." before the box and re-fitted on resize (the tooltip then leads
    with the full name). The user's calls: 24 px icons in 28 px rows; an XP reward shows the XP
    coin or the skill's medallion sprite, a lamp the lamp, a general shop the General Store map
-   icon. Next: the settings view's rows, with a pointing-hand cursor over clickable rows
-   (`cursorConfig.mouseOverCursor`; `CURSOR_HAND` 204 or `CURSOR_HYPERLINK_HAND` 175, probe
-   which). Use built-in
-   sprites only, because a custom PNG puts the plugin in closer review. Probed 2026-10-29
+   icon. The settings view's picks followed (`47df67d..6934fda`; settings rows user-checked
+   2026-10-29): the same icon rows, ticked when picked and never dimmed. Every row, in both
+   views, shows `CURSOR_HYPERLINK_HAND` (the user's pick from a cursor probe) and a hovered box
+   from the four-state `RS3_BTN_CHECKBOX_0..3` set, so a ticked box reacts to hover too (that
+   last part not yet checked in the client). Use built-in sprites only, because a custom PNG
+   puts the plugin in closer review. Probed 2026-10-29
    (`docs/api-concepts.md`, "Pointer hooks on a plain `ui.Layer`" and "Hand-built rows in a
    window"): icons draw and clip in the window, and dimmed icon plus ticked box reads as done.
    A row must forward the wheel to the window itself. Act on `ONCLICK`, since a fast click
@@ -107,8 +109,9 @@ after each:
    The user's call: drag by a grip handle at the row's left, so a click anywhere else still
    ticks. The client's `ONDRAG` hooks never fired in the probe, so the drag is built from
    `ONCLICK`/`ONHOLD`/`ONRELEASE` and `Mouse.GetPosition()`, as PrettyUI's `item_grid` and title
-   bar do (PrettyUI has no reorderable list). The grip shows a move cursor (`TOPLEVEL_V2_MOVE`
-   194, PrettyUI's title-bar cursor). If drag is unreliable, the fallback is up/down buttons in
+   bar do (PrettyUI has no reorderable list). The grip's cursor is to be picked again: the
+   user read `TOPLEVEL_V2_MOVE` 194 (PrettyUI's title-bar cursor) as a resize cursor, so
+   probe `CURSOR_MOVE` 0 and `CURSOR_TELE_GRAB` 111 with them. If drag is unreliable, the fallback is up/down buttons in
    settings.
 4. **Per-chore settings.**
    - **Shop runs:** the user picks which of a chore's shops they visit, and it ticks once every

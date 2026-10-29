@@ -86,8 +86,12 @@ function M.view(s, chores, now, shops)
     for _, group in ipairs(M.byPeriod(chores)) do
         local section =
             { period = group.period, title = group.title, rows = {}, done = 0, total = 0 }
-        for _, id in ipairs(s.selected) do
-            local chore = state.find(group.chores, id)
+        local byId = {}
+        for _, chore in ipairs(group.chores) do
+            byId[chore.id] = chore
+        end
+        for _, id in ipairs((state.selectedIn(s, chores, group.period))) do
+            local chore = byId[id]
             if chore then
                 local done = now ~= nil and state.isDone(s, chore, now)
                 local lines, bought = shopLines(s, chore, shops and shops[chore.id] or {}, now)

@@ -117,6 +117,29 @@ function M.select(state, chores, id)
     return out
 end
 
+-- The ids selected in period `which`, in the player's order, and where in `selected` each sits.
+-- Ids no chore in the list has are skipped. Shared by the view and `move` so the rows drawn
+-- and the slots reordered always agree.
+---@param state ChoreState
+---@param chores Chore[]
+---@param which ChorePeriod
+---@return string[] ids
+---@return integer[] slots
+function M.selectedIn(state, chores, which)
+    local inPeriod = {}
+    for _, chore in ipairs(chores) do
+        if chore.period == which then inPeriod[chore.id] = true end
+    end
+    local ids, slots = {}, {}
+    for i, id in ipairs(state.selected) do
+        if inPeriod[id] then
+            ids[#ids + 1] = id
+            slots[#slots + 1] = i
+        end
+    end
+    return ids, slots
+end
+
 -- `state` with `id` moved to position `index` among the selected chores of its own period
 -- (1 = first), clamped to that period's range. Other chores keep their relative order, and
 -- a chore never changes period, so the other periods' rows stay put. Gives back `state`
@@ -129,16 +152,10 @@ end
 function M.move(state, chores, id, index)
     local chore = M.find(chores, id)
     if not chore or not M.isSelected(state, id) then return state end
-    -- The period's ids in order, and where in `selected` each of them sits.
-    local ids, slots = {}, {}
+    local ids, slots = M.selectedIn(state, chores, chore.period)
     local from = 0
-    for i, other in ipairs(state.selected) do
-        local c = M.find(chores, other)
-        if c and c.period == chore.period then
-            ids[#ids + 1] = other
-            slots[#slots + 1] = i
-            if other == id then from = #ids end
-        end
+    for k, other in ipairs(ids) do
+        if other == id then from = k end
     end
     local to = math.max(1, math.min(index, #ids))
     if to == from then return state end

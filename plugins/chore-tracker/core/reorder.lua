@@ -14,6 +14,20 @@ M.SCROLL_STEP = 8
 ---@field y integer the dragged row's top, kept inside the period's rows
 ---@field rows table<string, integer> every other row's y, with a gap opened at `slot`
 
+-- Every row's y with nothing being dragged: `ids` stacked from `firstY`, `rowHeight` apart.
+---@param ids string[]
+---@param firstY integer
+---@param rowHeight integer? defaults to the list's row height
+---@return table<string, integer>
+function M.settle(ids, firstY, rowHeight)
+    local h = rowHeight or listlayout.ROW_HEIGHT
+    local rows = {}
+    for i, id in ipairs(ids) do
+        rows[id] = firstY + (i - 1) * h
+    end
+    return rows
+end
+
 -- Where a drag of the row at `from` (1-based, in `ids`) stands when its top is at `desiredY`.
 -- `ids` are the period's row ids in their current order and `firstY` is the first row's y.
 -- The row drops into the slot nearest its top; the others close up around it, then shift
@@ -29,13 +43,13 @@ function M.drag(ids, firstY, from, desiredY, rowHeight)
     local lastY = firstY + (#ids - 1) * h
     local y = math.max(firstY, math.min(desiredY, lastY))
     local slot = math.floor((y - firstY) / h + 0.5) + 1
-    local rows, n = {}, 0
+    local others = {}
     for i, id in ipairs(ids) do
-        if i ~= from then
-            n = n + 1
-            local place = n < slot and n or n + 1
-            rows[id] = firstY + (place - 1) * h
-        end
+        if i ~= from then others[#others + 1] = id end
+    end
+    local rows = M.settle(others, firstY, h)
+    for n = slot, #others do
+        rows[others[n]] = rows[others[n]] + h
     end
     return { slot = slot, y = math.floor(y + 0.5), rows = rows }
 end

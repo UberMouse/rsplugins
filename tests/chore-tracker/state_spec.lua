@@ -182,6 +182,25 @@ describe("chore-tracker state", function()
         end)
     end)
 
+    describe("selectedIn", function()
+        it("lists one period's picks in selected order with their places in selected", function()
+            local s = state.new()
+            for _, id in ipairs({ "d2", "w1", "d1", "gone" }) do
+                s = state.select(s, chores, id)
+            end
+            s.selected[#s.selected + 1] = "gone"
+            local ids, slots = state.selectedIn(s, chores, "daily")
+            assert.are.same({ "d2", "d1" }, ids)
+            assert.are.same({ 1, 3 }, slots)
+        end)
+
+        it("is empty for a period with no picks", function()
+            local ids, slots = state.selectedIn(state.new(), chores, "daily")
+            assert.are.same({}, ids)
+            assert.are.same({}, slots)
+        end)
+    end)
+
     describe("move", function()
         local function picked(ids)
             local s = state.new()

@@ -228,8 +228,12 @@ The official reference annotates Lua with pseudo-types:
       1.2.0 source: the title layer's `ONCLICK` calls `resize:SetEnabled(false)` and its
       `stopDrag` (`ONRELEASE` / `ONDRAGCOMPLETE`) calls `SetEnabled(true)`, and a quick click
       arrives release-first, so the disable lands last. The plugin's workaround (re-enable on a
-      Logic tick when `resize.enabled` is false and `titleDrag.isClicked` is not true) is not yet
-      confirmed in the client.
+      Logic tick when `resize.enabled` is false and `titleDrag.isClicked` is not true) was
+      confirmed in the client (beta client, dev bridge + user, 2026-10-29): after several quick
+      title-bar clicks the resize cursors and resizing came back, a title-bar drag moved the
+      window with no resize handles showing, and the grips still dragged. So `titleDrag.isClicked`
+      reads true for a held title press from its first Logic tick and false soon after a quick
+      click.
 - **`type()` of a UI component** is `"userdata"` (beta client, dev bridge, 2026-10-29): a component from
   `ui.Interfaces:GetComponent(...)` and a `ui.Layer` made by a plugin or library (PrettyUI's title-drag
   layer), so a `type(x) == "table"` check rejects it. `type(layer.isClicked)` is `"boolean"`.

@@ -529,13 +529,13 @@ local RESIZE_CURSORS = {
     w = id.Cursor.TOPLEVEL_V2_MOVE,
 }
 
--- Workaround for PrettyUI 1.2.0: it turns the window's resize off only while its title bar is
--- pressed, but a quick click reaches it release-first (docs/api-concepts.md), so the release
--- turns resize on and the press then turns it off, with the title bar no longer held. A
--- disabled resize with the title bar not held is that state; turn it back on. Every read is
--- guarded, so a PrettyUI without these internals is left alone.
----@param w table the PrettyUI window
-local function reviveResize(w)
+-- Workaround for PrettyUI 1.2.0: a quick title-bar click reaches it release-first
+-- (docs/api-concepts.md), so the release turns resize on and the press then turns it off for
+-- good. Resize off with the title bar not held is that stuck state; turn it back on. Reads are
+-- guarded so a PrettyUI without these internals is left alone.
+local function reviveResize()
+    local w = win ---@type table?
+    if collapsed ~= nil or not w then return end
     local resize, titleDrag = w.resize, w.titleDrag
     if type(resize) ~= "table" then return end
     -- Client components are userdata; the harness's fakes are tables.
@@ -543,11 +543,6 @@ local function reviveResize(w)
     if resize.enabled ~= false or titleDrag.isClicked == true then return end
     if type(resize.SetEnabled) ~= "function" then return end
     resize:SetEnabled(true)
-end
-
--- Keep the open window's resize on; see reviveResize.
-local function followResize()
-    if collapsed == nil and win then reviveResize(win) end
 end
 
 -- Set the resize cursors on `w`'s eight resize handles with rows.setCursor. PrettyUI only
@@ -821,7 +816,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.
     followGrips()
-    followResize()
+    reviveResize()
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)

@@ -581,9 +581,13 @@ describe("chore-tracker resize after a title-bar click", function()
             local h = loaded({ load = false })
             h.ui:resizeInternals(mode)
             h:load()
-            h.ui:clickTitle(window(h))
+            local win = window(h)
+            h.ui:clickTitle(win)
+            -- Ticking must not error, and without a titleDrag to tell a held press from the
+            -- stuck state the plugin must not turn the resize back on.
             h:advance(40)
-            assert.is_true(h.ui:layout(window(h)).visible)
+            assert.is_true(h.ui:layout(win).visible)
+            if win.resize then assert.is_false(win.resize.enabled) end
         end
     end)
 end)

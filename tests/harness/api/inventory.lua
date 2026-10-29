@@ -6,8 +6,9 @@
 -- object. The page names the validity property `isValid` (the stub says `valid`).
 --
 -- config is mocked only as far as inventories need: config.Inv and config.Obj, with names and
--- IDs from docs/api/consts/ (and config.Font, in fonts.lua). ObjType fields beyond id/configName/typeName come from
--- h.world:defineObj and fault if a test reads one it didn't define.
+-- IDs from docs/api/consts/ (and config.Font, in fonts.lua). ObjType fields beyond
+-- id/configName/typeName come from h.world:defineObj and fault if a test reads one it didn't
+-- define.
 
 local recording = require("dev/recording")
 

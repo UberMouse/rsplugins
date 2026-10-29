@@ -5,6 +5,7 @@ local harness = require("tests.harness")
 local catalog = require("tests.harness.catalog")
 local uiFake = require("tests.harness.api.ui")
 require("tests.chore-tracker.support")
+local fit = require("core/fit")
 local varCore = require("core/vars")
 local varRules = require("data/vars")
 
@@ -87,8 +88,12 @@ end
 function M.findRow(h, name)
     local found = nil
     for _, row in ipairs(M.rows(h)) do
-        -- A name too long for the window is cut short and ends in "...".
-        local cut = row.text:sub(-3) == "..." and row.text:sub(1, -4) or nil
+        -- A name too long for the window is cut short and ends in "...". A bare "..." row has
+        -- no prefix to match, so it matches nothing.
+        local cut = row.text:sub(-#fit.ELLIPSIS) == fit.ELLIPSIS
+                and row.text:sub(1, -#fit.ELLIPSIS - 1)
+            or nil
+        if cut and #cut == 0 then cut = nil end
         if
             row.text == name
             or row.text:sub(1, #name + 2) == name .. " ("

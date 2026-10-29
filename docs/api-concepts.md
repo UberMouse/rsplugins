@@ -638,7 +638,9 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
     (internal, read from the 1.2.0 source; PrettyUI's own content components bind the same
     handler) made it scroll.
   - Tooltips: `prettyui.Tooltip` is exported, and `Tooltip.attach(target, parent, value)` is
-    what PrettyUI's `ItemSlot` uses on content children (read from source, not yet tried).
+    what PrettyUI's `ItemSlot` uses on content children. It works on a hand-built row
+    (user-checked in the beta client, 2026-10-29): the tooltip shows on hover and goes on leave,
+    and a shortened row's tooltip leads with the full name.
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

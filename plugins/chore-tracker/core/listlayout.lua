@@ -9,11 +9,12 @@ M.ROW_HEIGHT = 28
 -- A heading is a PrettyUI 1.2.0 title, whose row is 28 px.
 M.HEADING_HEIGHT = 28
 -- Space above each heading (from the button above the first, or the last row of the section
--- before), below each heading, and under the last row. The last is PrettyUI 1.2.0's bottom
--- padding, so the list ends with the same margin as its own rows.
+-- before), and below each heading.
 M.HEADING_GAP = 8
 M.AFTER_HEADING = 4
-M.BOTTOM_PADDING = 14
+-- PrettyUI 1.2.0's flow padding: the margin at the content's sides for its own rows, so the
+-- shell insets chore rows by it, and under the last row, so the list ends with the same margin.
+M.FLOW_PADDING = 14
 
 ---@class ChoreListLayout
 ---@field headings table<ChorePeriod, integer> each section's heading y, by period
@@ -37,7 +38,7 @@ function M.place(sections, top)
             y = y + M.ROW_HEIGHT
         end
     end
-    out.height = y + M.BOTTOM_PADDING
+    out.height = y + M.FLOW_PADDING
     return out
 end
 

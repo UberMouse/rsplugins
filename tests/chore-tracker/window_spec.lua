@@ -6,6 +6,7 @@ local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
 local loaded, row, pick, ticked = helpers.loaded, helpers.row, helpers.pick, helpers.ticked
 
+local ELLIPSIS = require("core/fit").ELLIPSIS
 local fonts = require("tests.harness.api.fonts")
 
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
@@ -459,6 +460,30 @@ describe("chore-tracker long names", function()
         local after, tip2 = onlyRow(h)
         assert.are.equal("Feather Shop Run (1/4)", after)
         assert.is_nil(tip2:find("Feather Shop Run", 1, true))
+    end)
+
+    it("replaces a row's tooltip once when a refresh changes its text and cut", function()
+        local h = loaded()
+        pick(h, { FEATHERS.id })
+        local fits = fonts.width("Feather Shop Run (1/4)", false)
+        local r = helpers.rows(h)[1]
+        h.ui:resize(window(h), fits + LABEL_INSET - r.layer.width, 0)
+        h:advance(600)
+        local lib = h.ui:lib()
+        local before = #lib.tooltips
+        buyFeathers(h, "FISHINGSHOP")
+        h:advance(20)
+        assert.are.equal(before + 1, #lib.tooltips)
+    end)
+
+    it("shows just dots when a laid-out row has no room for any text", function()
+        local h = loaded()
+        pick(h, { "daily-challenge" })
+        local r = helpers.rows(h)[1]
+        -- The window's minimum width keeps h.ui:resize from getting here, so size the row.
+        r.layer:SetSize(40, 28)
+        h:advance(600)
+        assert.are.equal(ELLIPSIS, r.label.content)
     end)
 
     it("shows full names and logs once when the font can't measure", function()

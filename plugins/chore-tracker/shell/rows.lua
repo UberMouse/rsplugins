@@ -8,14 +8,15 @@
 -- the list doesn't use it.
 
 local fit = require("core/fit")
+local listlayout = require("core/listlayout")
 
 local M = {}
 
 -- Pixel sizes: the row, its icon and tick box, and where the text starts (6 px after the
 -- icon). The row is inset from the content's sides by PrettyUI 1.2.0's flow padding, like its
 -- own rows.
-local PADDING = 14
-local ROW_HEIGHT = 28
+local PADDING = listlayout.FLOW_PADDING
+local ROW_HEIGHT = listlayout.ROW_HEIGHT
 local ICON_SIZE = 24
 local BOX_SIZE = 16
 local TEXT_X = ICON_SIZE + 6
@@ -165,17 +166,19 @@ local function applyTooltip(row)
     row.tooltipText = tooltip.text
 end
 
--- Show the row's text cut to the label's width. Does nothing when that width hasn't changed
--- since the text was last fitted, so it is cheap to call for every row. Until the row has a
--- width the full text shows, and the next call tries again. A font that can't measure leaves
--- the full text, logged once.
+-- Show the row's text cut to the label's width, leaving the tooltip to the caller. Does
+-- nothing when that width hasn't changed since the text was last fitted, so it is cheap to
+-- call for every row. Until the row has a width the full text shows, and the next call tries
+-- again; once it has one, a width with no room for any of the text gives just "...". A font
+-- that can't measure leaves the full text, logged once.
 ---@param row ChoreRowView
-function M.fit(row)
+local function fitLabel(row)
     assert(say, "rows.init sets say first")
     local text = row.text
     assert(text, "a row is fitted after show gave it text")
+    if row.layer.width <= 0 then return end
     local avail = row.layer.width - TEXT_X - BOX_SIZE - LABEL_GAP
-    if avail <= 0 or avail == row.availWidth then return end
+    if avail == row.availWidth then return end
     local ok, shown, shortened = pcall(fit.fit, text, avail, measure)
     if not ok then
         if not measureReported then
@@ -186,14 +189,21 @@ function M.fit(row)
     end
     row.availWidth = avail
     row.label.content = shown
-    if row.shortened ~= shortened then
-        row.shortened = shortened
-        applyTooltip(row)
-    end
+    row.shortened = shortened
+end
+
+-- Re-fit the row's label to its current width (a resize), and its tooltip when the label
+-- went from whole to cut or back. Same cost and width rules as fitLabel.
+---@param row ChoreRowView
+function M.fit(row)
+    local was = row.shortened
+    fitLabel(row)
+    if row.shortened ~= was then applyTooltip(row) end
 end
 
 -- Show `text`, and the row as done (dimmed icon, muted text, ticked box) or not. Only what
--- changed is touched.
+-- changed is touched. The tooltip is left to setTooltip, which the caller runs next, so one
+-- refresh replaces it once.
 ---@param row ChoreRowView
 ---@param text string
 ---@param done boolean
@@ -203,7 +213,7 @@ function M.show(row, text, done)
         -- Shown whole first, so a width that is still unknown leaves the full text.
         row.label.content = text
         row.shortened, row.availWidth = false, nil
-        M.fit(row)
+        fitLabel(row)
     end
     if row.done == done then return end
     row.done = done

@@ -1318,8 +1318,9 @@ end
 
 -- Why a pointer action at (x, y) on component `cs` is clipped away, or nil if it isn't: the
 -- point must lie in `cs`'s rect clipped by every ancestor's. The client clips hit-testing as
--- well as drawing: a row scrolled out of a window takes no click (Row Probe), and a press ends
--- when the pointer leaves the pressed layer or a parent's rect (drag probes, 2026-10-29).
+-- well as drawing: a row scrolled out of a window takes no click, and a press ends when the
+-- pointer leaves the pressed layer or a parent's rect (docs/api-concepts.md, "Pointer hooks on a
+-- plain `ui.Layer`" and "Pressing and dragging a plain `ui.Layer`").
 ---@param cs table component state
 ---@param x number
 ---@param y number
@@ -1434,7 +1435,7 @@ end
 -- Click a component the plugin made (or a window's content): the component that takes it
 -- (see `reach`) gets ONCLICK and then ONRELEASE, both with the press point in its own
 -- coordinates. A plugin acts on ONCLICK: a quick click can arrive release first in the client,
--- the order the fake doesn't reproduce (docs/api-concepts.md, Row Probe).
+-- the order the fake doesn't reproduce (docs/api-concepts.md, "Pointer hooks on a plain `ui.Layer`").
 ---@param cs table
 ---@return boolean
 ---@return string?
@@ -1452,9 +1453,9 @@ end
 -- Press the mouse button on a component the plugin made (or a window's content) at (x, y) in
 -- plugin-layer coordinates (default: its centre), and hold it. The component that takes it
 -- (see `reach`) gets ONCLICK with the point in its own coordinates, and is the pressed layer
--- until the press ends. In the client the first ONHOLD comes on the same tick as ONCLICK (Row
--- Probe); here it comes with the first `moveTo`, so a spec can look at the plugin's UI between
--- the two. Returns true, or false and why it didn't land (the reasons `click` gives).
+-- until the press ends. In the client the first ONHOLD comes on the same tick as ONCLICK
+-- (docs/api-concepts.md, "Pointer hooks on a plain `ui.Layer`"); here it comes with the first
+-- `moveTo`, so a spec can look at the plugin's UI between the two. Returns true, or false and why it didn't land (the reasons `click` gives).
 ---@param target any
 ---@param x number?
 ---@param y number?

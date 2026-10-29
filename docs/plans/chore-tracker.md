@@ -112,8 +112,8 @@ Staged order, with a check-in in the beta client after each:
    doesn't, and the list scrolling while dragging past its edge. The order is the player's own,
    saved per character in `state.selected`; a newly picked chore goes to the end of its period.
    The user's calls: a grip at the row's left (`id.Sprite.HAMBURGER_MENU_ICON` 8122, 16 px) so
-   a click anywhere else still ticks; the grip's cursor `id.Cursor.CURSOR_PUSH` 196, over the grip and for the
-   whole drag (both picked in probes, docs/api-concepts.md); live shift (the row follows the
+   a click anywhere else still ticks; the grip's cursor `id.Cursor.CURSOR_PUSH` 196, over the grip
+   and for the whole drag (both picked in probes, docs/api-concepts.md); live shift (the row follows the
    pointer, the period's other rows slide apart); auto-scroll past the list's edges; one press
    target per visible grip. The client's `ONDRAG` hooks never fired, and the drag probes v1-v3
    (docs/api-concepts.md, "Pressing and dragging a plain `ui.Layer`") showed a press ends once

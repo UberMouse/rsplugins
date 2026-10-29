@@ -31,8 +31,11 @@ your client, never does anything in game for you, and sends nothing anywhere.
   down: it follows the pointer, and the other chores of its period slide apart to show where it
   will land. Let go to drop it there. A chore stays within its own period (Daily, Weekly or
   Monthly). Drag past the top or bottom of the list and the list scrolls. The pointer may leave
-  the window while you drag; the chore drops wherever you let go. A click on the grip ticks
-  nothing; click the rest of the row for that. A chore you pick later goes to the end of its
+  the window while you drag; the chore drops wherever you let go. During a drag only, an
+  invisible layer over the screen keeps the drag following the pointer; it takes no game input
+  (the mouse button is already held for the drag) and goes as soon as the button is released or
+  the drag otherwise ends. A click on the grip ticks nothing; click the rest of the row for
+  that. A chore you pick later goes to the end of its
   period.
 - **Long names.** A name too long for the window is shortened with "..." so it stops before
   the tick box; make the window wider and more of it shows. Hover a shortened row and its
@@ -145,9 +148,9 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 ## What it remembers
 
-- **Your picks, their order and your ticks, per character.** They are saved each time you change them, under your
-  character's display name, so each character on the same computer has its own list. While you
-  are logged out the window says "Log in to see your chores".
+- **Your picks, their order and your ticks, per character.** They are saved each time you change
+  them, under your character's display name, so each character on the same computer has its own
+  list. While you are logged out the window says "Log in to see your chores".
 - **Where the window is**, for all characters: its position, its size, whether it is collapsed,
   and where the collapsed button is. These are saved within a second of a change and restored
   next time, moved back on screen if they no longer fit.

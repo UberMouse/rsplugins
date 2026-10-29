@@ -170,6 +170,11 @@ The official reference annotates Lua with pseudo-types:
     Dock it back on `ONRELEASE`. This is PrettyUI 1.2.0's scroll-thumb drag
     (`src/core/scroll.lua`, `thumbDrag`: "The first ONHOLD expands this layer across the
     overlay parent so later events continue outside the scrollbar").
+  - **Holding and leaving the client** (chore-tracker grip drag, user-driven in the beta
+    client, 2026-10-29). A drag held still for several seconds is kept: `ONHOLD` keeps coming.
+    Dragging the pointer out of the client window with the button held ends the drag (the row
+    dropped where it was shown). Whether leaving the client sends `ONRELEASE` or only stops
+    `ONHOLD` was not determined; the plugin drops a drag after 10 Logic ticks without `ONHOLD`.
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its

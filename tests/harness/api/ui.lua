@@ -81,7 +81,8 @@ function M.drawnPos(s)
 end
 
 -- Whether the point (x, y), in plugin-layer coordinates, is outside the part of `s` that
--- takes the pointer: its own rect clipped by every ancestor's (the drag probes, 2026-10-29).
+-- takes the pointer: its own rect clipped by every ancestor's (docs/api-concepts.md,
+-- "Pressing and dragging a plain `ui.Layer`").
 -- Returns the first of `s` and its ancestors whose rect leaves the point out, or nil.
 ---@param s table
 ---@param x number

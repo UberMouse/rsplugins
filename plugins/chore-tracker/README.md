@@ -45,7 +45,7 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Collapsing it.** The menu button at the top-right corner of the window, where
   a close button usually sits, folds the window into just that button, at the same spot. Click
   the button to open the window again: it opens leftwards and down from the button.
-- **Moving it.** Drag the window by its title bar, and resize it from its edges or corners.
+- **Moving it.** Drag the window by its title bar, and resize it from its edges or corners, which show a resize cursor when you hover them.
   While it is collapsed, hold **Alt** and drag the button to move it. Alt-dragging only works
   with the console closed.
 

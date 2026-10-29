@@ -238,6 +238,12 @@ The official reference annotates Lua with pseudo-types:
   `CURSOR_DIRECTIONAL_MOVE_VERT_HORIZ` 18411, `RS3_ICON_SORT_0`..`4`, `SCROLLBAR_DRAGGER_V2_0`
   789, `DEFAULT_SLIDER_HANDLE` 32435 and `AIF_ACCORDION_ARROWS_1` 7577 (all drew at 24 and 16
   px).
+  A labelled tile grid (each a `clickthrough = false` layer with `mouseOverCursor` +
+  `SetOpCursor(0)`) showed every id from 186 to 199 changing the cursor except
+  `TOPLEVEL_V2_SCALE_VERT` 190, which shows nothing. Set on PrettyUI's resize handles, 190 and
+  `TOPLEVEL_V2_SCALE_HORZ` 191 showed nothing, while `TOPLEVEL_V2_SCALE_DIAG_1` 192 (draws
+  ↖↘), `TOPLEVEL_V2_SCALE_DIAG_2` 193 (↗↙) and `TOPLEVEL_V2_MOVE` 194 showed. PrettyUI 1.2.0
+  sets no cursor on its resize handles. (Beta client, dev bridge + user, 2026-10-29.)
 - **Enums are numbers in the client**, though the stubs list string values: `ui.DragRenderBehaviour`
   reads `TRANSPARENT_OVERLAY = 0` … `INVISIBLE = 3`, and `ui.DragRenderBehaviour.FromID(2)`
   gives back the name `"OPAQUE_OVERLAY"`. `pairs` over the enum table shows only `FromID`.

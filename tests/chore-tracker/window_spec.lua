@@ -485,3 +485,54 @@ describe("chore-tracker long names", function()
         assert.are.equal(1, n)
     end)
 end)
+
+describe("chore-tracker resize cursors", function()
+    -- The handle keys PrettyUI 1.2.0 makes, and the cursor each shows.
+    local DIAG_1 = assert(catalog.config("Cursor", "TOPLEVEL_V2_SCALE_DIAG_1"))
+    local DIAG_2 = assert(catalog.config("Cursor", "TOPLEVEL_V2_SCALE_DIAG_2"))
+    local MOVE = assert(catalog.config("Cursor", "TOPLEVEL_V2_MOVE"))
+    local EXPECTED = { nw = DIAG_1, se = DIAG_1, ne = DIAG_2, sw = DIAG_2 }
+    for _, key in ipairs({ "n", "s", "e", "w" }) do
+        EXPECTED[key] = MOVE
+    end
+
+    ---@param h table
+    local function assertCursors(h)
+        local handles = window(h).resize.handles
+        local n = 0
+        for key, cursor in pairs(EXPECTED) do
+            assert.are.equal(cursor, handles[key].cursorConfig.mouseOverCursor, key)
+            assert.are.equal(cursor, handles[key].opConfig:GetOpCursor(0), key)
+            n = n + 1
+        end
+        assert.are.equal(8, n)
+    end
+
+    it("are set on the handles of the window built at load", function()
+        assertCursors(loaded())
+    end)
+
+    it("are set on the handles of a window a view switch rebuilds", function()
+        local h = loaded()
+        local first = window(h)
+        h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS", visible = true }))
+        h:advance(40)
+        assert.is_true(first.resize == nil)
+        assertCursors(h)
+        h.ui:click(h.ui:get("SpriteButton", { sprite = "BACK", visible = true }))
+        h:advance(40)
+        assertCursors(h)
+    end)
+
+    it("are skipped on a PrettyUI without the resize internals", function()
+        for _, mode in ipairs({ "none", "noHandles" }) do
+            local h = loaded({ load = false })
+            h.ui:resizeInternals(mode)
+            h:load()
+            assert.is_nil(window(h).resize and window(h).resize.handles)
+            h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS", visible = true }))
+            h:advance(40)
+            assert.is_true(h.ui:layout(window(h)).visible)
+        end
+    end)
+end)

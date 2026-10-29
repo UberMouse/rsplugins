@@ -844,6 +844,9 @@ local function overlayMethod(s, name, fn)
     end
 end
 
+-- The keys of 1.2.0's eight resize handles (src/core/resize.lua).
+local RESIZE_HANDLES = { "n", "s", "e", "w", "nw", "ne", "sw", "se" }
+
 local Window = strict.class("prettyui.Window instance", {
     undeclared = true,
     fields = {
@@ -880,6 +883,13 @@ local Window = strict.class("prettyui.Window instance", {
         -- plugin's own layers, so it takes no pointer actions.
         titleDrag = function(s)
             return s.titleDrag
+        end,
+        -- 1.2.0's internal resize controller of a resizable window: only its `handles` are
+        -- modelled, eight bare layers on the window's parent. A window made after
+        -- `h.ui:resizeInternals("none" or "noHandles")` reads it as nil (or without handles).
+        resize = function(s)
+            if s.destroyed or not s.handles or s.resizeMode == "none" then return nil end
+            return { handles = s.resizeMode ~= "noHandles" and s.handles or nil }
         end,
         _RegisterOverlay = function(s)
             return overlayMethod(s, "_RegisterOverlay", registerOverlay)
@@ -920,6 +930,10 @@ local Window = strict.class("prettyui.Window instance", {
                 s.titleDrag:Destroy()
                 s.titleDrag = nil
             end
+            for _, handle in pairs(s.handles or {}) do
+                handle:Destroy()
+            end
+            s.handles = nil
             s.root:Destroy()
             s.root = nil
         end,
@@ -1039,6 +1053,13 @@ local WindowModule = module("Window", function(lib, parent, options)
     s.overlays = {}
     s.noOverlayInternals = lib.h.ui.noOverlayInternals
     if s.title then s.titleDrag = ui.create("Layer", ps) end
+    s.resizeMode = lib.h.ui.resizeMode
+    if s.resizable then
+        s.handles = {}
+        for _, key in ipairs(RESIZE_HANDLES) do
+            s.handles[key] = ui.create("Layer", ps)
+        end
+    end
     s.closeButton, s.closeState = ui.create("Sprite", s.rootState)
     s.closeButton:SetPos(-CLOSE_SIZE - CLOSE_RIGHT, CLOSE_Y, 1.0)
     s.closeButton:SetSize(CLOSE_SIZE, CLOSE_SIZE)
@@ -1297,7 +1318,10 @@ Driver.__index = Driver
 ---@param h table
 ---@return table
 function M.driver(h)
-    return setmetatable({ h = h, altHeld = false, noOverlayInternals = false }, Driver)
+    return setmetatable(
+        { h = h, altHeld = false, noOverlayInternals = false, resizeMode = "all" },
+        Driver
+    )
 end
 
 ---@return table lib
@@ -1326,6 +1350,14 @@ end
 ---@param on boolean
 function Driver:overlayInternals(on)
     self.noOverlayInternals = not on
+end
+
+-- Make every Window made from now on lack 1.2.0's internal `resize` ("none") or its `handles`
+-- ("noHandles"), as on a PrettyUI version that lacks them; "all" (the default) restores them.
+-- Set it before `h:load()` for a window made at load.
+---@param mode "all"|"none"|"noHandles"
+function Driver:resizeInternals(mode)
+    self.resizeMode = mode
 end
 
 -- The components registered as a Window's overlays, in the order registered.

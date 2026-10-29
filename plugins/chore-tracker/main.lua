@@ -93,7 +93,9 @@
 -- every title-bar press, on each show, and on every frame a resize or a scrollbar drag moves
 -- and every scroll step, so the grips' targets are brought back over a window that may have
 -- been raised once such a burst of syncs ends (overlaySync; without it they stay under the
--- window after a title-bar press or a resize).
+-- window after a title-bar press or a resize), and its `resize.handles`, the layers of the
+-- window's edges and corners, which get resize cursors (without them the window works but
+-- shows none).
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -508,6 +510,39 @@ local function followGrips()
     grips.follow(collapsed == nil)
 end
 
+-- The cursor over each of the window's resize handles (PrettyUI 1.2.0 sets none): diagonal
+-- arrows on the corners and the four-way arrow on the edges. In the client the vertical and
+-- horizontal scale cursors show nothing on these handles (docs/api-concepts.md), so the edges
+-- use the move cursor, which the title bar shows too.
+local RESIZE_CURSORS = {
+    nw = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_1,
+    se = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_1,
+    ne = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_2,
+    sw = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_2,
+    n = id.Cursor.TOPLEVEL_V2_MOVE,
+    s = id.Cursor.TOPLEVEL_V2_MOVE,
+    e = id.Cursor.TOPLEVEL_V2_MOVE,
+    w = id.Cursor.TOPLEVEL_V2_MOVE,
+}
+
+-- Show the resize cursors on `w`'s handles, set the way PrettyUI's own cursor helper does.
+-- PrettyUI only moves, sizes and hides the handles afterwards, so once per window is enough.
+-- A PrettyUI without `resize.handles` (or a handle) is skipped.
+---@param w table the PrettyUI window
+local function setResizeCursors(w)
+    local resize = w.resize
+    local handles = type(resize) == "table" and resize.handles
+    if type(handles) ~= "table" then return end
+    for key, cursor in pairs(RESIZE_CURSORS) do
+        local handle = handles[key]
+        if handle then
+            handle.opConfig:ClearOpCursors()
+            handle.cursorConfig.mouseOverCursor = cursor
+            handle.opConfig:SetOpCursor(0, cursor)
+        end
+    end
+end
+
 -- (Re)build the window at `at` for the current phase and mode. There's no PrettyUI call to
 -- clear a window's content, so a view switch, a login change or the clock starting
 -- rebuilds the window where it was.
@@ -529,6 +564,7 @@ local function buildWindow(at)
         minHeight = MIN_HEIGHT,
     })
     win = w
+    setResizeCursors(w)
     w.closeButton.hidden = true
     -- The title-bar slot is the one spot of the title bar the drag layer leaves clickable.
     -- It collapses the window, except in the settings view, where it goes back to the list

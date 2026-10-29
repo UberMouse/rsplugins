@@ -37,9 +37,11 @@ These are the user's calls. They aren't all visible in the code.
   **Assumption:** 10 s covers the login burst of vars in the live client. It can't be checked in
   beta, where logging out disables plugins.
 - **Keep dailyscape's period** even where the game's flag is daily (Bert, Geoffrey, Cromperty,
-  Coeden, Lupe are weekly chores): the first claim in the week ticks it.
-- **Shop runs:** any purchase at any of a chore's listed shops ticks it, a multi-shop chore shows
-  a per-shop count, shop stock is per character, and any stock drop counts (decay left as is).
+  Coeden, Lupe are weekly chores): the first claim in the week ticks it. Dream of Iaia is the
+  exception (see "Round 2").
+- **Shop runs:** a multi-shop chore shows a per-shop count, shop stock is per character, and any
+  stock drop counts (decay left as is). Superseded 2026-10-29: "any purchase at any listed shop
+  ticks it" becomes "every shop the user chose for that chore" (see "Round 2").
 - **Unproven rules ship, marked.** A rule whose signal was never seen moving in the client has
   `proven = false` and the README says so. Flip it when a `[CHORES] seen <id>` line shows it
   working.
@@ -58,6 +60,46 @@ These are the user's calls. They aren't all visible in the code.
     the user's go-ahead.
 - **PrettyUI has no licence:** read its source locally, never copy or vendor it. The window's
   scroll keep reads PrettyUI 1.2.0's internal `_scroll.scrollY` (guarded); the user may veto that.
+
+## Round 2: making the list nicer (decided 2026-10-29)
+
+The user's ideas from 2026-10-29, the calls they made, and what research found. Nothing is built
+yet. Staged order, with a check-in in the beta client after each:
+
+1. **Celebration popup.** On a tick the plugin made itself (not a manual click), show
+   `prettyui.AchievementPopup.show{title, text, item, x, y, xAnchor, yAnchor, sound, soundID}`
+   mid-screen (anchors 0.5/0.5). On clearing a whole period, show a bigger one with a grander
+   jingle. PrettyUI 1.2.0 exports it: a HUD-framed toast with an item slot that fades out after
+   about 4 s, and its default sound is `id.Sound.ARCH_INFO_POPUP`. Built-in jingles to pick from
+   are `LEAGUE2_{EASY,MEDIUM,HARD,ELITE,MASTER}_TASK_COMPLETE` and
+   `CHEEVO_ACHIEVEMENT_COMPLETE_SOUND_V3` (`docs/api/consts/Sound.lua`). `audio.Play` takes a
+   built-in id, so no custom sound ships. Probe: the popup anchors and draws over the game view.
+2. **Own row component with an item icon.** PrettyUI's `CheckboxButton` takes no icon and can't
+   be dragged, so build a row from `ui.Layer` + `ui.Sprite` (`SetAssociatedObject(objId)` draws
+   the item's built-in icon) + text + a tick sprite. Icons come from a hand-written
+   `data/icons.lua` (chore id -> obj id, checked against `docs/api/consts/Obj.lua`). Use built-in
+   sprites only, because a custom PNG puts the plugin in closer review. Probe: item sprites in
+   the window, and whether a drag fights scroll and click-to-tick (`dragConfig.dragDelayTicks`,
+   `deadZone`).
+3. **Reorder by drag, within each period.** Keep the Daily/Weekly/Monthly headers and let the
+   user drag a selected chore up or down inside its own section. The order is per character. It
+   uses `ui.Hook.ONDRAG`/`ONDRAGCOMPLETE`, the way PrettyUI's `item_grid` does (PrettyUI has no
+   reorderable list). If drag is unreliable, the fallback is up/down buttons in settings.
+4. **Per-chore settings.**
+   - **Shop runs:** the user picks which of a chore's shops they visit, and it ticks once every
+     chosen shop has been bought from this period. The default is all listed shops.
+   - **Dream of Iaia:** merge dailyscape's two rows (resources weekly, XP monthly) into one chore
+     with a manual cadence setting (every 1/2/3 days, weekly, fortnightly). The wiki
+     (Dream_of_Iaia, read 2026-10-29) gives no fixed reset. Stations cap at 350k stored XP and
+     resources at 150k (with a level 3 Town Hall), and the cadence follows the worker split via
+     Giles: all workers on one resource is about every 36 h for resources and 7 days for XP, and
+     a two-way split is about 72 h and 14 days. Later, "due when near the cap" from game data:
+     candidates are `DINO_BASE_CAMP_WORKER_ASSIGNED_*`, `DINO_BASE_CAMP_RESOURCE_*`,
+     `DINO_BASE_CAMP_BUILDING_TIER_TOWNHALL`, `QUEST_EGW_FINALE_REWARD_STATION_XP_*`,
+     `_REWARD_STATION_STATE_*` and `_POST_QUEST_REWARD_SETUP` (3 bits, meaning unknown). Probe:
+     whether these are sent away from Anachronia, and what they hold. A "stockpile" chore class
+     like this might later fit the Invention machine and the Miscellania coffers too.
+5. **More auto-detection**, from the table below, batched to the chores the user actually does.
 
 ## Chores still ticked by hand (33)
 

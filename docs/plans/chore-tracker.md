@@ -64,13 +64,17 @@ These are the user's calls. They aren't all visible in the code.
 ## Round 2: making the list nicer (decided 2026-10-29)
 
 The user's ideas from 2026-10-29, the calls they made, and what research found. Step 1 is built
-(not yet checked in the client); the rest is not. Staged order, with a check-in in the beta client after each:
+and user-checked in the client; the rest is not. Staged order, with a check-in in the beta client
+after each:
 
-1. **Celebration popup** (built; `core/celebrate.lua`, `shell/popups.lua`; the sound ids
-   `ARCH_INFO_POPUP` and `LEAGUE2_HARD_TASK_COMPLETE` and the titles are first guesses, to hear
-   in game). On a tick the plugin made itself (not a manual click), show
+1. **Celebration popup** (built `280a68a..c1b5a76`; `core/celebrate.lua`, `shell/popups.lua`).
+   The user checked it in the client on 2026-10-29: the auto-tick popup, the period-clear popup
+   from a hand tick and again after an untick and re-tick, and both settings toggles. **Not yet
+   heard:** the sounds (`ARCH_INFO_POPUP`, `LEAGUE2_HARD_TASK_COMPLETE`), as the user's VM has no
+   audio; check them on a machine with sound. On a tick the plugin made itself (not a manual
+   click), show
    `prettyui.AchievementPopup.show{title, text, item, x, y, xAnchor, yAnchor, sound, soundID}`
-   mid-screen (anchors 0.5/0.5). On clearing a whole period, show a bigger one with a grander
+   centred, a third of the way down. On clearing a whole period, show a bigger one with a grander
    jingle. PrettyUI 1.2.0 exports it: a HUD-framed toast with an item slot that fades out after
    about 4 s, and its default sound is `id.Sound.ARCH_INFO_POPUP`. Built-in jingles to pick from
    are `LEAGUE2_{EASY,MEDIUM,HARD,ELITE,MASTER}_TASK_COMPLETE` and

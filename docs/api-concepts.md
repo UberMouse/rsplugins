@@ -579,6 +579,12 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   (134 CheckboxButtons, two per row, each with a tooltip, plus headings) builds in one Lua call
   without hitting the 1000 ms limit (user-checked 2026-10-25). That is one machine, not a
   bound: a window with many times that would still need slicing across `Logic` ticks.
+- **`AchievementPopup` draws over the game view from the plugin layer** (user-checked
+  2026-10-29, Chore Tracker). `prettyui.AchievementPopup.show` with `parent` set to the plugin
+  layer, `xAnchor = 0.5`, `yAnchor = 1/3` and offsets of minus half its size showed centred a
+  third of the way down. Back-to-back popups queued through `onComplete` each showed in turn.
+  Its sound (`soundID`, played through `audio.Play`) is unheard: the client ran in a VM with
+  no audio.
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

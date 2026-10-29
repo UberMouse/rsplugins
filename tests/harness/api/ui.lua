@@ -1,12 +1,13 @@
 -- ui.Interfaces:GetComponent for the plugin root layer, id.Component for its name, and the
--- fake components the PrettyUI fake (api/prettyui.lua) builds on it. Nothing else under `ui`
--- or `id` is modelled: any other member faults as unmocked.
+-- fake components the PrettyUI fake (api/prettyui.lua) builds on it, and id.Sound by name.
+-- Nothing else under `ui` or `id` is modelled: any other member faults as unmocked.
 --
 -- A component keeps what it was given (SetPos/SetSize pixels plus fractions of the parent's
 -- size, as on ui/component.html) and works out x, y, width and height from its parent on
 -- every read, so a child anchored to its parent's right edge follows it as it moves and
 -- resizes, as children do in the client (docs/api-concepts.md, UI).
 
+local catalog = require("tests.harness.catalog")
 local strict = require("tests.harness.strict")
 
 local M = {}
@@ -269,6 +270,13 @@ function M.create(kind, parent)
     return proxy, s
 end
 
+-- The id of a built-in sound, for the PrettyUI fake's default popup sound.
+---@param name string
+---@return integer
+function M.soundId(name)
+    return assert(catalog.config("Sound", name), "unknown sound " .. name)
+end
+
 local Interfaces = strict.class("ui.Interfaces", {
     methods = {
         GetComponent = function(s, combinedID, ...)
@@ -304,6 +312,9 @@ local IdNamespace = strict.class("_global.id", {
         Component = function(s)
             return s.components
         end,
+        Sound = function(s)
+            return s.sounds
+        end,
     },
 })
 
@@ -319,6 +330,13 @@ function M.install(h, env)
         components = strict.lookup(function(name)
             strict.fault("unmocked API: id.Component." .. tostring(name))
         end, { [M.PLUGIN_LAYER_NAME] = M.PLUGIN_LAYER_ID }),
+        -- Names and ids from docs/api/consts/Sound.lua (loaded on first use); a plugin can
+        -- only name a sound that exists. The mock plays nothing.
+        sounds = strict.lookup(function(name)
+            local soundId = catalog.config("Sound", name)
+            if not soundId then strict.fault("unknown sound: id.Sound." .. tostring(name)) end
+            return soundId
+        end),
     })
 end
 

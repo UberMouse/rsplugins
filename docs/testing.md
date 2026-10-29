@@ -234,7 +234,7 @@ When `plugin.json` lists PrettyUI by its numeric mod.io ID in the object form
 form is proven in the client; so does any other dependency, naming it. The fake models the
 part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`, with `root`, `closeButton`, `SetSize`, `SetScrollPosition` (and the internal `_scroll.scrollY` it sets), `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
 `AddCheckboxButton` (with `SetOptionTooltip`), `AddDivider` and `AddSpriteButton`; `Panel.new`, with `root`, `width`,
-`height`, `SetSize`, `AddSpriteButton` and `Destroy`; and `SpriteButton.new`, with `SetTooltip`; and the tooltips of all of these. Any other member, method or option
+`height`, `SetSize`, `AddSpriteButton` and `Destroy`; `SpriteButton.new`, with `SetTooltip`; `AchievementPopup.show` and `new`, with `root` and `Destroy` (the driver's `h.ui:popups()` lists them); and the tooltips of all of these. Any other member, method or option
 faults as unmocked: extend `api/prettyui.lua` and `types/prettyui.lua` together, with a ledger
 row, when a plugin needs more. LuaLS (`types/prettyui.lua`) doesn't flag an unknown option key
 such as `titel`; the fake faults on it at test time.
@@ -574,6 +574,8 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | `Window:AddSpriteButton(sprite, action, options)`: the next content row, 24 px by default, or at `options.y` outside the flow | 1.2.0 source (`src/core/content_methods.lua`, the `AddSpriteButton` entry, installed on Window) |
 | `Window:SetScrollPosition(position)` floors the position and clamps it to 0..(content height - viewport height), where the content height is the lowest row's bottom plus 14 px (flow rows and `y`-placed ones alike) and the viewport is the window less its title bar (32, or 8 untitled) and 8 px bottom border; `SetSize` and a resize re-clamp it. A Window's `_scroll.scrollY` reads the position (internal: 1.2.0 has no getter), and `_scroll` is nil after `Destroy()` | 1.2.0 source (`src/core/scroll.lua` `SetScrollPosition`, `_Layout` and `Scroll.install`; `src/core/layout.lua` `growContent`; `src/window.lua` `Destroy`) |
 | Panel option `scrollable` (false: no scrolling, no scrollbar) is accepted; the fake doesn't scroll either way | 1.2.0 source (`src/core/scroll.lua`, `src/panel.lua`) |
+| AchievementPopup (`show(options)` / `new(parent, options)`): defaults 300x92, title "ACHIEVEMENT COMPLETE", centred (`xAnchor` 0.5, `x` -width/2) at `y` 20; `show` takes `options.parent` and returns nil without one (the real one then uses the game area, which the harness lacks, so the fake faults on a missing parent); the popup subscribes its own `Event.Logic` callback named `prettyui_achievement_popup_<n>` and, on the 201st Logic tick (15 in, 160 held, 25 out; 200 ticks is 4 s at 50/s), destroys itself (unsubscribing) and then calls `onComplete(popup)`; `Destroy()` unsubscribes and never calls `onComplete`. The fake records each popup (`h.ui:popups()`: title, text, size, the sound options, `played`, `root`, `destroyed`, `completed`) and models only the options in its list (`item` and the colour and quantity options fault) | 1.2.0 source (`src/achievement_popup.lua`); the sound ids `ARCH_INFO_POPUP` and `LEAGUE2_HARD_TASK_COMPLETE` exist in the live client (dev-bridge, 2026-10-29) |
+| `id.Sound.<NAME>` resolves to the id in `docs/api/consts/Sound.lua` (`ARCH_INFO_POPUP` 48145, `LEAGUE2_HARD_TASK_COMPLETE` 60041); an unknown name faults | the consts file; the two ids confirmed in the live client, dev-bridge 2026-10-29 |
 | Tooltips: shown on the target's mouse-over, hidden only on its mouse-leave. A Window's or Panel's content tooltips (choices included) are drawn on the host's parent: `Close` hides them, `Destroy` destroys them. A `SpriteButton.new` button's tooltip is drawn inside the parent it was given. `SetTooltip` / `SetOptionTooltip` with a string retext an existing tooltip (a shown one stays shown); a table or nil destroys it and attaches a new, hidden one | 1.2.0 source (`src/tooltip.lua`, `src/window.lua`, `src/selection_button.lua`); https://prettyui.j3.gg lists both methods |
 
 ### Harness choices: unknown client behaviour, or stricter than the client on purpose
@@ -616,6 +618,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 | How a manifest names PrettyUI | Only the probed form resolves: the object form with the numeric mod.io ID (`{ "<global>": 6398181 }`). The array form (`["prettyui"]`, `["6398181"]`) and string values (`{ "prettyui": "6398181" }`, `{ "prettyui": "prettyui" }`) fail the load, saying the form is unconfirmed. Stricter on purpose: plugin-anatomy.md has those name a folder, and the installed folder is `6398181`, so the client may give no global. Relax it once an in-client probe confirms another form |
 | `h.ui:click` on a destroyed component or PrettyUI object | Faults (`used after Destroy()`) rather than reporting it unclickable, so a plugin that leaves a destroyed button's handle reachable is caught |
 | `h.ui:holdAlt` across `h:reload()` | Unloading releases Alt |
+| An AchievementPopup's sound and look | No sound is played (`audio` isn't modelled; the real popup passes the id to `audio.Play` inside a `pcall`), and none of its sprites, fade or flash are drawn: the fake keeps the root layer, the title and the text. `h.ui:popupsFail(true)` makes `show` return nil, standing in for a client with no parent to put it in |
 | PrettyUI text | Doesn't wrap: the fake can't measure fonts, so a body row is 24 px, or 18 px per `<br>`-separated line plus 6 |
 | PrettyUI clicks | `h.ui:click` hits a component's centre. Only a target's own window's title-bar drag layer can cover it; other windows' z-order isn't modelled |
 | A Window's title-bar drag layer position | Tracks the root's live position. In 1.2.0 it is a sibling of the root (`src/window.lua`, `titleDrag`), moved only at the end of a title drag, by the DragBounds callback and by `SetSize`, so between a bare `root:SetPos` and its snap-back the real layer can sit over the old spot and block clicks there instead (not modelled) |
@@ -631,7 +634,7 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
   `MiniMenu`, `GrandExchange`, `ClientOptions`, `ScreenConvert`, `Shapes`, the `CoordGrid`
   global (its constructors and methods; a PlayerEntity's `coordGrid` is modelled), math
   types (bar `xyGlobal`'s `x`/`y`), `id.*` beyond
-  `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP`, `config.*` beyond `Inv` and `Obj`,
+  `id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP` and the names in `id.Sound`, `config.*` beyond `Inv` and `Obj`,
   `slerp` and the Vector/Matrix forms of `lerp`,
   `Plugin.resources`, `Player.GetTrackingID` / `GetRunEnergy` / `GetWeight` / `GetCombatLevel`,
   `PlayerEntity` beyond `displayName` and `coordGrid`, `InvType.stockCount`.

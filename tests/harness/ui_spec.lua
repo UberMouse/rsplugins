@@ -45,6 +45,16 @@ describe("ui root fake", function()
         )
     end)
 
+    it("serves id.Sound names from docs/api/consts/Sound.lua, and faults on others", function()
+        local h = load("sound = id.Sound.ARCH_INFO_POPUP")
+        assert.are.equal(48145, h.env.sound)
+        assert.are.equal(60041, load("sound = id.Sound.LEAGUE2_HARD_TASK_COMPLETE").env.sound)
+        assert.matches(
+            "unknown sound: id.Sound.NOT_A_SOUND",
+            harness.errorOf(load, "local _ = id.Sound.NOT_A_SOUND")
+        )
+    end)
+
     it("faults on the wrong call form and unmodelled component members", function()
         assert.matches(
             "called with '%.'",

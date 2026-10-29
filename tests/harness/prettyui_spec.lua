@@ -487,3 +487,84 @@ describe("the probe's collapse and expand", function()
         assert.are.same({ closed.globalX, closed.globalY }, { open.globalX, open.globalY })
     end)
 end)
+
+describe("prettyui AchievementPopup", function()
+    -- A popup made by show, with an onComplete counter.
+    local MAIN = [[
+        completed = 0
+        popup = prettyui.AchievementPopup.show({
+            parent = parent,
+            title = "T",
+            text = "body",
+            width = 200,
+            height = 80,
+            x = -100,
+            xAnchor = 0.5,
+            y = -40,
+            yAnchor = 1 / 3,
+            soundID = id.Sound.LEAGUE2_HARD_TASK_COMPLETE,
+            onComplete = function(p) completed = completed + 1; done = p end,
+        })
+    ]]
+
+    it("records its options, sound and place in the parent", function()
+        local h = load(MAIN)
+        local p = h.ui:popups()[1]
+        assert.are.same({ "T", "body", 200, 80 }, { p.title, p.text, p.width, p.height })
+        assert.are.equal(60041, p.played)
+        assert.are.same({ 3836 / 2 - 100, math.floor(2121 / 3 - 40 + 0.5) }, { p.root.x, p.root.y })
+        assert.are.equal(h.env.popup, p.proxy)
+    end)
+
+    it("takes the 1.2.0 defaults: 300x92, its sound, centred 20 down", function()
+        local h = load("popup = prettyui.AchievementPopup.show({ parent = parent })")
+        local p = h.ui:popups()[1]
+        assert.are.same({ "ACHIEVEMENT COMPLETE", 300, 92 }, { p.title, p.width, p.height })
+        assert.are.equal(48145, p.played)
+        assert.are.same({ 3836 / 2 - 150, 20 }, { p.root.x, p.root.y })
+        local muted = load("prettyui.AchievementPopup.show({ parent = parent, sound = false })")
+        assert.is_nil(muted.ui:popups()[1].played)
+    end)
+
+    it("ends itself on the 201st Logic tick, then calls onComplete with itself", function()
+        local h = load(MAIN)
+        local p = h.ui:popups()[1]
+        h:advance(200 * 20)
+        assert.is_false(p.destroyed)
+        assert.are.equal(0, h.env.completed)
+        h:advance(20)
+        assert.is_true(p.destroyed)
+        assert.are.equal(1, h.env.completed)
+        assert.are.equal(h.env.popup, h.env.done)
+        assert.are.equal(0, #h.instance.subs.Logic)
+    end)
+
+    it("subscribes its own Logic callback, and Destroy removes it without onComplete", function()
+        local h = load(MAIN)
+        assert.are.equal("prettyui_achievement_popup_1", h.instance.subs.Logic[1].name)
+        h.env.popup:Destroy()
+        assert.are.equal(0, #h.instance.subs.Logic)
+        h:advance(400 * 20)
+        assert.are.equal(0, h.env.completed)
+        assert.is_true(h.ui:popups()[1].destroyed)
+    end)
+
+    it("returns nil from show when the client has no parent for it", function()
+        local h = load("popup = prettyui.AchievementPopup.show({ parent = parent })")
+        h.ui:popupsFail(true)
+        local show = h.env.prettyui.AchievementPopup.show
+        assert.is_nil(show({ parent = h.env.parent }))
+        assert.are.equal(1, #h.ui:popups())
+    end)
+
+    it("faults on options it doesn't model, and on show without a parent", function()
+        assert.matches(
+            "option 'item'",
+            harness.errorOf(load, "prettyui.AchievementPopup.show({ parent = parent, item = 1 })")
+        )
+        assert.matches(
+            "without options.parent",
+            harness.errorOf(load, "prettyui.AchievementPopup.show({})")
+        )
+    end)
+end)

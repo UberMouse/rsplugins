@@ -41,10 +41,20 @@
 --     Each chore they tick (or shop first recorded in a period) logs "[CHORES] purchase
 --     <chore id> at <shop>", "[CHORES] collected <chore id> near <giver>" or "[CHORES] seen
 --     <chore id> done (<var>)" (grep: \[CHORES\] (purchase|collected|seen)).
+--   * Celebrations (shell/popups.lua, core/celebrate.lua): when the plugin ticks a picked chore
+--     itself, a PrettyUI AchievementPopup says so ("CHORE COMPLETE", the chore's name), and
+--     when a period's picked chores are all done, a bigger one follows ("DAILIES COMPLETE").
+--     The second also shows when the last is ticked by hand; picks, unticks, logins and
+--     character switches show nothing. One popup at a time in the plugin layer, built-in
+--     sounds, dropped at logout, a character switch, shutdown or when turned off. The
+--     settings view's Celebrations section turns the popups and their sound off, saved for all
+--     characters. Each popup logs "[CHORES] celebrate <chore id>" or "[CHORES] celebrate
+--     <period> cleared" (grep: \[CHORES\] (purchase|collected|seen|celebrate) for all the
+--     lines above and these).
 --   * Picks and ticks are saved per character (by display name) as they change. The window's
 --     position, size and collapsed state, and the collapsed button's spot, are saved for all
---     characters. Logged out, the window says so; until the game clock reads, nothing can be
---     ticked.
+--     characters, as are the celebration settings. Logged out, the window says so; until the
+--     game clock reads, nothing can be ticked.
 --
 -- It reads only what the game already gives the player's client (an open shop's stock, their
 -- own backpack, position and game vars): no permissions, nothing sent to the game, nothing
@@ -70,10 +80,13 @@ local chores = require("data/chores")
 local collections = require("data/collections")
 local shops = require("data/shops")
 local varRules = require("data/vars")
+local celebrate = require("core/celebrate")
 local layout = require("core/layout")
+local settingsCore = require("core/settings")
 local state = require("core/state")
 local view = require("core/view")
 local detect = require("shell/detect")
+local popups = require("shell/popups")
 local store = require("shell/store")
 local varDetect = require("shell/vars")
 
@@ -140,6 +153,8 @@ local pendingRebuild = false
 local retiring = nil ---@type prettyui.Panel?
 -- The layout the store holds, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
+-- The celebration settings, for all characters.
+local celebrations = settingsCore.default()
 
 ---------------------------------------------------------------------------
 -- Reading the game
@@ -278,6 +293,7 @@ local function onTick(group, _values, id, ticked)
         group:SetSelected(id, not ticked, false)
         return
     end
+    local before = tracker
     if ticked then
         tracker = state.mark(tracker, id, now)
     else
@@ -285,6 +301,8 @@ local function onTick(group, _values, id, ticked)
     end
     store.saveState(character, tracker)
     refreshList()
+    -- A hand tick earns no popup of its own, but the one that clears a period does.
+    popups.enqueue(celebrate.decide(before, tracker, chores, now, true))
 end
 
 ---@param w prettyui.Window
@@ -342,8 +360,24 @@ local function onPick(_, _values, id, picked)
     store.saveState(character, tracker)
 end
 
+-- A celebration setting was ticked or unticked: apply it and save it for all characters.
+---@param _ prettyui.CheckboxButton
+---@param _values any[]
+---@param setting "popups"|"sound"
+---@param on boolean
+local function onCelebrationSetting(_, _values, setting, on)
+    celebrations[setting] = on
+    popups.configure(celebrations)
+    store.saveSettings(celebrations)
+end
+
 ---@param w prettyui.Window
 local function buildSettings(w)
+    w:AddTitle("Celebrations")
+    w:AddCheckboxButton({
+        { text = "Celebration popups", value = "popups", selected = celebrations.popups },
+        { text = "Popup sound", value = "sound", selected = celebrations.sound },
+    }, { onChange = onCelebrationSetting })
     for _, group in ipairs(view.byPeriod(chores)) do
         local choices = {}
         for _, chore in ipairs(group.chores) do
@@ -542,8 +576,13 @@ end
 local function apply(change)
     local now = clockNow()
     if character == nil or now == nil then return end
-    keep(change(tracker, now))
+    local before = tracker
+    local changed = change(tracker, now)
+    keep(changed)
+    popups.enqueue(celebrate.decide(before, changed, chores, now, false))
 end
+
+popups.init({ parent = parent, say = say })
 
 detect.init({
     chores = chores,
@@ -571,6 +610,7 @@ local function sync(clockTicked)
     local switched = name ~= character
     if switched then
         character = name
+        popups.clear()
         if name then
             tracker = store.loadState(name, chores)
             say("showing the logged-in character's chores")
@@ -626,6 +666,8 @@ Event.InventoryAdded.Subscribe("chore-tracker", detect.onInventoryAdded)
 Event.InventoryUpdated.Subscribe("chore-tracker", detect.onInventoryUpdated)
 Event.InventoryRemoved.Subscribe("chore-tracker", detect.onInventoryRemoved)
 
+celebrations = store.loadSettings()
+popups.configure(celebrations)
 sync(false)
 -- The layout as stored, then fitted to the plugin layer. savedLayout keeps the stored one,
 -- so a layout that had to be moved in gets saved at the next check.
@@ -648,5 +690,6 @@ function PluginShutdown()
     end
     if collapsed then collapsed:Destroy() end
     if retiring then retiring:Destroy() end
+    popups.clear()
     if tee then tee.shutdown() end -- dev only: the tee's own Logic subscription
 end

@@ -13,6 +13,7 @@
 ---@field Window prettyui.WindowModule
 ---@field Panel prettyui.PanelModule
 ---@field SpriteButton prettyui.SpriteButtonModule
+---@field AchievementPopup prettyui.AchievementPopupModule
 prettyui = {}
 
 ---------------------------------------------------------------------------
@@ -216,3 +217,42 @@ local SpriteButton = {}
 function SpriteButton:SetTooltip(value) end
 
 function SpriteButton:Destroy() end
+
+---------------------------------------------------------------------------
+-- AchievementPopup
+---------------------------------------------------------------------------
+
+---@class prettyui.AchievementPopupOptions
+---@field parent ui.Component? Where `show` puts it; nil means the game area
+---@field title string? Default "ACHIEVEMENT COMPLETE"
+---@field text string?
+---@field width number? Default 300
+---@field height number? Default 92
+---@field x number? Default -width/2
+---@field y number? Default 20
+---@field xAnchor number? Fraction of the parent's width added to x. Default 0.5
+---@field yAnchor number? Fraction of the parent's height added to y. Default 0
+---@field sound boolean? false plays no sound
+---@field soundID SoundId? Default id.Sound.ARCH_INFO_POPUP
+---@field onComplete fun(popup: prettyui.AchievementPopup)? Called after it fades out and is destroyed
+
+---@class prettyui.AchievementPopupModule
+local AchievementPopupModule = {}
+
+---Show a popup in `options.parent`; nil when there is no parent to put it in. It ends itself
+---after 200 Logic ticks (4 s).
+---@param options prettyui.AchievementPopupOptions?
+---@return prettyui.AchievementPopup?
+function AchievementPopupModule.show(options) end
+
+---@param parent ui.Component
+---@param options prettyui.AchievementPopupOptions?
+---@return prettyui.AchievementPopup
+function AchievementPopupModule.new(parent, options) end
+
+---@class prettyui.AchievementPopup
+---@field root ui.Layer nil after Destroy()
+local AchievementPopup = {}
+
+---Remove it and its Logic subscription. onComplete is not called.
+function AchievementPopup:Destroy() end

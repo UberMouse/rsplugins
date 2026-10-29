@@ -83,6 +83,20 @@ local OPTIONS = {
     -- The fields a CheckboxButton choice table may have.
     Choice = set({ "text", "label", "value", "selected", "disabled", "tooltip" }),
     Divider = set({ "tooltip" }),
+    AchievementPopup = set({
+        "parent",
+        "title",
+        "text",
+        "width",
+        "height",
+        "x",
+        "y",
+        "xAnchor",
+        "yAnchor",
+        "sound",
+        "soundID",
+        "onComplete",
+    }),
 }
 
 ---@param v number
@@ -770,6 +784,130 @@ local SpriteButtonModule = module("SpriteButton", function(lib, parent, spriteNa
     return newSpriteButton(lib, ps, spriteName, action, checkOptions("SpriteButton", options))
 end)
 
+-- AchievementPopup (src/achievement_popup.lua): a frame of PrettyUI's own sprites with a title
+-- and a text, fading in over 15 ticks and out over the last 25, and ending itself on the 201st
+-- Logic tick after it was made (elapsed ticks > 200: 15 in, 160 held, 25 out): it destroys
+-- itself, then calls onComplete(popup). It subscribes its own Logic callback, named
+-- prettyui_achievement_popup_<n>. The sound is not played; `played` records the id it would
+-- (soundID, else ARCH_INFO_POPUP; none for sound = false).
+local POPUP_DEFAULTS = { width = 300, height = 92, y = 20 }
+local POPUP_TICKS = 200
+local POPUP_MIN = 9
+local DEFAULT_POPUP_SOUND = "ARCH_INFO_POPUP"
+
+-- Add and remove the popup's own Logic subscription in the plugin's subscriber list. The
+-- real library does this from Lua; going through the plugin's Event global would put the
+-- harness's runtime (a C frame) between the call and the Unsubscribe check of events.lua.
+---@param instance table
+---@param name string
+---@param fn function
+local function subscribeLogic(instance, name, fn)
+    table.insert(instance.subs.Logic, { name = name, fn = fn })
+end
+
+---@param instance table
+---@param name string
+local function unsubscribeLogic(instance, name)
+    for i, entry in ipairs(instance.subs.Logic) do
+        if entry.name == name then
+            table.remove(instance.subs.Logic, i)
+            entry.removed = true
+            return
+        end
+    end
+end
+
+local AchievementPopup = strict.class("prettyui.AchievementPopup instance", {
+    undeclared = true,
+    fields = {
+        root = function(s)
+            return s.root
+        end,
+    },
+    methods = {
+        Destroy = function(s)
+            if s.destroyed then return end
+            s.destroyed = true
+            unsubscribeLogic(s.lib.h.instance, s.eventName)
+            s.root:Destroy()
+            s.root = nil
+            s.onComplete = nil
+        end,
+    },
+})
+
+-- Make a popup in `parent` and start its Logic countdown.
+---@param lib table
+---@param parent any
+---@param options any
+---@return table popup
+local function newPopup(lib, parent, options)
+    local ps = parentState("AchievementPopup", parent)
+    options = checkOptions("AchievementPopup", options)
+    lib.popupCount = lib.popupCount + 1
+    local width = math.max(POPUP_MIN, options.width or POPUP_DEFAULTS.width)
+    local height = math.max(POPUP_MIN, options.height or POPUP_DEFAULTS.height)
+    local s = {
+        kind = "AchievementPopup",
+        lib = lib,
+        parent = parent,
+        title = tostring(options.title or "ACHIEVEMENT COMPLETE"),
+        text = tostring(options.text or ""),
+        width = width,
+        height = height,
+        sound = options.sound,
+        soundID = options.soundID,
+        onComplete = options.onComplete,
+        eventName = "prettyui_achievement_popup_" .. lib.popupCount,
+        elapsed = 0,
+        completed = false,
+        destroyed = false,
+    }
+    if options.sound ~= false then s.played = options.soundID or ui.soundId(DEFAULT_POPUP_SOUND) end
+    s.root, s.rootState = ui.create("Layer", ps)
+    s.root:SetPos(
+        options.x or -math.floor(width / 2),
+        options.y or POPUP_DEFAULTS.y,
+        options.xAnchor == nil and 0.5 or options.xAnchor,
+        options.yAnchor or 0
+    )
+    s.root:SetSize(width, height)
+    local obj = AchievementPopup.new(s)
+    s.proxy = obj
+    track(lib, "AchievementPopup", obj, s)
+    subscribeLogic(lib.h.instance, s.eventName, function()
+        if s.destroyed then return end
+        s.elapsed = s.elapsed + 1
+        if s.elapsed > POPUP_TICKS then
+            local onComplete = s.onComplete
+            s.proxy:Destroy()
+            s.completed = true
+            if onComplete then onComplete(s.proxy) end
+        end
+    end)
+    return obj
+end
+
+local AchievementPopupModule = strict.class("prettyui.AchievementPopup", {
+    undeclared = true,
+    statics = {
+        new = function(lib, parent, options)
+            return newPopup(lib, parent, options)
+        end,
+        -- nil when there is no parent, as in 1.2.0. The real one then falls back to the game
+        -- area, which the harness doesn't have: a plugin must pass a parent. The driver's
+        -- popupsFail() stands in for a client with nowhere to put it.
+        show = function(lib, options)
+            options = checkOptions("AchievementPopup", options)
+            if lib.popupsFail then return nil end
+            if options.parent == nil then
+                strict.fault("unmocked API: AchievementPopup.show without options.parent")
+            end
+            return newPopup(lib, options.parent, options)
+        end,
+    },
+})
+
 local Library = strict.class("prettyui", {
     undeclared = true,
     fields = {
@@ -781,6 +919,9 @@ local Library = strict.class("prettyui", {
         end,
         SpriteButton = function(s)
             return s.SpriteButton
+        end,
+        AchievementPopup = function(s)
+            return s.AchievementPopup
         end,
         version = function()
             return M.VERSION
@@ -801,11 +942,14 @@ function M.install(h, env, global)
             byObj = setmetatable({}, { __mode = "k" }),
             closeButtons = {},
             tooltips = {},
+            h = h,
+            popupCount = 0,
         }
         lib.global = Library.new({
             Window = WindowModule.new(lib),
             Panel = PanelModule.new(lib),
             SpriteButton = SpriteButtonModule.new(lib),
+            AchievementPopup = AchievementPopupModule.new(lib),
         })
         instance.prettyui = lib
     end
@@ -848,6 +992,25 @@ function Driver:lib()
     local instance = self.h.instance
     assert(instance and instance.alive, "plugin not loaded")
     return assert(instance.prettyui, "the plugin has no prettyui dependency")
+end
+
+-- Every AchievementPopup the plugin has made, oldest first. Each is the popup's state:
+-- title, text, width, height, sound, soundID, `played` (the sound id it would have played,
+-- nil for none), `root`, `elapsed` Logic ticks, `destroyed` and `completed` (ended on its
+-- own, so onComplete ran).
+---@return table[]
+function Driver:popups()
+    local out = {}
+    for _, r in ipairs(self:lib().records) do
+        if r.kind == "AchievementPopup" then out[#out + 1] = r.s end
+    end
+    return out
+end
+
+-- Make AchievementPopup.show return nil from now on (true), or work again (false).
+---@param on boolean
+function Driver:popupsFail(on)
+    self:lib().popupsFail = on
 end
 
 ---@param obj any

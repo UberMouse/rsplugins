@@ -30,6 +30,16 @@ your client, never does anything in game for you, and sends nothing anywhere.
   While it is collapsed, hold **Alt** and drag the button to move it. Alt-dragging only works
   with the console closed.
 
+- **Celebrations.** When the plugin ticks a chore you picked, a small popup, "CHORE COMPLETE"
+  with the chore's name, shows upper-middle of the screen with a short jingle. When your picked
+  chores of a period are all done, a bigger one follows with a grander jingle: "DAILIES
+  COMPLETE", "WEEKLIES COMPLETE" or "MONTHLIES COMPLETE". That one also shows when you tick the
+  last one by hand, but ticking a chore by hand never shows the chore's own popup, and
+  unticking, picking or unpicking chores, and logging in, show nothing. Popups appear one at a
+  time and last about four seconds, whether the window is open, collapsed or in settings. In
+  the settings view, under **Celebrations**, untick "Celebration popups" to turn them off, or
+  "Popup sound" to keep them quiet. Both are saved for all characters.
+
 ## Chores it ticks for you
 
 Ticking by hand still works for every chore, these included: a chore ticked either way stays
@@ -123,6 +133,7 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 - **Where the window is**, for all characters: its position, its size, whether it is collapsed,
   and where the collapsed button is. These are saved within a second of a change and restored
   next time, moved back on screen if they no longer fit.
+- **Whether celebrations are on, and with sound**, for all characters.
 - Until the game clock is available (just after logging in), the window shows "Waiting for the
   game clock" and chores can't be ticked.
 
@@ -145,7 +156,8 @@ The chore list (names, descriptions, wiki links and reset periods) comes from
 ## Console lines
 
 Everything the plugin logs carries the tag `[CHORES]`: loading, collapsing and expanding,
-character changes and waiting for the clock. It never logs your display name. Grep regex:
+character changes, waiting for the clock and each celebration popup shown
+(`[CHORES] celebrate <chore id>`, or `[CHORES] celebrate <period> cleared`). It never logs your display name. Grep regex:
 `\[CHORES\]`.
 
 A purchase that ticks a chore, or is the period's first at that shop, logs
@@ -157,7 +169,7 @@ the game's vars logs `[CHORES] seen <chore id> done (<var>)`, naming the var who
 ticked it (such as `[CHORES] seen bert-sand done (HANDSAND_BUCKETS_CLAIMED_TODAY)`). A watched
 var the game no longer has is logged once at start as `[CHORES] unknown var <name>; not
 watched`, and its chores are left to tick by hand. Grep regex:
-`\[CHORES\] (purchase|collected|seen)`.
+`\[CHORES\] (purchase|collected|seen|celebrate)`.
 
 ## Before submitting
 
@@ -183,6 +195,7 @@ permissions") is true only after that check passes.
 | `main.lua` | The window, its collapsed button, the two views, and following the login and clock |
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
+| `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
@@ -190,6 +203,8 @@ permissions") is true only after that check passes.
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values, and the RuneDay |
 | `core/view.lua` | What the list shows, as plain data |
 | `core/layout.lua` | The saved window layout, read back and kept on screen |
+| `core/celebrate.lua` | Which celebrations a change to the picks and ticks earns |
+| `core/settings.lua` | The celebration settings, defaults and reading them back |
 | `data/chores.lua` | The dailyscape chore list (generated) |
 | `data/shops.lua` | The shops each shop-run chore watches (hand-written) |
 | `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
@@ -211,7 +226,7 @@ By submitting a Plugin (as defined in Schedule 4 of the EULA), you acknowledge t
 This plugin requests no permissions.
 
 ## Data Protection
-This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick.
+This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites.
 This information is not transmitted outside of the plugin under any circumstances.
-Your picked and ticked chores, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state.
+Your picked and ticked chores, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
 ```

@@ -1,6 +1,6 @@
 -- The ui root fake: ui.Interfaces:GetComponent for the plugin layer, id.Component for its
--- name, a plugin's own ui.Layer/Sprite/Text, ui.Hook, ui.AlignMode and the id.Sound/Font/Sprite
--- names, and nothing else.
+-- name, a plugin's own ui.Layer/Sprite/Text, ui.Hook, ui.AlignMode and the
+-- id.Sound/Font/Sprite/Obj names, and nothing else.
 
 local harness = require("tests.harness")
 local paths = require("tests.harness.paths")
@@ -38,7 +38,7 @@ describe("ui root fake", function()
             "unmocked API: id.Component.TOPLEVEL_V2__GAME_AREA",
             harness.errorOf(load, "local _ = id.Component.TOPLEVEL_V2__GAME_AREA")
         )
-        assert.matches("unmocked API: _global.id.Obj", harness.errorOf(load, "local _ = id.Obj"))
+        assert.matches("unmocked API: _global.id.Inv", harness.errorOf(load, "local _ = id.Inv"))
         assert.matches("unmocked API: ui.Button", harness.errorOf(load, "local _ = ui.Button"))
         assert.matches(
             "only id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP is modelled",
@@ -345,6 +345,19 @@ describe("a plugin's own components", function()
         assert.matches(
             "unmocked API: id.Font.FromID",
             harness.errorOf(loadRows, "local _ = id.Font.FromID")
+        )
+    end)
+
+    it("serve id.Obj names from docs/api/consts/Obj.lua, and fault on others", function()
+        local h = loadRows("o = id.Obj.FEATHER; ui.Sprite.new(row):SetAssociatedObject(o)")
+        assert.are.equal(314, h.env.o)
+        assert.matches(
+            "unknown object: id.Obj.NOPE",
+            harness.errorOf(loadRows, "local _ = id.Obj.NOPE")
+        )
+        assert.matches(
+            "unmocked API: id.Obj.FromID",
+            harness.errorOf(loadRows, "local _ = id.Obj.FromID")
         )
     end)
 

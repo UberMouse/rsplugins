@@ -2,9 +2,11 @@
 -- dailyscape, MIT; see data/chores.lua), drawn with PrettyUI.
 --
 --   * The window lists the chores you picked, grouped Daily / Weekly / Monthly, each headed
---     with how many are done. Tick a chore when you've done it; done chores stay in place,
---     dimmed, and a second click unticks them. Hover a chore for its description and wiki
---     links (shown as text: plugins can't open URLs).
+--     with how many are done. Each chore is a row with its icon (data/icons.lua: a built-in
+--     item icon or interface sprite), its name and a tick box. A click anywhere on the row
+--     ticks it; done chores stay in place, ticked, icon and name dimmed, and a second click
+--     unticks them. Hover a chore for its description and wiki links (shown as text: plugins
+--     can't open URLs).
 --   * The settings button (top left of the content) opens the settings view, which has the
 --     Celebrations switches and lists every chore to pick from. There, the title bar's
 --     top-right slot is a back button to the list, in reach however far the settings are
@@ -66,6 +68,15 @@
 -- local daemon; scripts/check-submission.sh fails until it is stripped (README, "Before
 -- submitting").
 --
+-- The list's rows are built by hand (shell/rows.lua) in the window's content, at spots
+-- core/listlayout.lua works out, because PrettyUI 1.2.0's CheckboxButton can't show an icon,
+-- be recoloured or be retexted. Ticks, colours, counts and tooltips change in place; the window
+-- is rebuilt only for a view switch, a login change or the clock starting or stopping. Two
+-- reads of PrettyUI 1.2.0 internals, each guarded so a version without it loses only that:
+-- `_scroll.scrollY`, to keep the scroll through such a rebuild (scrollPosition), and the
+-- window's `_onScrollWheel`, handed to each row so the wheel over a row still scrolls the window
+-- (buildList).
+--
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
 -- origin, so the button covers the Panel's 4 px frame. A Panel always draws that frame, but
@@ -79,15 +90,18 @@ if tee then tee.install(_ENV, "chore-tracker") end
 
 local chores = require("data/chores")
 local collections = require("data/collections")
+local icons = require("data/icons")
 local shops = require("data/shops")
 local varRules = require("data/vars")
 local celebrate = require("core/celebrate")
 local layout = require("core/layout")
+local listlayout = require("core/listlayout")
 local settingsCore = require("core/settings")
 local state = require("core/state")
 local view = require("core/view")
 local detect = require("shell/detect")
 local popups = require("shell/popups")
+local rows = require("shell/rows")
 local store = require("shell/store")
 local varDetect = require("shell/vars")
 
@@ -100,11 +114,6 @@ local BUTTON_SIZE = layout.BUTTON_SIZE
 
 -- The smallest the window can be resized to.
 local MIN_WIDTH, MIN_HEIGHT = 240, 160
-
--- Row text colours (0xRRGGBBAA): PrettyUI 1.2.0's default for a choice, and a dimmed one
--- for done rows.
-local TEXT_COLOUR = 0xE7D7B0FF
-local DONE_COLOUR = 0x7A7262FF
 
 -- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapseAt).
 local COLLAPSE_TOOLTIP = { text = "Collapse" }
@@ -142,15 +151,14 @@ local win = nil ---@type prettyui.Window?
 local openButton = nil ---@type prettyui.SpriteButton?
 local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
 local collapsedButton = nil ---@type prettyui.SpriteButton?
--- The list view's widgets, to update in place: chore id -> its two rows (with the text they
--- were made with), and period -> its heading.
-local rowWidgets = {} ---@type table<string, { normal: prettyui.CheckboxButton, dimmed: prettyui.CheckboxButton, text: string, tooltip: ChoreTooltip, done: boolean? }>
+-- The list view's components, to update in place: chore id -> its row, and period -> its
+-- heading. Both go with the window.
+local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
 -- Work left for the next Logic tick. A button's action mustn't destroy the button while
--- PrettyUI is still handling its click, so a view switch or a row whose text changed (both
--- rebuild the window) and removing the collapsed panel after expanding wait a tick.
+-- PrettyUI is still handling its click, so a view switch (which rebuilds the window) and
+-- removing the collapsed panel after expanding wait a tick.
 local pendingMode = nil ---@type ChoreMode?
-local pendingRebuild = false
 local retiring = nil ---@type prettyui.Panel?
 -- The layout the store holds, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
@@ -218,87 +226,41 @@ end
 -- List view
 ---------------------------------------------------------------------------
 
--- Show a row as done or not: ticked and dimmed, or unticked in the normal colour.
--- PrettyUI 1.2.0 can't recolour a choice once made, so each row exists twice at the same
--- spot, once per colour, and only the matching one is shown.
----@param id string
----@param done boolean
-local function showDone(id, done)
-    local widgets = rowWidgets[id]
-    if widgets.done == done then return end
-    widgets.done = done
-    widgets.normal:SetSelected(id, done, false)
-    widgets.dimmed:SetSelected(id, done, false)
-    local showing, hiding = widgets.normal, widgets.dimmed
-    if done then
-        showing, hiding = widgets.dimmed, widgets.normal
-    end
-    showing.root.hidden = false
-    hiding.root.hidden = true
-    -- A shown tooltip hides only on its own row's mouse-leave, which a hidden row never gets,
-    -- so the hidden copy's tooltip would stay up. Replacing it with the same table (not a
-    -- string, which only retexts it) gives a fresh, hidden one: PrettyUI 1.2.0's
-    -- SetOptionTooltip behaviour, read from its source (src/tooltip.lua, Tooltip.set).
-    hiding:SetOptionTooltip(id, widgets.tooltip)
-end
-
--- Give a row a new tooltip. A table, as in showDone, so a shown one is replaced by a fresh,
--- hidden one rather than left up.
----@param id string
----@param tooltip ChoreTooltip
-local function setRowTooltip(id, tooltip)
-    local widgets = rowWidgets[id]
-    widgets.tooltip = tooltip
-    widgets.normal:SetOptionTooltip(id, tooltip)
-    widgets.dimmed:SetOptionTooltip(id, tooltip)
-end
-
--- Bring the list's ticks, dimming, counts and tooltips up to date with the tracker and the
--- clock. Only rows that changed are touched, in place, except that PrettyUI 1.2.0 has no
--- call to change a choice's text: a row whose shop count changed means rebuilding the
--- window (next tick, as this can run inside a row's click).
+-- Bring the list's headings, rows and tooltips up to date with the tracker and the clock,
+-- in place: each row changes only what differs (rows.lua).
 local function refreshList()
-    local sections = view.view(tracker, chores, clockNow(), shops)
-    for _, section in ipairs(sections) do
-        for _, row in ipairs(section.rows) do
-            local widgets = rowWidgets[row.id]
-            if widgets and widgets.text ~= view.rowText(row) then
-                pendingRebuild = true
-                return
-            end
-        end
-    end
-    for _, section in ipairs(sections) do
+    assert(win, "the list is only refreshed while its window exists")
+    local content = win.content
+    for _, section in ipairs(view.view(tracker, chores, clockNow(), shops)) do
         local heading = headings[section.period]
         if heading then heading.content = headingText(section) end
         for _, row in ipairs(section.rows) do
-            local widgets = rowWidgets[row.id]
-            if widgets then
-                local tooltip = tooltipFor(row, view.shopTooltip(row, section.period))
-                if tooltip.text ~= widgets.tooltip.text then setRowTooltip(row.id, tooltip) end
-                showDone(row.id, row.done)
+            local rowView = rowViews[row.id]
+            if rowView then
+                rows.show(rowView, view.rowText(row), row.done)
+                rows.setTooltip(
+                    rowView,
+                    content,
+                    tooltipFor(row, view.shopTooltip(row, section.period))
+                )
             end
         end
     end
 end
 
--- A row was ticked or unticked by the player: mark it at the clock's minute and save.
----@param group prettyui.CheckboxButton
----@param _values any[]
+-- A row was clicked: tick or untick its chore at the clock's minute, and save. Without a
+-- character or a clock there is nothing to mark against, so nothing changes.
 ---@param id string
----@param ticked boolean
-local function onTick(group, _values, id, ticked)
+local function onTick(id)
     local now = clockNow()
-    if character == nil or now == nil then
-        -- Nothing to mark against yet: put the box back.
-        group:SetSelected(id, not ticked, false)
-        return
-    end
+    if character == nil or now == nil then return end
+    local chore = state.find(chores, id)
+    assert(chore, "a row is only made for a chore in the list")
     local before = tracker
-    if ticked then
-        tracker = state.mark(tracker, id, now)
-    else
+    if state.isDone(tracker, chore, now) then
         tracker = state.unmark(tracker, id)
+    else
+        tracker = state.mark(tracker, id, now)
     end
     store.saveState(character, tracker)
     refreshList()
@@ -306,40 +268,41 @@ local function onTick(group, _values, id, ticked)
     popups.enqueue(celebrate.decide(before, tracker, chores, now, true))
 end
 
+-- The list: the settings button and any notice in PrettyUI's flow, then a heading per period
+-- and a hand-built row per picked chore below them, at the spots core/listlayout.lua gives.
 ---@param w prettyui.Window
 ---@param openSettings fun()
 local function buildList(w, openSettings)
-    w:AddSpriteButton("SETTINGS", openSettings, { size = BUTTON_SIZE, tooltip = "Pick chores" })
+    local button =
+        w:AddSpriteButton("SETTINGS", openSettings, { size = BUTTON_SIZE, tooltip = "Pick chores" })
+    -- The list goes below the last of these, the button or the notice.
+    local top = button.root.y + button.root.height
     local now = clockNow()
-    if now == nil then w:AddText("Waiting for the game clock.") end
+    if now == nil then
+        local notice = w:AddText("Waiting for the game clock.")
+        top = notice.y + notice.height
+    end
     local sections = view.view(tracker, chores, now, shops)
     if #sections == 0 then
         w:AddText("No chores picked yet: use the settings button above to choose some.")
         return
     end
+    local spots = listlayout.place(sections, top)
+    -- A row swallows the mouse wheel unless it hands it to the window. The handler is
+    -- PrettyUI 1.2.0-internal, so without it the rows are still made, just without that.
+    local wheel = nil ---@type ChoreWheelHandler?
+    if type(w._onScrollWheel) == "function" then wheel = w._onScrollWheel end
     for _, section in ipairs(sections) do
-        headings[section.period] = w:AddTitle(headingText(section))
+        headings[section.period] =
+            w:AddTitle({ text = headingText(section), y = spots.headings[section.period] })
         for _, row in ipairs(section.rows) do
-            local tooltip = tooltipFor(row, view.shopTooltip(row, section.period))
-            local text = view.rowText(row)
-            local choice = { text = text, value = row.id, tooltip = tooltip }
-            local normal = w:AddCheckboxButton(
-                { choice },
-                { onChange = onTick, colour = TEXT_COLOUR }
-            )
-            -- The dimmed copy sits on the normal row (an explicit y keeps it out of the flow).
-            local dimmed = w:AddCheckboxButton(
-                { choice },
-                { onChange = onTick, colour = DONE_COLOUR, y = normal.root.y }
-            )
-            -- Both start unticked, normal shown and dimmed hidden; showDone swaps them for a
-            -- done row.
-            dimmed.root.hidden = true
-            rowWidgets[row.id] =
-                { normal = normal, dimmed = dimmed, text = text, tooltip = tooltip, done = false }
-            showDone(row.id, row.done)
+            rowViews[row.id] = rows.new(w.content, spots.rows[row.id], icons[row.id], function()
+                onTick(row.id)
+            end, wheel)
         end
     end
+    w:SetContentHeight(spots.height)
+    refreshList()
 end
 
 ---------------------------------------------------------------------------
@@ -412,8 +375,7 @@ end
 ---@param at { x: integer, y: integer, width: integer, height: integer }
 local function buildWindow(at)
     if win then win:Destroy() end
-    rowWidgets, headings = {}, {}
-    pendingRebuild = false
+    rowViews, headings = {}, {}
     local w = prettyui.Window.new(parent, {
         title = "Chores",
         x = at.x,
@@ -456,7 +418,8 @@ end
 
 -- How far the window's content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
 -- can set it (SetScrollPosition) but has no getter, so this reads its internal
--- `_scroll.scrollY`; a version without that field gives nil.
+-- `_scroll.scrollY`; a version without that field gives nil. (The plugin's one other read of
+-- PrettyUI internals is the rows' wheel handler, `_onScrollWheel`, in buildList.)
 ---@return number?
 local function scrollPosition()
     assert(win, "the window exists from load to shutdown")
@@ -467,8 +430,9 @@ local function scrollPosition()
 end
 
 -- Rebuild the window where it is, staying closed if collapsed. With `keepScroll`, the new
--- content is scrolled as far as the old (PrettyUI clamps it to the new content), so a row
--- whose count changed doesn't jump the list to the top; a view switch starts at the top.
+-- content is scrolled as far as the old (PrettyUI clamps it to the new content), so a login
+-- change or the clock starting doesn't jump the list to the top; a view switch starts at the
+-- top.
 ---@param keepScroll boolean
 local function rebuild(keepScroll)
     assert(win, "the window exists from load to shutdown")
@@ -487,8 +451,9 @@ local expand
 local function collapseAt(x, y)
     assert(win and openButton, "the window's hamburger only exists with the window")
     -- The hamburger's tooltip is drawn inside the window, not in its content, so Close hides
-    -- it only with the window, and it would be back on the next Show. Replacing it (with a
-    -- table, as in showDone) leaves a fresh, hidden one.
+    -- it only with the window, and it would be back on the next Show. Replacing it with a
+    -- table leaves a fresh, hidden one (a string would only retext it: PrettyUI 1.2.0's
+    -- Tooltip.set, src/tooltip.lua).
     openButton:SetTooltip(COLLAPSE_TOOLTIP)
     win:Close()
     collapsed = prettyui.Panel.new(parent, {
@@ -584,6 +549,7 @@ local function apply(change)
 end
 
 popups.init({ parent = parent, say = say })
+rows.init({ say = say })
 
 detect.init({
     chores = chores,
@@ -649,8 +615,6 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
         mode = pendingMode
         pendingMode = nil
         rebuild(false)
-    elseif pendingRebuild then
-        rebuild(true)
     end
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)

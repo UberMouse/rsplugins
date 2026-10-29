@@ -59,12 +59,15 @@ These are the user's calls. They aren't all visible in the code.
   - The penguin vars (`PENG_SPY_*`) may encode this week's locations. Don't use them without
     the user's go-ahead.
 - **PrettyUI has no licence:** read its source locally, never copy or vendor it. The window's
-  scroll keep reads PrettyUI 1.2.0's internal `_scroll.scrollY` (guarded); the user may veto that.
+  scroll keep reads PrettyUI 1.2.0's internal `_scroll.scrollY`, and each list row is handed the
+  window's internal `_onScrollWheel` so the wheel scrolls over it (both guarded); the user may
+  veto either.
 
 ## Round 2: making the list nicer (decided 2026-10-29)
 
 The user's ideas from 2026-10-29, the calls they made, and what research found. Step 1 is built
-and user-checked in the client; the rest is not. Staged order, with a check-in in the beta client
+and user-checked in the client; step 2's list rows are built, not yet checked in the client; the
+rest is not. Staged order, with a check-in in the beta client
 after each:
 
 1. **Celebration popup** (built `280a68a..c1b5a76`; `core/celebrate.lua`, `shell/popups.lua`).
@@ -83,7 +86,9 @@ after each:
 2. **Own row component with an item icon.** PrettyUI's `CheckboxButton` takes no icon and can't
    be dragged, so build a row from `ui.Layer` + `ui.Sprite` (`SetAssociatedObject(objId)` draws
    the item's built-in icon) + text + a tick sprite. Icons come from a hand-written
-   `data/icons.lua` (chore id -> obj id, checked against `docs/api/consts/Obj.lua`). Use built-in
+   `data/icons.lua` (chore id -> an `id.Obj` or `id.Sprite` constant name, checked against
+   `docs/api/consts/` by `tests/chore-tracker/data_spec.lua`). Built (list view only:
+   `shell/rows.lua`, `core/listlayout.lua`); the settings view's rows come next. Use built-in
    sprites only, because a custom PNG puts the plugin in closer review. Probed 2026-10-29
    (`docs/api-concepts.md`, "Pointer hooks on a plain `ui.Layer`" and "Hand-built rows in a
    window"): icons draw and clip in the window, and dimmed icon plus ticked box reads as done.

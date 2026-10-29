@@ -82,3 +82,41 @@ describe("chore-tracker data", function()
         assert.are.same({ "https://runescape.wiki/w/The_Black_Marketeer" }, ports.links)
     end)
 end)
+
+-- The hand-written icon table (data/icons.lua): one built-in graphic per chore.
+describe("chore-tracker icons", function()
+    local icons = require("data/icons")
+    local catalog = require("tests.harness.catalog")
+
+    it("gives every chore exactly one icon, and names no chore that doesn't exist", function()
+        local ids = {}
+        for _, c in ipairs(chores) do
+            ids[c.id] = true
+            assert(icons[c.id] ~= nil, "no icon for " .. c.id)
+        end
+        for id in pairs(icons) do
+            assert(ids[id], "an icon for " .. id .. ", which isn't a chore")
+        end
+    end)
+
+    it("names one obj or one sprite per chore, each in docs/api/consts", function()
+        for id, icon in pairs(icons) do
+            local keys = {}
+            for k in pairs(icon) do
+                keys[#keys + 1] = k
+            end
+            assert(
+                #keys == 1 and (icon.obj or icon.sprite),
+                id .. ": want exactly one of obj/sprite"
+            )
+            if icon.obj then
+                assert(catalog.config("Obj", icon.obj), id .. ": no id.Obj." .. icon.obj)
+            else
+                assert(
+                    catalog.config("Sprite", icon.sprite),
+                    id .. ": no id.Sprite." .. icon.sprite
+                )
+            end
+        end
+    end)
+end)

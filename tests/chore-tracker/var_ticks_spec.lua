@@ -141,7 +141,7 @@ describe("chore-tracker var ticks", function()
     it("keeps a chore's earlier tick, logging nothing", function()
         local h = settled()
         pick(h, { BERT.id })
-        helpers.tick(h, BERT.name, BERT.id)
+        helpers.tick(h, BERT.name)
         h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", helpers.NOW + 30)
         local writes = h.dbWrites
         set(h, "HANDSAND_BUCKETS_CLAIMED_TODAY", 1)

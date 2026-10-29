@@ -4,7 +4,8 @@
 
 local harness = require("tests.harness")
 local helpers = require("tests.chore-tracker.helpers")
-local loaded, row, ticked, pick = helpers.loaded, helpers.row, helpers.ticked, helpers.pick
+local loaded, ticked, pick, rowShown =
+    helpers.loaded, helpers.ticked, helpers.pick, helpers.rowShown
 
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
 local YAK = { name = "Yak Hide", id = "yak-hide" }
@@ -42,16 +43,6 @@ end
 ---@param count integer
 local function setFeathers(h, inv, count)
     openShop(h, inv, count)
-end
-
--- The visible row's text and tooltip text for a chore.
----@param h table
----@param name string
----@return string text
----@return string tooltip
-local function rowShown(h, name)
-    local choice = h.ui:choices(row(h, name))[1]
-    return choice.text, choice.tooltip.text
 end
 
 -- The stored shop progress of a character's chore.
@@ -239,24 +230,27 @@ describe("chore-tracker shop runs", function()
         assert.are.equal(1, lines)
     end)
 
-    it("keeps the scroll through a count change's rebuild, not a view switch", function()
-        local h = loaded()
-        pick(h, { DAILY.id, FEATHERS.id, YAK.id })
-        -- Short enough that the list overflows and can scroll.
-        h.ui:resize(window(h), 0, -260)
-        window(h):SetScrollPosition(40)
-        local win = window(h)
-        assert.are.equal(40, win._scroll.scrollY)
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 0)
-        h:advance(20)
-        assert.are_not.equal(win, window(h))
-        assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
-        assert.are.equal(40, window(h)._scroll.scrollY)
+    it(
+        "changes a count in place, keeping the window and its scroll; a view switch doesn't",
+        function()
+            local h = loaded()
+            pick(h, { DAILY.id, FEATHERS.id, YAK.id })
+            -- Short enough that the list overflows and can scroll.
+            h.ui:resize(window(h), 0, -260)
+            window(h):SetScrollPosition(40)
+            local win = window(h)
+            assert.are.equal(40, win._scroll.scrollY)
+            openShop(h, "FISHINGSHOP", 20)
+            setFeathers(h, "FISHINGSHOP", 0)
+            h:advance(20)
+            assert.are.equal(win, window(h))
+            assert.are.equal("Feather Shop Run (1/4)", helpers.row(h, FEATHERS.name).text)
+            assert.are.equal(40, window(h)._scroll.scrollY)
 
-        helpers.openSettings(h)
-        assert.are.equal(0, window(h)._scroll.scrollY)
-    end)
+            helpers.openSettings(h)
+            assert.are.equal(0, window(h)._scroll.scrollY)
+        end
+    )
 
     it("counts a shop with two inventories as one, whichever is bought from", function()
         local h = loaded()

@@ -1,7 +1,7 @@
 -- ui.Interfaces:GetComponent for the plugin root layer, id.Component for its name, the
 -- fake components the PrettyUI fake (api/prettyui.lua) builds on it, ui.Layer/Sprite/Text.new
--- for a plugin's own components, ui.Hook and ui.AlignMode, and id.Sound, id.Font and
--- id.Sprite by name. Nothing else under `ui` or `id` is modelled: any other member faults as
+-- for a plugin's own components, ui.Hook and ui.AlignMode, and id.Sound, id.Font, id.Sprite
+-- and id.Obj by name. Nothing else under `ui` or `id` is modelled: any other member faults as
 -- unmocked.
 --
 -- A component keeps what it was given (SetPos/SetSize pixels plus fractions of the parent's
@@ -622,12 +622,15 @@ local IdNamespace = strict.class("_global.id", {
         Sprite = function(s)
             return s.sprites
         end,
+        Obj = function(s)
+            return s.objs
+        end,
     },
 })
 
 -- id.<kind>.NAME from docs/api/consts/<kind>.lua (loaded on first use): a plugin can only name
 -- one that exists. `label` is the singular for the fault. FromID isn't modelled.
----@param kind string "Sound", "Font" or "Sprite"
+---@param kind string "Sound", "Font", "Sprite" or "Obj"
 ---@param label string
 ---@return table
 local function idNames(kind, label)
@@ -663,6 +666,7 @@ function M.install(h, env)
         sounds = idNames("Sound", "sound"), -- the mock plays nothing
         fonts = idNames("Font", "font"),
         sprites = idNames("Sprite", "sprite"),
+        objs = idNames("Obj", "object"), -- for SetAssociatedObject
     })
 end
 

@@ -19,8 +19,11 @@ your client, never does anything in game for you, and sends nothing anywhere.
   corner, where the menu button usually sits. It stays there however far down you have scrolled.
   (Collapse the window from the list, not from here.)
 - **Ticking chores.** The list shows the chores you picked under Daily, Weekly and Monthly
-  headings, each with a count such as "Daily  2/5". Tick a chore when you've done it. It stays
-  where it is, ticked and dimmed; click it again to untick it.
+  headings, each with a count such as "Daily  2/5". Each chore's row has an icon from the game
+  (the reward or the thing you handle, a gold XP or skill medallion when the reward is XP, the
+  General Store icon for the general shops), its name, and a tick box at the right. Click
+  anywhere on a row when you've done the chore: it stays where it is, ticked, with its icon and
+  name dimmed. Click it again to untick it.
 - **Details.** Hover a chore for its description and its RuneScape Wiki links. The links are
   shown as text, because plugins can't open web pages.
 - **Collapsing it.** The menu button at the top-right corner of the window, where
@@ -54,7 +57,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   doesn't count. A chore with more than one shop shows how many you have bought from this
   period, as "Feather Shop Run (1/4)", and its tooltip lists each shop as "bought" or "not
   yet". A shop the game has in two versions, before and after a quest, counts once, bought
-  from either. When a count changes the window redraws, keeping how far it is scrolled.
+  from either. A count changes in its row as you buy, without moving the list.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or
@@ -142,7 +145,12 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 ## Requirements
 
 - **PrettyUI** (mod.io 6398181), the interface library the window is built with. It is a
-  required dependency: install it too.
+  required dependency: install it too. The plugin reads two of PrettyUI 1.2.0's internal
+  fields, as PrettyUI has no public way to do either: the window's scroll position
+  (`_scroll.scrollY`), to keep the list where it was when the window redraws, and the window's
+  mouse-wheel handler (`_onScrollWheel`), so the wheel scrolls the list over a chore's row. A
+  PrettyUI version without them loses only that: the list starts at the top on a redraw, or
+  the wheel doesn't scroll it while the pointer is over a row.
 - **No permissions.** The submitted plugin requests none; the development checkout's manifest
   asks for `httpAccess` only for the dev log tee, which is stripped before submitting. The plugin
   reads the game clock, your own character's display name and position, your backpack, the stock
@@ -170,7 +178,9 @@ chore logs `[CHORES] collected <chore id> near <giver>` (such as
 the game's vars logs `[CHORES] seen <chore id> done (<var>)`, naming the var whose change
 ticked it (such as `[CHORES] seen bert-sand done (HANDSAND_BUCKETS_CLAIMED_TODAY)`). A watched
 var the game no longer has is logged once at start as `[CHORES] unknown var <name>; not
-watched`, and its chores are left to tick by hand. Grep regex:
+watched`, and its chores are left to tick by hand. Likewise an icon the game no longer has
+is logged once, when a row first needs it, as `[CHORES] unknown icon id.Obj.<name>; its rows
+show no icon` (or `id.Sprite.<name>`), and its rows show no icon. Grep regex:
 `\[CHORES\] (purchase|collected|seen|celebrate)`.
 
 ## Before submitting
@@ -198,6 +208,7 @@ permissions") is true only after that check passes.
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
+| `shell/rows.lua` | One chore's row in the list: its icon, text and tick box, changed in place |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
@@ -205,12 +216,14 @@ permissions") is true only after that check passes.
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values, and the RuneDay |
 | `core/view.lua` | What the list shows, as plain data |
 | `core/layout.lua` | The saved window layout, read back and kept on screen |
+| `core/listlayout.lua` | Where the list's headings and rows go in the window |
 | `core/celebrate.lua` | Which celebrations a change to the picks and ticks earns |
 | `core/settings.lua` | The celebration settings, defaults and reading them back |
 | `data/chores.lua` | The dailyscape chore list (generated) |
 | `data/shops.lua` | The shops each shop-run chore watches (hand-written) |
 | `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
 | `data/vars.lua` | The chores seen from game vars and each one's rule (hand-written) |
+| `data/icons.lua` | Each chore's icon, a built-in item or interface sprite (hand-written) |
 
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
 (`docs/testing.md`).
@@ -228,7 +241,7 @@ By submitting a Plugin (as defined in Schedule 4 of the EULA), you acknowledge t
 This plugin requests no permissions.
 
 ## Data Protection
-This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites.
+This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites, and each chore with one of the game's own item icons or sprites.
 This information is not transmitted outside of the plugin under any circumstances.
 Your picked and ticked chores, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
 ```

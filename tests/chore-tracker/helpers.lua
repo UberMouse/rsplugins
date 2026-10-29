@@ -1,7 +1,9 @@
--- Shared steps for the Chore Tracker's harness specs: load it in a scripted world, find a
--- list row, and pick chores in the settings view.
+-- Shared steps for the Chore Tracker's harness specs: load it in a scripted world, find and
+-- click a list row, and pick chores in the settings view.
 
 local harness = require("tests.harness")
+local catalog = require("tests.harness.catalog")
+local uiFake = require("tests.harness.api.ui")
 require("tests.chore-tracker.support")
 local varCore = require("core/vars")
 local varRules = require("data/vars")
@@ -45,28 +47,88 @@ function M.loaded(opts)
     return h
 end
 
--- The one visible list row (of its normal and dimmed copies) for a chore name.
+-- The list's rows, top to bottom: each hand-built row layer in the window's content, as
+-- { layer, icon, label, box, text } (icon nil when the row has none). Found through the
+-- harness's component states, since the plugin keeps its rows in locals.
+---@param h table
+---@return table[]
+function M.rows(h)
+    local content = h.ui:get("Window", { text = "Chores" }).content
+    local out = {}
+    for _, child in ipairs(uiFake.stateOf(content).children) do
+        if child.class == "ui.Layer" then
+            local row = { layer = child.proxy }
+            for _, part in ipairs(child.children) do
+                if part.class == "ui.Text" then
+                    row.label, row.text = part.proxy, part.content
+                elseif part.class == "ui.Sprite" then
+                    -- The icon is left of the box, which sits at the row's right edge.
+                    if row.box then
+                        row.icon, row.box = row.box, part.proxy
+                    else
+                        row.box = part.proxy
+                    end
+                end
+            end
+            out[#out + 1] = row
+        end
+    end
+    table.sort(out, function(a, b)
+        return a.layer.y < b.layer.y
+    end)
+    return out
+end
+
+-- The list row for a chore name (its text is the name, or the name and a shop count), or nil.
+---@param h table
+---@param name string
+---@return table?
+function M.findRow(h, name)
+    local found = nil
+    for _, row in ipairs(M.rows(h)) do
+        if row.text == name or row.text:sub(1, #name + 2) == name .. " (" then
+            assert(found == nil, "two rows for " .. name)
+            found = row
+        end
+    end
+    return found
+end
+
+-- The list row for a chore name; errors if there is none.
 ---@param h table
 ---@param name string
 ---@return table
 function M.row(h, name)
-    return h.ui:get("CheckboxButton", { text = name, visible = true })
+    return assert(M.findRow(h, name), "no row for " .. name)
 end
 
--- Whether a chore's visible list row is ticked.
+-- Whether a chore's list row shows ticked.
 ---@param h table
 ---@param name string
 ---@return boolean
 function M.ticked(h, name)
-    return h.ui:choices(M.row(h, name))[1].selected
+    return M.row(h, name).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_SMALL_2")
 end
 
--- Click a chore's visible list row.
+-- Click a chore's list row (on its text, which passes the click to the row).
 ---@param h table
 ---@param name string
----@param id string
-function M.tick(h, name, id)
-    click(h, M.row(h, name), id)
+function M.tick(h, name)
+    click(h, M.row(h, name).label)
+end
+
+-- A chore's row text and tooltip text, read by hovering it.
+---@param h table
+---@param name string
+---@return string text
+---@return string tooltip
+function M.rowShown(h, name)
+    local row = M.row(h, name)
+    assert(h.ui:hover(row.layer))
+    local tips = h.ui:tooltips()
+    h.ui:leave()
+    assert(#tips == 1, "want one tooltip, got " .. #tips)
+    return row.text, tips[1]
 end
 
 -- The settings view's CheckboxButton holding chore `id`.

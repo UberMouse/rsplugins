@@ -14,6 +14,11 @@
 -- The targets are re-docked every Logic tick (follow), so they keep up with the window being
 -- moved, resized or scrolled. A target is only moved when its spot changed, and hidden
 -- whenever its grip isn't wholly on show.
+--
+-- A held press gets ONHOLD every Logic tick, even with the pointer still (docs/api-concepts.md).
+-- A drag that goes DRAG_LOST_TICKS without one has lost its release (what the client sends when
+-- it loses focus mid-press is unprobed), and is dropped as a release would: left stretched in
+-- front, its target would take the next click anywhere and move the row.
 
 local listlayout = require("core/listlayout")
 local reorder = require("core/reorder")
@@ -26,6 +31,8 @@ local M = {}
 local GRIP_CURSOR = id.Cursor.CURSOR_PUSH
 local GRIP_SIZE, GRIP_Y = rows.GRIP_SIZE, rows.GRIP_Y
 local ROW_HEIGHT = listlayout.ROW_HEIGHT
+-- About 200 ms: well clear of the every-tick ONHOLD of a held press.
+local DRAG_LOST_TICKS = 10
 
 ---@class ChoreGrip
 ---@field id string the chore id of the row it sits over
@@ -53,6 +60,7 @@ local ROW_HEIGHT = listlayout.ROW_HEIGHT
 ---@field firstY integer the period's first row's content y
 ---@field grab number the pointer's offset below the row's top
 ---@field slot integer where it would drop now
+---@field idle integer Logic ticks since its last ONHOLD
 
 local ctx = nil ---@type ChoreGripsOpts?
 local grips = {} ---@type ChoreGrip[]
@@ -64,6 +72,8 @@ local drag = nil ---@type ChoreGripDrag?
 local pressed = nil ---@type { grip: ChoreGrip, ticks: integer }?
 -- Whether the window was open at the last follow.
 local shown = false
+-- Whether the last dock hid every target but a dragging one, so a closed window needs no more.
+local allHidden = false
 
 -- The viewport's spot and size in plugin-layer coordinates, and the scroll position; nil when
 -- the scroll can't be read. Rows are placed from these, not from their own xyGlobal, which
@@ -119,6 +129,7 @@ local function dock()
             place(grip, x, y, not (shown and inView))
         end
     end
+    allHidden = not shown
 end
 
 -- Move a row's layer to content y `y`, if it isn't there.
@@ -187,6 +198,7 @@ local function start(grip, localY)
         firstY = ctx.rows[ids[1]].layer.y,
         grab = GRIP_Y + localY,
         slot = from,
+        idle = 0,
     }
     pressed = nil
     local target = grip.target
@@ -241,7 +253,10 @@ function M.build(opts)
             end)
             target:Subscribe(ui.Hook.ONHOLD, function(_, _, y)
                 if drag then
-                    if drag.grip == grip then update(y) end
+                    if drag.grip == grip then
+                        drag.idle = 0
+                        update(y)
+                    end
                 elseif pressed and pressed.grip == grip then
                     start(grip, y)
                 end
@@ -261,11 +276,11 @@ function M.clear()
     for _, grip in ipairs(grips) do
         grip.target:Destroy()
     end
-    grips, drag, pressed, ctx, shown = {}, nil, nil, nil, false
+    grips, drag, pressed, ctx, shown, allHidden = {}, nil, nil, nil, false, false
 end
 
--- Keep the targets over their grips. Call every Logic tick, `shown` false while the window is
--- closed.
+-- Keep the targets over their grips, and drop a drag whose release never came. Call every
+-- Logic tick, `open` false while the window is closed.
 ---@param open boolean
 function M.follow(open)
     if pressed and not drag then
@@ -273,7 +288,11 @@ function M.follow(open)
         if pressed.ticks >= 2 then pressed = nil end
     end
     shown = open
-    if ctx then dock() end
+    if drag then
+        drag.idle = drag.idle + 1
+        if drag.idle > DRAG_LOST_TICKS then drop() end
+    end
+    if ctx and (open or not allHidden) then dock() end
 end
 
 -- Bring the targets back over the window, which a Show brings to the front.

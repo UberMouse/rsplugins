@@ -64,7 +64,6 @@ local reported = {} ---@type table<string, boolean>
 ---@field icon ui.Sprite? nil when the icon's name didn't resolve
 ---@field label ui.Text
 ---@field box ui.Sprite
----@field grip ui.Sprite? a list row's drag grip
 ---@field textX integer where the label starts in the row
 ---@field text string? the row's full text
 ---@field availWidth integer? the label width `text` was last fitted to
@@ -148,10 +147,9 @@ function M.new(content, y, icon, onClick, wheel, grip)
     end)
     if wheel then layer:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel) end
 
-    local gripSprite = nil ---@type ui.Sprite?
     local left = 0
     if grip then
-        gripSprite = ui.Sprite.new(layer)
+        local gripSprite = ui.Sprite.new(layer)
         gripSprite:SetPos(0, M.GRIP_Y)
         gripSprite:SetSize(M.GRIP_SIZE, M.GRIP_SIZE)
         gripSprite.clickthrough = true
@@ -193,7 +191,6 @@ function M.new(content, y, icon, onClick, wheel, grip)
             icon = sprite,
             label = label,
             box = box,
-            grip = gripSprite,
             textX = textX,
             shortened = false,
             hovered = false,

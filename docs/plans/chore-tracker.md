@@ -66,10 +66,9 @@ These are the user's calls. They aren't all visible in the code.
 
 ## Round 2: making the list nicer (decided 2026-10-29)
 
-The user's ideas from 2026-10-29, the calls they made, and what research found. Steps 1 and 2
-are built and user-checked in the client (step 2's ticked-box hover aside); step 3 is built, not
-yet checked in the client; the rest is not. Staged order, with a check-in in the beta client
-after each:
+The user's ideas from 2026-10-29, the calls they made, and what research found. Steps 1 to 3
+are built and user-checked in the client (step 2's ticked-box hover aside); the rest is not.
+Staged order, with a check-in in the beta client after each:
 
 1. **Celebration popup** (built `280a68a..c1b5a76`; `core/celebrate.lua`, `shell/popups.lua`).
    The user checked it in the client on 2026-10-29: the auto-tick popup, the period-clear popup
@@ -106,11 +105,14 @@ after each:
    arrives release-first. The native drag hooks never fire, so step 3 builds its drag from
    press, hold, release and the mouse position.
 3. **Reorder by drag, within each period.** Built (run R3: `5421b8c..db53909` the pure core,
-   `1470cee..63ea43a` the harness's press/hold/release driver, then the grip and drag), not yet
-   checked in the client. The order is the player's own, saved per character in
-   `state.selected`; a newly picked chore goes to the end of its period. The user's calls: a
-   grip at the row's left (`id.Sprite.HAMBURGER_MENU_ICON` 8122, 16 px) so a click anywhere
-   else still ticks; the grip's cursor `id.Cursor.CURSOR_PUSH` 196, over the grip and for the
+   `1470cee..63ea43a` the harness's press/hold/release driver, then the grip and drag), and
+   user-checked in the client 2026-10-29: the PUSH cursor over the grip, the rows sliding apart
+   while dragging, a drag that overshoots the window kept, the release dropping the row, the
+   order kept after `prl chore-tracker`, a click on the row ticking it while a click on the grip
+   doesn't, and the list scrolling while dragging past its edge. The order is the player's own,
+   saved per character in `state.selected`; a newly picked chore goes to the end of its period.
+   The user's calls: a grip at the row's left (`id.Sprite.HAMBURGER_MENU_ICON` 8122, 16 px) so
+   a click anywhere else still ticks; the grip's cursor `id.Cursor.CURSOR_PUSH` 196, over the grip and for the
    whole drag (both picked in probes, docs/api-concepts.md); live shift (the row follows the
    pointer, the period's other rows slide apart); auto-scroll past the list's edges; one press
    target per visible grip. The client's `ONDRAG` hooks never fired, and the drag probes v1-v3
@@ -232,10 +234,6 @@ it with location or a var. There is no interface-opened event.
   for an unknown var or config name is unconfirmed; the plugin handles both.
 - Console regex for all of the plugin's detection lines:
   `\[CHORES\] (purchase|collected|seen|unknown var)`.
-- Drag a chore by its grip (step 3): the PUSH cursor over the grip, the rows sliding apart, a
-  drag that overshoots the window and comes back, the drop kept after `prl chore-tracker`, a
-  click on the row (not the grip) still ticking, and the list scrolling while dragging past its
-  bottom edge. A drop logs `[CHORES] moved <chore id> to <n> in <period>`.
 
 ## Before submitting to Mod.io
 

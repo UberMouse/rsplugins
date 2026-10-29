@@ -477,6 +477,49 @@ describe("chore-tracker drag", function()
         assert.is_true(h.ui:release())
         assert.are.equal("daily-challenge", stored(h)[2])
     end)
+
+    it("keeps a drag held still for as long as the holds keep coming", function()
+        local h = ready()
+        local writes = h.dbWrites
+        local x, y = grab(h, "daily-challenge")
+        assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
+        for _ = 1, 50 do
+            h:advance(20)
+            assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
+        end
+        assert.are.equal(writes, h.dbWrites)
+        assert.are.equal(uiFake.width(h.instance.uiRoot), h.ui.pressing.s.proxy.width)
+        assert.is_true(h.ui:release())
+        assert.are.equal("daily-challenge", stored(h)[3])
+    end)
+
+    it("drops a drag whose holds stop with no release, as a release would", function()
+        local h = ready()
+        local firstY = rowY(h, "daily-challenge")
+        local writes = h.dbWrites
+        local x, y = grab(h, "daily-challenge")
+        assert.is_true(h.ui:moveTo(x, y + ROW))
+        h:advance(20)
+        assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
+        local target = h.ui.pressing.s.proxy
+        -- A few ticks without a hold are still a drag.
+        h:advance(100)
+        assert.are.equal(uiFake.width(h.instance.uiRoot), target.width)
+        assert.are.equal(writes, h.dbWrites)
+        -- Then it drops at the slot shown, saves, and docks the target back over its grip.
+        h:advance(300)
+        assert.are.equal(writes + 1, h.dbWrites)
+        assert.are.equal("daily-challenge", stored(h)[3])
+        assert.are.equal(firstY + 2 * ROW, rowY(h, "daily-challenge"))
+        assert.are.equal(target, targetOf(h, "daily-challenge"))
+        assert.matches("%[CHORES%] moved daily%-challenge to 3 in daily", h:output())
+        -- The fake still holds the button the client stopped reporting; end its press here.
+        h.ui.pressing = nil
+        -- The next click lands on its row again, and ticks it without moving anything.
+        helpers.tick(h, "Invention Machine")
+        assert.is_true(helpers.ticked(h, "Invention Machine"))
+        assert.are.equal("invention-machine", stored(h)[5])
+    end)
 end)
 
 describe("chore-tracker saved order", function()
@@ -514,8 +557,14 @@ describe("chore-tracker drag and other events", function()
         assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
         local pressed = h.ui.pressing.s
         h.world:logout()
-        h:advance(500)
+        -- The button stays down, so a hold comes every tick until the rebuild ends the press.
+        for _ = 1, 25 do
+            h:advance(20)
+            if pressed.destroyed then break end
+            assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
+        end
         assert.is_true(pressed.destroyed)
+        h:advance(500)
         assert.are.equal(0, #targets(h))
         assert.are.equal(writes, h.dbWrites)
         assert.are.same(DAILY, { table.unpack(stored(h), 1, 5) })

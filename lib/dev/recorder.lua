@@ -64,7 +64,7 @@ end
 local installed = false
 local active = false -- install() finished subscribing the flush; cleared by shutdown()
 local stopped = false -- set after an internal error; the stand-ins keep forwarding
-local sendFailed = false -- set if sending a batch raised; nothing more is sent
+local sendFailed = false -- set if flush raised outside starting a request; nothing more is sent
 local url = nil ---@type PluginURL?
 local pluginName, session = "", ""
 local tick = 0 -- Logic ticks since install
@@ -688,7 +688,8 @@ local function flush()
 end
 
 -- Not guard(flush): the entries just before a recording error are what explain it, so the
--- buffer keeps draining after recording stops. Only a failure to send stops sending.
+-- buffer keeps draining after recording stops. Only an unexpected error in flush stops sending;
+-- a request that fails to start just drops its batch.
 local function onLogic()
     if not active then return end
     tick = tick + 1

@@ -350,6 +350,16 @@ win:_RegisterOverlay(overlay, function() return visible end, function() syncs = 
         assert.matches("used after Destroy", harness.errorOf(h.env.w.Close, h.env.w))
     end)
 
+    it("faults destroying an untitled window whose registered overlay was destroyed", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, {})
+            overlay = ui.Layer.new(parent)
+            w:_RegisterOverlay(overlay, nil, function() end)
+            overlay:Destroy()
+        ]])
+        assert.matches("used after Destroy", harness.errorOf(h.env.w.Destroy, h.env.w))
+    end)
+
     it("hides its title-bar drag layer on Close, and Show raises the root then it", function()
         local h = load(WINDOW .. [[
 other = ui.Layer.new(parent)

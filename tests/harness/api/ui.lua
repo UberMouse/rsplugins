@@ -277,6 +277,8 @@ local function storedField(member)
 end
 
 -- Assigning `member` stores the value if `accepts` it, else faults with `expected`.
+-- Cursor/op config states carry `owner` (their component), whose liveness gates them; a
+-- component's own state has no `owner` and is checked directly.
 ---@param member string
 ---@param accepts fun(value: any): boolean
 ---@param expected string

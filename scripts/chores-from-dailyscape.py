@@ -366,7 +366,7 @@ def render(chores):
         "--",
     ]
     lines += [("-- " + l).rstrip() for l in LICENSE.splitlines()]
-    lines += ["", "return {"]
+    lines += ["", "---@type Chore[]", "return {"]
     for c in chores:
         lines.append("    {")
         for field in ("id", "name", "period"):

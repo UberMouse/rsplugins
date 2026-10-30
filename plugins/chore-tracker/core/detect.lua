@@ -63,11 +63,6 @@ function M.rose(before, after, names)
     return false
 end
 
----@class ChoreTile
----@field x integer world tile x
----@field z integer world tile z
----@field level integer the plane, 0-3
-
 -- Whether tiles `a` and `b` are on the same plane and at most `range` tiles apart in each
 -- direction (Chebyshev distance, so the area is a square).
 ---@param a ChoreTile

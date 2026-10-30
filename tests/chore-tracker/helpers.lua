@@ -7,7 +7,7 @@ local catalog = require("tests.harness.catalog")
 local uiFake = require("tests.harness.api.ui")
 local support = require("tests.chore-tracker.support")
 local fit = require("core/fit")
-local varCore = require("core/vars")
+local varsCore = require("core/vars")
 local varRules = require("data/vars")
 local chores = require("data/chores")
 local view = require("core/view")
@@ -137,7 +137,7 @@ function M.loaded(opts)
     local h = harness.new("chore-tracker", { grant = opts.grant })
     h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", opts.clock or M.NOW)
     for _, rule in ipairs(varRules) do
-        for _, name in ipairs(varCore.names(rule)) do
+        for _, name in ipairs(varsCore.names(rule)) do
             h.world:setVar("VarPlayer", name, 0)
         end
     end

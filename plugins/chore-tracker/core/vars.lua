@@ -8,6 +8,9 @@
 -- condition with an operand it can't work out (a var with no value, or the RuneDay without a
 -- clock) doesn't hold. A rule may also name, as `rises`, a var whose going up is what ticks
 -- its chore.
+--
+-- LuaLS checks the rule operators and operand types in data/vars.lua through ChoreVarRule
+-- below, so the `---@type ChoreVarRule[]` line over that data is what enforces them.
 
 local M = {}
 

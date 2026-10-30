@@ -1,8 +1,13 @@
 -- Chores done by collecting from someone who is no shop, hand-written. The goods arrive as
 -- banknotes with no shop open, so shell/detect.lua ticks one when its notes rise near `tile`
--- (core/shops.lua, near). Tiles are the wiki's NPC map pins. `proven` marks notes seen
+-- (core/detect.lua, near). Tiles are the wiki's NPC map pins. `proven` marks notes seen
 -- arriving in the beta client (docs/api-concepts.md, "Shops in the client"); an unproven
 -- one's note name is from docs/api/consts/Obj.lua.
+
+---@class ChoreTile
+---@field x integer world tile x
+---@field z integer world tile z
+---@field level integer the plane, 0-3
 
 ---@class ChoreCollection
 ---@field chore string the chore id

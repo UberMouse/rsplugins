@@ -1,10 +1,10 @@
--- core/shops (spotting a purchase in a shop's counts) and the hand-written shop list,
+-- core/detect (spotting a purchase in a shop's counts) and the hand-written shop list,
 -- data/shops.lua.
 
 require("tests.chore-tracker.support")
 local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
-local shopCore = require("core/shops")
+local detect = require("core/detect")
 local shops = require("data/shops")
 
 describe("chore-tracker shops core", function()
@@ -12,7 +12,7 @@ describe("chore-tracker shops core", function()
         local a = { name = "A", invs = { "INV_A" }, proven = true }
         local b = { name = "B", invs = { "INV_B" }, proven = false }
         local c = { name = "C", invs = { "INV_C1", "INV_C2" }, proven = false }
-        local index = shopCore.index({ two = { a, b }, one = { b }, three = { c } })
+        local index = detect.index({ two = { a, b }, one = { b }, three = { c } })
         assert.are.same({ { chore = "two", shop = a } }, index.INV_A)
         -- Each of a shop's inventories leads to the same shop.
         assert.are.same({ { chore = "three", shop = c } }, index.INV_C1)
@@ -22,31 +22,31 @@ describe("chore-tracker shops core", function()
     end)
 
     it("sees a purchase only in a count that drops", function()
-        assert.is_true(shopCore.dropped({ 20, 5 }, { 20, 4 }))
-        assert.is_true(shopCore.dropped({ 20, 5 }, { 0, 5 }))
-        assert.is_false(shopCore.dropped({ 20, 5 }, { 20, 5 }))
-        assert.is_false(shopCore.dropped({ 20, 5 }, { 25, 6 }))
+        assert.is_true(detect.dropped({ 20, 5 }, { 20, 4 }))
+        assert.is_true(detect.dropped({ 20, 5 }, { 0, 5 }))
+        assert.is_false(detect.dropped({ 20, 5 }, { 20, 5 }))
+        assert.is_false(detect.dropped({ 20, 5 }, { 25, 6 }))
         -- A slot only one side has (a shop that grew a line) isn't compared.
-        assert.is_false(shopCore.dropped({ 20 }, { 20, 3 }))
-        assert.is_false(shopCore.dropped({ 20, 3 }, { 20 }))
+        assert.is_false(detect.dropped({ 20 }, { 20, 3 }))
+        assert.is_false(detect.dropped({ 20, 3 }, { 20 }))
     end)
 
     it("sees a rise in any named count", function()
         local both = { "A", "B" }
-        assert.is_true(shopCore.rose({ A = 0, B = 5 }, { A = 30, B = 5 }, both))
-        assert.is_false(shopCore.rose({ A = 30, B = 5 }, { A = 0, B = 5 }, both))
-        assert.is_false(shopCore.rose({ A = 3 }, { A = 3, B = 9 }, both))
+        assert.is_true(detect.rose({ A = 0, B = 5 }, { A = 30, B = 5 }, both))
+        assert.is_false(detect.rose({ A = 30, B = 5 }, { A = 0, B = 5 }, both))
+        assert.is_false(detect.rose({ A = 3 }, { A = 3, B = 9 }, both))
         -- Only the names asked about count.
-        assert.is_false(shopCore.rose({ A = 0, B = 5 }, { A = 30, B = 5 }, { "B" }))
+        assert.is_false(detect.rose({ A = 0, B = 5 }, { A = 30, B = 5 }, { "B" }))
     end)
 
     it("is near within the range on each axis, on the same plane only", function()
         local spot = { x = 2763, z = 3186, level = 0 }
-        assert.is_true(shopCore.near({ x = 2763, z = 3186, level = 0 }, spot, 10))
-        assert.is_true(shopCore.near({ x = 2773, z = 3176, level = 0 }, spot, 10))
-        assert.is_false(shopCore.near({ x = 2774, z = 3186, level = 0 }, spot, 10))
-        assert.is_false(shopCore.near({ x = 2763, z = 3175, level = 0 }, spot, 10))
-        assert.is_false(shopCore.near({ x = 2763, z = 3186, level = 1 }, spot, 10))
+        assert.is_true(detect.near({ x = 2763, z = 3186, level = 0 }, spot, 10))
+        assert.is_true(detect.near({ x = 2773, z = 3176, level = 0 }, spot, 10))
+        assert.is_false(detect.near({ x = 2774, z = 3186, level = 0 }, spot, 10))
+        assert.is_false(detect.near({ x = 2763, z = 3175, level = 0 }, spot, 10))
+        assert.is_false(detect.near({ x = 2763, z = 3186, level = 1 }, spot, 10))
     end)
 end)
 

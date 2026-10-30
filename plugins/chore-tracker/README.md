@@ -215,6 +215,11 @@ permissions") is true only after that check passes.
 
 ## Files
 
+Code requires a module under its file name (`local state = require("core/state")`), with a
+`Core` suffix on a `core/` module when a same-named `data/` or `shell/` module is required in
+the same file (`detectCore` beside `detect`). `data/vars.lua` is `varRules`, as `core/vars.lua`
+and `shell/vars.lua` share its name.
+
 | File | What |
 |---|---|
 | `main.lua` | The two views, list and settings, ticking and picking, and following the login and clock |
@@ -228,7 +233,7 @@ permissions") is true only after that check passes.
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began, and the RuneDay (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
-| `core/shops.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
+| `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
 | `core/view.lua` | What the list shows, as plain data |
 | `core/fit.lua` | Cutting a row's name short with "..." so it fits before the tick box |

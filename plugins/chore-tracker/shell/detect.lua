@@ -1,13 +1,13 @@
 -- Seeing chores done from what the client shows the player: purchases at the shops in
 -- data/shops.lua, and banknotes collected near the givers in data/collections.lua. It reads
 -- only those shops' inventories, the backpack, and the player's own tile; the pure
--- comparisons are in core/shops.lua.
+-- comparisons are in core/detect.lua.
 --
 -- main.lua subscribes the inventory events to the handlers here and hands in an `apply`
 -- that changes the tracker, so this module keeps no chore state of its own: only the last
 -- counts it read, to compare the next ones with.
 
-local shopCore = require("core/shops")
+local detectCore = require("core/detect")
 local state = require("core/state")
 
 local M = {}
@@ -27,7 +27,7 @@ local BACKPACK = "INV"
 ---clock.
 ---@field apply fun(change: ChoreChange)
 
----@class ChoreShopHit a core/shops ChoreShopEntry with its chore resolved
+---@class ChoreShopHit a core/detect ChoreShopEntry with its chore resolved
 ---@field chore Chore
 ---@field shop ChoreShop
 
@@ -64,7 +64,7 @@ function M.init(o)
     -- unconfirmed.
     shopIndex, invTypes = {}, {}
     -- Chore ids resolve for every shop, watched or not.
-    for name, indexed in pairs(shopCore.index(o.shops)) do
+    for name, indexed in pairs(detectCore.index(o.shops)) do
         local entries = {} ---@type ChoreShopHit[]
         for i, entry in ipairs(indexed) do
             entries[i] = { chore = state.resolve(o.chores, entry.chore, "data"), shop = entry.shop }
@@ -195,8 +195,8 @@ local function onNotesRose(before, after)
     for _, hit in ipairs(collectionHits) do
         local collection = hit.collection
         if
-            shopCore.rose(before, after, collection.notes)
-            and shopCore.near(at, collection.tile, collection.range)
+            detectCore.rose(before, after, collection.notes)
+            and detectCore.near(at, collection.tile, collection.range)
         then
             options.apply(function(tracker, now)
                 local ticked = state.autoMark(tracker, hit.chore, now)
@@ -212,7 +212,7 @@ end
 local function onBackpack()
     local before, after = noteCounts, readNotes()
     noteCounts = after
-    if before and after and shopCore.rose(before, after, noteNames) then
+    if before and after and detectCore.rose(before, after, noteNames) then
         onNotesRose(before, after)
     end
 end
@@ -247,7 +247,7 @@ function M.onInventoryUpdated(ev)
     if not shopIndex[name] then return end
     local before, after = shopCounts[name], readCounts(ev.inv)
     shopCounts[name] = after
-    if before and after and shopCore.dropped(before, after) then onPurchase(name) end
+    if before and after and detectCore.dropped(before, after) then onPurchase(name) end
 end
 
 ---@param ev InventoryRemovedEventPayload

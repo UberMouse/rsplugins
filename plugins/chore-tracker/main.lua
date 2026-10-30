@@ -42,16 +42,16 @@ local varRules = require("data/vars")
 local celebrate = require("core/celebrate")
 local layout = require("core/layout")
 local listlayout = require("core/listlayout")
-local settingsCore = require("core/settings")
+local settings = require("core/settings")
 local state = require("core/state")
 local view = require("core/view")
 local detect = require("shell/detect")
 local grips = require("shell/grips")
 local popups = require("shell/popups")
-local internals = require("shell/prettyui_internals")
+local prettyui_internals = require("shell/prettyui_internals")
 local rows = require("shell/rows")
 local store = require("shell/store")
-local varDetect = require("shell/vars")
+local vars = require("shell/vars")
 local window = require("shell/window")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
@@ -91,7 +91,7 @@ local headings = {} ---@type table<string, ui.Text>
 -- while PrettyUI is still handling its click, and a view switch rebuilds the window.
 local pendingMode = nil ---@type ChoreMode?
 -- The celebration settings, for all characters.
-local celebrations = settingsCore.default()
+local celebrations = settings.default()
 
 ---------------------------------------------------------------------------
 -- Reading the game
@@ -216,7 +216,7 @@ local function buildList(w, openSettings)
         lists[i] = sectionIds(section.period, section.rows)
     end
     local spots = listlayout.place(lists, top)
-    local wheel = internals.wheelHandler(w)
+    local wheel = prettyui_internals.wheelHandler(w)
     for _, section in ipairs(sections) do
         headings[section.period] =
             w:AddTitle({ text = view.headingText(section), y = spots.headings[section.period] })
@@ -229,7 +229,7 @@ local function buildList(w, openSettings)
     w:SetContentHeight(spots.height)
     refreshList()
     -- The grips' press targets sit over the window, placed from its viewport (see grips.lua).
-    local viewport = internals.viewport(w)
+    local viewport = prettyui_internals.viewport(w)
     if viewport ~= nil then
         grips.build({
             -- The plugin layer takes children (docs/api-concepts.md, "UI"); GetComponent's
@@ -239,13 +239,13 @@ local function buildList(w, openSettings)
             rows = rowViews,
             sections = lists,
             scrollY = function()
-                return internals.scrollPosition(w)
+                return prettyui_internals.scrollPosition(w)
             end,
             scrollTo = function(y)
                 w:SetScrollPosition(y)
             end,
             wheel = wheel,
-            watchSync = internals.overlaySync(w, parent --[[@as ui.ComponentCollection]]),
+            watchSync = prettyui_internals.overlaySync(w, parent --[[@as ui.ComponentCollection]]),
             onDrop = onDrop,
         })
     end
@@ -296,7 +296,7 @@ local function buildSettings(w)
         sections[i] = sectionIds(group.period, group.chores)
     end
     local spots = listlayout.place(sections, switches.root.y + switches.root.height)
-    local wheel = internals.wheelHandler(w)
+    local wheel = prettyui_internals.wheelHandler(w)
     for _, group in ipairs(groups) do
         w:AddTitle({ text = group.title, y = spots.headings[group.period] })
         for _, chore in ipairs(group.chores) do
@@ -396,7 +396,7 @@ detect.init({
     say = say,
     apply = apply,
 })
-varDetect.init({ chores = chores, rules = varRules, say = say, apply = apply })
+vars.init({ chores = chores, rules = varRules, say = say, apply = apply })
 
 ---------------------------------------------------------------------------
 -- Following the game
@@ -424,7 +424,7 @@ local function sync(clockTicked)
             say("logged out")
         end
         detect.scan()
-        varDetect.scan()
+        vars.scan()
     end
     if switched or nextPhase ~= phase then
         if nextPhase == "waiting" and phase ~= "waiting" then say("waiting for the game clock") end
@@ -444,7 +444,7 @@ end
 ---------------------------------------------------------------------------
 
 Event.Logic.Subscribe("chore-tracker", function(ev)
-    varDetect.tick()
+    vars.tick()
     -- Before the view switch: a panel retired by expand last tick is past its click.
     window.dropRetired()
     if pendingMode then
@@ -463,7 +463,7 @@ end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)
     if ev.var.id == CLOCK_ID and ev.var.typeName == CLOCK_DOMAIN then sync(true) end
-    varDetect.onVarTransmit(ev)
+    vars.onVarTransmit(ev)
 end)
 
 Event.InventoryAdded.Subscribe("chore-tracker", detect.onInventoryAdded)

@@ -4,7 +4,7 @@
 Usage: python3 -I scripts/var-dump-analyze.py [snapshot.jsonl] [options]
 
   snapshot.jsonl     a snapshot from the var-dump plugin (default: the newest
-                     dumps/var-dump/snapshot-*.jsonl)
+                     dumps/var-dump/snapshot-*.jsonl; .partial files are skipped)
   --changes PATH     the VarTransmit log (default: changes.jsonl next to the
                      snapshot, if it exists); only read, never written
   --compare PATH     an older snapshot to diff against (default: the snapshot
@@ -45,7 +45,8 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-DUMP_DIR = Path("dumps/var-dump")
+ROOT = Path(__file__).resolve().parents[1]
+DUMP_DIR = ROOT / "dumps/var-dump"
 
 # --- Family tree tuning -------------------------------------------------------
 LEAF_MAX = 60   # a group with more members than this is split by its next name token
@@ -233,6 +234,12 @@ def read_jsonl(path):
                 yield json.loads(line)
             except json.JSONDecodeError:
                 print(f"{path}:{number}: skipping unparsable line", file=sys.stderr)
+
+
+def list_snapshots(directory):
+    """Complete snapshots in a directory, oldest first. The pattern ends in .jsonl, so the
+    receiver's snapshot-*.jsonl.partial files (an upload still running, or abandoned) never match."""
+    return sorted(directory.glob("snapshot-*.jsonl"))  # names sort by time
 
 
 def snapshot_time(path):
@@ -801,13 +808,13 @@ def main():
     parser.add_argument("--changes", type=Path)
     parser.add_argument("--compare", help='older snapshot, or "none"')
     parser.add_argument("--out", type=Path, default=DUMP_DIR / "analysis")
-    parser.add_argument("--catalog", type=Path, nargs="?", const=Path("docs/vars"),
-                        help="also write the value-free catalog (default dir: docs/vars)")
+    parser.add_argument("--catalog", type=Path, nargs="?", const=ROOT / "docs/vars",
+                        help="also write the value-free catalog (default dir: <repo>/docs/vars)")
     args = parser.parse_args()
 
     snapshot = args.snapshot
     if snapshot is None:
-        found = sorted(DUMP_DIR.glob("snapshot-*.jsonl"))  # names sort by time
+        found = list_snapshots(DUMP_DIR)
         if not found:
             sys.exit(f"no snapshot-*.jsonl in {DUMP_DIR}; pass a path")
         snapshot = found[-1]
@@ -817,7 +824,7 @@ def main():
     elif args.compare:
         compare = Path(args.compare)
     else:
-        older = [p for p in sorted(snapshot.parent.glob("snapshot-*.jsonl")) if p.name < snapshot.name]
+        older = [p for p in list_snapshots(snapshot.parent) if p.name < snapshot.name]
         compare = older[-1] if older else None
     out = args.out
     out.mkdir(parents=True, exist_ok=True)

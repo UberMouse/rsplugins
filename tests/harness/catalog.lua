@@ -12,6 +12,10 @@ local M = {}
 local vars = nil ---@type table?
 local configs = {}
 
+-- The vars.csv columns the line pattern below reads by position; mirrors CATALOG_FIELDS in
+-- scripts/var-dump-analyze.py, the generator.
+local EXPECTED_HEADER = "domain,id,name,family,group,type,base_var,bits"
+
 -- A VarBit's "lo-hi" bit range (vars.csv `bits` column).
 ---@param bits string
 ---@return integer lo
@@ -39,7 +43,18 @@ local function loadVars()
     for rawLine in io.lines(file) do
         local line = rawLine:gsub("\r$", "") -- the CSV has CRLF line endings
         if first then
-            first = false -- header row
+            first = false
+            -- Rows are matched by position below, so a reordered or extended CSV must fail here.
+            assert(
+                line == EXPECTED_HEADER,
+                file
+                    .. " header is '"
+                    .. line
+                    .. "', expected '"
+                    .. EXPECTED_HEADER
+                    .. "': the catalog format changed; rerun scripts/var-dump-analyze.py --catalog"
+                    .. " (its CATALOG_FIELDS is the column list)"
+            )
         else
             local domain, id, name, _, _, typeName, baseVar, bits =
                 line:match("^([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*)$")

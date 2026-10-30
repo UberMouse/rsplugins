@@ -22,8 +22,11 @@ copy the folder instead (see [docs/testing.md](../../docs/testing.md#opting-a-pl
    [api-concepts.md](../../docs/api-concepts.md#seen-with-dev-bridge-2026-10-26)).
    Be logged in first, or the snapshot is empty. (`httpAccess` is optional rather than required
    because `requiredPermissions` is currently broken in the client.)
-3. Each enable/reload writes a new `snapshot-<time>.jsonl`. While the plugin is on, updates are
-   appended to `changes.jsonl`.
+3. Each enable/reload writes a new `snapshot-<time>.jsonl`, as `snapshot-<time>.jsonl.partial`
+   until the last part arrives, so a snapshot the plugin abandoned stays `.partial` and
+   `var-dump-analyze.py` (which only looks at `.jsonl`) never picks it. While the plugin is on,
+   updates are appended to `changes.jsonl`. The receiver refuses (403) requests whose `Host` or
+   `Origin` isn't `127.0.0.1` or `localhost`.
 
 Uploads to the receiver go one `/changes` request at a time; bodies built meanwhile queue (100 at
 most, the oldest dropped first and counted in one console line once uploads succeed again). When

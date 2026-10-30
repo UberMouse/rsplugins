@@ -3,8 +3,8 @@
 
 Usage: python3 -I scripts/var-dump-changes.py [options]
 
-  --changes PATH   the VarTransmit log (default: dumps/var-dump/changes.jsonl)
-  --catalog PATH   the var catalog with VarBit layout (default: docs/vars/vars.csv)
+  --changes PATH   the VarTransmit log (default: <repo>/dumps/var-dump/changes.jsonl)
+  --catalog PATH   the var catalog with VarBit layout (default: <repo>/docs/vars/vars.csv)
   --after SEQ      only changes after this seq (the "last seq" a previous run printed)
   --last-session   only the newest session (the var-dump plugin restarts seq at each load)
   --match REGEX    only changes whose var, or a VarBit that moved, matches REGEX
@@ -22,6 +22,10 @@ import argparse
 import csv
 import json
 import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 # Prefixes of vars that change constantly (clocks, timers, interface state) and drown a probe.
 NOISE = (
@@ -50,10 +54,24 @@ def field(value, lo, hi):
     return ((value & 0xFFFFFFFF) >> lo) & ((1 << (hi - lo + 1)) - 1)
 
 
+def read_jsonl(path):
+    """Parsed lines of a JSONL file; a torn line (the receiver may be mid-append) is skipped."""
+    rows = []
+    with open(path) as f:
+        for number, line in enumerate(f, 1):
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                print(f"{path}:{number}: skipping unparsable line", file=sys.stderr)
+    return rows
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--changes", default="dumps/var-dump/changes.jsonl")
-    p.add_argument("--catalog", default="docs/vars/vars.csv")
+    p.add_argument("--changes", default=ROOT / "dumps/var-dump/changes.jsonl")
+    p.add_argument("--catalog", default=ROOT / "docs/vars/vars.csv")
     p.add_argument("--after", type=int, default=None)
     p.add_argument("--last-session", action="store_true")
     p.add_argument("--match", type=re.compile, default=None)
@@ -61,12 +79,11 @@ def main():
     args = p.parse_args()
 
     bits, types = load_catalog(args.catalog)
-    with open(args.changes) as f:
-        rows = [json.loads(line) for line in f if line.strip()]
+    rows = read_jsonl(args.changes)
     if args.last_session:
         start = 0
         for i in range(1, len(rows)):
-            if rows[i]["seq"] < rows[i - 1]["seq"]:
+            if rows[i]["seq"] <= rows[i - 1]["seq"]:
                 start = i
         rows = rows[start:]
 

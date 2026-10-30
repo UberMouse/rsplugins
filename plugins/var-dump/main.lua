@@ -19,12 +19,27 @@ local SUBS = {
     Logic = "varDumpSnapshot",
 }
 
+-- Requests still running, mapped to their body. Holding both stops them being
+-- garbage collected before the request finishes, in case the client doesn't
+-- copy the body. PluginShutdown cancels them.
+local inFlight = {}
+
 -- Defined before anything below can fail, so a failing load still unsubscribes. Unsubscribing
--- a name that was never subscribed returns false, so the not-yet-granted case is fine.
--- Direct calls, never an API function handed to pcall (docs/api-concepts.md).
+-- a name that was never subscribed returns false (live-probed, docs/testing.md fidelity
+-- ledger), so the not-yet-granted case is fine. Event calls are direct and Cancel runs in a
+-- closure, never an API function handed to pcall (docs/api-concepts.md).
 function PluginShutdown()
     for event, name in pairs(SUBS) do
         Event[event].Unsubscribe(name)
+    end
+    -- Swap so a completion firing from Cancel clears the new table, not the one being walked,
+    -- and `running` keeps every body referenced until the cancels finish.
+    local running = inFlight
+    inFlight = {}
+    for request in pairs(running) do
+        pcall(function()
+            request:Cancel()
+        end)
     end
 end
 
@@ -169,11 +184,6 @@ end
 ---------------------------------------------------------------------------
 -- Sending to the receiver
 ---------------------------------------------------------------------------
-
--- Requests still running, mapped to their body. Holding both stops them being
--- garbage collected before the request finishes, in case the client doesn't
--- copy the body.
-local inFlight = {}
 
 -- Log why a request failed, with a hint for the common case.
 local function reportFailure(request)

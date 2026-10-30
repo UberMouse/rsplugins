@@ -1,5 +1,5 @@
 -- ui.Interfaces:GetComponent for the plugin root layer, id.Component for its name, the
--- fake components the PrettyUI fake (api/prettyui.lua) builds on it, ui.Layer/Sprite/Text.new
+-- fake components the PrettyUI fake (api/prettyui/) builds on it, ui.Layer/Sprite/Text.new
 -- for a plugin's own components, ui.Hook and ui.AlignMode, and id.Sound, id.Font, id.Sprite
 -- and id.Obj by name. Nothing else under `ui` or `id` is modelled: any other member faults as
 -- unmocked.

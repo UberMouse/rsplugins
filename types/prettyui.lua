@@ -1,6 +1,6 @@
 ---@meta
 -- LuaLS types for the part of PrettyUI 1.2.0 (mod.io 6398181, https://prettyui.j3.gg) that
--- the test harness fakes (tests/harness/api/prettyui.lua). Written from the installed 1.2.0
+-- the test harness fakes (tests/harness/api/prettyui/). Written from the installed 1.2.0
 -- source and the docs site; PrettyUI ships without a licence, so nothing here is copied from
 -- it. A plugin that lists it, e.g. `"requiredDependencies": { "prettyui": 6398181 }`, gets
 -- it as the global `prettyui` (docs/plugin-anatomy.md). Declare a member here only when the

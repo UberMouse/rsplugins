@@ -233,7 +233,7 @@ end
 ---------------------------------------------------------------------------
 
 -- One logic step: deliver answered HTTP requests, then queued chat messages, then snap back
--- PrettyUI roots moved by a bare SetPos (api/prettyui.lua), then fire Logic, and ServerLogic
+-- PrettyUI roots moved by a bare SetPos (api/prettyui/), then fire Logic, and ServerLogic
 -- every SERVER_TICK steps. The order within a step is the harness's choice;
 -- the client's is undocumented. Replaying, the recording's entries for this tick go around
 -- Logic, and a recording that has ServerLogic events supplies it until it ends.

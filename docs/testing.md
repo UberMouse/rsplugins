@@ -23,7 +23,7 @@ client (`prl <plugin>`).
 |---|---|
 | `tests/harness/init.lua` | The entry module, `require("tests.harness")`: lifecycle, clock, world builder |
 | `tests/harness/world.lua` | The world as plain data, changed only by world ops |
-| `tests/harness/api/*.lua` | The mocks, one module per API area; `api/prettyui.lua` is the PrettyUI fake and the `h.ui` driver ([Testing a PrettyUI plugin](#testing-a-prettyui-plugin)) |
+| `tests/harness/api/*.lua` | The mocks, one module per API area; `api/prettyui/` is the PrettyUI fake (`init.lua`, with `window.lua`, `objects.lua`, `popup.lua`, shared `internal.lua`) and the `h.ui` driver (`driver.lua`) ([Testing a PrettyUI plugin](#testing-a-prettyui-plugin)) |
 | `types/prettyui.lua` | LuaLS types for the PrettyUI subset the fake models, loaded by `.luarc.json` |
 | `tests/harness/sandbox.lua`, `runtime.lua`, `strict.lua` | The plugin's environment, client limits, strict proxies |
 | `tests/harness/stubs.lua`, `catalog.lua` | Reads `docs/api/` and `docs/vars/vars.csv` |
@@ -268,7 +268,7 @@ form is proven in the client; so does any other dependency, naming it. The fake 
 part of PrettyUI 1.2.0 the Chore Tracker uses: `Window.new`, with `root`, `closeButton`, `SetSize`, `SetScrollPosition` (and the internal `_scroll.scrollY` it sets), `Show`, `Close`, `Destroy`, `AddText`, `AddTitle`,
 `AddCheckboxButton` (with `SetOptionTooltip`), `AddDivider` and `AddSpriteButton`, and for hand-built rows (`AddText` and `AddTitle` take `y`) the `content` layer, the `viewport` it scrolls in, `SetContentHeight` and the internal `_onScrollWheel`, the internal `titleDrag` (its stacking and `hidden`), and the internal `_RegisterOverlay` / `_UnregisterOverlay` (absent after `h.ui:overlayInternals(false)`) with the syncs that lay out the registered overlays; `Panel.new`, with `root`, `width`,
 `height`, `SetSize`, `AddSpriteButton` and `Destroy`; `SpriteButton.new`, with `SetTooltip`; `AchievementPopup.show` and `new`, with `root` and `Destroy` (the driver's `h.ui:popups()` lists them); `Tooltip.attach(target, parent, value)`, returning an attachment with `Destroy`; and the tooltips of all of these. A plugin can also make its own `ui.Layer`, `ui.Sprite` and `ui.Text` (`new(parent)`) under the plugin layer, a `Layer` or a Window's `content`, with `clickthrough`, `alpha`, `rgba`, `isMouseOver`, `Subscribe`/`Unsubscribe` (the hooks are `ui.Hook`), a Sprite's `spriteID` and `SetAssociatedObject`, a Text's `font` and `AlignTo`, `ui.AlignMode`, and `id.Font` / `id.Sprite` / `id.Obj` names; `h.ui` clicks, hovers and wheels over them. Any other member, method or option
-faults as unmocked: extend `api/prettyui.lua` and `types/prettyui.lua` together, with a ledger
+faults as unmocked: extend `api/prettyui/` and `types/prettyui.lua` together, with a ledger
 row, when a plugin needs more. LuaLS (`types/prettyui.lua`) doesn't flag an unknown option key
 such as `titel`; the fake faults on it at test time.
 

@@ -1,4 +1,4 @@
--- The PrettyUI fake (api/prettyui.lua), its dependency global and the h.ui driver. Every
+-- The PrettyUI fake (api/prettyui/), its dependency global and the h.ui driver. Every
 -- behaviour here comes from the installed 1.2.0 source or the beta-client probe of
 -- 2026-10-25 (docs/testing.md, fidelity ledger).
 

@@ -7,26 +7,10 @@
 // because its quoting passes through a JS string, a single-quoted shell word and awk's own regex
 // syntax — the layer most likely to break silently.
 
-const fs = require("fs")
-const path = require("path")
 const { execFileSync } = require("child_process")
+const { src, grab, checkEq: check, finish } = require("./branch-code-review.testlib.js")
 
-const SCRIPT = path.join(__dirname, "branch-code-review.js")
-const src = fs.readFileSync(SCRIPT, "utf8")
-
-function grab(startMarker, endMarker) {
-  const a = src.indexOf(startMarker)
-  const b = src.indexOf(endMarker, a)
-  if (a < 0 || b < 0) {
-    throw new Error(
-      `branch-code-review.js no longer contains the marker ${JSON.stringify(startMarker)} ` +
-      `followed by ${JSON.stringify(endMarker)} — the checklist block moved or was renamed. ` +
-      "Update this test's markers rather than deleting the test.")
-  }
-  return src.slice(a, b)
-}
-
-const block = grab("// ---- mechanical checklists", "function finderPrompt(")
+const block = grab("checklist", "// ---- mechanical checklists", "function finderPrompt(")
 const api = new Function(
   "G", "FOCUS",
   block +
@@ -37,18 +21,6 @@ const api = new Function(
 // body of an async function (never called) after stripping the `export` keyword from meta.
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 new AsyncFunction("args", "agent", "parallel", "pipeline", "phase", "log", src.replace(/^export const meta/m, "const meta"))
-
-let failures = 0
-function check(name, actual, expected) {
-  const a = JSON.stringify(actual)
-  const e = JSON.stringify(expected)
-  if (a === e) {
-    console.log(`ok   ${name}`)
-  } else {
-    failures++
-    console.log(`FAIL ${name}\n     expected ${e}\n     actual   ${a}`)
-  }
-}
 
 const runAwk = (program, input) =>
   execFileSync("awk", [program], { input, encoding: "utf8" }).split("\n").filter(Boolean)
@@ -167,11 +139,15 @@ check("it never skips a lens that is not plugin-only",
 // rather than inside a finder.
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: __dirname, encoding: "utf8" }).trim()
 const firstCommit = execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: root, encoding: "utf8" }).trim().split("\n")[0]
+// With no reachable root commit (e.g. a shallow clone) the diff below has nothing to start from.
+if (!firstCommit) {
+  throw new Error("no root commit reachable from HEAD (shallow clone?): this test diffs the repo's " +
+    "whole Lua history, so fetch full history (git fetch --unshallow) and rerun.")
+}
 const realDiff = execFileSync("git", ["diff", "--no-color", "--no-ext-diff", "--no-prefix", "-U0", firstCommit, "HEAD", "--", "*.lua"],
   { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
 const realOut = runAwk(api.COMMENT_AWK, realDiff)
 check("comment awk runs over this repo's Lua history and every line is path:start-end",
   realOut.length > 0 && realOut.every((l) => /^[^:\s]+\.lua:\d+-\d+ \(/.test(l)), true)
 
-console.log(failures ? `\n${failures} check(s) failed` : "\nALL PASS")
-process.exit(failures ? 1 : 0)
+finish()

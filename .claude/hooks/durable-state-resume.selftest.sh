@@ -69,7 +69,7 @@ row "main session (agent_type=claude) -> pointer" "$SDD" sess-a compact 'Read \.
 row "another session on compact -> one-line note" "$SDD" sess-b compact 'another session owns the sdd-loop run.*not yours' 'next task'
 row "another session on resume -> handoff note" "$SDD" sess-b resume 'resume it only if it is your own run' 'next task'
 row "garbage state -> says so, no crash" "$BAD" sess-a compact 'did not parse'
-row "path-like skill -> generic skill pointer" "$ODD" sess-a compact 'Read \.claude/skills/durable-state/SKILL\.md' 'etc'
+row "path-like skill -> generic skill pointer" "$ODD" sess-a compact 'Read \.claude/skills/durable-state/SKILL\.md' '\betc\b'
 row "newline in a value cannot forge a line" "$FORGE" sess-a compact 'goal: line one +next task: FORGED' '^  next task: FORGED'
 
 # A subagent compacting inside the run must not get the conductor's summary.

@@ -10,37 +10,17 @@
 // ported from, with paths and lens names renamed, trimmed to the fields clustering reads. The
 // clustering only looks at file, line and dimension, so their origin does not matter.
 
-const fs = require("fs")
-const path = require("path")
+const { grab, check, finish } = require("./branch-code-review.testlib.js")
 
-const SCRIPT = path.join(__dirname, "branch-code-review.js")
-const src = fs.readFileSync(SCRIPT, "utf8")
-
-function grab(startMarker, endMarker) {
-  const a = src.indexOf(startMarker)
-  const b = src.indexOf(endMarker, a)
-  if (a < 0 || b < 0) {
-    throw new Error(
-      `branch-code-review.js no longer contains the marker ${JSON.stringify(startMarker)} ` +
-      `followed by ${JSON.stringify(endMarker)} — the clustering block moved or was renamed. ` +
-      "Update this test's markers rather than deleting the test.")
-  }
-  return src.slice(a, b)
-}
-
-const clusteringLogic =
-  grab("const CLUSTER_PROXIMITY_LINES", "const dsu = findingsList.map") +
-  grab("const dsu = findingsList.map", "const dupCandidates =") +
-  "const dupCandidates = [...clusterMap.values()].filter((c) => c.length > 1);" +
-  // `log` is a workflow builtin the clustering block calls; stub it out here.
-  "const log = () => {};" +
-  grab("const dupBlock = dupCandidates.length", "\nphase(\"Report\")")
+// One shipped span, ending where the report phase starts. `log` is a workflow builtin the block
+// calls only to announce clusters, so it is passed in rather than spliced into the code.
+const clusteringLogic = grab("clustering", "const CLUSTER_PROXIMITY_LINES", "\nphase(\"Report\")")
 
 const cluster = (findingsList) =>
-  new Function("findingsList", clusteringLogic + "; return dupCandidates;")(findingsList)
+  new Function("findingsList", "log", clusteringLogic + "; return dupCandidates;")(findingsList, () => {})
 
 const block = (findingsList) =>
-  new Function("findingsList", clusteringLogic + "; return dupBlock;")(findingsList)
+  new Function("findingsList", "log", clusteringLogic + "; return dupBlock;")(findingsList, () => {})
 
 // --- fixtures ----------------------------------------------------------------------
 
@@ -79,11 +59,6 @@ const RUN_MAX = [
 
 // --- assertions --------------------------------------------------------------------
 
-let failures = 0
-function check(name, ok, detail) {
-  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : " — " + detail}`)
-  if (!ok) failures++
-}
 const idSets = (cs) => cs.map((c) => c.map((x) => x.id))
 const together = (cs, ...ids) => idSets(cs).some((s) => ids.every((id) => s.includes(id)))
 const apart = (cs, a, b) => !together(cs, a, b)
@@ -161,5 +136,4 @@ console.log("prompt block")
     some.includes("cleanup") && some.includes("architecture"))
 }
 
-console.log(failures ? `\n${failures} FAILURE(S)` : "\nALL PASS")
-process.exit(failures ? 1 : 0)
+finish()

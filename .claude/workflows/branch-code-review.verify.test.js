@@ -6,35 +6,14 @@
 // Like the other workflow tests, this extracts the shipped code between markers and evaluates it,
 // so a rename fails loudly rather than silently testing nothing.
 
-const fs = require("fs")
-const path = require("path")
-
-const SCRIPT = path.join(__dirname, "branch-code-review.js")
-const src = fs.readFileSync(SCRIPT, "utf8")
-
-function grab(startMarker, endMarker) {
-  const a = src.indexOf(startMarker)
-  const b = src.indexOf(endMarker, a)
-  if (a < 0 || b < 0) {
-    throw new Error(
-      `branch-code-review.js no longer contains the marker ${JSON.stringify(startMarker)} ` +
-      `followed by ${JSON.stringify(endMarker)} — the grouped-verify block moved or was renamed. ` +
-      "Update this test's markers rather than deleting the test.")
-  }
-  return src.slice(a, b)
-}
+const { grab, check, finish } = require("./branch-code-review.testlib.js")
 
 const api = new Function(
-  grab("// ---- verdict parsing", "const SYNTH_SCHEMA") +
-  grab("// ---- grouped verify", "// ---- end grouped verify") +
+  grab("verdict parsing", "// ---- verdict parsing", "const SYNTH_SCHEMA") +
+  grab("grouped verify", "// ---- grouped verify", "// ---- end grouped verify") +
   "return { parseVerdicts, verifyGroups, scoreFinding, voteDecided, nextVoteRound, BAND_SCORE }")()
 const { parseVerdicts, verifyGroups, scoreFinding, voteDecided, nextVoteRound, BAND_SCORE } = api
 
-let failures = 0
-function check(name, ok, detail) {
-  if (!ok) failures++
-  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : " — " + detail}`)
-}
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 const f = (file, line) => ({ file, line: String(line), summary: `${file}:${line}` })
@@ -163,5 +142,4 @@ console.log("nextVoteRound")
   check("it never re-runs a group whose findings are all decided", eq(skip.groups, [[2, 3]]))
 }
 
-console.log(failures ? `\n${failures} FAILURE(S)` : "\nALL PASS")
-process.exit(failures ? 1 : 0)
+finish()

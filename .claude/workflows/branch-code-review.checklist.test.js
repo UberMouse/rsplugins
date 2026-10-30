@@ -138,12 +138,16 @@ check("it never skips a lens that is not plugin-only",
 // Run the awk over this repo's own history, so a regex the shipped awk cannot compile fails here
 // rather than inside a finder.
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: __dirname, encoding: "utf8" }).trim()
-const firstCommit = execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: root, encoding: "utf8" }).trim().split("\n")[0]
-// With no reachable root commit (e.g. a shallow clone) the diff below has nothing to start from.
-if (!firstCommit) {
-  throw new Error("no root commit reachable from HEAD (shallow clone?): this test diffs the repo's " +
-    "whole Lua history, so fetch full history (git fetch --unshallow) and rerun.")
+// In a shallow clone rev-list reports the shallow boundary as a parentless "root", so the diff would
+// run over truncated history and fail on an unrelated-looking check. Throw (exit 1) rather than skip,
+// so a gate running this test cannot go green without having run it.
+const shallow = execFileSync("git", ["rev-parse", "--is-shallow-repository"], { cwd: root, encoding: "utf8" }).trim()
+if (shallow === "true") {
+  throw new Error("shallow clone: this test diffs the repo's whole Lua history, so fetch full " +
+    "history (git fetch --unshallow) and rerun.")
 }
+const firstCommit = execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: root, encoding: "utf8" }).trim().split("\n")[0]
+if (!firstCommit) throw new Error("no root commit reachable from HEAD: nothing to diff the Lua history from.")
 const realDiff = execFileSync("git", ["diff", "--no-color", "--no-ext-diff", "--no-prefix", "-U0", firstCommit, "HEAD", "--", "*.lua"],
   { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
 const realOut = runAwk(api.COMMENT_AWK, realDiff)

@@ -201,13 +201,17 @@ function M.new(content, y, icon, onClick, opts)
             hovered = false,
         }
     -- Under the default id: Tooltip.attach subscribes the same hooks under its own id
-    -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other.
+    -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other. Both return
+    -- true: in the client a listener that returns nothing stops the ones after it, the
+    -- tooltip's included (docs/api-concepts.md).
     layer:Subscribe(ui.Hook.ONMOUSEOVER, function()
         row.hovered = true
         drawBox(row)
+        return true
     end)
     layer:Subscribe(ui.Hook.ONMOUSELEAVE, function()
         M.unhover(row)
+        return true
     end)
     return row
 end

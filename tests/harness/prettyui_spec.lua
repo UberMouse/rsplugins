@@ -1378,8 +1378,12 @@ describe("prettyui driver press, hold and release", function()
     end)
 
     it("runs ONHOLD under the runtime budget", function()
-        local h =
-            load(BAR .. "bar:Subscribe(ui.Hook.ONHOLD, 'spin', function() while true do end end)")
+        -- BAR's own ONHOLD listener returns nothing, which would stop this one (ui.fire).
+        local h = load(
+            BAR
+                .. "bar:Unsubscribe(ui.Hook.ONHOLD)\n"
+                .. "bar:Subscribe(ui.Hook.ONHOLD, 'spin', function() while true do end end)"
+        )
         h.ui:press(h.env.bar)
         assert.matches(
             "Maximum function execution time",

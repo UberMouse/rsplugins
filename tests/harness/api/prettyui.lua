@@ -283,8 +283,13 @@ local function newContext(parent)
     return { parent = parent, tips = {} }
 end
 
--- Destroy on an attachment from Tooltip.attach: gives the target's clickthrough back, as
--- 1.2.0 does, and leaves its window's context. Calling it again does nothing.
+-- The hook id Tooltip.attach subscribes its target's mouse-over and mouse-leave under (1.2.0,
+-- src/tooltip.lua).
+local TOOLTIP_HOOK_ID = "prettyui_tooltip"
+
+-- Destroy on an attachment from Tooltip.attach: gives the target's clickthrough back and
+-- drops its listeners, as 1.2.0 does, and leaves its window's context. Calling it again does
+-- nothing.
 ---@param tip table
 local function destroyAttachment(tip)
     if tip.destroyed then return end
@@ -292,7 +297,11 @@ local function destroyAttachment(tip)
     tip.shown = false
     local lib = tip.lib
     if lib.rawTips[tip.target] == tip then lib.rawTips[tip.target] = nil end
-    if not tip.target.destroyed then tip.target.clickthrough = tip.priorClickthrough end
+    if not tip.target.destroyed then
+        tip.target.clickthrough = tip.priorClickthrough
+        ui.removeListener(tip.target, ui.Hook.ONMOUSEOVER, TOOLTIP_HOOK_ID)
+        ui.removeListener(tip.target, ui.Hook.ONMOUSELEAVE, TOOLTIP_HOOK_ID)
+    end
     if tip.context then
         for i, member in ipairs(tip.context.tips) do
             if member == tip then
@@ -350,6 +359,16 @@ local function attachRawTooltip(lib, target, parent, value, ...)
     tip.lib = lib
     tip.priorClickthrough = ts.clickthrough
     ts.clickthrough = false
+    -- Shown and hidden by listeners under 1.2.0's own id, so a listener before them that
+    -- stops the rest (ui.fire) keeps the tooltip from showing, as in the client.
+    ui.addListener(ts, ui.Hook.ONMOUSEOVER, TOOLTIP_HOOK_ID, function()
+        tip.shown = true
+        return true
+    end)
+    ui.addListener(ts, ui.Hook.ONMOUSELEAVE, TOOLTIP_HOOK_ID, function()
+        tip.shown = false
+        return true
+    end)
     lib.rawTips[ts] = tip
     return TooltipAttachment.new(tip)
 end
@@ -2008,9 +2027,9 @@ function Driver:hover(target, value)
 end
 
 -- Move the pointer onto a component the plugin made (or a window's content): the component
--- that takes it (see `reach`) gets ONMOUSEOVER(component, x, y), reads isMouseOver true and
--- shows its Tooltip.attach tooltip. Moving between a component and its clickthrough
--- children stays on the same component: no events. Returns false and why, leaving the pointer
+-- that takes it (see `reach`) gets ONMOUSEOVER(component, x, y) and reads isMouseOver true;
+-- its Tooltip.attach tooltip shows if its listener gets to run. Moving between a component
+-- and its clickthrough children stays on the same component: no events. Returns false and why, leaving the pointer
 -- where it was, if it doesn't land.
 ---@param cs table component state
 ---@return boolean
@@ -2028,8 +2047,6 @@ function Driver:hoverComponent(cs)
     end
     self.hovering = { cs = hit, tipOf = tipOf, raw = true }
     hit.mouseOver = true
-    local tip = tipOf()
-    if tip then tip.shown = true end
     local x, y = localPoint(hit, centre(cs))
     runtime.call(self.h.budgetMs, "component mouse-over", ui.fire, hit, ui.Hook.ONMOUSEOVER, x, y)
     return true
@@ -2038,16 +2055,18 @@ end
 -- Move the pointer off whatever it is over. A target hidden (or destroyed) since it was
 -- hovered gets no mouse-leave, so its tooltip stays shown: the stuck tooltips seen in the
 -- client (docs/api-concepts.md, PrettyUI in the client). A component the plugin made reads
--- isMouseOver false either way, and otherwise gets ONMOUSELEAVE(component).
+-- isMouseOver false either way, and otherwise gets ONMOUSELEAVE(component), whose tooltip
+-- listener hides its tooltip.
 function Driver:leave()
     local hovering = self.hovering
     self.hovering = nil
     if hovering == nil then return end
     if hovering.raw and not hovering.cs.destroyed then hovering.cs.mouseOver = false end
     if not ui.visible(hovering.cs) then return end
-    local tip = hovering.tipOf()
-    if tip then tip.shown = false end
-    if hovering.raw then
+    if not hovering.raw then
+        local tip = hovering.tipOf()
+        if tip then tip.shown = false end
+    else
         runtime.call(
             self.h.budgetMs,
             "component mouse-leave",

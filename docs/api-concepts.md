@@ -144,6 +144,19 @@ The official reference annotates Lua with pseudo-types:
   - `component.dragConfig` is read-only ("sol: cannot write to a readonly property"); set its
     fields in place (`layer.dragConfig.deadZone = 10`), which reads back. A new layer's is
     `0, 0, 0`.
+- **A hook listener that returns nothing stops the ones after it** (hook probe, beta client, dev
+  bridge, user hovering, 2026-10-30). The stub says an omitted return counts as true; it
+  doesn't. Four layers, each with `ONMOUSEOVER` listeners under the default id and a named id
+  (`"probe"`), in subscription order:
+  - default returning nothing, then named: only the default ran;
+  - default returning `true`, then named: both ran;
+  - named alone: it ran;
+  - named returning `true`, then default returning nothing: both ran.
+
+  So return `true` from a listener whenever another may follow it on the same hook. PrettyUI
+  1.2.0's `Tooltip.attach` subscribes `ONMOUSEOVER`/`ONMOUSELEAVE` under `"prettyui_tooltip"`
+  after any listener the plugin made first: chore-tracker's row hover listeners returned nothing,
+  and no row tooltip showed until they returned `true`.
 - **Pressing and dragging a plain `ui.Layer`** (drag probes v1-v3, user-driven in the beta
   client through the dev bridge, 2026-10-29).
   - `ONHOLD` fires once per Logic tick while the button is down. Its x, y are the pointer in

@@ -426,6 +426,42 @@ describe("a plugin's own components", function()
         assert.are.same({ "default" }, h.env.log)
     end)
 
+    -- The hook probe's boxes A to D (docs/api-concepts.md, hook listener returns).
+    it("run the next listener only after one that returns true", function()
+        -- Each case's listeners, in subscription order: the id (nil for the default) and the
+        -- listener's return.
+        local cases = {
+            A = { { nil, "nil" }, { "named", "true" } },
+            B = { { nil, "true" }, { "named", "true" } },
+            C = { { "named", "true" } },
+            D = { { "named", "true" }, { nil, "nil" } },
+        }
+        local fired = {}
+        for case, listeners in pairs(cases) do
+            local lines = { "log = {}", "row:SetSize(100, 28)", "row.clickthrough = false" }
+            for _, l in ipairs(listeners) do
+                local id, result = l[1], l[2]
+                local fn = string.format(
+                    "function() log[#log + 1] = %q; return %s end",
+                    id or "default",
+                    result
+                )
+                lines[#lines + 1] = id
+                        and string.format("row:Subscribe(ui.Hook.ONCLICK, %q, %s)", id, fn)
+                    or string.format("row:Subscribe(ui.Hook.ONCLICK, %s)", fn)
+            end
+            local h = loadRows(table.concat(lines, "\n"))
+            h.ui:click(h.env.row)
+            fired[case] = h.env.log
+        end
+        assert.are.same({
+            A = { "default" },
+            B = { "default", "named" },
+            C = { "named" },
+            D = { "named", "default" },
+        }, fired)
+    end)
+
     it(
         "fault on a bad hook, a bad callback, a repeated id and an Unsubscribe of nothing",
         function()

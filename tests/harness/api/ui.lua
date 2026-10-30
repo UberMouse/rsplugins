@@ -182,8 +182,26 @@ function M.addListener(s, hook, id, fn)
     list[#list + 1] = { id = id, fn = fn }
 end
 
--- Run `s`'s listeners for `hook` in subscription order, each as fn(component, ...), until
--- one returns false (the stub: the return says whether to carry on). A component destroyed
+-- Remove `s`'s listener for `hook` under `id` (nil for the default one). Returns whether
+-- there was one.
+---@param s table component state
+---@param hook integer
+---@param id string?
+---@return boolean
+function M.removeListener(s, hook, id)
+    local list = s.hooks[hook] or {}
+    for i, listener in ipairs(list) do
+        if listener.id == (id or DEFAULT_ID) then
+            table.remove(list, i)
+            return true
+        end
+    end
+    return false
+end
+
+-- Run `s`'s listeners for `hook` in subscription order, each as fn(component, ...), while
+-- each returns true. The stub says a listener returning nothing lets the next run; in the
+-- client it stops them (docs/api-concepts.md, hook listener returns). A component destroyed
 -- by an earlier listener gets no more. Callers run this under runtime.call.
 ---@param s table component state
 ---@param hook integer
@@ -198,7 +216,7 @@ function M.fire(s, hook, ...)
     for _, listener in ipairs(snapshot) do
         if s.destroyed then break end
         ran = ran + 1
-        if listener.fn(s.proxy, ...) == false then break end
+        if listener.fn(s.proxy, ...) ~= true then break end
     end
     return ran
 end
@@ -443,13 +461,7 @@ local METHODS = {
         if select("#", ...) > 0 or (id ~= nil and type(id) ~= "string") then
             strict.fault(s.class .. ":Unsubscribe(hook) or Unsubscribe(hook, id)")
         end
-        local list = s.hooks[hook] or {}
-        for i, listener in ipairs(list) do
-            if listener.id == (id or DEFAULT_ID) then
-                table.remove(list, i)
-                return
-            end
-        end
+        if M.removeListener(s, hook, id) then return end
         strict.fault(
             s.class
                 .. ":Unsubscribe: no "

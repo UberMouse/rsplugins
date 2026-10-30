@@ -1,10 +1,9 @@
 -- Self-tests: PersistentDB, per core/persistentdb.html.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 
-local function plugin(main)
-    return { ["main.lua"] = main }
-end
+local plugin = support.inline
 
 describe("PersistentDB", function()
     it("round-trips each type and returns nil for a missing key", function()

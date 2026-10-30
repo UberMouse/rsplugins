@@ -1,11 +1,12 @@
 -- config.Font: GetStringWidth on a named font, and nothing else.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 
 ---@param main string
 ---@return table h
 local function load(main)
-    return harness.load({ ["main.lua"] = main })
+    return harness.load(support.inline(main))
 end
 
 describe("config.Font fake", function()

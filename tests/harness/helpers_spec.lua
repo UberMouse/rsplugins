@@ -1,10 +1,9 @@
 -- Self-tests: the global helpers clamp, lerp, random and utils.CalcTextWidth.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 
-local function plugin(main)
-    return { ["main.lua"] = main }
-end
+local plugin = support.inline
 
 describe("helpers", function()
     it("clamp and lerp return floats, as the client's do", function()
@@ -36,12 +35,7 @@ describe("helpers", function()
             ["clamp('a', 0, 1)"] = "clamp%(value: Float",
         }
         for code, pattern in pairs(cases) do
-            assert.matches(
-                pattern,
-                harness.errorOf(function()
-                    harness.load(plugin("local x = " .. code))
-                end)
-            )
+            assert.matches(pattern, harness.errorOf(harness.load, plugin("local x = " .. code)))
         end
     end)
 
@@ -97,12 +91,7 @@ describe("helpers", function()
             ["formatStr('{}', Player)"] = "an API object",
         }
         for code, pattern in pairs(cases) do
-            assert.matches(
-                pattern,
-                harness.errorOf(function()
-                    harness.load(plugin("local x = " .. code))
-                end)
-            )
+            assert.matches(pattern, harness.errorOf(harness.load, plugin("local x = " .. code)))
         end
     end)
 
@@ -115,9 +104,7 @@ describe("helpers", function()
         assert.are.equal(21, h.env.w)
         assert.matches(
             "unmocked state: utils.CalcTextWidth needs the font's metrics",
-            harness.errorOf(function()
-                harness.load(plugin("local w = utils.CalcTextWidth(494, 'abc')"))
-            end)
+            harness.errorOf(harness.load, plugin("local w = utils.CalcTextWidth(494, 'abc')"))
         )
     end)
 end)

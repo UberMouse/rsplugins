@@ -3,16 +3,12 @@
 -- 2026-10-25 (docs/testing.md, fidelity ledger).
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 local ui = require("tests.harness.api.ui")
 local strict = require("tests.harness.strict")
 
-local MANIFEST = [[{ "name": "t", "version": "1", "contactEmailAddress": "t@example.com",
-    "requiredDependencies": { "prettyui": 6398181 } }]]
-
 -- Runs before the test's main.lua: the plugin layer as `parent`.
-local PRELUDE = [[
-parent = ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)
-]]
+local PRELUDE = support.pluginLayer("parent")
 
 -- `text` as a Lua pattern that matches it literally.
 ---@param text string
@@ -25,7 +21,9 @@ end
 ---@param manifest string?
 ---@return table h
 local function load(main, manifest)
-    return harness.load({ ["main.lua"] = PRELUDE .. main, ["plugin.json"] = manifest or MANIFEST })
+    return harness.load(
+        support.inline(PRELUDE .. main, { manifest = manifest or support.PRETTYUI_MANIFEST })
+    )
 end
 
 -- The probe's window: 600,300, 300x200, titled and resizable, with a MENU button in the X's
@@ -333,12 +331,7 @@ win:_RegisterOverlay(overlay, function() return visible end, function() syncs = 
     it("faults syncing an overlay destroyed while still registered", function()
         local h = load(OVERLAY)
         h.env.overlay:Destroy()
-        assert.matches(
-            "used after Destroy",
-            harness.errorOf(function()
-                h.env.win:Show()
-            end)
-        )
+        assert.matches("used after Destroy", harness.errorOf(h.env.win.Show, h.env.win))
     end)
 
     it("faults closing an untitled window whose registered overlay was destroyed", function()
@@ -524,12 +517,7 @@ other = ui.Layer.new(parent)
         assert.is_nil(h.env.win.root)
         assert.are.same({}, h.ui:find("Window"))
         assert.are.same({}, h.ui:find("SpriteButton"))
-        assert.matches(
-            "used after Destroy",
-            harness.errorOf(function()
-                h.env.win:Show()
-            end)
-        )
+        assert.matches("used after Destroy", harness.errorOf(h.env.win.Show, h.env.win))
     end)
 
     it("reads nil on the fields 1.2.0 clears and faults on the rest after Destroy", function()
@@ -579,12 +567,7 @@ other = ui.Layer.new(parent)
     it("faults when the driver clicks a destroyed button or close X", function()
         local h = load(WINDOW .. "x = win.closeButton; win:Destroy()")
         for _, target in ipairs({ h.env.menu, h.env.x }) do
-            assert.matches(
-                "used after Destroy",
-                harness.errorOf(function()
-                    h.ui:click(target)
-                end)
-            )
+            assert.matches("used after Destroy", harness.errorOf(h.ui.click, h.ui, target))
         end
     end)
 end)
@@ -1674,12 +1657,7 @@ describe("prettyui Window resize and title-bar state", function()
         local h = load(WINDOW)
         local win = h.env.win
         h.ui:clickTitle(win)
-        assert.matches(
-            "its resize is disabled",
-            harness.errorOf(function()
-                h.ui:resize(win, 10, 10)
-            end)
-        )
+        assert.matches("its resize is disabled", harness.errorOf(h.ui.resize, h.ui, win, 10, 10))
         win.resize:SetEnabled(true)
         h.ui:resize(win, 10, 10)
         local r = h.ui:layout(win)

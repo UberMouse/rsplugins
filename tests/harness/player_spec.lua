@@ -1,11 +1,10 @@
 -- Self-tests: Player availability, entity and skill getters.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 local SkillType = harness.enums.SkillType
 
-local function plugin(main)
-    return { ["main.lua"] = main }
-end
+local plugin = support.inline
 
 describe("Player", function()
     it("is unavailable until login, then serves the display name", function()
@@ -43,26 +42,17 @@ describe("Player", function()
         local h = harness.new(plugin("function tile() return Player.GetEntity().coordGrid end"))
         h.world:login("Zezima")
         h:load()
-        assert.matches(
-            "unmocked state: the player's position",
-            harness.errorOf(function()
-                h.env.tile()
-            end)
-        )
+        assert.matches("unmocked state: the player's position", harness.errorOf(h.env.tile))
         assert.matches(
             "setPosition needs integer",
-            harness.errorOf(function()
-                h.world:setPosition(12800, 0)
-            end)
+            harness.errorOf(h.world.setPosition, h.world, 12800, 0)
         )
     end)
 
     it("faults when a getter runs while logged out", function()
         assert.matches(
             "Player.GetEntity called while logged out",
-            harness.errorOf(function()
-                harness.load(plugin("Player.GetEntity()"))
-            end)
+            harness.errorOf(harness.load, plugin("Player.GetEntity()"))
         )
     end)
 
@@ -109,22 +99,12 @@ describe("Player", function()
     it("faults on a skill the test never set", function()
         local h = harness.new(plugin("local l = Player.GetLevelGameplay(SkillType.SLAYER)"))
         h.world:login("Zezima")
-        assert.matches(
-            "skill 18 was never set",
-            harness.errorOf(function()
-                h:load()
-            end)
-        )
+        assert.matches("skill 18 was never set", harness.errorOf(h.load, h))
     end)
 
     it("leaves other PlayerEntity members unmocked", function()
         local h = harness.new(plugin("local c = Player.GetEntity().route"))
         h.world:login("Zezima")
-        assert.matches(
-            "unmocked API: PlayerEntity.route",
-            harness.errorOf(function()
-                h:load()
-            end)
-        )
+        assert.matches("unmocked API: PlayerEntity.route", harness.errorOf(h.load, h))
     end)
 end)

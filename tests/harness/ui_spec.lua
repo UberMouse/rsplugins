@@ -3,13 +3,14 @@
 -- id.Sound/Font/Sprite/Obj names, and nothing else.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 local paths = require("tests.harness.paths")
 local ui = require("tests.harness.api.ui")
 
 ---@param main string
 ---@return table h
 local function load(main)
-    return harness.load({ ["main.lua"] = main })
+    return harness.load(support.inline(main))
 end
 
 describe("ui root fake", function()
@@ -158,27 +159,19 @@ describe("fake ui components", function()
         local layer = ui.create("Layer", rootState)
         assert.matches(
             "self%-percentage",
-            harness.errorOf(function()
-                layer:SetPos(0, 0, 0, 0, 0.5, 0.5)
-            end)
+            harness.errorOf(layer.SetPos, layer, 0, 0, 0, 0, 0.5, 0.5)
         )
     end)
 end)
 
 -- A plugin's own components. `root` is the plugin layer, `row` a layer under it. The manifest
 -- lists PrettyUI so the h.ui driver is there.
-local MANIFEST = [[{ "name": "t", "version": "1", "contactEmailAddress": "t@example.com",
-    "requiredDependencies": { "prettyui": 6398181 } }]]
-
-local PRELUDE = [[
-root = ui.Interfaces:GetComponent(id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)
-row = ui.Layer.new(root)
-]]
+local PRELUDE = support.pluginLayer("root") .. "row = ui.Layer.new(root)\n"
 
 ---@param main string
 ---@return table h
 local function loadRows(main)
-    return harness.load({ ["main.lua"] = PRELUDE .. main, ["plugin.json"] = MANIFEST })
+    return harness.load(support.inline(PRELUDE .. main, { manifest = support.PRETTYUI_MANIFEST }))
 end
 
 describe("a plugin's own components", function()

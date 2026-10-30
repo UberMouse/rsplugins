@@ -2,10 +2,9 @@
 -- runtime enforces (callback errors, the time budget).
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 
-local function plugin(main)
-    return { ["main.lua"] = main }
-end
+local plugin = support.inline
 
 describe("Event subscriptions", function()
     it("calls subscribers in subscription order", function()
@@ -71,12 +70,13 @@ describe("Event subscriptions", function()
         -- Top level: the fault fails the load, though the plugin's pcall caught it.
         assert.matches(
             "Event.KeyTyped.Unsubscribe passed straight to pcall: the client aborts %(SIGABRT%)",
-            harness.errorOf(function()
-                harness.load(plugin([[
+            harness.errorOf(
+                harness.load,
+                plugin([[
                     Event.KeyTyped.Subscribe("x", function() end)
                     pcall(Event.KeyTyped.Unsubscribe, "x")
-                ]]))
-            end)
+                ]])
+            )
         )
         local h = harness.load(plugin([[
             Event.KeyTyped.Subscribe("x", function() end)
@@ -87,15 +87,11 @@ describe("Event subscriptions", function()
         ]]))
         assert.matches(
             "Event.KeyTyped.Unsubscribe passed straight to pcall",
-            harness.errorOf(function()
-                h:fire("WindowFocusChanged", { hasFocus = true })
-            end)
+            harness.errorOf(h.fire, h, "WindowFocusChanged", { hasFocus = true })
         )
         assert.matches(
             "Event.KeyTyped.Unsubscribe passed straight to pcall",
-            harness.errorOf(function()
-                h:unload()
-            end)
+            harness.errorOf(h.unload, h)
         )
     end)
 
@@ -257,12 +253,7 @@ describe("Event subscriptions", function()
                 Event.ServerLogic.Subscribe("x", function() print("x2") end)
             end
         ]]))
-            assert.matches(
-                "kaboom",
-                harness.errorOf(function()
-                    h:fire("ServerLogic")
-                end)
-            )
+            assert.matches("kaboom", harness.errorOf(h.fire, h, "ServerLogic"))
             h.env.swap()
             h:fire("ServerLogic")
             assert.are.equal("x2", h:output())
@@ -293,8 +284,9 @@ describe("Event subscriptions", function()
     end)
 
     it("allows a direct Unsubscribe inside an HTTP completion callback", function()
-        local h = harness.load({
-            ["main.lua"] = [[
+        local h = harness.load(
+            plugin(
+                [[
                 local started = false
                 Event.KeyTyped.Subscribe("x", function() end)
                 Event.Logic.Subscribe("go", function()
@@ -305,10 +297,10 @@ describe("Event subscriptions", function()
                     end)
                 end)
             ]],
-            ["plugin.json"] = [[{ "name": "T", "version": "0.0.1",
-                "contactEmailAddress": "t@example.com", "optionalPermissions": [ "httpAccess" ],
-                "urls": { "sink": "http://127.0.0.1:8765" } }]],
-        }, { grant = { "httpAccess" } })
+                { manifest = support.HTTP_MANIFEST }
+            ),
+            { grant = { "httpAccess" } }
+        )
         h:step()
         h:respond(h.requests[1], { status = 200 })
         h:step()
@@ -324,24 +316,18 @@ describe("Event subscriptions", function()
         assert.are.equal("false", h:output())
         assert.matches(
             "unmocked API: KeyTypedEventPayload.key",
-            harness.errorOf(function()
-                h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
-            end)
+            harness.errorOf(h.fire, h, "KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
         )
         assert.matches(
             "WindowFocusChangedEventPayload has no field focus",
-            harness.errorOf(function()
-                h:fire("WindowFocusChanged", { focus = true })
-            end)
+            harness.errorOf(h.fire, h, "WindowFocusChanged", { focus = true })
         )
     end)
 
     it("faults on an event the stubs don't have", function()
         assert.matches(
             "unmocked API: Event.Teleported",
-            harness.errorOf(function()
-                harness.load(plugin("Event.Teleported.Subscribe('x', print)"))
-            end)
+            harness.errorOf(harness.load, plugin("Event.Teleported.Subscribe('x', print)"))
         )
     end)
 end)
@@ -376,9 +362,7 @@ describe("client limits", function()
         ]]))
         assert.matches(
             "^Event.Logic subscriber 'boom': inline/main.lua:1: kaboom",
-            harness.errorOf(function()
-                h:advance(20)
-            end)
+            harness.errorOf(h.advance, h, 20)
         )
     end)
 
@@ -395,9 +379,7 @@ describe("client limits", function()
         )
         assert.matches(
             "Event.Logic subscriber 'spin': Maximum function execution time of 50 ms exceeded",
-            harness.errorOf(function()
-                h:advance(20)
-            end)
+            harness.errorOf(h.advance, h, 20)
         )
     end)
 
@@ -406,9 +388,7 @@ describe("client limits", function()
         h.budgetMs = 50
         assert.matches(
             "main.lua: Maximum function execution time of 50 ms exceeded",
-            harness.errorOf(function()
-                h:load()
-            end)
+            harness.errorOf(h.load, h)
         )
     end)
 
@@ -423,9 +403,7 @@ describe("client limits", function()
         )
         assert.matches(
             "Event.Logic subscriber 'resume': Maximum function execution time of 50 ms exceeded",
-            harness.errorOf(function()
-                h:advance(20)
-            end)
+            harness.errorOf(h.advance, h, 20)
         )
     end)
 
@@ -435,9 +413,7 @@ describe("client limits", function()
         h.budgetMs = 30
         assert.matches(
             "main.lua: Maximum function execution time of 30 ms exceeded",
-            harness.errorOf(function()
-                h:load()
-            end)
+            harness.errorOf(h.load, h)
         )
     end)
 end)

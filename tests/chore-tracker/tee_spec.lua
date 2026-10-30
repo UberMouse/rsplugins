@@ -2,7 +2,7 @@
 -- lines in main.lua and the shutdown line are stripped before submission, so this spec goes
 -- with them.
 
-local dkjson = require("dkjson")
+local harness = require("tests.harness")
 local helpers = require("tests.chore-tracker.helpers")
 
 describe("chore-tracker dev log tee", function()
@@ -14,7 +14,7 @@ describe("chore-tracker dev log tee", function()
             if record.url == "http://127.0.0.1:8766/tee" then posts[#posts + 1] = record end
         end
         assert.are.equal(1, #posts)
-        local batch = assert(dkjson.decode(posts[1].body))
+        local batch = harness.decodeJson(posts[1].body, "tee batch")
         assert.are.equal("chore-tracker", batch.plugin)
         local found = false
         for _, line in ipairs(batch.lines) do

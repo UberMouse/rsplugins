@@ -2,6 +2,7 @@
 -- hand-written recordings in the recorder's format (docs/testing.md, "Recordings").
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 local timeline = require("tests.harness.timeline")
 
 local MANIFEST = [[{ "name": "T", "version": "0.0.1", "contactEmailAddress": "t@example.com",
@@ -11,14 +12,11 @@ local MANIFEST = [[{ "name": "T", "version": "0.0.1", "contactEmailAddress": "t@
 ---@param main string
 ---@return table
 local function plugin(main)
-    return {
-        ["plugin.json"] = MANIFEST,
-        ["main.lua"] = [[
+    return support.inline([[
             local tick = 0
             Event.Logic.Subscribe("tick", function(ev) tick = ev.logicTick end)
             function say(...) print(tick, ...) end
-        ]] .. main,
-    }
+        ]] .. main, { manifest = MANIFEST })
 end
 
 local HEADER = '{"k": "session", "schema": 1, "plugin": "t", "session": "s"}\n'
@@ -146,9 +144,7 @@ describe("replaying a recording", function()
         -- The recording never read GetTotal(995).
         assert.matches(
             "unrecorded: Inventory%.Find%(93%):GetTotal%(995%)",
-            harness.errorOf(function()
-                h:load()
-            end)
+            harness.errorOf(h.load, h)
         )
         assert.are.equal("0 2 LOGS -1 5 5 true", h:output())
     end)
@@ -156,12 +152,7 @@ describe("replaying a recording", function()
     it("fails a read the recording never made with unrecorded: <key>", function()
         local h = harness.new(plugin("local qp = var.VarPlayer.QP.value"))
         h:useRecording({ { t = 0, k = "read", path = "var.VarPlayer.OPTION_RUN.value", v = 0 } })
-        assert.matches(
-            "unrecorded: var%.VarPlayer%.QP%.value",
-            harness.errorOf(function()
-                h:load()
-            end)
-        )
+        assert.matches("unrecorded: var%.VarPlayer%.QP%.value", harness.errorOf(h.load, h))
     end)
 
     it("carries on as a scripted world once the recording ends", function()
@@ -293,9 +284,7 @@ describe("replaying a recording", function()
         h:useRecording({})
         assert.matches(
             "unrecorded: Plugin%.HasPermission%(httpAccess%)",
-            harness.errorOf(function()
-                h:load()
-            end)
+            harness.errorOf(h.load, h)
         )
         -- Decided by the test, it is answered: granted up front, or revoked by the builder.
         h = harness.new(plugin(main), { grant = { "httpAccess" } })
@@ -335,20 +324,10 @@ describe("replaying a recording", function()
     it("faults a PersistentDB read of a key neither recorded nor set in the replay", function()
         local h = harness.new(plugin('say(PersistentDB:GetInt("n"))'))
         h:useRecording({ { t = 0, k = "db", op = "GetInt", key = "other", v = 1 } })
-        assert.matches(
-            'unrecorded: PersistentDB:GetInt%("n"%)',
-            harness.errorOf(function()
-                h:load()
-            end)
-        )
+        assert.matches('unrecorded: PersistentDB:GetInt%("n"%)', harness.errorOf(h.load, h))
         h = harness.new(plugin('say(PersistentDB:CheckExists("n"))'))
         h:useRecording({})
-        assert.matches(
-            'unrecorded: PersistentDB:CheckExists%("n"%)',
-            harness.errorOf(function()
-                h:load()
-            end)
-        )
+        assert.matches('unrecorded: PersistentDB:CheckExists%("n"%)', harness.errorOf(h.load, h))
     end)
 
     it("answers a PersistentDB key the recording, the plugin or the test accounts for", function()
@@ -381,9 +360,7 @@ describe("replaying a recording", function()
         assert.matches(
             "recording lost 7 entries in 1 gap%(s%), the first at t=4; pass "
                 .. "{ allowDropped = true }",
-            harness.errorOf(function()
-                h:useRecording(lossy())
-            end)
+            harness.errorOf(h.useRecording, h, lossy())
         )
         h:useRecording(lossy(), { allowDropped = true })
         assert.are.same({ { t = 4, n = 7 } }, h.replay.dropped)
@@ -392,12 +369,10 @@ describe("replaying a recording", function()
     it("refuses a dropped line without a tick, which can't be placed in the replay", function()
         assert.matches(
             "recording entry 2 %(dropped%) has no integer t",
-            harness.errorOf(function()
-                timeline.build({
-                    { t = 1, k = "read", path = "var.VarPlayer.QP.value", v = 1 },
-                    { k = "dropped", n = 7 },
-                })
-            end)
+            harness.errorOf(timeline.build, {
+                { t = 1, k = "read", path = "var.VarPlayer.QP.value", v = 1 },
+                { k = "dropped", n = 7 },
+            })
         )
     end)
 
@@ -418,9 +393,7 @@ describe("replaying a recording", function()
         })
         assert.matches(
             "replay: the recorded slot at Inventory%.Find%(93%):GetSlots%(%)%[1%] has no obj id",
-            harness.errorOf(function()
-                h:load()
-            end)
+            harness.errorOf(h.load, h)
         )
     end)
 
@@ -429,9 +402,7 @@ describe("replaying a recording", function()
         local schema2 = HEADER:gsub('"schema": 1', '"schema": 2')
         assert.matches(
             "recording schema 2; the harness replays schema 1",
-            harness.errorOf(function()
-                h:useRecording(timeline.parse(schema2))
-            end)
+            harness.errorOf(h.useRecording, h, timeline.parse(schema2))
         )
     end)
 end)

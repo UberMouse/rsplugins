@@ -2,10 +2,9 @@
 -- from docs/vars/vars.csv.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 
-local function plugin(main)
-    return { ["main.lua"] = main }
-end
+local plugin = support.inline
 
 describe("vars", function()
     it("serves a var by name and by ID as the same object, reading the world", function()
@@ -43,9 +42,7 @@ describe("vars", function()
     it("faults on a var name the catalog lacks, and returns nil for an unknown ID", function()
         assert.matches(
             "unmocked API: var.VarPlayer.NOT_A_REAL_VAR is not in docs/vars/vars.csv",
-            harness.errorOf(function()
-                harness.load(plugin("local v = var.VarPlayer.NOT_A_REAL_VAR"))
-            end)
+            harness.errorOf(harness.load, plugin("local v = var.VarPlayer.NOT_A_REAL_VAR"))
         )
         local h = harness.load(plugin("missing = var.VarPlayer.FromID(999999) == nil"))
         assert.is_true(h.env.missing)
@@ -54,9 +51,7 @@ describe("vars", function()
     it("faults on reading a value the test never set", function()
         assert.matches(
             "var.VarPlayer.ABSYSTEM.value was never set",
-            harness.errorOf(function()
-                harness.load(plugin("local v = var.VarPlayer.ABSYSTEM.value"))
-            end)
+            harness.errorOf(harness.load, plugin("local v = var.VarPlayer.ABSYSTEM.value"))
         )
     end)
 
@@ -64,9 +59,7 @@ describe("vars", function()
         local h = harness.new(plugin(""))
         assert.matches(
             "VarPlayer.ABSYSTEM is %w+: expected an integer, got seven",
-            harness.errorOf(function()
-                h.world:setVar("VarPlayer", "ABSYSTEM", "seven")
-            end)
+            harness.errorOf(h.world.setVar, h.world, "VarPlayer", "ABSYSTEM", "seven")
         )
         h.world:setVar("VarPlayer", "FRIEND_SORT_MODE", 7)
     end)
@@ -141,9 +134,7 @@ describe("vars", function()
                 assert.matches(
                     "VarPlayer.FRIEND_SORT_MODE is bits 3%-5 of OPTION_TOGGLE1: value must be 0..7, got "
                         .. shown,
-                    harness.errorOf(function()
-                        h.world:setVar("VarPlayer", "FRIEND_SORT_MODE", v)
-                    end)
+                    harness.errorOf(h.world.setVar, h.world, "VarPlayer", "FRIEND_SORT_MODE", v)
                 )
             end
         end)
@@ -154,9 +145,7 @@ describe("vars", function()
                 assert.matches(
                     "VarPlayer.HANDSAND_BUCKETS is INTEGER: value must be %-2147483648..2147483647, got "
                         .. shown,
-                    harness.errorOf(function()
-                        h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", v)
-                    end)
+                    harness.errorOf(h.world.setVar, h.world, "VarPlayer", "HANDSAND_BUCKETS", v)
                 )
             end
             h.world:setVar("VarPlayer", "HANDSAND_BUCKETS", -0x80000000)
@@ -179,9 +168,10 @@ describe("vars", function()
         it("faults on reading a VarBit whose base was never set", function()
             assert.matches(
                 "var.VarPlayer.HANDSAND_COUNT.value was never set",
-                harness.errorOf(function()
-                    harness.load(plugin("local v = var.VarPlayer.HANDSAND_COUNT.value"))
-                end)
+                harness.errorOf(
+                    harness.load,
+                    plugin("local v = var.VarPlayer.HANDSAND_COUNT.value")
+                )
             )
         end)
     end)
@@ -189,9 +179,7 @@ describe("vars", function()
     it("keeps var values read-only to the plugin", function()
         assert.matches(
             "VarType.value is read%-only",
-            harness.errorOf(function()
-                harness.load(plugin("var.VarPlayer.ABSYSTEM.value = 1"))
-            end)
+            harness.errorOf(harness.load, plugin("var.VarPlayer.ABSYSTEM.value = 1"))
         )
     end)
 end)

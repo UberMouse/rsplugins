@@ -1,13 +1,11 @@
 -- Self-tests: Chat.AddMessage and ChatMessage, per game/chat.html and core/events.html.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 local ChatType = harness.enums.ChatType
 
 local function plugin(main)
-    return {
-        ["main.lua"] = main,
-        ["plugin.json"] = '{ "optionalPermissions": [ "chatAccess" ] }',
-    }
+    return support.inline(main, { manifest = '{ "optionalPermissions": [ "chatAccess" ] }' })
 end
 
 local ECHO = [[
@@ -41,9 +39,7 @@ describe("Chat", function()
     it("faults on AddMessage without chatAccess", function()
         assert.matches(
             "Chat.AddMessage without the chatAccess permission",
-            harness.errorOf(function()
-                harness.load(plugin("Chat.AddMessage('hi')"))
-            end)
+            harness.errorOf(harness.load, plugin("Chat.AddMessage('hi')"))
         )
     end)
 

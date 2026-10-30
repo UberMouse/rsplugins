@@ -1,15 +1,10 @@
 -- Self-tests: Plugin.HasPermission / Plugin.urls, permission changes, and HTTPRequest.
 
 local harness = require("tests.harness")
-
-local MANIFEST = [[{
-    "name": "T", "version": "0.0.1", "contactEmailAddress": "t@example.com",
-    "optionalPermissions": [ "httpAccess", "chatAccess" ],
-    "urls": { "sink": "http://127.0.0.1:8765" }
-}]]
+local support = require("tests.harness.spec_support")
 
 local function plugin(main)
-    return { ["main.lua"] = main, ["plugin.json"] = MANIFEST }
+    return support.inline(main, { manifest = support.HTTP_MANIFEST })
 end
 
 describe("Plugin", function()
@@ -48,12 +43,11 @@ describe("Plugin", function()
     it("faults on a request to a url the manifest lacks", function()
         assert.matches(
             "is not a plugin.json url",
-            harness.errorOf(function()
-                harness.load(
-                    plugin("HTTPRequest.new(Plugin.urls.wiki)"),
-                    { grant = { "httpAccess" } }
-                )
-            end)
+            harness.errorOf(
+                harness.load,
+                plugin("HTTPRequest.new(Plugin.urls.wiki)"),
+                { grant = { "httpAccess" } }
+            )
         )
     end)
 
@@ -90,9 +84,7 @@ describe("Plugin", function()
             assert.matches("^sol%.jag::scripting::PluginPermission: ", h.env.text)
             assert.matches(
                 'HasPermission%("httpAccess"%): stack index 1, expected userdata, received string',
-                harness.errorOf(function()
-                    harness.load(plugin('Plugin.HasPermission("httpAccess")'))
-                end)
+                harness.errorOf(harness.load, plugin('Plugin.HasPermission("httpAccess")'))
             )
         end
     )
@@ -101,9 +93,7 @@ describe("Plugin", function()
         local h = harness.new(plugin(""))
         assert.matches(
             "trackingAccess is not requested in the plugin's plugin.json",
-            harness.errorOf(function()
-                h.world:grant("trackingAccess")
-            end)
+            harness.errorOf(h.world.grant, h.world, "trackingAccess")
         )
     end)
 end)
@@ -187,9 +177,7 @@ describe("HTTPRequest", function()
         h.env.send("{}")
         assert.matches(
             "unknown response field successful",
-            harness.errorOf(function()
-                h:respond(h.requests[1], { status = 400, successful = false })
-            end)
+            harness.errorOf(h.respond, h, h.requests[1], { status = 400, successful = false })
         )
     end)
 
@@ -197,18 +185,15 @@ describe("HTTPRequest", function()
         local h = harness.load(plugin(SENDER))
         assert.matches(
             "HTTPRequest.new without the httpAccess permission",
-            harness.errorOf(function()
-                h.env.send("{}")
-            end)
+            harness.errorOf(h.env.send, "{}")
         )
         assert.matches(
             "is not a plugin.json url",
-            harness.errorOf(function()
-                harness.load(
-                    plugin("HTTPRequest.new('http://example.com')"),
-                    { grant = { "httpAccess" } }
-                )
-            end)
+            harness.errorOf(
+                harness.load,
+                plugin("HTTPRequest.new('http://example.com')"),
+                { grant = { "httpAccess" } }
+            )
         )
     end)
 
@@ -217,15 +202,11 @@ describe("HTTPRequest", function()
         local req = h.env.send("{}")
         assert.matches(
             "This request is already being executed",
-            harness.errorOf(function()
-                req:Post("again")
-            end)
+            harness.errorOf(req.Post, req, "again")
         )
         assert.matches(
             "This request is already being executed",
-            harness.errorOf(function()
-                req:AddHeader("X", "y")
-            end)
+            harness.errorOf(req.AddHeader, req, "X", "y")
         )
     end)
 
@@ -240,9 +221,7 @@ describe("HTTPRequest", function()
             { grant = { "httpAccess" } }
         )
         h:respond(h.requests[1], { status = 200 })
-        local err = harness.errorOf(function()
-            h:advance(20)
-        end)
+        local err = harness.errorOf(h.advance, h, 20)
         assert.matches("^HTTP completion callback for http://127.0.0.1:8765: ", err)
         assert.matches("crashed the client %(docs/api%-concepts.md", err)
     end)

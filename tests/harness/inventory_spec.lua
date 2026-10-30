@@ -2,10 +2,9 @@
 -- Names are real ones from docs/api/consts (INV = backpack, LOGS = 1511, COINS = 995).
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 
-local function plugin(main)
-    return { ["main.lua"] = main }
-end
+local plugin = support.inline
 
 describe("Inventory", function()
     it("finds a loaded inventory by config or ID and reads its slots", function()
@@ -113,9 +112,7 @@ describe("Inventory", function()
         assert.are.equal(2, h.env.woodTotal)
         assert.matches(
             "unmocked state: ObjType.cost of LOGS",
-            harness.errorOf(function()
-                harness.load(plugin("local c = config.Obj.LOGS.cost"))
-            end)
+            harness.errorOf(harness.load, plugin("local c = config.Obj.LOGS.cost"))
         )
     end)
 
@@ -123,21 +120,15 @@ describe("Inventory", function()
         local h = harness.new(plugin(""))
         assert.matches(
             "obj NOT_AN_OBJ is not in docs/api/consts/Obj.lua",
-            harness.errorOf(function()
-                h.world:setInventory("INV", { [1] = { obj = "NOT_AN_OBJ" } })
-            end)
+            harness.errorOf(h.world.setInventory, h.world, "INV", { [1] = { obj = "NOT_AN_OBJ" } })
         )
         assert.matches(
             "config.Inv.NOT_AN_INV is not in docs/api/consts/Inv.lua",
-            harness.errorOf(function()
-                harness.load(plugin("local i = config.Inv.NOT_AN_INV"))
-            end)
+            harness.errorOf(harness.load, plugin("local i = config.Inv.NOT_AN_INV"))
         )
         assert.matches(
             "unmocked API: _global.config.NPC",
-            harness.errorOf(function()
-                harness.load(plugin("local n = config.NPC"))
-            end)
+            harness.errorOf(harness.load, plugin("local n = config.NPC"))
         )
     end)
 end)

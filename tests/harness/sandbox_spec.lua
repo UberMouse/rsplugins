@@ -2,18 +2,17 @@
 -- lifecycle hooks.
 
 local harness = require("tests.harness")
+local support = require("tests.harness.spec_support")
 
 -- An inline plugin whose main.lua is `main`, plus any other files.
 local function plugin(main, files)
-    local t = files or {}
-    t["main.lua"] = main
-    return t
+    return support.inline(main, { files = files })
 end
 
 describe("loading", function()
-    it("runs main.lua from a plugins/ folder", function()
-        local h = harness.load("var-dump")
-        assert.matches("%[VARDUMP%] waiting for httpAccess", h:output())
+    it("runs main.lua from a plugin folder given by path", function()
+        local h = harness.load("tests/fixtures/plugins/hello")
+        assert.are.equal("[HELLO] fixture loaded", h:output())
     end)
 
     it("runs inline main.lua in a fresh env per load", function()
@@ -25,11 +24,10 @@ describe("loading", function()
     it("refuses a manifest with requiredPermissions, which the client can't run", function()
         assert.matches(
             "requiredPermissions is broken in the client",
-            harness.errorOf(function()
-                harness.new(
-                    plugin("", { ["plugin.json"] = '{ "requiredPermissions": ["httpAccess"] }' })
-                )
-            end)
+            harness.errorOf(
+                harness.new,
+                plugin("", { ["plugin.json"] = '{ "requiredPermissions": ["httpAccess"] }' })
+            )
         )
     end)
 end)
@@ -67,12 +65,13 @@ describe("require", function()
     it("fails on a circular require", function()
         assert.matches(
             "circular require of",
-            harness.errorOf(function()
-                harness.load(plugin("require('a')", {
+            harness.errorOf(
+                harness.load,
+                plugin("require('a')", {
                     ["a.lua"] = "return require('b')",
                     ["b.lua"] = "return require('a')",
-                }))
-            end)
+                })
+            )
         )
     end)
 end)
@@ -81,58 +80,41 @@ describe("strict environment", function()
     it("faults on a global the harness doesn't provide, naming it", function()
         assert.matches(
             "^main.lua: inline/main.lua:1: unmocked API: World",
-            harness.errorOf(function()
-                harness.load(plugin("local w = World"))
-            end)
+            harness.errorOf(harness.load, plugin("local w = World"))
         )
     end)
 
     it("faults on an unmocked member of a mocked namespace", function()
         assert.matches(
             "unmocked API: Player.GetTrackingID",
-            harness.errorOf(function()
-                harness.load(plugin("Player.GetTrackingID()"))
-            end)
+            harness.errorOf(harness.load, plugin("Player.GetTrackingID()"))
         )
     end)
 
     it("still fails when the plugin swallows the fault with pcall", function()
         assert.matches(
             "caught a harness error.*unmocked API: World",
-            harness.errorOf(function()
-                harness.load(plugin("pcall(function() return World end)"))
-            end)
+            harness.errorOf(harness.load, plugin("pcall(function() return World end)"))
         )
     end)
 
     it("catches a method called with '.' and a static called with ':'", function()
         assert.matches(
             "PersistentDB.Get called with '.'",
-            harness.errorOf(function()
-                harness.load(plugin("PersistentDB.Get('k')"))
-            end)
+            harness.errorOf(harness.load, plugin("PersistentDB.Get('k')"))
         )
         assert.matches(
             "Player:IsAvailable called with ':'",
-            harness.errorOf(function()
-                harness.load(plugin("Player:IsAvailable()"))
-            end)
+            harness.errorOf(harness.load, plugin("Player:IsAvailable()"))
         )
     end)
 
     it("faults on an unknown enum member, and on a write to an enum", function()
         assert.matches(
             "unmocked API: PluginPermissions%.httpaccess",
-            harness.errorOf(function()
-                harness.load(plugin("local _ = PluginPermissions.httpaccess"))
-            end)
+            harness.errorOf(harness.load, plugin("local _ = PluginPermissions.httpaccess"))
         )
-        assert.matches(
-            "is read%-only",
-            harness.errorOf(function()
-                harness.load(plugin("ChatType.X = 1"))
-            end)
-        )
+        assert.matches("is read%-only", harness.errorOf(harness.load, plugin("ChatType.X = 1")))
     end)
 
     it("reads a global named in opts.absent as nil, and rejects naming a provided one", function()
@@ -140,9 +122,7 @@ describe("strict environment", function()
         assert.is_true(h.env.seen)
         assert.matches(
             "opts.absent names string, which the sandbox provides",
-            harness.errorOf(function()
-                harness.load(plugin(""), { absent = { "string" } })
-            end)
+            harness.errorOf(harness.load, plugin(""), { absent = { "string" } })
         )
     end)
 
@@ -164,24 +144,18 @@ describe("stdlib", function()
         assert.is_true(h.env.ok)
         assert.matches(
             "not provided in the harness sandbox: utf8 %(absent in the client%)",
-            harness.errorOf(function()
-                harness.load(plugin("local n = utf8.len('x')"))
-            end)
+            harness.errorOf(harness.load, plugin("local n = utf8.len('x')"))
         )
         assert.matches(
             "collectgarbage%(stop%) is not modelled",
-            harness.errorOf(function()
-                harness.load(plugin('collectgarbage("stop")'))
-            end)
+            harness.errorOf(harness.load, plugin('collectgarbage("stop")'))
         )
     end)
 
     it("withholds os and io unless a test opts in", function()
         assert.matches(
             "not provided in the harness sandbox: os",
-            harness.errorOf(function()
-                harness.load(plugin("local t = os.time()"))
-            end)
+            harness.errorOf(harness.load, plugin("local t = os.time()"))
         )
         local h = harness.load(plugin("t = os.time()"), { stdlib = { os = true } })
         assert.is_number(h.env.t)
@@ -190,9 +164,7 @@ describe("stdlib", function()
     it("withholds load unless a test opts in, then keeps chunks in the sandbox", function()
         assert.matches(
             "not provided in the harness sandbox: load %(present in the client",
-            harness.errorOf(function()
-                harness.load(plugin("local f = load('return 1')"))
-            end)
+            harness.errorOf(harness.load, plugin("local f = load('return 1')"))
         )
         local h = harness.load(
             plugin([[
@@ -205,9 +177,11 @@ describe("stdlib", function()
         assert.are.same({ true, 7, true }, { h.env.inSandbox, h.env.own, h.env.noEnv })
         assert.matches(
             "only",
-            harness.errorOf(function()
-                harness.load(plugin("load('return 1', 'c', 'b')"), { stdlib = { load = true } })
-            end)
+            harness.errorOf(
+                harness.load,
+                plugin("load('return 1', 'c', 'b')"),
+                { stdlib = { load = true } }
+            )
         )
     end)
 
@@ -236,9 +210,7 @@ describe("_G", function()
         for _, name in ipairs({ "mine", "Plugin", "require" }) do
             assert.matches(
                 "_G%." .. name .. ": the client's _G is the table every plugin shares",
-                harness.errorOf(function()
-                    harness.load(plugin("mine = 1 local x = _G." .. name))
-                end)
+                harness.errorOf(harness.load, plugin("mine = 1 local x = _G." .. name))
             )
         end
     end)
@@ -247,9 +219,7 @@ describe("_G", function()
         for _, code in ipairs({ "_G.mine = 1", "_G.print = nil", "_G['Event'] = {}" }) do
             assert.matches(
                 "assigned: the client's _G is the table every plugin shares",
-                harness.errorOf(function()
-                    harness.load(plugin(code))
-                end)
+                harness.errorOf(harness.load, plugin(code))
             )
         end
     end)

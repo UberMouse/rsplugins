@@ -29,10 +29,13 @@ client (`prl <plugin>`).
 | `tests/harness/stubs.lua`, `catalog.lua` | Reads `docs/api/` and `docs/vars/vars.csv` |
 | `tests/harness/timeline.lua`, `replay.lua` | Replaying a recording: grouping its entries by tick (pure), and driving the world from them |
 | `tests/harness/*_spec.lua` | The harness's own tests |
+| `tests/harness/spec_support.lua` | Boilerplate the harness specs share (not a spec): `inline(main, { manifest?, files? })` builds an inline plugin's files table, `PRETTYUI_MANIFEST` / `HTTP_MANIFEST` and `pluginLayer(name)` the manifests and plugin-layer prelude. Specs for the dev tools use `tests/support/devplugin.lua` instead |
 | `tests/<plugin>/*_spec.lua` | A plugin's tests |
 | `lib/dev/`, `scripts/rsdev.py` | The dev recorder and the daemon that receives it ([Recordings](#recordings)) |
 | `scripts/recording-sanitise.py`, `recording-chat-allowlist.txt`, `test_recording_sanitise.py`, `tests/fixtures/` | Recorded sessions made into committed fixtures, the game chat a fixture may keep, and the sanitiser's tests ([Turning a session into a fixture](#turning-a-session-into-a-fixture)) |
 | `tests/recorder/` | The recorder's tests, with `plugins/recorder-demo` |
+| `tests/var-dump/` | `plugins/var-dump`'s specs |
+| `tests/fixtures/plugins/` | Minimal plugins that exist only to be loaded by path, e.g. `hello/` for `sandbox_spec.lua` |
 | `tests/fixtures/client-surface.json`, `tests/harness/client_surface_spec.lua`, `tests/harness/surface_report.lua`, `scripts/client-surface.py`, `plugins/dev-bridge/probes/client-surface.lua` | The live client's API surface, the spec that checks the mocks against it, and the stub-vs-client report ([below](#checking-the-mocks-against-the-live-client)) |
 
 ## Writing a plugin test
@@ -66,7 +69,7 @@ end)
   `harness.enums.*` for enum values and `h.env.<name>` for the plugin's globals.
 - `h.env.someGlobal` and `h.env.someFunction()` reach into the plugin. Prefer asserting on what a
   player would see (`h.chatLog`, `h:output()`, `h.requests`, `h.db`).
-- To check an error, use `assert.matches(pattern, harness.errorOf(function() ... end))`. luassert's
+- To check an error, use `assert.matches(pattern, harness.errorOf(function() ... end))`, or `harness.errorOf(fn, arg1, ...)` for a single call. luassert's
   `error_matches` strips everything up to the first `file:line:`, which is the part that names the
   event and the plugin line.
 
@@ -98,6 +101,7 @@ n end` gives `utils.CalcTextWidth` its font metrics (without it, the call faults
 |---|---|
 | `h:load()` / `h:unload()` / `h:reload()` | Enable (fresh env, run `main.lua`), disable (call a global `PluginShutdown`, drop subscriptions and pending HTTP callbacks), or both. After `PluginShutdown` (or with none), `h:unload()` faults, naming each event and subscription name, if the instance still holds a subscription; `h:reload()` inherits it. A `PluginShutdown` that raises or times out is reported alone, without the leak check |
 | `h:advance(ms)` | Run the clock forward in 20 ms logic steps; a remainder carries over. Each step: deliver answered HTTP requests, deliver queued `Chat.AddMessage` messages, fire `Logic`, and every 30th step `ServerLogic` |
+| `h:step()` | One Logic step, without touching the carry-over clock that `h:advance` keeps: the same step `h:advance(20)` runs when nothing is carried over (the tick advances by one; delivers answered HTTP and queued chat, fires `Logic`, and `ServerLogic` on every 30th) |
 | `h:fire(event, fields?)` | Fire any stub event; `fields` must be fields of the stub's `<Event>EventPayload`. For events the world builder doesn't model (`KeyDown`, `SkillTransmit`...) |
 | `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "" }` (a status of 400 or more arrives failed), `{ timedOut = true }` or `{ error = "info", errorCode = n }`; any other field faults. Delivered on the next step. A request left unanswered for 10 s (500 steps) times out by itself |
 | `h:useRecording(source, opts?)` | Drive the world from a recording (a `.jsonl` path, repo-relative or absolute, or a list of entries); call before `h:load()`. A recording with `dropped` entries is refused unless `opts.allowDropped`. See [Replaying a recording](#replaying-a-recording) |

@@ -99,9 +99,12 @@ describe("Plugin", function()
 
     it("only grants permissions the manifest requests", function()
         local h = harness.new(plugin(""))
-        assert.has_error(function()
-            h.world:grant("trackingAccess")
-        end)
+        assert.matches(
+            "trackingAccess is not requested in the plugin's plugin.json",
+            harness.errorOf(function()
+                h.world:grant("trackingAccess")
+            end)
+        )
     end)
 end)
 
@@ -192,9 +195,12 @@ describe("HTTPRequest", function()
 
     it("faults without httpAccess, or for a base url not in the manifest", function()
         local h = harness.load(plugin(SENDER))
-        assert.has_error(function()
-            h.env.send("{}")
-        end)
+        assert.matches(
+            "HTTPRequest.new without the httpAccess permission",
+            harness.errorOf(function()
+                h.env.send("{}")
+            end)
+        )
         assert.matches(
             "is not a plugin.json url",
             harness.errorOf(function()
@@ -239,6 +245,22 @@ describe("HTTPRequest", function()
         end)
         assert.matches("^HTTP completion callback for http://127.0.0.1:8765: ", err)
         assert.matches("crashed the client %(docs/api%-concepts.md", err)
+    end)
+
+    it("delivers HTTP, then chat, then Logic within one step (Harness:step's order)", function()
+        local h = harness.load(
+            plugin([[
+            order = {}
+            Event.ChatMessage.Subscribe("c", function() order[#order + 1] = "chat" end)
+            Event.Logic.Subscribe("l", function() order[#order + 1] = "logic" end)
+            HTTPRequest.new(Plugin.urls.sink):Get(function() order[#order + 1] = "http" end)
+            Chat.AddMessage("queued")
+        ]]),
+            { grant = { "httpAccess", "chatAccess" } }
+        )
+        h:respond(h.requests[1], { status = 200 })
+        h:step()
+        assert.are.same({ "http", "chat", "logic" }, h.env.order)
     end)
 
     it("drops completion callbacks of an unloaded plugin", function()

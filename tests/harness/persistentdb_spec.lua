@@ -41,6 +41,29 @@ describe("PersistentDB", function()
         assert.is_false(h.env.wrongType)
     end)
 
+    it(
+        "counts stores in h.dbWrites: Set and typed setters, not failures, reads or deletes",
+        function()
+            local h = harness.load(plugin([[
+            PersistentDB:Set("a", 1)
+            PersistentDB:SetInt("b", 2)
+        ]]))
+            assert.are.equal(2, h.dbWrites)
+            local db = h.env.PersistentDB
+            db:SetInt("c", "three") -- wrong type: stores nothing
+            assert.are.equal(2, h.dbWrites)
+            db:Get("a")
+            db:GetInt("b")
+            db:CheckExists("a")
+            db:Delete("a")
+            assert.are.equal(2, h.dbWrites)
+            -- The count is the harness's, so it carries across a reload; main.lua runs again and
+            -- stores twice more.
+            h:reload()
+            assert.are.equal(4, h.dbWrites)
+        end
+    )
+
     it("stores a copy of a table, dropping fields it can't store", function()
         local h = harness.load(plugin([[
             local t = { keep = 1, fn = print, nested = { ok = "yes" } }

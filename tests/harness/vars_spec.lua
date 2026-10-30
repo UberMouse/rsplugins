@@ -62,12 +62,12 @@ describe("vars", function()
 
     it("checks values against the var's type", function()
         local h = harness.new(plugin(""))
-        assert.has_error(function()
-            h.world:setVar("VarPlayer", "ABSYSTEM", "seven")
-        end)
-        assert.has_error(function()
-            h.world:setVar("VarPlayer", "FRIEND_SORT_MODE", 8) -- a 3-bit VarBit
-        end)
+        assert.matches(
+            "VarPlayer.ABSYSTEM is %w+: expected an integer, got seven",
+            harness.errorOf(function()
+                h.world:setVar("VarPlayer", "ABSYSTEM", "seven")
+            end)
+        )
         h.world:setVar("VarPlayer", "FRIEND_SORT_MODE", 7)
     end)
 

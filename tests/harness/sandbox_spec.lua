@@ -23,11 +23,14 @@ describe("loading", function()
     end)
 
     it("refuses a manifest with requiredPermissions, which the client can't run", function()
-        assert.has_error(function()
-            harness.new(
-                plugin("", { ["plugin.json"] = '{ "requiredPermissions": ["httpAccess"] }' })
-            )
-        end)
+        assert.matches(
+            "requiredPermissions is broken in the client",
+            harness.errorOf(function()
+                harness.new(
+                    plugin("", { ["plugin.json"] = '{ "requiredPermissions": ["httpAccess"] }' })
+                )
+            end)
+        )
     end)
 end)
 
@@ -62,12 +65,15 @@ describe("require", function()
     end)
 
     it("fails on a circular require", function()
-        assert.has_error(function()
-            harness.load(plugin("require('a')", {
-                ["a.lua"] = "return require('b')",
-                ["b.lua"] = "return require('a')",
-            }))
-        end)
+        assert.matches(
+            "circular require of",
+            harness.errorOf(function()
+                harness.load(plugin("require('a')", {
+                    ["a.lua"] = "return require('b')",
+                    ["b.lua"] = "return require('a')",
+                }))
+            end)
+        )
     end)
 end)
 
@@ -110,6 +116,32 @@ describe("strict environment", function()
             "Player:IsAvailable called with ':'",
             harness.errorOf(function()
                 harness.load(plugin("Player:IsAvailable()"))
+            end)
+        )
+    end)
+
+    it("faults on an unknown enum member, and on a write to an enum", function()
+        assert.matches(
+            "unmocked API: PluginPermissions%.httpaccess",
+            harness.errorOf(function()
+                harness.load(plugin("local _ = PluginPermissions.httpaccess"))
+            end)
+        )
+        assert.matches(
+            "is read%-only",
+            harness.errorOf(function()
+                harness.load(plugin("ChatType.X = 1"))
+            end)
+        )
+    end)
+
+    it("reads a global named in opts.absent as nil, and rejects naming a provided one", function()
+        local h = harness.load(plugin("seen = World == nil"), { absent = { "World" } })
+        assert.is_true(h.env.seen)
+        assert.matches(
+            "opts.absent names string, which the sandbox provides",
+            harness.errorOf(function()
+                harness.load(plugin(""), { absent = { "string" } })
             end)
         )
     end)

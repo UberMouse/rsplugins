@@ -207,6 +207,7 @@ describe("replaying a recording", function()
         })
         h:load()
         assert.are.equal("0 Fixture Player 4 nil true false", h:output())
+        assert.are.equal(0, h.dbWrites) -- seeding the store isn't the plugin writing
     end)
 
     it("skips the plugin's own chat coming back, and delivers server chat", function()
@@ -240,6 +241,34 @@ describe("replaying a recording", function()
         h:playRecording()
         assert.are.equal("1 109 You pick the target's pocket. 1792892990", h:output())
         assert.are.equal(1, #h.chatLog)
+    end)
+
+    it("skips a VarTransmit for a var the catalog lacks, and records why", function()
+        local h = harness.new(plugin([[
+            Event.VarTransmit.Subscribe("v", function(ev) say(ev.var.configName) end)
+        ]]))
+        h:useRecording({
+            {
+                t = 2,
+                k = "event",
+                name = "VarTransmit",
+                payload = {
+                    var = { config = "NOT_A_REAL_VAR", id = 99999999, type = "VarPlayer" },
+                    oldValue = 0,
+                    newValue = 1,
+                },
+            },
+        })
+        h:load()
+        h:playRecording()
+        assert.are.equal("", h:output())
+        assert.are.same({
+            {
+                t = 2,
+                event = "VarTransmit",
+                why = "var NOT_A_REAL_VAR is not in docs/vars/vars.csv",
+            },
+        }, h.replay.skipped)
     end)
 
     it("reads JSON text, with slot tables keyed by digit strings, into the world", function()

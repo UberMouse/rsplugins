@@ -904,11 +904,12 @@ w:SetContentHeight(280)
 ]]
 
 -- The same rows, each handing the wheel to the window's handler.
-local WHEEL_ROWS = ROWS:gsub(
+local WHEEL_ROWS, wheelSubs = ROWS:gsub(
     "local icon = ",
     "row:Subscribe(ui.Hook.ONSCROLLWHEEL, w._onScrollWheel)\n    local icon = ",
     1
 )
+assert(wheelSubs == 1, "ROWS no longer has the 'local icon = ' line WHEEL_ROWS patches")
 
 describe("prettyui Window content for hand-built rows", function()
     it("is a live ui.Layer a plugin parents components to, and goes with the window", function()
@@ -957,7 +958,8 @@ describe("prettyui Window content for hand-built rows", function()
         function()
             local h = load(ROWS)
             local w = h.env.w
-            assert.are.equal(w._onScrollWheel, w._onScrollWheel)
+            -- Every read gives the same function, so Subscribe and Unsubscribe by it match.
+            assert.is_true(rawequal(w._onScrollWheel, w._onScrollWheel))
             assert.are.equal("function", type(w._onScrollWheel))
             assert.is_false(w._onScrollWheel(h.env.rows[1].row, 2))
             assert.are.equal(64, w._scroll.scrollY)
@@ -1155,8 +1157,10 @@ describe("prettyui driver on hand-built rows", function()
         assert.are.equal(64, h.env.w._scroll.scrollY)
     end)
 
-    it("calls a wheel listener as (component, delta), until one returns false", function()
-        local h = load([[
+    it(
+        "calls a wheel listener as (component, delta), until one returns anything but true",
+        function()
+            local h = load([[
             w = prettyui.Window.new(parent, { title = "T" })
             seen = {}
             row = ui.Layer.new(w.content)
@@ -1168,9 +1172,10 @@ describe("prettyui driver on hand-built rows", function()
             end)
             row:Subscribe(ui.Hook.ONSCROLLWHEEL, "b", function() seen[#seen + 1] = { "b" } end)
         ]])
-        assert.are.same({ true, 1 }, { h.ui:wheel(h.env.row, -3) })
-        assert.are.same({ { "a", true, -3 } }, h.env.seen)
-    end)
+            assert.are.same({ true, 1 }, { h.ui:wheel(h.env.row, -3) })
+            assert.are.same({ { "a", true, -3 } }, h.env.seen)
+        end
+    )
 
     it("runs the callbacks under the runtime budget", function()
         local h = load([[
@@ -1503,12 +1508,14 @@ describe("prettyui Tooltip.attach on hand-built rows", function()
 
     it("is hidden by Window:Close and destroyed by Window:Destroy", function()
         local h = load(TIPPED)
-        h.ui:hover(h.env.rows[1].row)
+        assert.is_true(h.ui:hover(h.env.rows[1].row))
+        assert.are.same({ "row 1" }, h.ui:tooltips())
         h.env.w:Close()
         assert.are.same({}, h.ui:tooltips())
         h.env.w:Show()
         assert.are.same({}, h.ui:tooltips())
-        h.ui:hover(h.env.rows[2].row)
+        assert.is_true(h.ui:hover(h.env.rows[2].row))
+        assert.are.same({ "row 2" }, h.ui:tooltips())
         h.env.w:Destroy()
         assert.are.same({}, h.ui:tooltips())
         -- Destroying one the window already took is harmless.
@@ -1524,7 +1531,8 @@ describe("prettyui Tooltip.attach on hand-built rows", function()
                 tips[1] = prettyui.Tooltip.attach(rows[1].row, w.content, { text = text })
             end
         ]])
-            h.ui:hover(h.env.rows[1].row)
+            assert.is_true(h.ui:hover(h.env.rows[1].row))
+            assert.are.same({ "row 1" }, h.ui:tooltips())
             h.env.retip("changed")
             assert.are.same({}, h.ui:tooltips())
             h.ui:leave()
@@ -1542,12 +1550,12 @@ describe("prettyui Tooltip.attach on hand-built rows", function()
         local icon = h.env.icon
         assert.is_false(h.env.now)
         -- The icon takes the click itself now, and the row gets none.
-        h.ui:click(icon)
+        assert.is_true(h.ui:click(icon))
         assert.are.same({}, h.env.clicks)
         h.env.tip:Destroy()
         assert.is_true(icon.clickthrough)
         h.env.tip:Destroy()
-        h.ui:click(icon)
+        assert.is_true(h.ui:click(icon))
         assert.are.equal(2, #h.env.clicks)
     end)
 

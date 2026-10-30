@@ -53,6 +53,20 @@ describe("Event subscriptions", function()
         assert.are.equal("", h:output())
     end)
 
+    it("skips a subscriber unsubscribed earlier in the same dispatch", function()
+        local h = harness.load(plugin([[
+            Event.WindowFocusChanged.Subscribe("a", function()
+                print("a")
+                Event.WindowFocusChanged.Unsubscribe("b")
+            end)
+            Event.WindowFocusChanged.Subscribe("b", function() print("b") end)
+        ]]))
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        assert.are.equal("a", h:output())
+        h:fire("WindowFocusChanged", { hasFocus = true })
+        assert.are.equal("a\na", h:output()) -- output accumulates; "b" never appears
+    end)
+
     it("faults on Unsubscribe passed straight to pcall or xpcall, wherever it runs", function()
         -- Top level: the fault fails the load, though the plugin's pcall caught it.
         assert.matches(
@@ -138,6 +152,7 @@ describe("Event subscriptions", function()
         end
         h:fire("WindowFocusChanged", { hasFocus = true })
         assert.are.same({}, h.instance.subs.KeyTyped)
+        assert.are.same({ "prl me" }, h.consoleCommands)
     end)
 
     it("allows a direct Unsubscribe inside an HTTP completion callback", function()
@@ -176,9 +191,12 @@ describe("Event subscriptions", function()
                 h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
             end)
         )
-        assert.has_error(function()
-            h:fire("WindowFocusChanged", { focus = true })
-        end)
+        assert.matches(
+            "WindowFocusChangedEventPayload has no field focus",
+            harness.errorOf(function()
+                h:fire("WindowFocusChanged", { focus = true })
+            end)
+        )
     end)
 
     it("faults on an event the stubs don't have", function()

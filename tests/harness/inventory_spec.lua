@@ -86,9 +86,12 @@ describe("Inventory", function()
         assert.are.equal("removed INV", h:output())
         assert.is_false(inv.isValid)
         assert.is_nil(h.env.refind())
-        assert.has_error(function()
-            return inv.slotCount
-        end)
+        assert.matches(
+            "Inv used after its inventory was removed %(check inv.isValid%)",
+            harness.errorOf(function()
+                return inv.slotCount
+            end)
+        )
         h.world:setInventory("INV", { [1] = { obj = "LOGS" } }, 28)
         assert.are_not.equal(inv, h.env.refind())
         assert.is_true(h.env.refind().isValid)
@@ -118,9 +121,12 @@ describe("Inventory", function()
 
     it("rejects config names that aren't in docs/api/consts", function()
         local h = harness.new(plugin(""))
-        assert.has_error(function()
-            h.world:setInventory("INV", { [1] = { obj = "NOT_AN_OBJ" } })
-        end)
+        assert.matches(
+            "obj NOT_AN_OBJ is not in docs/api/consts/Obj.lua",
+            harness.errorOf(function()
+                h.world:setInventory("INV", { [1] = { obj = "NOT_AN_OBJ" } })
+            end)
+        )
         assert.matches(
             "config.Inv.NOT_AN_INV is not in docs/api/consts/Inv.lua",
             harness.errorOf(function()

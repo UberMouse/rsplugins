@@ -2,11 +2,13 @@
 
 RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API).
 
-- Dev tools (Lua 5.4, lua-language-server, stylua, selene, Python) come from `flake.nix`. With
+- Dev tools (Lua 5.4, lua-language-server, stylua, selene, Python, ruff) come from `flake.nix`. With
   direnv, run `direnv allow` once and they load whenever you `cd` in. Otherwise use `nix develop`.
   Claude Code's Bash tool gets them from `SessionStart`, `CwdChanged` and `FileChanged`
   (`.envrc|flake.nix|flake.lock`) hooks in `~/.claude/settings.json`, each running
   `direnv export zsh > "$CLAUDE_ENV_FILE"`, so agents never need `direnv exec`.
+- Once per clone, `git config blame.ignoreRevsFile .git-blame-ignore-revs` keeps `git blame` past
+  the formatting-only commits.
 - [docs/](docs/README.md): our notes on the plugin API, dev environment, guidelines and Mod.io
   submission. `docs/api/` is the API reference as LuaLS stubs. The dev shell links it, and
   `.luarc.json` points editors at it, so you get completion and type checks.

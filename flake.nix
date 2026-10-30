@@ -173,6 +173,7 @@
               echo "  lua / luac                    Lua $(lua -v 2>&1 | cut -d' ' -f2) (client runs 5.4.8)"
               echo "  lua-language-server           LSP for editors; docs/api/ holds the API stubs"
               echo "  stylua / selene               Lua formatter / linter"
+              echo "  ruff                          Python formatter / linter (scripts/)"
               echo "  plugins and scripts           indexed in README.md (tables: Plugins, Scripts)"
               echo "  scripts/check.sh              the gate; run it before committing"
             '';

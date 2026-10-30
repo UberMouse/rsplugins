@@ -21,6 +21,7 @@
 #  10. submission    scripts/check-submission.selftest.sh: the submission check's cases (always)
 #  11. mod checks     claude plugin validate + test on each Claude Code mod under .claude/skills/
 #                     (always; tsc needs hand-copied engine types, see .claude/skills/rsp-ops/README.md)
+# 12. ruff           ruff check + ruff format --check on scripts/, per ruff.toml (always)
 #
 # Usage: scripts/check.sh [path ...]
 #   Paths default to plugins/, lib/ and tests/ (those that exist) and only narrow steps 1-5. Any
@@ -31,9 +32,10 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-for tool in luac selene stylua lua-language-server python3 busted node jq; do
+for tool in luac selene stylua lua-language-server python3 ruff busted node jq; do
     if ! command -v "$tool" >/dev/null; then
-        echo "$tool not on PATH: run inside the dev shell (direnv, or nix develop)" >&2
+        echo "$tool not on PATH: run inside the dev shell (direnv, or nix develop)." >&2
+        echo "A shell started before flake.nix changed needs \`direnv reload\`, or run \`direnv exec . scripts/check.sh\`." >&2
         exit 2
     fi
 done
@@ -164,6 +166,10 @@ for mod in .claude/skills/*/.claude-plugin/plugin.json; do
     run_step "mod validate $dir" claude plugin validate "$dir"
     run_step "mod test $dir" claude plugin test "$dir"
 done
+
+# Format is checked as well as lint so the style cannot drift back.
+run_step "ruff check (fix: ruff check --fix scripts)" ruff check scripts
+run_step "ruff format (fix: ruff format scripts)" ruff format --check scripts
 
 if [[ ${#failed[@]} -gt 0 ]]; then
     printf 'check: FAILED (%d): %s\n' "${#failed[@]}" "${failed[*]}" >&2

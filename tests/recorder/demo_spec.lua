@@ -165,6 +165,21 @@ describe("plugins/recorder-demo with the recorder", function()
         assert.are.equal(0, one(entries, { path = "Player.GetEntity().displayName" }).t)
     end)
 
+    it("leaves no subscription behind when it shuts down, with a batch in flight", function()
+        local h = support.demo()
+        h:step() -- batch 1 is in flight
+        assert.are.equal(1, #support.posts(h))
+        h:unload()
+        for event, list in pairs(h.instance.subs) do
+            local names = {}
+            for i, entry in ipairs(list) do
+                names[i] = entry.name
+            end
+            assert.are.same({}, names, "still subscribed to " .. event)
+        end
+        assert.are.equal(0, support.lines(h, "[RECORDER] dropping"))
+    end)
+
     it("runs without dev/", function()
         local files = {}
         for _, name in ipairs({ "main.lua", "envprobe.lua", "plugin.json" }) do

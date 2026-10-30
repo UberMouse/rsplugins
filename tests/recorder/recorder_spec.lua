@@ -268,23 +268,100 @@ describe("dev recorder", function()
         assert.are.equal(1, support.lines(h, "[RECORDER] recording stopped after an error"))
     end)
 
-    it("stops sending, once, when sending a batch fails", function()
+    it("stops sending, once, when building a batch fails", function()
         local h = harness.new(
             support.plugin(
-                'HTTPRequest = { new = function() error("no requests") end }\n'
-                    .. support.INSTALL
-                    .. "local qp = var.VarPlayer.QP.value"
+                support.INSTALL
+                    .. "local qp = var.VarPlayer.QP.value\n"
+                    .. "local run = var.VarPlayer.OPTION_RUN.value"
             ),
             { grant = { "httpAccess" } }
         )
         h.world:setVar("VarPlayer", "QP", 10)
+        h.world:setVar("VarPlayer", "OPTION_RUN", 0)
         h:load()
+        -- Comparing a number with a string raises in the batch builder, not in starting a request.
+        h.env.require("dev/recorder").limits.batchBytes = "many"
         h:advance(2000)
         assert.are.equal(0, #h.requests)
         assert.are.equal(
             1,
             support.lines(h, "[RECORDER] recording and sending stopped after an error")
         )
+    end)
+
+    -- A plugin whose HTTPRequest.new raises while `failStart` is set, as the client may refuse
+    -- a request.
+    local FAILING_NEW = [[
+        local real = HTTPRequest
+        HTTPRequest = setmetatable({ new = function(...)
+            if failStart then error("no requests") end
+            return real.new(...)
+        end }, { __index = real })
+    ]]
+
+    it("drops a batch whose request fails to start, and keeps sending", function()
+        local h = harness.new(
+            support.plugin(
+                FAILING_NEW
+                    .. support.INSTALL
+                    .. 'Event.Logic.Subscribe("read", function() local _ = var.VarPlayer.QP.value end)'
+            ),
+            { grant = { "httpAccess" } }
+        )
+        h.world:setVar("VarPlayer", "QP", 10)
+        h:load()
+        h.env.failStart = true
+        h:advance(100)
+        assert.are.equal(0, #h.requests)
+        assert.are.equal(1, support.lines(h, "[RECORDER] dropping the oldest entries"))
+        assert.matches("starting the request failed", h:output())
+        assert.is_nil(h:output():find("sending stopped", 1, true))
+
+        -- The next batch is still sent once the retry wait is over, and counts what was lost.
+        h.env.failStart = false
+        h.world:setVar("VarPlayer", "QP", 11)
+        h:advance(6000)
+        local batches = support.batches(h)
+        assert.are.equal(1, #batches)
+        assert.is_true(batches[1].dropped > 0)
+        assert.are.equal(1, support.lines(h, "[RECORDER] dropping"))
+    end)
+
+    it("ignores a batch completing after shutdown, and cancels the request in flight", function()
+        local h = harness.new(
+            support.plugin(support.INSTALL .. "local qp = var.VarPlayer.QP.value"),
+            { grant = { "httpAccess" } }
+        )
+        h.world:setVar("VarPlayer", "QP", 10)
+        h:load()
+        h:step()
+        local posts = support.posts(h)
+        assert.are.equal(1, #posts)
+        local recorder = h.env.require("dev/recorder")
+        recorder.shutdown()
+        assert.are.same({}, h.instance.subs.Logic)
+        assert.is_true(posts[1].request.cancelled)
+
+        -- Later ticks send nothing and log nothing (no drop, no fault).
+        h:advance(3000)
+        assert.are.equal(1, #support.posts(h))
+        assert.are.equal(0, support.lines(h, "[RECORDER]"))
+        recorder.shutdown() -- twice is fine
+    end)
+
+    it("shuts down as a no-op without urls.recorder", function()
+        local h = harness.new(
+            support.plugin(
+                support.INSTALL .. "require('dev/recorder').shutdown()",
+                '{ "name": "T", "version": "0.0.1", "contactEmailAddress": "t@example.com", '
+                    .. '"optionalPermissions": [ "httpAccess" ] }'
+            ),
+            { grant = { "httpAccess" } }
+        )
+        h:load()
+        assert.are.equal(1, support.lines(h, "[RECORDER] no urls.recorder"))
+        h:unload()
     end)
 
     it("records the plugin's own HTTP requests, but not its batches", function()

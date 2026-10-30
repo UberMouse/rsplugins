@@ -9,6 +9,25 @@
 -- Run `prl var-dump` to take a fresh snapshot. NOT for submission: dumping all
 -- vars is a research tool, not a player-facing feature.
 
+-- The event subscriptions this plugin makes (event name -> subscription name), kept in one
+-- table so Subscribe and Unsubscribe can't drift apart. Some are made only once httpAccess
+-- is granted.
+local SUBS = {
+    OptionalPermissionChanged = "varDumpPermission",
+    VarTransmit = "varDumpChanges",
+    ServerLogic = "varDumpFlush",
+    Logic = "varDumpSnapshot",
+}
+
+-- Defined before anything below can fail, so a failing load still unsubscribes. Unsubscribing
+-- a name that was never subscribed returns false, so the not-yet-granted case is fine.
+-- Direct calls, never an API function handed to pcall (docs/api-concepts.md).
+function PluginShutdown()
+    for event, name in pairs(SUBS) do
+        Event[event].Unsubscribe(name)
+    end
+end
+
 local json = require("json")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
@@ -434,17 +453,17 @@ local started = false
 local function start()
     if started then return end
     started = true
-    Event.VarTransmit.Subscribe("varDumpChanges", onVarTransmit)
-    Event.ServerLogic.Subscribe("varDumpFlush", onServerLogic)
+    Event.VarTransmit.Subscribe(SUBS.VarTransmit, onVarTransmit)
+    Event.ServerLogic.Subscribe(SUBS.ServerLogic, onServerLogic)
     snap = { stage = "list", domainIndex = 1, all = {}, next = 1, part = 0, entries = {} }
     building = true
     beginDomain()
-    Event.Logic.Subscribe("varDumpSnapshot", onLogic)
+    Event.Logic.Subscribe(SUBS.Logic, onLogic)
 end
 
 -- httpAccess is optional, so it can be granted while the plugin is running.
 -- Start as soon as it is, without needing a reload.
-Event.OptionalPermissionChanged.Subscribe("varDumpPermission", function(ev)
+Event.OptionalPermissionChanged.Subscribe(SUBS.OptionalPermissionChanged, function(ev)
     if ev.enabled and Plugin.HasPermission(PluginPermissions.httpAccess) then start() end
 end)
 

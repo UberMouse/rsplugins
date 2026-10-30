@@ -7,6 +7,10 @@
 --
 --     local recorder = require("dev/recorder") -- nil when dev/ isn't there
 --     if recorder then recorder.install(_ENV, "my-plugin") end
+--     function PluginShutdown()
+--         -- the plugin's own Unsubscribes, then:
+--         if recorder then recorder.shutdown() end
+--     end
 --
 -- and lists "httpAccess" in optionalPermissions and "recorder": "http://127.0.0.1:8766" in
 -- urls. install() swaps the API globals in that environment for stand-ins that forward every
@@ -16,6 +20,8 @@
 -- the Logic event, never from an HTTP callback (starting a request in one crashed the client;
 -- docs/api-concepts.md). With the receiver down, the oldest entries are dropped and counted,
 -- and the plugin carries on.
+--
+-- recorder.shutdown() stops the recorder's flush and cancels a batch in flight.
 --
 -- The stand-ins are Lua tables, so `type()` of an API object is "table" while recording.
 
@@ -36,6 +42,7 @@ recorder.limits = {
 -- The manifest url the batches go to: urls.recorder in plugin.json.
 local URL_NAME = "recorder"
 local PATH = "/record"
+local FLUSH_NAME = "devRecorderFlush" -- the recorder's own Logic subscription
 
 -- Deliveries not recorded: they fire every tick or frame. Entries carry the Logic tick
 -- count instead (`t`), which is all a replay needs to place them in time.
@@ -55,6 +62,7 @@ end
 ---------------------------------------------------------------------------
 
 local installed = false
+local active = false -- install() finished subscribing the flush; cleared by shutdown()
 local stopped = false -- set after an internal error; the stand-ins keep forwarding
 local sendFailed = false -- set if sending a batch raised; nothing more is sent
 local url = nil ---@type PluginURL?
@@ -628,6 +636,7 @@ end
 -- client), so a failure only records the loss; the next Logic tick posts again.
 ---@param finished HTTPRequest
 local function onPosted(finished)
+    if not active then return end -- shutdown() cancelled the request; a late completion is ignored
     local sent = assert(inFlight, "a batch is in flight")
     inFlight = nil -- the request has finished, so its body may go
     if finished.successful and finished.responseCode == 200 then return end
@@ -657,19 +666,31 @@ local function flush()
         seq = seq,
         dropped = dropped,
     }, entries)
-    -- realHTTP is nil if the client only provides HTTPRequest once httpAccess is granted
-    -- (undocumented); the global is there by now.
-    local request = (realHTTP or HTTPRequest).new(url, PATH)
-    request:AddHeader("Content-Type", "application/json")
-    -- Keep the request and its body referenced until it finishes, in case the client
-    -- doesn't copy the body (docs/api-concepts.md).
-    inFlight = { request = request, body = body, count = #entries }
-    request:Post(body, onPosted)
+    -- Starting the request is the one step that can fail without the recorder being broken (say
+    -- the client refuses a new request): that batch is dropped like a failed POST, and sending
+    -- continues. Any other error in flush still reaches onLogic's pcall and stops sending.
+    -- A Lua closure around the API calls, never an API function handed to pcall.
+    local started, err = pcall(function()
+        -- realHTTP is nil if the client only provides HTTPRequest once httpAccess is granted
+        -- (undocumented); the global is there by now.
+        local request = (realHTTP or HTTPRequest).new(url, PATH)
+        request:AddHeader("Content-Type", "application/json")
+        -- Keep the request and its body referenced until it finishes, in case the client
+        -- doesn't copy the body (docs/api-concepts.md).
+        inFlight = { request = request, body = body, count = #entries }
+        request:Post(body, onPosted)
+    end)
+    if not started then
+        inFlight = nil
+        noteDropped(#entries, "starting the request failed: " .. tostring(err))
+        nextPost = tick + recorder.limits.retryTicks
+    end
 end
 
 -- Not guard(flush): the entries just before a recording error are what explain it, so the
 -- buffer keeps draining after recording stops. Only a failure to send stops sending.
 local function onLogic()
+    if not active then return end
     tick = tick + 1
     if sendFailed then return end
     local ok, err = pcall(flush)
@@ -723,10 +744,30 @@ function recorder.install(env, plugin)
             )
         )
     end
-    realEvent.Logic.Subscribe("devRecorderFlush", onLogic)
+    realEvent.Logic.Subscribe(FLUSH_NAME, onLogic)
+    active = true
     for name, wrap in pairs(WRAPPERS) do
         local real = env[name]
         if real ~= nil then env[name] = wrap(real) end
+    end
+end
+
+-- Stop recording: unsubscribe the flush and cancel a batch in flight, so a completion can't
+-- reach a dead Lua state. The stand-ins keep forwarding (the plugin is unloading anyway).
+-- Safe to call twice, and a no-op if install() didn't finish. Call it from the plugin's
+-- PluginShutdown, after its own Unsubscribes.
+function recorder.shutdown()
+    if not active then return end
+    active = false
+    -- A plain call statement: not passed to pcall and not a tail call (docs/api-concepts.md).
+    realEvent.Logic.Unsubscribe(FLUSH_NAME)
+    local sent = inFlight
+    inFlight = nil
+    if sent then
+        -- A Lua closure around the API call, never the API function itself.
+        pcall(function()
+            sent.request:Cancel()
+        end)
     end
 end
 

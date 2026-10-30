@@ -293,7 +293,7 @@ harness. `plugins/recorder-demo` is the worked example.
 every use to the real API. Without `urls.recorder` it logs one `[RECORDER]` line and changes
 nothing. Without httpAccess it logs one line, records into its buffer and sends nothing, then
 starts sending once the permission is granted (no reload needed). If the recorder itself fails,
-it logs once and stops recording, and the plugin carries on.
+it logs once and stops recording, and the plugin carries on. `recorder.shutdown()` (from `PluginShutdown`) unsubscribes its flush and cancels a batch in flight.
 
 **Modules.** `install()` swaps the globals of the environment passed to it. Every module shares
 `main.lua`'s environment, in the harness and in the client (recorder-demo's probe said
@@ -355,7 +355,7 @@ so any other member is nil where the harness would fault.
 second and one at a time, never from an HTTP callback. Each body stays referenced until its
 request finishes. A batch holds up to 256 KB of entries. The buffer keeps up to 8 MB. Past that
 the oldest entries are dropped, and so is a batch the receiver doesn't take, after which the next
-POST waits 5 s. A failed batch isn't re-sent, so the buffer bounds memory but doesn't carry data
+POST waits 5 s (also when starting the request raises). A failed batch isn't re-sent, so the buffer bounds memory but doesn't carry data
 across a receiver outage: start the receiver before granting httpAccess. Drops (buffer overflow
 and failed batches) are counted, and the first one logs one console line. One value is capped
 at 10,000 nodes and each string at 4096 bytes, so recording a full bank stays well inside a

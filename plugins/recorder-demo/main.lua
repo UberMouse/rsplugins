@@ -8,6 +8,24 @@
 local recorder = require("dev/recorder")
 if recorder then recorder.install(_ENV, "recorder-demo") end
 
+-- The event subscriptions this plugin makes: event name -> subscription name. Subscribing
+-- and unsubscribing both read this table, so they can't drift apart.
+local SUBS = {
+    VarTransmit = "recdemoVars",
+    InventoryUpdated = "recdemoInventory",
+    ChatMessage = "recdemoChat",
+    ServerLogic = "recdemoTick",
+}
+
+-- Defined before anything below can fail, so a failing load still unsubscribes. Direct
+-- Unsubscribe calls, never an API function handed to pcall (docs/api-concepts.md).
+function PluginShutdown()
+    for event, name in pairs(SUBS) do
+        Event[event].Unsubscribe(name)
+    end
+    if recorder then recorder.shutdown() end
+end
+
 -- Every console line from this plugin carries this tag, so it's easy to grep.
 local function say(...)
     log("[RECDEMO]", ...)
@@ -129,8 +147,8 @@ local enables = (PersistentDB:GetInt("enables") or 0) + 1
 PersistentDB:SetInt("enables", enables)
 say("enabled", enables, "times")
 
-Event.VarTransmit.Subscribe("recdemoVars", onVarTransmit)
-Event.InventoryUpdated.Subscribe("recdemoInventory", onInventoryUpdated)
-Event.ChatMessage.Subscribe("recdemoChat", onChatMessage)
-Event.ServerLogic.Subscribe("recdemoTick", onServerLogic)
+Event.VarTransmit.Subscribe(SUBS.VarTransmit, onVarTransmit)
+Event.InventoryUpdated.Subscribe(SUBS.InventoryUpdated, onInventoryUpdated)
+Event.ChatMessage.Subscribe(SUBS.ChatMessage, onChatMessage)
+Event.ServerLogic.Subscribe(SUBS.ServerLogic, onServerLogic)
 readState()

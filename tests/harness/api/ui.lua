@@ -299,6 +299,18 @@ local function isInteger(value)
     return math.type(value) == "integer"
 end
 
+---@param value any
+---@return boolean
+local function isBoolean(value)
+    return type(value) == "boolean"
+end
+
+---@param value any
+---@return boolean
+local function isString(value)
+    return type(value) == "string"
+end
+
 -- A cursor id the plugin may set: -1 (none) or a member of id.Cursor.
 ---@param value any
 ---@return boolean
@@ -309,11 +321,13 @@ end
 -- ui.ComponentCursorConfig: only `mouseOverCursor` is modelled. Its state is a table of the
 -- component's own (`s.cursorState`) holding `owner`, so a handle kept across the component's
 -- Destroy() faults on use.
+local readCursor = storedField("mouseOverCursor")
 local CursorConfig = strict.class("ui.ComponentCursorConfig", {
     fields = {
+        ---@return integer
         mouseOverCursor = function(s)
             live(s.owner)
-            return storedField("mouseOverCursor")(s)
+            return readCursor(s)
         end,
     },
     setters = {
@@ -340,6 +354,7 @@ local OpConfig = strict.class("ui.ComponentOpConfig", {
         end,
         -- The page says what an unset op gives only as a filter description; -1 is the
         -- "no cursor" value mouseOverCursor uses.
+        ---@return integer
         GetOpCursor = function(s, opIndex)
             live(s.owner)
             return s.opCursors[opIndex] or -1
@@ -378,6 +393,7 @@ local FIELDS = {
         return s.hidden
     end,
     -- One proxy per component, so `c.cursorConfig == c.cursorConfig` and no proxy per read.
+    ---@return table
     cursorConfig = function(s)
         if not s.cursorProxy then
             s.cursorState = { class = "ui.ComponentCursorConfig", owner = s }
@@ -385,6 +401,7 @@ local FIELDS = {
         end
         return s.cursorProxy
     end,
+    ---@return table
     opConfig = function(s)
         if not s.opProxy then
             s.opState = { class = "ui.ComponentOpConfig", opCursors = {}, owner = s }
@@ -496,9 +513,7 @@ local SETTERS = {
     alpha = checkedSetter("alpha", function(v)
         return type(v) == "number"
     end, "a number"),
-    hidden = checkedSetter("hidden", function(v)
-        return type(v) == "boolean"
-    end, "a boolean"),
+    hidden = checkedSetter("hidden", isBoolean, "a boolean"),
     rgba = checkedSetter("rgba", function(v)
         return isInteger(v) and v >= 0 and v <= 0xFFFFFFFF
     end, "an integer from 0 to 0xFFFFFFFF"),
@@ -592,15 +607,14 @@ local CLASSES = {
     Text = componentClass("ui.Text", {
         fields = {
             font = storedField("font"),
+            ---@return string
             content = function(s)
                 return s.content
             end,
         },
         setters = {
             font = checkedSetter("font", isInteger, "an integer"),
-            content = checkedSetter("content", function(v)
-                return type(v) == "string"
-            end, "a string"),
+            content = checkedSetter("content", isString, "a string"),
         },
         methods = { AlignTo = alignTo },
     }),

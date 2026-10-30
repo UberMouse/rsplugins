@@ -12,6 +12,7 @@
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
 local plugin = require("tests.harness.api.plugin")
+local world = require("tests.harness.world")
 
 local M = {}
 
@@ -24,7 +25,7 @@ local ACTIVE = "This request is already being executed"
 
 -- The client gives up on a request after 10 s (500 Logic ticks), with libcurl's
 -- CURLE_OPERATION_TIMEDOUT and its message.
-M.TIMEOUT_TICKS = 500
+local TIMEOUT_TICKS = 500
 local TIMEOUT_CODE = 28
 local TIMEOUT_INFO = "ErrorOperation timed out after 10001 milliseconds with 0 bytes received"
 
@@ -77,7 +78,7 @@ end
 local function start(s, method, body, onDone)
     local h = s.h
     if h.inHttpCallback then strict.fault(CALLBACK_CRASH) end
-    if not h.world.state.permissions.granted.httpAccess then
+    if not world.granted(h.world.state, "httpAccess") then
         strict.fault("HTTPRequest used without the httpAccess permission")
     end
     if s.active then
@@ -129,7 +130,7 @@ local Namespace = strict.class("HTTPRequest", {
     statics = {
         new = function(s, baseURL, path)
             local h = s.h
-            if not h.world.state.permissions.granted.httpAccess then
+            if not world.granted(h.world.state, "httpAccess") then
                 strict.fault("HTTPRequest.new without the httpAccess permission")
             end
             -- Only a Plugin.urls value is a base URL; the harness hands those out, so one the
@@ -190,7 +191,7 @@ local function finish(f, r)
 end
 
 -- Deliver every answered request started before this step, in request order, and time out
--- those left unanswered for M.TIMEOUT_TICKS. A cancelled request finishes, failed, with no
+-- those left unanswered for TIMEOUT_TICKS. A cancelled request finishes, failed, with no
 -- callback.
 ---@param h table the harness
 function M.deliver(h)
@@ -201,7 +202,7 @@ function M.deliver(h)
             s.fields.finished, s.fields.failed = true, true
         end
         local r = record.response
-        if not r and s.active and h.tick - record.startTick >= M.TIMEOUT_TICKS then
+        if not r and s.active and h.tick - record.startTick >= TIMEOUT_TICKS then
             r = { timedOut = true }
             record.response = r
         end

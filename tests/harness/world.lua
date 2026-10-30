@@ -138,17 +138,31 @@ end
 
 ---@param key string|integer
 ---@return integer
-function M.invId(key)
+local function invId(key)
     local id = catalog.config("Inv", key)
     if not id then strict.fault("inv " .. tostring(key) .. " is not in docs/api/consts/Inv.lua") end
     ---@cast id -? -- fault() never returns
     return id
 end
 
-local SkillType = stubs.value("game/player.lua", "SkillType")
 local SKILLS = {}
-for _, v in pairs(SkillType) do
+for _, v in pairs(stubs.value("game/player.lua", "SkillType")) do
     SKILLS[v] = true
+end
+
+-- Whether `v` is a SkillType value.
+---@param v any
+---@return boolean
+function M.isSkill(v)
+    return SKILLS[v] == true
+end
+
+-- Whether the plugin holds permission `perm` (a name string) in `state`.
+---@param state table
+---@param perm string
+---@return boolean
+function M.granted(state, perm)
+    return state.permissions.granted[perm] == true
 end
 
 local OBJ_FIELDS = stubs.fields("ObjType")
@@ -226,7 +240,7 @@ end
 -- Skill levels and XP, as the Player getters return them. Unset ones default to the
 -- uncapped value (level / xp).
 function ops.setSkill(state, op)
-    if not SKILLS[op.skill] then
+    if not M.isSkill(op.skill) then
         strict.fault("setSkill: not a SkillType value: " .. tostring(op.skill))
     end
     assert(
@@ -262,7 +276,7 @@ M.EMPTY_OBJ = -1
 -- left out, or given as obj -1 (how recordings write empty slots), is empty. A real obj with
 -- count 0 is not empty: a bought-out shop line stays in its shop inventory that way.
 function ops.setInventory(state, op)
-    local id = M.invId(op.inv)
+    local id = invId(op.inv)
     local old = state.invs[id]
     local slots, highest = {}, 0
     for i, slot in pairs(op.slots) do
@@ -294,7 +308,7 @@ function ops.setInventory(state, op)
 end
 
 function ops.removeInventory(state, op)
-    local id = M.invId(op.inv)
+    local id = invId(op.inv)
     if not state.invs[id] then return {} end
     state.invs[id] = nil
     return { { event = "InventoryRemoved", inv = id } }

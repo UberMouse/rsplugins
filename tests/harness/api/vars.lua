@@ -57,12 +57,8 @@ local VarType = strict.class("VarType", {
 
 local VarNamespace = strict.class("_global.var", {
     fields = {
-        VarPlayer = function(s)
-            return s.VarPlayer
-        end,
-        VarClient = function(s)
-            return s.VarClient
-        end,
+        VarPlayer = "VarPlayer",
+        VarClient = "VarClient",
     },
 })
 -- FromID is declared inline in the stub: `VarPlayer { [string]: VarType, FromID: ... }`.
@@ -93,7 +89,7 @@ function M.install(h, env)
             end
             return catalog.var(domain, varId) and M.proxy(h, domain, varId)
         end
-        domains[domain] = strict.lookup(function(name)
+        domains[domain] = strict.lookup("var." .. domain, function(name)
             if not catalog.var(domain, name) then
                 strict.fault(
                     string.format(
@@ -104,7 +100,7 @@ function M.install(h, env)
                 )
             end
             return M.proxy(h, domain, name)
-        end, { FromID = fromID })
+        end, { extra = { FromID = fromID } })
     end
     env.var = VarNamespace.new(domains)
     env.ValueType = strict.enum("ValueType", M.ValueType)

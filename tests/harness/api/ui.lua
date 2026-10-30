@@ -59,9 +59,9 @@ end
 ---@param s table
 ---@return integer x
 ---@return integer y
-function M.globalPos(s)
+local function globalPos(s)
     if not s.parent then return 0, 0 end
-    local gx, gy = M.globalPos(s.parent)
+    local gx, gy = globalPos(s.parent)
     local x, y = M.pos(s)
     return gx + x, gy + y
 end
@@ -227,12 +227,8 @@ end
 
 local Vector2 = strict.class("Vector2", {
     fields = {
-        x = function(s)
-            return s.x
-        end,
-        y = function(s)
-            return s.y
-        end,
+        x = "x",
+        y = "y",
     },
 })
 
@@ -240,7 +236,7 @@ local Vector2 = strict.class("Vector2", {
 -- a plugin that keeps using one has lost track of its UI.
 ---@param s table
 local function live(s)
-    if s.destroyed then strict.fault(s.class .. " used after Destroy()") end
+    strict.live(s, s.class)
 end
 
 ---@param s table
@@ -414,7 +410,7 @@ local FIELDS = {
         return s.opProxy
     end,
     xyGlobal = function(s)
-        local x, y = M.globalPos(s)
+        local x, y = globalPos(s)
         return Vector2.new({ x = x, y = y })
     end,
 }
@@ -712,36 +708,30 @@ local function constructor(kind)
     })
 end
 
+local constructors = {
+    Layer = constructor("Layer").new({}),
+    Sprite = constructor("Sprite").new({}),
+    Text = constructor("Text").new({}),
+}
+
 -- A read-only enum table of opaque numbers (ui.Hook, ui.AlignMode); other names fault.
 ---@param name string
 ---@param values table
 ---@return table
 local function enumTable(name, values)
-    return strict.lookup(function(member)
+    return strict.lookup(name, function(member)
         strict.fault("unmocked API: " .. name .. "." .. tostring(member))
-    end, values)
+    end, { extra = values })
 end
 
 local UiNamespace = strict.class("ui", {
     fields = {
-        Interfaces = function(s)
-            return s.interfaces
-        end,
-        Layer = function(s)
-            return s.Layer
-        end,
-        Sprite = function(s)
-            return s.Sprite
-        end,
-        Text = function(s)
-            return s.Text
-        end,
-        Hook = function(s)
-            return s.Hook
-        end,
-        AlignMode = function(s)
-            return s.AlignMode
-        end,
+        Interfaces = "Interfaces",
+        Layer = "Layer",
+        Sprite = "Sprite",
+        Text = "Text",
+        Hook = "Hook",
+        AlignMode = "AlignMode",
     },
 })
 -- The stubs declare these as classes and enums of their own, not as fields of `ui`.
@@ -751,24 +741,12 @@ end
 
 local IdNamespace = strict.class("_global.id", {
     fields = {
-        Component = function(s)
-            return s.components
-        end,
-        Sound = function(s)
-            return s.sounds
-        end,
-        Font = function(s)
-            return s.fonts
-        end,
-        Sprite = function(s)
-            return s.sprites
-        end,
-        Obj = function(s)
-            return s.objs
-        end,
-        Cursor = function(s)
-            return s.cursors
-        end,
+        Component = "Component",
+        Sound = "Sound",
+        Font = "Font",
+        Sprite = "Sprite",
+        Obj = "Obj",
+        Cursor = "Cursor",
     },
 })
 
@@ -778,7 +756,7 @@ local IdNamespace = strict.class("_global.id", {
 ---@param label string
 ---@return table
 local function idNames(kind, label)
-    return strict.lookup(function(name)
+    return strict.lookup("id." .. kind, function(name)
         if name == "FromID" then strict.fault("unmocked API: id." .. kind .. ".FromID") end
         local found = catalog.config(kind, name)
         if not found then
@@ -796,22 +774,22 @@ function M.install(h, env)
     local root, rootState = M.create("Component", nil)
     h.instance.uiRoot = rootState
     env.ui = UiNamespace.new({
-        interfaces = Interfaces.new({ root = root }),
-        Layer = constructor("Layer").new({}),
-        Sprite = constructor("Sprite").new({}),
-        Text = constructor("Text").new({}),
+        Interfaces = Interfaces.new({ root = root }),
+        Layer = constructors.Layer,
+        Sprite = constructors.Sprite,
+        Text = constructors.Text,
         Hook = enumTable("ui.Hook", M.Hook),
         AlignMode = enumTable("ui.AlignMode", M.AlignMode),
     })
     env.id = IdNamespace.new({
-        components = strict.lookup(function(name)
+        Component = strict.lookup("id.Component", function(name)
             strict.fault("unmocked API: id.Component." .. tostring(name))
-        end, { [M.PLUGIN_LAYER_NAME] = M.PLUGIN_LAYER_ID }),
-        sounds = idNames("Sound", "sound"), -- the mock plays nothing
-        fonts = idNames("Font", "font"),
-        sprites = idNames("Sprite", "sprite"),
-        objs = idNames("Obj", "object"), -- for SetAssociatedObject
-        cursors = idNames("Cursor", "cursor"), -- for the cursor configs
+        end, { extra = { [M.PLUGIN_LAYER_NAME] = M.PLUGIN_LAYER_ID } }),
+        Sound = idNames("Sound", "sound"), -- the mock plays nothing
+        Font = idNames("Font", "font"),
+        Sprite = idNames("Sprite", "sprite"),
+        Obj = idNames("Obj", "object"), -- for SetAssociatedObject
+        Cursor = idNames("Cursor", "cursor"), -- for the cursor configs
     })
 end
 

@@ -41,12 +41,8 @@ M.width = width
 
 local Font = strict.class("FontType", {
     fields = {
-        id = function(s)
-            return s.id
-        end,
-        configName = function(s)
-            return s.name
-        end,
+        id = "id",
+        configName = "name",
         typeName = function()
             return "Font"
         end,
@@ -68,16 +64,18 @@ local Font = strict.class("FontType", {
 ---@return table
 function M.table()
     local made = {}
-    return strict.lookup(function(name)
+    return strict.lookup("config.Font", function(name)
         local id = catalog.config("Font", name)
         if not id then strict.fault("unknown font: config.Font." .. tostring(name)) end
         ---@cast id -? -- fault() never returns
         made[name] = made[name] or Font.new({ id = id, name = name })
         return made[name]
     end, {
-        FromID = function()
-            strict.fault("unmocked API: config.Font.FromID")
-        end,
+        extra = {
+            FromID = function()
+                strict.fault("unmocked API: config.Font.FromID")
+            end,
+        },
     })
 end
 

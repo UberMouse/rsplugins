@@ -9,6 +9,7 @@
 
 local dkjson = require("dkjson")
 local paths = require("tests.harness.paths")
+local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
 
 local snap = assert(
@@ -54,11 +55,7 @@ end
 ---@param set table
 ---@return string
 local function sortedList(set)
-    local out = {}
-    for k in pairs(set) do
-        out[#out + 1] = k
-    end
-    table.sort(out)
+    local out = strict.sortedKeys(set)
     return #out > 0 and table.concat(out, " ") or "-"
 end
 
@@ -90,27 +87,16 @@ local function compare(label, client, stub)
     end
 end
 
----@param t table
----@return string[]
-local function sortedKeys(t)
-    local out = {}
-    for k in pairs(t) do
-        out[#out + 1] = k
-    end
-    table.sort(out)
-    return out
-end
-
 print("Client surface captured " .. snap.captured .. " (" .. snap.version .. ")\n")
 print("# Types (members of an object the snapshot reached)")
-for _, owner in ipairs(sortedKeys(snap.types)) do
+for _, owner in ipairs(strict.sortedKeys(snap.types)) do
     local t = snap.types[owner]
     if t.members and next(t.members) then
         compare(owner .. " (" .. tostring(t.usertype) .. ")", t.members, stubMembers(owner))
     end
 end
 print("\n# Namespaces (keys of a global table)")
-for _, name in ipairs(sortedKeys(snap.namespaces)) do
+for _, name in ipairs(strict.sortedKeys(snap.namespaces)) do
     local ns = snap.namespaces[name]
     if ns.keys and next(ns.keys) and not SKIP[name] and not index.enums[name] then
         compare(name, ns.keys, stubMembers(name))

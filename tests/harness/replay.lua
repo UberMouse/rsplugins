@@ -173,7 +173,7 @@ local function fire(h, t, entry)
         })
     end
     if name == "ChatMessage" then
-        if not h.world.state.permissions.granted.chatAccess then
+        if not world.granted(h.world.state, "chatAccess") then
             strict.fault(
                 "replay: the recording delivers ChatMessage at t="
                     .. t

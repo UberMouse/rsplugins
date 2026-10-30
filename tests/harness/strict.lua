@@ -120,6 +120,7 @@ end
 
 -- A proxy class. `def` lists what the mock serves, keyed by member name:
 --   fields   = { name = function(state) return value end }
+--              or a string, shorthand for `return state[<string>]`: { root = "root" }
 --   methods  = { name = function(state, ...) end }   called as obj:name(...)
 --   statics  = { name = function(state, ...) end }   called as Obj.name(...)
 --   writable = { name = true }                       field may be assigned (stored in state)
@@ -140,7 +141,16 @@ end
 ---@param def table
 ---@return table class with a `new(state)` constructor
 function M.class(name, def)
-    local fields, methods, statics = def.fields or {}, def.methods or {}, def.statics or {}
+    local fields, methods, statics = {}, def.methods or {}, def.statics or {}
+    for k, getter in pairs(def.fields or {}) do
+        if type(getter) == "string" then
+            local key = getter
+            getter = function(s)
+                return s[key]
+            end
+        end
+        fields[k] = getter
+    end
     local writable = def.writable or {}
     local setters = def.setters or {}
     if not def.undeclared then
@@ -262,16 +272,16 @@ function M.enum(name, values, opts)
 end
 
 -- A lookup table whose keys are resolved on demand (var.VarPlayer.NAME, config.Obj.NAME):
--- `lookup(key)` returns the value or faults. `extra` holds fixed members such as FromID.
+-- `lookup(key)` returns the value or faults. `opts.extra` holds fixed members such as FromID.
 -- pairs() over it faults as unprobed (the keys aren't held, so it would silently walk nothing)
 -- unless `opts.iterable`, which serves `extra` (Plugin.urls, probed to iterate).
+---@param name string the table's name, for the read-only fault
 ---@param lookup fun(key: any): any
----@param extra table?
----@param opts { iterable: boolean? }?
+---@param opts { extra: table?, iterable: boolean? }?
 ---@return table
-function M.lookup(lookup, extra, opts)
-    extra = extra or {}
-    local iterable = opts and opts.iterable
+function M.lookup(name, lookup, opts)
+    opts = opts or {}
+    local extra, iterable = opts.extra or {}, opts.iterable
     return setmetatable({}, {
         __pairs = function()
             if iterable then return next, extra, nil end
@@ -282,9 +292,17 @@ function M.lookup(lookup, extra, opts)
             return lookup(key)
         end,
         __newindex = function(_, key)
-            M.fault("cannot assign " .. tostring(key) .. ": config tables are read-only")
+            M.fault("cannot assign " .. tostring(key) .. ": " .. name .. " is read-only")
         end,
     })
+end
+
+-- Fault if a destroyed object is used. Every member of a destroyed component faults: the
+-- client's behaviour is undocumented, and a plugin that keeps using one has lost track of it.
+---@param s table object state, `destroyed` set once it is gone
+---@param label string names the object in the fault
+function M.live(s, label)
+    if s.destroyed then M.fault(label .. " used after Destroy()") end
 end
 
 return M

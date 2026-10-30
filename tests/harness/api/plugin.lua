@@ -2,6 +2,7 @@
 
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
+local world = require("tests.harness.world")
 
 local M = {}
 
@@ -77,20 +78,17 @@ local Plugin = strict.class("Plugin", {
         -- than answering the not-granted default: the client may well have had it granted.
         HasPermission = function(s, value)
             local perm = M.permissionName(value)
-            local perms = s.h.world.state.permissions
-            if s.h.replay and not perms.known[perm] then
+            if s.h.replay and not s.h.world.state.permissions.known[perm] then
                 strict.fault("unrecorded: Plugin.HasPermission(" .. tostring(perm) .. ")")
             end
-            return perms.granted[perm] == true
+            return world.granted(s.h.world.state, perm)
         end,
     },
     fields = {
         -- Plugin.urls.<name> for each manifest url; an unknown name is nil, as live
         -- (docs/api-concepts.md). HTTPRequest.new faults on that nil, so a test still
         -- catches a url missing from plugin.json.
-        urls = function(s)
-            return s.urls
-        end,
+        urls = "urls",
     },
 })
 
@@ -111,9 +109,9 @@ function M.install(h, env)
     for name, text in pairs(h.manifest.urls or {}) do
         urls[name] = newUrl(text)
     end
-    local lookup = strict.lookup(function()
+    local lookup = strict.lookup("Plugin.urls", function()
         return nil
-    end, urls, { iterable = true }) -- probed: pairs() over Plugin.urls lists the manifest's urls
+    end, { extra = urls, iterable = true }) -- probed: pairs() over Plugin.urls lists the manifest's urls
     env.Plugin = Plugin.new({ h = h, urls = lookup })
     env.PluginPermissions =
         strict.enum("PluginPermissions", M.PluginPermissions, { iterable = true })
@@ -130,8 +128,6 @@ function M.install(h, env)
     env.log = function(...)
         write("log", ...)
     end
-    strict.declare("_G", "print", "global")
-    strict.declare("_G", "log", "global")
 end
 
 return M

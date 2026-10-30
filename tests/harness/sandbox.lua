@@ -8,6 +8,7 @@
 -- which is what `_G` names (dev-bridge eval, docs/api-concepts.md). The harness's `_G` reads
 -- like that table and faults on any write to it.
 
+local events = require("tests.harness.api.events")
 local prettyui = require("tests.harness.api.prettyui")
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
@@ -64,6 +65,15 @@ local GC_OPTIONS = { collect = true, count = true, step = true, isrunning = true
 
 -- Globals of the plugin's own env in the client, so not in its _G (dev-bridge, 2026-10-26).
 local PLUGIN_ENV_ONLY = { Plugin = true, require = true }
+
+-- The globals that are Lua's own, not API the stubs declare.
+local STDLIB = { collectgarbage = true, warn = true }
+for _, name in ipairs(BASE) do
+    STDLIB[name] = true
+end
+for _, name in ipairs(LIBS) do
+    STDLIB[name] = true
+end
 
 local API_MODULES = {
     "tests.harness.api.plugin",
@@ -318,7 +328,6 @@ function M.build(h, instance)
             env[name] = OPT_IN[name](env)
         end
     end
-    local events = require("tests.harness.api.events")
     env.Event = events.namespace(instance)
     for _, module in ipairs(API_MODULES) do
         require(module).install(h, env)
@@ -326,17 +335,9 @@ function M.build(h, instance)
     env.require = makeRequire(h, env)
 
     -- Register every API global for the stub self-test: anything that isn't stdlib.
-    local stdlib = {}
-    for _, name in ipairs(BASE) do
-        stdlib[name] = true
-    end
-    for _, name in ipairs(LIBS) do
-        stdlib[name] = true
-    end
-    stdlib.collectgarbage, stdlib.warn = true, true
     for name in pairs(env) do
-        local declared = strict.declared._G and strict.declared._G[name]
-        if not stdlib[name] and not OPT_IN[name] and not declared then
+        local declared = strict.declared._G[name]
+        if not STDLIB[name] and not OPT_IN[name] and not declared then
             strict.declare("_G", name, "global")
         end
     end

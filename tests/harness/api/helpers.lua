@@ -171,6 +171,28 @@ local function formatStr(format, ...)
     return table.concat(out)
 end
 
+local Utils = strict.class("_global.utils", {
+    fields = {
+        CalcTextWidth = function(s)
+            local h = s.h
+            return function(fontID, text)
+                if math.type(fontID) ~= "integer" or type(text) ~= "string" then
+                    strict.fault("utils.CalcTextWidth(fontID: Int, text: string)")
+                end
+                if not h.textWidth then
+                    strict.fault(
+                        "unmocked state: utils.CalcTextWidth needs the font's metrics "
+                            .. "(opts.textWidth)"
+                    )
+                end
+                local width = h.textWidth(fontID, text)
+                assert(math.type(width) == "integer", "opts.textWidth must return an integer")
+                return width
+            end
+        end,
+    },
+})
+
 ---@param h table the harness
 ---@param env table the sandbox being built
 function M.install(h, env)
@@ -199,27 +221,7 @@ function M.install(h, env)
         return min + (max - min) * nextUniform(h) + 0.0
     end
 
-    local Utils = strict.class("_global.utils", {
-        fields = {
-            CalcTextWidth = function()
-                return function(fontID, text)
-                    if math.type(fontID) ~= "integer" or type(text) ~= "string" then
-                        strict.fault("utils.CalcTextWidth(fontID: Int, text: string)")
-                    end
-                    if not h.textWidth then
-                        strict.fault(
-                            "unmocked state: utils.CalcTextWidth needs the font's metrics "
-                                .. "(opts.textWidth)"
-                        )
-                    end
-                    local width = h.textWidth(fontID, text)
-                    assert(math.type(width) == "integer", "opts.textWidth must return an integer")
-                    return width
-                end
-            end,
-        },
-    })
-    env.utils = Utils.new({})
+    env.utils = Utils.new({ h = h })
 end
 
 return M

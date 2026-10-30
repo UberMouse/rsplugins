@@ -14,6 +14,7 @@
 -- method or option faults as unmocked; extend the fake, with a ledger row, when a plugin
 -- needs more.
 
+local events = require("tests.harness.api.events")
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")
 local ui = require("tests.harness.api.ui")
@@ -165,7 +166,7 @@ end
 -- (Show) and fails on others; a plugin shouldn't rely on it.
 ---@param s table
 local function live(s)
-    if s.destroyed then strict.fault("prettyui " .. s.kind .. " used after Destroy()") end
+    strict.live(s, "prettyui " .. s.kind)
 end
 
 -- Where the owner's next row goes, and move the flow past it. Rows stack top to bottom at
@@ -197,13 +198,23 @@ local function remember(s)
     s.remembered = { x = x, y = y }
 end
 
+-- The position (x, y) clamped so the root component stays inside its parent.
+---@param root table component state
+---@param x number
+---@param y number
+---@return number x
+---@return number y
+local function clampedPos(root, x, y)
+    return clamp(x, 0, ui.width(root.parent) - ui.width(root)),
+        clamp(y, 0, ui.height(root.parent) - ui.height(root))
+end
+
 -- Keep a Panel inside its parent, as PrettyUI's drag bounds do on create and SetSize.
 ---@param s table
 local function clampIntoParent(s)
     local root = s.rootState
     local x, y = ui.pos(root)
-    local nx = clamp(x, 0, ui.width(root.parent) - ui.width(root))
-    local ny = clamp(y, 0, ui.height(root.parent) - ui.height(root))
+    local nx, ny = clampedPos(root, x, y)
     if nx ~= x or ny ~= y then s.root:SetPos(nx, ny) end
     remember(s)
 end
@@ -374,13 +385,30 @@ local function attachRawTooltip(lib, target, parent, value, ...)
     return TooltipAttachment.new(tip)
 end
 
-local SpriteButton = strict.class("prettyui.SpriteButton instance", {
-    undeclared = true,
-    fields = {
-        root = function(s)
-            return s.root
-        end,
-    },
+-- A library object's class: `def` as for strict.class, plus a `root` field and an idempotent
+-- Destroy. Destroy marks the object destroyed, runs `teardown(s)` for what the object owns,
+-- then destroys and forgets the root. (Window orders its teardown differently, so it keeps its
+-- own Destroy.)
+---@param name string
+---@param def table
+---@param teardown fun(s: table)
+---@return table class
+local function libraryObject(name, def, teardown)
+    def.undeclared = true
+    def.fields = def.fields or {}
+    def.fields.root = "root"
+    def.methods = def.methods or {}
+    def.methods.Destroy = function(s)
+        if s.destroyed then return end
+        s.destroyed = true
+        teardown(s)
+        s.root:Destroy()
+        s.root = nil
+    end
+    return strict.class(name, def)
+end
+
+local SpriteButton = libraryObject("prettyui.SpriteButton instance", {
     methods = {
         -- A string changes the text; a table or nil replaces it (hidden), as 1.2.0 does.
         SetTooltip = function(s, value)
@@ -388,15 +416,10 @@ local SpriteButton = strict.class("prettyui.SpriteButton instance", {
             s.tip = replaceTip(s.lib, s.tip, value, s.rootState, s.tipParent, s.context)
             return true
         end,
-        Destroy = function(s)
-            if s.destroyed then return end
-            s.destroyed = true
-            destroyTip(s.tip)
-            s.root:Destroy()
-            s.root = nil
-        end,
     },
-})
+}, function(s)
+    destroyTip(s.tip)
+end)
 
 ---@param lib table
 ---@param parent table parent state
@@ -437,31 +460,11 @@ local function newSpriteButton(lib, parent, name, action, options, context)
     return obj
 end
 
-local Divider = strict.class("prettyui.Divider instance", {
-    undeclared = true,
-    fields = {
-        root = function(s)
-            return s.root
-        end,
-    },
-    methods = {
-        Destroy = function(s)
-            if s.destroyed then return end
-            s.destroyed = true
-            destroyTip(s.tip)
-            s.root:Destroy()
-            s.root = nil
-        end,
-    },
-})
+local Divider = libraryObject("prettyui.Divider instance", {}, function(s)
+    destroyTip(s.tip)
+end)
 
-local Checkbox = strict.class("prettyui.CheckboxButton instance", {
-    undeclared = true,
-    fields = {
-        root = function(s)
-            return s.root
-        end,
-    },
+local Checkbox = libraryObject("prettyui.CheckboxButton instance", {
     methods = {
         -- The checked values, in choice order (a copy).
         GetSelectedValues = function(s)
@@ -515,18 +518,13 @@ local Checkbox = strict.class("prettyui.CheckboxButton instance", {
             end
             return false
         end,
-        Destroy = function(s)
-            if s.destroyed then return end
-            s.destroyed = true
-            destroyTip(s.tip)
-            for _, item in ipairs(s.items) do
-                destroyTip(item.tip)
-            end
-            s.root:Destroy()
-            s.root = nil
-        end,
     },
-})
+}, function(s)
+    destroyTip(s.tip)
+    for _, item in ipairs(s.items) do
+        destroyTip(item.tip)
+    end
+end)
 
 -- AddSpriteButton on a Window or Panel: a button in the content flow. Given a y, the button
 -- is placed there and the flow doesn't move.
@@ -933,9 +931,7 @@ local ScrollController = strict.class("prettyui.Window instance._scroll", {
 local Window = strict.class("prettyui.Window instance", {
     undeclared = true,
     fields = {
-        root = function(s)
-            return s.root
-        end,
+        root = "root",
         closeButton = liveField(
             ---@return table
             function(s)
@@ -1024,7 +1020,8 @@ local Window = strict.class("prettyui.Window instance", {
         end,
         Close = windowClose,
         -- 1.2.0 ends any title-bar press and syncs the overlays hidden before tearing down,
-        -- then forgets them (src/window.lua, Destroy).
+        -- then forgets them (src/window.lua, Destroy). Not libraryObject's Destroy: that marks
+        -- the object destroyed first, and these steps run before it does.
         Destroy = function(s)
             if s.destroyed then return end
             stopTitleDrag(s)
@@ -1062,12 +1059,8 @@ local Window = strict.class("prettyui.Window instance", {
     },
 })
 
-local Panel = strict.class("prettyui.Panel instance", {
-    undeclared = true,
+local Panel = libraryObject("prettyui.Panel instance", {
     fields = {
-        root = function(s)
-            return s.root
-        end,
         width = liveField(
             ---@return number
             function(s)
@@ -1098,16 +1091,11 @@ local Panel = strict.class("prettyui.Panel instance", {
         AddSpriteButton = function(s, spriteName, action, options)
             return addSpriteButton(s, spriteName, action, options)
         end,
-        Destroy = function(s)
-            if s.destroyed then return end
-            s.destroyed = true
-            clearContext(s.tips, true)
-            destroyTip(s.tip)
-            s.root:Destroy()
-            s.root = nil
-        end,
     },
-})
+}, function(s)
+    clearContext(s.tips, true)
+    destroyTip(s.tip)
+end)
 
 -- The library tables: prettyui.Window.new(...) and so on.
 ---@param name string
@@ -1242,46 +1230,10 @@ local POPUP_TICKS = 200
 local POPUP_MIN = 9
 local DEFAULT_POPUP_SOUND = "ARCH_INFO_POPUP"
 
--- Add and remove the popup's own Logic subscription in the plugin's subscriber list. The
--- real library does this from Lua; going through the plugin's Event global would put the
--- harness's runtime (a C frame) between the call and the Unsubscribe check of events.lua.
----@param instance table
----@param name string
----@param fn function
-local function subscribeLogic(instance, name, fn)
-    table.insert(instance.subs.Logic, { name = name, fn = fn })
-end
-
----@param instance table
----@param name string
-local function unsubscribeLogic(instance, name)
-    for i, entry in ipairs(instance.subs.Logic) do
-        if entry.name == name then
-            table.remove(instance.subs.Logic, i)
-            entry.removed = true
-            return
-        end
-    end
-end
-
-local AchievementPopup = strict.class("prettyui.AchievementPopup instance", {
-    undeclared = true,
-    fields = {
-        root = function(s)
-            return s.root
-        end,
-    },
-    methods = {
-        Destroy = function(s)
-            if s.destroyed then return end
-            s.destroyed = true
-            unsubscribeLogic(s.lib.h.instance, s.eventName)
-            s.root:Destroy()
-            s.root = nil
-            s.onComplete = nil
-        end,
-    },
-})
+local AchievementPopup = libraryObject("prettyui.AchievementPopup instance", {}, function(s)
+    events.unsubscribe(s.lib.h.instance, "Logic", s.eventName)
+    s.onComplete = nil
+end)
 
 -- Make a popup in `parent` and start its Logic countdown.
 ---@param lib table
@@ -1322,7 +1274,7 @@ local function newPopup(lib, parent, options)
     local obj = AchievementPopup.new(s)
     s.proxy = obj
     track(lib, "AchievementPopup", obj, s)
-    subscribeLogic(lib.h.instance, s.eventName, function()
+    events.subscribe(lib.h.instance, "Logic", s.eventName, function()
         if s.destroyed then return end
         s.elapsed = s.elapsed + 1
         if s.elapsed > POPUP_TICKS then
@@ -1363,21 +1315,11 @@ local TooltipModule = strict.class("prettyui.Tooltip", {
 local Library = strict.class("prettyui", {
     undeclared = true,
     fields = {
-        Window = function(s)
-            return s.Window
-        end,
-        Panel = function(s)
-            return s.Panel
-        end,
-        SpriteButton = function(s)
-            return s.SpriteButton
-        end,
-        AchievementPopup = function(s)
-            return s.AchievementPopup
-        end,
-        Tooltip = function(s)
-            return s.Tooltip
-        end,
+        Window = "Window",
+        Panel = "Panel",
+        SpriteButton = "SpriteButton",
+        AchievementPopup = "AchievementPopup",
+        Tooltip = "Tooltip",
         version = function()
             return M.VERSION
         end,
@@ -1998,8 +1940,7 @@ function Driver:dragTitle(win, dx, dy)
     pressTitle(s, true)
     local root = s.rootState
     local x, y = ui.pos(root)
-    local nx = clamp(x + dx, 0, ui.width(root.parent) - ui.width(root))
-    local ny = clamp(y + dy, 0, ui.height(root.parent) - ui.height(root))
+    local nx, ny = clampedPos(root, x + dx, y + dy)
     if nx ~= x or ny ~= y then
         s.root:SetPos(nx, ny)
         remember(s)
@@ -2204,8 +2145,7 @@ function Driver:altDrag(panel, dx, dy)
     assert(ui.visible(s.rootState), "the panel is hidden")
     local root = s.rootState
     local x, y = ui.pos(root)
-    local nx = clamp(x + dx, 0, ui.width(root.parent) - ui.width(root))
-    local ny = clamp(y + dy, 0, ui.height(root.parent) - ui.height(root))
+    local nx, ny = clampedPos(root, x + dx, y + dy)
     s.root:SetPos(nx, ny)
     remember(s)
     return true

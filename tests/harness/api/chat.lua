@@ -8,6 +8,7 @@
 local events = require("tests.harness.api.events")
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
+local world = require("tests.harness.world")
 
 local M = {}
 
@@ -36,7 +37,7 @@ function M.deliver(h, message, chatType, sender, timestamp)
         timestamp = timestamp or EPOCH + h.tick // 50,
     })
     assert(payload, "ChatMessage has a payload")
-    if h.world.state.permissions.granted.chatAccess then
+    if world.granted(h.world.state, "chatAccess") then
         events.dispatch(h, "ChatMessage", payload)
     end
     h.chatLog[#h.chatLog + 1] =
@@ -46,7 +47,7 @@ end
 local Chat = strict.class("Chat", {
     statics = {
         AddMessage = function(s, message)
-            if not s.h.world.state.permissions.granted.chatAccess then
+            if not world.granted(s.h.world.state, "chatAccess") then
                 strict.fault("Chat.AddMessage without the chatAccess permission")
             end
             if type(message) ~= "string" then strict.fault("Chat.AddMessage(message: String)") end

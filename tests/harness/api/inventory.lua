@@ -26,12 +26,8 @@ local objTypeIds = setmetatable({}, { __mode = "k" })
 
 local InvType = strict.class("InvType", {
     fields = {
-        id = function(s)
-            return s.id
-        end,
-        configName = function(s)
-            return s.name
-        end,
+        id = "id",
+        configName = "name",
         typeName = function()
             return "Inv"
         end,
@@ -62,12 +58,8 @@ for field in pairs(stubs.fields("ObjType")) do
         return v
     end
 end
-objFields.id = function(s)
-    return s.id
-end
-objFields.configName = function(s)
-    return s.name
-end
+objFields.id = "id"
+objFields.configName = "name"
 objFields.typeName = function()
     return "Obj"
 end
@@ -103,21 +95,19 @@ local InvSlot = strict.class("InvSlot", {
         obj = function(s)
             return configProxy(s.h, "Obj", s.obj)
         end,
-        count = function(s)
-            return s.count
-        end,
+        count = "count",
     },
 })
 
 -- The live inventory behind an Inv, or a fault if it has been removed (or re-added as a
--- new Inv) since this one was handed out.
+-- new Inv) since this one was handed out. A removed inventory stays removed, so `destroyed`
+-- sticks on the Inv's state.
 ---@param s table Inv state
 ---@return table
 local function live(s)
     local inv = s.h.world.state.invs[s.id]
-    if not (inv and inv.generation == s.generation) then
-        strict.fault("Inv used after its inventory was removed (check inv.isValid)")
-    end
+    if not (inv and inv.generation == s.generation) then s.destroyed = true end
+    strict.live(s, "Inv")
     return inv
 end
 
@@ -150,7 +140,7 @@ end
 ---@return string?
 local function configArgPath(v)
     local kind = (invTypeIds[v] and "Inv") or (objTypeIds[v] and "Obj")
-    return kind and recording.configPath("config", kind, tostring(v.configName)) or nil
+    return kind and recording.configPath("config", kind, tostring(v.configName))
 end
 
 local Inv = strict.class("Inv", {
@@ -251,9 +241,7 @@ end
 -- world gets the inventory; Find hands out world-backed Invs from then on.
 local RecordedInv = strict.class("Inv", {
     fields = {
-        id = function(s)
-            return s.id
-        end,
+        id = "id",
         config = function(s)
             return configProxy(s.h, "Inv", s.id)
         end,
@@ -324,7 +312,7 @@ local Inventory = strict.class("Inventory", {
 ---@param kind string "Inv" or "Obj"
 ---@return table # config.Inv or config.Obj
 local function configTable(h, kind)
-    return strict.lookup(function(name)
+    return strict.lookup("config." .. kind, function(name)
         local id = catalog.config(kind, name)
         if not id then
             strict.fault(
@@ -339,23 +327,19 @@ local function configTable(h, kind)
         ---@cast id -? -- fault() never returns
         return configProxy(h, kind, id)
     end, {
-        FromID = function(id)
-            return catalog.config(kind, id) and configProxy(h, kind, id) or nil
-        end,
+        extra = {
+            FromID = function(id)
+                return catalog.config(kind, id) and configProxy(h, kind, id)
+            end,
+        },
     })
 end
 
 local Config = strict.class("_global.config", {
     fields = {
-        Inv = function(s)
-            return s.Inv
-        end,
-        Obj = function(s)
-            return s.Obj
-        end,
-        Font = function(s)
-            return s.Font
-        end,
+        Inv = "Inv",
+        Obj = "Obj",
+        Font = "Font",
     },
 })
 strict.declare("_global.config", "Inv.FromID", "inline")

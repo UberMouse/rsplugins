@@ -9,6 +9,7 @@ local recording = require("dev/recording")
 
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
+local world = require("tests.harness.world")
 
 local M = {}
 
@@ -19,10 +20,6 @@ M.DISPLAY_NAME_PATH = recording.memberPath(
 )
 
 M.SkillType = stubs.value("game/player.lua", "SkillType")
-local SKILLS = {}
-for _, v in pairs(M.SkillType) do
-    SKILLS[v] = true
-end
 
 -- A CoordGrid of world tile (x, z) on `level`, per game/coordgrid.html#properties: map
 -- squares are 64 tiles, so mapSquareX = x // 64 and localX = x % 64. Live, two reads of the
@@ -36,15 +33,9 @@ local CoordGrid = strict.class("CoordGrid", {
         return string.format("%d,%d,%d,%d,%d", s.level, s.x // 64, s.z // 64, s.x % 64, s.z % 64)
     end,
     fields = {
-        level = function(s)
-            return s.level
-        end,
-        x = function(s)
-            return s.x
-        end,
-        z = function(s)
-            return s.z
-        end,
+        level = "level",
+        x = "x",
+        z = "z",
         mapSquareX = function(s)
             return s.x // 64
         end,
@@ -105,7 +96,9 @@ end
 local function skillGetter(fn, key)
     return function(s, skill)
         local p = loggedIn(s, fn)
-        if not SKILLS[skill] then strict.fault("Player." .. fn .. ": not a SkillType value") end
+        if not world.isSkill(skill) then
+            strict.fault("Player." .. fn .. ": not a SkillType value")
+        end
         local levels = p.skills[skill]
         if not levels then
             return s.h:recorded(

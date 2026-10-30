@@ -126,25 +126,30 @@ else
     failed+=("tests (run: scripts/test-lua.sh)")
 fi
 
+# Quiet on success; on failure print the captured output and record the label (also when the
+# command cannot start, since its error text is captured too).
+# Usage: run_step <label> <cmd...>
+run_step() {
+    local label=$1 out
+    shift
+    if ! out=$("$@" 2>&1); then
+        echo "$out"
+        failed+=("$label")
+    fi
+}
+
 # Discovery means a new scripts/test_*.py is gated without editing this file.
-if ! py_out=$(PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_*.py' 2>&1); then
-    echo "$py_out"
-    failed+=("python tests (run: python3 -m unittest discover -s scripts -p 'test_*.py')")
-fi
+PYTHONDONTWRITEBYTECODE=1 run_step \
+    "python tests (run: python3 -m unittest discover -s scripts -p 'test_*.py')" \
+    python3 -m unittest discover -s scripts -p 'test_*.py'
 
 # The JS tests exit non-zero on any failure; one of them reads the repo's Lua history.
 for t in .claude/workflows/*.test.js; do
-    if ! js_out=$(node "$t" 2>&1); then
-        echo "$js_out"
-        failed+=("js test $t")
-    fi
+    run_step "js test $t" node "$t"
 done
 
 for t in .claude/hooks/*.selftest.sh; do
-    if ! hook_out=$("$t" 2>&1); then
-        echo "$hook_out"
-        failed+=("hook selftest $t")
-    fi
+    run_step "hook selftest $t" "$t"
 done
 
 if [[ ${#failed[@]} -gt 0 ]]; then

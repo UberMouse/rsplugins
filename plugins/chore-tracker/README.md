@@ -215,11 +215,12 @@ permissions") is true only after that check passes.
 
 ## Files
 
-Code requires a module under its file name, camelCased when it has several words
-(`local state = require("core/state")`, `prettyuiInternals` for `prettyui_internals.lua`), with a
-`Core` suffix on a `core/` module when a same-named `data/` or `shell/` module is required in
-the same file (`detectCore` beside `detect`). `data/vars.lua` is `varRules`, as `core/vars.lua`
-and `shell/vars.lua` share its name.
+Code binds each of the plugin's modules it requires to a local named after its file, camelCased
+when the name has several words (`local state = require("core/state")`,
+`local prettyuiInternals = require("shell/prettyui_internals")`). A `core/` module gets a `Core`
+suffix when a same-named `data/` or `shell/` module is required in the same file, or the
+requiring file is itself that `shell/` module (`detectCore` in `shell/detect.lua`). `data/vars.lua`
+is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 
 | File | What |
 |---|---|

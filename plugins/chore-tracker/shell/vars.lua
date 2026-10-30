@@ -7,7 +7,7 @@
 
 local period = require("core/period")
 local state = require("core/state")
-local vars = require("core/vars")
+local varsCore = require("core/vars")
 
 local M = {}
 
@@ -51,7 +51,7 @@ function M.init(o)
     for _, rule in ipairs(o.rules) do
         -- Resolved for every rule, watched or not, so a bad chore id fails at load.
         local chore = state.resolve(o.chores, rule.chore, "data/vars.lua")
-        local names, complete = vars.names(rule), true
+        local names, complete = varsCore.names(rule), true
         for _, name in ipairs(names) do
             if not varTypes[name] and not missing[name] then
                 -- Whether the client returns nil or raises for an unknown name is unconfirmed.
@@ -133,7 +133,7 @@ local function onChanged(before, after, changed)
         local day = period.runeDay(now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)
-            if cause and vars.ticks(entry.rule, before, after, day) then
+            if cause and varsCore.ticks(entry.rule, before, after, day) then
                 local ticked = state.autoMark(tracker, entry.chore, now)
                 if ticked ~= tracker then
                     say("seen", entry.chore.id, "done", "(" .. cause .. ")")

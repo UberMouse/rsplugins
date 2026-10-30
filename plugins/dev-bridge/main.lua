@@ -40,14 +40,11 @@ local payloads = assert(require("dev/payloads"), "dev/ (a link to lib/dev) is mi
 local eval = assert(require("eval"), "eval.lua is missing")
 
 local SYNC_PATH = "/bridge/sync"
--- The events forwarded to the daemon (each is in protocol.LOAD_EVENTS too).
-local FORWARDED = {
-    ChatMessage = true,
-    VarTransmit = true,
-    InventoryUpdated = true,
-    MiniMenuEntrySelected = true,
-    GameStateChanged = true,
-}
+-- protocol.FORWARDED as a set, for the handler's lookup.
+local FORWARDED = {}
+for _, event in ipairs(protocol.FORWARDED) do
+    FORWARDED[event] = true
+end
 
 ---------------------------------------------------------------------------
 -- State (one per enable: the client runs main.lua afresh each time)
@@ -85,9 +82,6 @@ local failing = false
 local connected = false
 
 local say ---@type fun(...) -- defined below push: say and noteDropped call each other
--- Defined with the handlers below; the evaluator calls them (eval.lua, eval.new).
-local firstProbe ---@type fun(event: string)
-local noProbes ---@type fun(event: string)
 -- Defined with the handlers below, which it subscribes; onLogic calls it.
 local reconcileLazy ---@type fun()
 
@@ -117,17 +111,37 @@ say = function(...)
     push(protocol.logEntry(tick, "log", batch.joined(...)))
 end
 
+local LOAD_SET = {}
+for _, event in ipairs(protocol.LOAD_EVENTS) do
+    LOAD_SET[event] = true
+end
+
+-- `event` has its first probe: want its handler at the client from the next Logic tick, unless
+-- it is a load-time event or the bridge has stopped. No client call here: this runs inside a
+-- snippet or a probe callback, which may be inside another event's dispatch.
+---@param event string
+local function firstProbe(event)
+    if stopped or LOAD_SET[event] then return end
+    lazyWanted[event] = true
+    lazyChanged = true
+end
+
+-- `event` has no probes left: stop wanting its handler. No client call here either.
+---@param event string
+local function noProbes(event)
+    if lazyWanted[event] then
+        lazyWanted[event] = nil
+        lazyChanged = true
+    end
+end
+
 local evaluator = eval.new({
     push = push,
     tick = function()
         return tick
     end,
-    firstProbe = function(event)
-        firstProbe(event)
-    end,
-    noProbes = function(event)
-        noProbes(event)
-    end,
+    firstProbe = firstProbe,
+    noProbes = noProbes,
 })
 
 ---------------------------------------------------------------------------
@@ -460,28 +474,6 @@ end
 ---@return string
 local function subscriptionName(event)
     return "devBridge" .. event
-end
-
-local LOAD_SET = {}
-for _, event in ipairs(protocol.LOAD_EVENTS) do
-    LOAD_SET[event] = true
-end
-
--- `event` has its first probe: want its handler at the client from the next Logic tick, unless
--- it is a load-time event or the bridge has stopped. No client call here: this runs inside a
--- snippet or a probe callback, which may be inside another event's dispatch.
-firstProbe = function(event)
-    if stopped or LOAD_SET[event] then return end
-    lazyWanted[event] = true
-    lazyChanged = true
-end
-
--- `event` has no probes left: stop wanting its handler. No client call here either.
-noProbes = function(event)
-    if lazyWanted[event] then
-        lazyWanted[event] = nil
-        lazyChanged = true
-    end
 end
 
 -- Make the client's lazy subscriptions match lazyWanted, by direct calls in PROBE_EVENTS order.

@@ -385,15 +385,15 @@ end
 
 -- The bridge's own subscriptions, made at load as "devBridge<Event>" (main.lua) in this order and
 -- unsubscribed only in PluginShutdown: Logic (the bridge's own work) first, then the five
--- forwarded events.
-protocol.LOAD_EVENTS = {
-    "Logic",
+-- forwarded events (protocol.FORWARDED, the events sent to the daemon).
+protocol.FORWARDED = {
     "ChatMessage",
     "VarTransmit",
     "InventoryUpdated",
     "MiniMenuEntrySelected",
     "GameStateChanged",
 }
+protocol.LOAD_EVENTS = { "Logic", table.unpack(protocol.FORWARDED) }
 
 -- The events an eval probe may use (LOAD_EVENTS among them), in the stub's order. A probe is
 -- an entry in eval.lua's table, called by the bridge's handler for its event. An event outside

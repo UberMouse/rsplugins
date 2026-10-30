@@ -172,7 +172,9 @@ local function scanLister(domain, found)
     return function()
         varId = varId + 1
         if varId > SCAN_MAX then return false end
-        local ok, v = pcall(fromID, varId)
+        local ok, v = pcall(function()
+            return fromID(varId)
+        end)
         if ok and v then addFound(found, varId, v) end
         return true
     end

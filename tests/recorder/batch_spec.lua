@@ -97,6 +97,17 @@ describe("the entry buffer with a line cap", function()
     end)
 end)
 
+describe("batch.text", function()
+    it("never raises on a value whose tostring fails", function()
+        local bad = setmetatable({}, {
+            __tostring = function()
+                error("no")
+            end,
+        })
+        assert.are.equal("<a table that tostring() fails on>", batch.text(bad))
+    end)
+end)
+
 describe("batch.joined", function()
     it("joins arguments like the console: tostring'd, space separated", function()
         assert.are.equal("a 1 nil true", batch.joined("a", 1, nil, true))

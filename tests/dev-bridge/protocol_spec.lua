@@ -6,7 +6,6 @@
 local dkjson = require("dkjson")
 local support = require("tests.dev-bridge.support")
 local protocol = require("protocol")
-local batch = require("dev/batch")
 
 describe("protocol.syncBody", function()
     it("holds the schema-1 fields with the encoded events spliced in", function()
@@ -344,23 +343,6 @@ describe("protocol.takeResults", function()
         -- ccc overflows but d would fit: d must still wait behind ccc, or results swap order.
         taken, rest = protocol.takeResults({ "aaaa", "ccc", "d" }, 6)
         assert.are.same({ { "aaaa" }, { "ccc", "d" } }, { taken, rest })
-    end)
-end)
-
-describe("protocol text", function()
-    it("joins arguments with spaces, as print and log do, nils included", function()
-        assert.are.equal("a 1 nil true", batch.joined("a", 1, nil, true))
-        assert.are.equal("", batch.joined())
-    end)
-
-    it("never raises on a value whose tostring fails", function()
-        local bad = setmetatable({}, {
-            __tostring = function()
-                error("no")
-            end,
-        })
-        assert.are.equal("<a table that tostring() fails on>", batch.text(bad))
-        assert.are.equal("x <a table that tostring() fails on>", batch.joined("x", bad))
     end)
 end)
 

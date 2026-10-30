@@ -46,6 +46,11 @@ the way the client needs.
 - **`VarTransmit`** may fire without the value changing, and may name only one VarBit of a base
   var per update (unconfirmed; see `docs/api-concepts.md`). Code that assumes every changed VarBit
   gets its own event misses updates.
+- **`pcall` on API functions.** Pass a Lua closure, not the API function, to `pcall`
+  (`pcall(function() Event.X.Unsubscribe(k) end)`, not `pcall(Event.X.Unsubscribe, k)`). Proven for
+  `Unsubscribe` only: handed bare to `pcall` it aborted the client (`docs/api-concepts.md`,
+  "Runtime limits we've hit"). dev-kit's `pcall(Mouse.GetX)` is live counterevidence that other
+  functions survive it, so a bare call is a style finding, not a crash claim.
 - **Permissions and dependencies change at runtime.** A feature gated on an optional permission
   or optional dependency must handle `OptionalPermissionChanged` / `OptionalDependencyChanged`
   (start when granted, stop when revoked), not just check once at enable.

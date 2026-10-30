@@ -28,7 +28,8 @@ copy the folder instead (see [docs/testing.md](../../docs/testing.md#opting-a-pl
 Uploads to the receiver go one `/changes` request at a time; bodies built meanwhile queue (100 at
 most, the oldest dropped first and counted in one console line once uploads succeed again). When
 the receiver is unreachable the plugin logs one `[VARDUMP]` warning, retries the failed body, and
-logs one line when uploads recover.
+logs one line when uploads recover. A snapshot upload that fails is abandoned with its own line
+(`prl var-dump` retries it), and drops not yet reported are logged when the plugin unloads.
 
 Console lines from the plugin are tagged `[VARDUMP]` (grep regex: `\[VARDUMP\]`).
 

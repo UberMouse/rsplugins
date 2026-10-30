@@ -26,10 +26,15 @@ local SUBS = {
 -- doesn't copy it. PluginShutdown cancels them.
 local inFlight = {}
 
--- Defined before anything below can fail, so a failing load still unsubscribes. Unsubscribing
--- a name that was never subscribed returns false (live-probed, docs/testing.md fidelity
--- ledger), so the not-yet-granted case is fine. Event calls are direct and Cancel runs in a
--- closure, never an API function handed to pcall (docs/api-concepts.md).
+-- Assigned further down, once the drop counters exist; PluginShutdown calls it if set.
+local reportDrops = nil ---@type fun()?
+
+-- Defined before anything below can fail, so a failing load still unsubscribes. That is also why
+-- Cancel is inlined here instead of using dev/post's cancel: the `httpPost` local is declared
+-- after the requires, so it is not in scope this early. Unsubscribing a name that was never
+-- subscribed returns false (live-probed, docs/testing.md fidelity ledger), so the
+-- not-yet-granted case is fine. Event calls are direct and Cancel runs in a closure, never an
+-- API function handed to pcall (docs/api-concepts.md).
 function PluginShutdown()
     for event, name in pairs(SUBS) do
         Event[event].Unsubscribe(name)
@@ -43,6 +48,8 @@ function PluginShutdown()
             pending.request:Cancel()
         end)
     end
+    -- Never let unreported drops vanish with the plugin.
+    if reportDrops then reportDrops() end
 end
 
 -- dev/ is the symlink to lib/dev shared with the other dev tools, and must be present for the
@@ -198,6 +205,19 @@ local sinkDown = false
 -- Dropped /changes bodies not yet reported; the count is logged once uploads next succeed.
 local droppedBodies, droppedChanges = 0, 0
 
+-- Log the dropped-bodies line if any are unreported, then reset the counts.
+function reportDrops()
+    if droppedBodies == 0 then return end
+    say(
+        formatStr(
+            "dropped {} queued /changes uploads ({} changes) while the receiver was unreachable",
+            droppedBodies,
+            droppedChanges
+        )
+    )
+    droppedBodies, droppedChanges = 0, 0
+end
+
 -- Note one finished upload. `why` says what went wrong when `success` is false.
 local function noteResult(success, path, why)
     if not success then
@@ -217,16 +237,7 @@ local function noteResult(success, path, why)
         sinkDown = false
         say("uploads to the receiver recovered")
     end
-    if droppedBodies > 0 then
-        say(
-            formatStr(
-                "dropped {} queued /changes uploads ({} changes) while the receiver was unreachable",
-                droppedBodies,
-                droppedChanges
-            )
-        )
-        droppedBodies, droppedChanges = 0, 0
-    end
+    reportDrops()
 end
 
 -- POST a JSON body to a path on the sink, then call onDone(success).
@@ -300,7 +311,14 @@ local function pumpUploads()
             if success then
                 varsUploaded = varsUploaded + part.count
             else
-                -- Give up on the rest; `prl var-dump` to retry.
+                -- Give up on the rest; `prl var-dump` to retry. Said here even when the outage
+                -- warning was already used up, so the abandoned snapshot is never silent.
+                say(
+                    formatStr(
+                        "snapshot upload abandoned after {} vars were sent; run `prl var-dump` to retry",
+                        varsUploaded
+                    )
+                )
                 uploadFailed = true
                 snapshotQueue = {}
             end

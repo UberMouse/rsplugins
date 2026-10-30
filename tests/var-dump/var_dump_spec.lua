@@ -5,6 +5,11 @@
 -- even under the plugin's own pcall. So the granted-path specs wrap sandbox.build to give the
 -- plugin plain-table stand-ins for those two (`loadGranted`). They test the upload policy
 -- after the listing; how the real client lists vars, and the snapshot contents, are not tested.
+--
+-- The stand-in's shape (the integer ID in the value slot) is NOT what the client gives:
+-- docs/api-concepts.md records that pairs(id.VarPlayer) does not put the ID in the value slot.
+-- So these specs take the nameLister path the client can't, and exist only to get start()
+-- running for the transport specs.
 
 local harness = require("tests.harness")
 local sandbox = require("tests.harness.sandbox")
@@ -13,8 +18,12 @@ local SINK = "http://127.0.0.1:8765" -- var-dump's plugin.json "sink" url
 local SERVER_TICK_MS = 600
 
 -- Load var-dump with httpAccess granted and `id.VarPlayer` / `id.VarClient` replaced by small
--- tables. The wrap is undone before returning.
+-- plain tables. The wrap is undone before returning, even if the load raises.
 local function loadGranted()
+    local h = harness.new("var-dump", { grant = { "httpAccess" } })
+    -- A var's first change has no old value to read, which the harness faults on, so give it
+    -- one before the plugin starts. Done before the wrap so a fault here can't leave it set.
+    h.world:setVar("VarPlayer", "ABSYSTEM", 0)
     local build = sandbox.build
     ---@diagnostic disable-next-line: duplicate-set-field -- a deliberate wrap, undone below
     sandbox.build = function(...)
@@ -23,10 +32,6 @@ local function loadGranted()
             { VarPlayer = { ABSYSTEM = 5264 }, VarClient = { ACC_CREATE_LAST_RECOMMENDATION = 1 } }
         return env
     end
-    local h = harness.new("var-dump", { grant = { "httpAccess" } })
-    -- A var's first change has no old value to read, which the harness faults on, so give it
-    -- one before the plugin starts.
-    h.world:setVar("VarPlayer", "ABSYSTEM", 0)
     local ok, err = pcall(h.load, h)
     sandbox.build = build
     assert(ok, err)
@@ -123,8 +128,72 @@ describe("plugins/var-dump /changes uploads", function()
         local h = loadSettled()
         change(h, 1)
         local n = #h.requests
+        local inFlight = h:requestsTo(SINK .. "/changes")[1]
         h:unload() -- faults if PluginShutdown left a subscription
         h:advance(SERVER_TICK_MS)
         assert.are.equal(n, #h.requests)
+        assert.is_true(inFlight.request.cancelled)
+    end)
+
+    it("reports unreported drops on shutdown", function()
+        local h = loadSettled()
+        for i = 1, 105 do
+            change(h, i)
+        end
+        assert.are.equal(0, consoleLines(h, "dropped"))
+        h:unload()
+        assert.are.equal(1, consoleLines(h, "dropped 4 queued /changes uploads (4 changes)"))
+    end)
+
+    it("never queues past the bound when a failed body is requeued", function()
+        -- One in flight plus 100 queued: the failed body has no room to come back.
+        local h = loadSettled()
+        for i = 1, 101 do
+            change(h, i)
+        end
+        h:answerAll(SINK .. "/changes", { status = 500 })
+        h:advance(SERVER_TICK_MS)
+        h:answerAll(SINK .. "/changes")
+        h:advance(SERVER_TICK_MS)
+        assert.are.equal(1, consoleLines(h, "dropped 1 queued /changes uploads (1 changes)"))
+    end)
+
+    it("reports a drop once, not again on later successes", function()
+        local h = loadSettled()
+        for i = 1, 105 do
+            change(h, i)
+        end
+        for _ = 1, 3 do
+            h:answerAll(SINK .. "/changes")
+            h:advance(SERVER_TICK_MS)
+        end
+        assert.are.equal(1, consoleLines(h, "dropped"))
+    end)
+
+    it("warns again for a second outage after a recovery", function()
+        local h = loadSettled()
+        change(h, 1)
+        for _ = 1, 2 do
+            h:answerAll(SINK .. "/changes", { status = 500 })
+            h:advance(SERVER_TICK_MS)
+            h:answerAll(SINK .. "/changes")
+            h:advance(SERVER_TICK_MS)
+            change(h, 100 + _)
+        end
+        assert.are.equal(2, consoleLines(h, "failed:"))
+        assert.are.equal(2, consoleLines(h, "recovered"))
+    end)
+end)
+
+describe("plugins/var-dump snapshot upload", function()
+    it("says it gave up even when the outage warning was already used", function()
+        local h = loadGranted()
+        h:advance(200) -- the snapshot's one part is sent
+        change(h, 1)
+        h:answerAll(SINK .. "/changes", { status = 500 }) -- the warn-once is spent here
+        h:answerAll(SINK .. "/snapshot", { status = 500 })
+        h:advance(SERVER_TICK_MS)
+        assert.are.equal(1, consoleLines(h, "failed:"))
+        assert.are.equal(1, consoleLines(h, "snapshot upload abandoned"))
     end)
 end)

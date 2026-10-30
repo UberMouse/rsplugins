@@ -18,12 +18,12 @@ local function positions(list)
 end
 
 describe("chore-tracker data", function()
-    it("has 67 chores: 20 daily, 42 weekly, 5 monthly", function()
+    it("has 66 chores: 20 daily, 41 weekly, 5 monthly", function()
         local counts = { daily = 0, weekly = 0, monthly = 0 }
         for _, c in ipairs(chores) do
             counts[c.period] = counts[c.period] + 1
         end
-        assert.are.same({ daily = 20, weekly = 42, monthly = 5 }, counts)
+        assert.are.same({ daily = 20, weekly = 41, monthly = 5 }, counts)
     end)
 
     it("has unique ids, and unique names within a period", function()

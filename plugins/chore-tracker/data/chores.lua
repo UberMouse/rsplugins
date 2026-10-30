@@ -3,8 +3,8 @@
 --
 -- `id` is what saved picks, ticks and shop purchases are keyed by, and what the other data
 -- files name, so it never changes, even when a name does (`bloodwood-tree` is Bakriminel Bolts).
--- Naming rules: Title Case in the game's spelling; the activity, not the action ("Anachronia
--- Totems", not "Charge Anachronia Totems"); goods from one source are "<goods> from <source>",
+-- Naming rules: Title Case in the game's spelling; the activity, not the action ("Clan
+-- Citadel Cap", not "Capping Clan Citadel"); goods from one source are "<goods> from <source>",
 -- from several shops "<goods> Shop Run", unless the shop's own name is the familiar one
 -- (Thalmund's Wares). A name must make sense without its category, since the list and the
 -- collapsed strip show only its period. Monthly chores have no category: five rows need no
@@ -380,15 +380,6 @@ return {
         links = {},
     },
     {
-        id = "charge-anachronia-totems",
-        name = "Anachronia Totems",
-        period = "weekly",
-        category = "upkeep",
-        url = "https://runescape.wiki/w/Totem",
-        desc = "Recharge your totems, and swap them if you like",
-        links = {},
-    },
-    {
         id = "aquarium-treasure-chest",
         name = "Aquarium Treasure Chest",
         period = "weekly",
@@ -659,7 +650,7 @@ return {
         name = "Troll Invasion",
         period = "monthly",
         url = "https://runescape.wiki/w/Troll_Invasion",
-        desc = "Defend all waves for an XP book of up to 77k and a Treasure Hunter key",
+        desc = "Defend all waves for an XP book of up to 77k",
         links = {},
     },
 }

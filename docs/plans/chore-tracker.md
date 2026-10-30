@@ -22,7 +22,7 @@ that dumps what a plugin sees to a local server (`lib/dev/`).
 | C | Shop runs tick on a purchase; Dell Monti and the Weird Old Man tick on notes gained nearby | `22f67e4..6125dd2` |
 | C2 | Chores tick from the player's own game vars: 7 proven or user-accepted, 16 unproven | `6125dd2..69d3f6f` |
 
-34 of the 67 chores tick themselves. The plugin README's "Chores it ticks for you" is the list,
+34 of the 66 chores tick themselves. The plugin README's "Chores it ticks for you" is the list,
 and `data/shops.lua`, `data/collections.lua` and `data/vars.lua` are the source.
 
 ## Decisions that bind later work
@@ -141,7 +141,7 @@ Staged order, with a check-in in the beta client after each:
      like this might later fit the Invention machine and the Miscellania coffers too.
 5. **More auto-detection**, from the table below, batched to the chores the user actually does.
 
-## Chores still ticked by hand (33)
+## Chores still ticked by hand (32)
 
 Each is grouped by the most promising route. "Candidates" are var names from `docs/vars/vars.csv`
 or API signals. "Probe" is what a probe in the beta client must show before building. Notes are
@@ -243,8 +243,6 @@ it with location or a var. There is no interface-opened event.
 ### Probably manual only
 
 - **Nemi Forest**: the map comes from outside the game.
-- **Charge Anachronia Totems**: `DINO_TOTEM_HOTSPOT_*` only. A change log while recharging
-  might find more.
 - **Fort Forinthry Bonus XP**: nothing specific. A change log while claiming might find a var,
   or a star or lamp arriving in `INV`.
 

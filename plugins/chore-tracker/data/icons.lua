@@ -37,7 +37,6 @@ return {
     ["soul-reaper"] = { sprite = "SKILL_SLAYER" },
     ["thalmunds-wares"] = { sprite = "MAPFUNCTION_SEP_0" },
     ["capping-clan-citadel"] = { obj = "CLAN_FLAG" },
-    ["charge-anachronia-totems"] = { obj = "DINO_TOTEM_CLUES" },
     ["meg"] = { obj = "MACRO_GENILAMP" },
     ["tears-of-guthix"] = { obj = "TOG_BOWL" },
     ["herby-werby"] = { obj = "DINO_REWARD_HERB_BAG" },

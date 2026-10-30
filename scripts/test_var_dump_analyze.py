@@ -28,15 +28,9 @@ SNAPSHOT = [
 
 
 def annotated(snapshot):
-    """Copies of the snapshot's vars with the per-var fields main() sets before building rows."""
+    """Copies of the snapshot's vars, annotated by the real step main() runs before building rows."""
     vars_ = [dict(v) for v in snapshot]
-    base_names = {v["baseVar"] for v in vars_ if v.get("isVarBit")}
-    for var in vars_:
-        var["_path"] = analyze.group_path(var["name"])
-        var["_state"] = analyze.state_of(var)
-        var["_packed"] = (var["domain"] == "VarPlayer" and not var.get("isVarBit")
-                          and var["name"] in base_names)
-        var["_hint"] = analyze.value_hint(var, 0)
+    analyze.annotate(vars_, 0)
     return vars_
 
 

@@ -807,6 +807,18 @@ def write_catalog(out, snapshot_day, vars_, var_rows, tree, bases):
     path.write_text("\n".join(md) + "\n")
 
 
+def annotate(vars_, now):
+    """Set _path (family path), _state, _packed (a VarPlayer base some VarBit lives in) and
+    _hint (value_hint at `now`) on every var, in place."""
+    base_names = {v["baseVar"] for v in vars_ if v.get("isVarBit")}
+    for var in vars_:
+        var["_path"] = group_path(var["name"])
+        var["_state"] = state_of(var)
+        var["_packed"] = (var["domain"] == "VarPlayer" and not var.get("isVarBit")
+                          and var["name"] in base_names)
+        var["_hint"] = value_hint(var, now)
+
+
 def catalog_rows(vars_):
     """Build the family tree and one vars.csv row per var; the vars need _packed, _state and
     _hint set. Sets _family and _theme on each var. Returns (tree, rows)."""
@@ -862,15 +874,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     now = snapshot_time(snapshot)
 
-    # Load and annotate every var with its family path, state and packing.
     vars_ = list(read_jsonl(snapshot))
-    base_names = {v["baseVar"] for v in vars_ if v.get("isVarBit")}
-    for var in vars_:
-        var["_path"] = group_path(var["name"])
-        var["_state"] = state_of(var)
-        var["_packed"] = (var["domain"] == "VarPlayer" and not var.get("isVarBit")
-                          and var["name"] in base_names)
-        var["_hint"] = value_hint(var, now)
+    annotate(vars_, now)
     print(f"{len(vars_)} vars from {snapshot}")
 
     tree, var_rows = catalog_rows(vars_)

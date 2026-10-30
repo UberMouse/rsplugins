@@ -169,19 +169,16 @@ The official reference annotates Lua with pseudo-types:
 
 ## Locs, shapes and walkability
 
-Findings from `plugins/walkable-flood`, a dev experiment (deleted; recoverable from commit
-`0bb7291`, 2026-10-20) that tried to rebuild "where can I walk" from loc data, flood-fill it from
-the player's tile and draw it. **It was never validated in the client**: its README listed
-checks to try, and no result was ever recorded. So every client-behaviour claim below is **open**,
-and facts marked *(stub)* come from the API stubs/docs, not from seeing the client. The tag
-*(walkable-flood, 2026-10-20)* means "assumed by that plugin's code, not confirmed". If the
-experiment is revived, run the checks in "Open checks" first.
+These facts come from `plugins/walkable-flood`, a deleted loc-based flood-fill experiment that
+never ran with results recorded (recover it with
+`git show b139b3b^:plugins/walkable-flood/main.lua`). Every client-behaviour claim below is open;
+*(stub)* marks stub readings. Run "Open checks" before relying on any of it.
 
-- **No walkability getter exists.** The API has no collision-flag or walkability getter. The
-  experiment approximated one from `LocType.blockWalk`, `LocEntity.shapeType`,
-  `LocEntity.rotationType`, `width`/`length` and `coordGrid`. It could not see terrain blocking
-  (water, cliffs, some map edges: map tile flags, not locs), level changes (only the player's
-  level's locs were used), or NPCs and players. (stub; walkable-flood, 2026-10-20)
+- **No walkability getter.** The stubs have no collision-flag or walkability member, so terrain
+  blocking (water, cliffs, some map edges: map tile flags, not locs) is invisible from locs alone.
+  (stub) By its own choice the experiment also ignored other levels, NPCs and players, and
+  approximated walkability from `LocType.blockWalk`, `LocEntity.shapeType`,
+  `LocEntity.rotationType`, `width`/`length` and `coordGrid`. (walkable-flood, 2026-10-20, open)
 - **`LocList.ByDistance(coordGrid, range, sameLevel)`** lists nearby locs. The plugin searched
   `ceil(32 * 1.5)` tiles for a 65×65-tile square, in case distance is a straight line (corners are
   1.41× the radius away) and to catch big locs whose anchor is just outside. Whether `range` is
@@ -216,23 +213,22 @@ experiment is revived, run the checks in "Open checks" first.
   (walkable-flood, 2026-10-20, open)
 - **Doors.** Whether a closed door is a `WALL_STRAIGHT` with `blockWalk` (and flips when opened)
   was never checked. (walkable-flood, 2026-10-20, open)
-- **`World.GetGroundHeight(level, x, z)`** takes fine coordinates (512 = one tile) and returns
-  `height, ok`; the plugin used `ok == false` as "map not loaded here" and stopped the fill at the
-  edge of the loaded area. That a failed call really means "not loaded" is **open**. Heights are
-  per tile corner, so overlay quads followed the slope. (stub for the signature;
-  walkable-flood, 2026-10-20, open)
-- **Overlay drawing.** One `ShapeData` was filled with `positions` (`Vector3`), `rgba`
-  (`0xRRGGBBAA`), `tris` and `lines` (0-based vertex indices), then
-  `ShapeList.CreateInstance(name)` plus `instance:SetShapeData(data)` (returns false on failure;
-  destroy the instance then). Instances were set `ignoreDepth = false`, `lineWidth = 4`, and
-  toggled with `visible`. Fill sat 16 fine units above the ground and wall lines at 48
-  to avoid flicker into terrain; tiles were split into instances of 1000 items to keep each `ShapeData`
-  modest. Whether it rendered as intended was never confirmed. (stub; walkable-flood, 2026-10-20,
-  open)
-- **Slicing.** The experiment spread loc application, flood and drawing over `Logic` ticks at 500
-  units each, because of the 1000 ms Lua-call limit (see "Runtime limits we've hit"). Whether 500
-  units per tick was cheap enough was not measured; it logged elapsed ticks per run. (walkable-flood,
-  2026-10-20, open)
+- **`World.GetGroundHeight(level, x, z[, heightOffsetType])`** takes fine coordinates (512 = one
+  tile) and returns `height, ok`, with height -1 when unavailable; the plugin used `ok == false`
+  as "map not loaded here" and stopped the fill at the edge of the loaded area. That a failed call
+  really means "not loaded" is **open**. Heights are per tile corner, so overlay quads followed
+  the slope. (stub for the signature; walkable-flood, 2026-10-20, open)
+- **Overlay drawing.** One `ShapeData` holds `positions` (`Vector3`), `rgba` (`0xRRGGBBAA`),
+  `tris` and `lines` (0-based vertex indices); `ShapeList.CreateInstance(name)` plus
+  `instance:SetShapeData(data)` attaches it (returns false on failure; destroy the instance then),
+  and instances have `ignoreDepth`, `lineWidth` and `visible` fields. (stub) The experiment put the
+  fill 16 fine units above the ground and wall lines 48 above, and split tiles into instances of
+  1000 items; whether the lifts stop flicker into terrain and whether the split is needed is
+  unconfirmed, as is whether it rendered as intended. (walkable-flood, 2026-10-20, open)
+- **Slicing.** The experiment spread loc application, flood and drawing over `Logic` ticks at
+  `WORK_PER_TICK` = 500 units each, because of the 1000 ms Lua-call limit (see "Runtime limits
+  we've hit"). Whether 500 units per tick is cheap enough is unconfirmed; it logged elapsed ticks
+  per run. (walkable-flood, 2026-10-20, open)
 - **Moderation.** Automatically showing walkable areas is close to the guidelines' ban on
   "automatically showing where to stand or move" ([guidelines.md](guidelines.md)), so it was dev
   only. Any player-facing version needs a moderation-friendly framing first.

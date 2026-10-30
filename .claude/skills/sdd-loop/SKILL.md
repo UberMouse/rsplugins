@@ -457,7 +457,7 @@ reading `git log` or blaming the line later. The message must say **what was wro
 code changed** on its own, without the report.
 
 - **Subject**: imperative, in the repo's style, describing the change, not listing ids
-  (`Bound walkable-flood's loc pass per tick`). For a group with several unrelated findings, name
+  (`Bound var-dump's snapshot pass per tick`). For a group with several unrelated findings, name
   the area and the dominant fix.
 - **Body**: one bullet per finding in the group, each stating **the problem** (and its
   consequence in the client) and **the fix** (what the code does now), as plain prose.

@@ -19,7 +19,7 @@ Every `<SLOT>` is filled by the conductor; the rest of the text is sent as writt
 | `<CRITERIA>` | the §0 acceptance criteria relevant to this task, verbatim |
 | `<CONTEXT>` | the change, what prior tasks landed, the files involved, the plugin's local conventions (its `say()` tag, sliced-work pattern, constants block) |
 | `<DOCS>` | the docs this task needs beyond `docs/README.md`, e.g. `docs/api-concepts.md` (events, UI, runtime limits), `docs/plugin-anatomy.md` (manifest, require, lifecycle, PersistentDB), `docs/guidelines.md` |
-| `<COMMIT_MSG>` | an imperative subject in the repo's style (`git log --oneline`), e.g. `Add tile markers to walkable-flood`, plus a body saying why |
+| `<COMMIT_MSG>` | an imperative subject in the repo's style (`git log --oneline`), e.g. `Add tile markers to chore-tracker`, plus a body saying why |
 | `<TRAILERS>` | the commit attribution lines from the conductor's own instructions, verbatim (omit if none) |
 | `<REQUESTED>` (spec reviewer) | the §0 acceptance criteria, verbatim |
 | `<TASK_PARENT>` (reviewers) | the commit before this task's first commit |

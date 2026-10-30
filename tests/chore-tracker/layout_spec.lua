@@ -70,7 +70,7 @@ describe("chore-tracker layout", function()
             buttonX = 980,
             buttonY = 0,
         }, c)
-        -- A button past the bottom edge stops at the last row that keeps it whole.
+        -- A button past the bottom edge stops at the last y that keeps it whole.
         local low = layout.default()
         low.buttonY = 900
         assert.are.equal(780, layout.clamp(low, 1000, 800, 240, 160, 20).buttonY)

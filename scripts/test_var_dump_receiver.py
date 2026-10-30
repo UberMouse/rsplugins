@@ -67,11 +67,35 @@ class Receiver(unittest.TestCase):
 
     def test_browser_requests_are_refused(self):
         body = {"changes": []}
-        self.assertEqual(self.post("/changes", body, {"Origin": "https://evil.example"}), 403)
-        self.assertEqual(self.post("/changes", body, {"Host": "evil.example:8765"}), 403)
-        self.assertEqual(self.post("/changes", body, {"Host": "localhost:8765"}), 200)
-        self.assertEqual(self.post("/changes", body, {"Origin": "http://localhost:3000"}), 200)
+        for headers in (
+            {"Origin": "https://evil.example"},
+            {"Origin": "http://localhost:3000"},
+            {"Host": "evil.example:8765"},
+            {"Host": "evil.com@127.0.0.1"},
+            {"Host": "[::1]:8765"},
+            {"Host": "localhost.:8765"},
+        ):
+            self.assertEqual(self.post("/changes", body, headers), 403, headers)
+        for host in ("127.0.0.1:8765", "localhost:8765", "127.0.0.1"):
+            self.assertEqual(self.post("/changes", body, {"Host": host}), 200, host)
         self.assertEqual(self.post("/changes", body), 200)  # no Origin, Host 127.0.0.1:port
+
+    def test_malformed_bodies_are_400s(self):
+        for path, body in (
+            ("/changes", [1]),
+            ("/changes", {}),
+            ("/changes", {"changes": {}}),
+            ("/snapshot", {}),
+            ("/snapshot", {"part": "1", "totalParts": 1, "vars": []}),
+        ):
+            self.assertEqual(self.post(path, body), 400, (path, body))
+
+    def test_changes_batch_with_a_bad_element_writes_nothing(self):
+        self.assertEqual(self.post("/changes", {"changes": [{"name": "A"}, 5]}), 400)
+        self.assertFalse((self.out / "changes.jsonl").exists())
+
+    def test_non_numeric_content_length_is_a_400(self):
+        self.assertEqual(self.post("/changes", b"{}", {"Content-Length": "abc"}), 400)
 
     def test_empty_body_is_a_400(self):
         self.assertEqual(self.post("/changes", b""), 400)

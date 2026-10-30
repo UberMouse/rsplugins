@@ -55,16 +55,21 @@ def field(value, lo, hi):
 
 
 def read_jsonl(path):
-    """Parsed lines of a JSONL file; a torn line (the receiver may be mid-append) is skipped."""
+    """Parsed lines of a JSONL file; a torn line (the receiver may be mid-append) or a line
+    that isn't an object is skipped. Sibling of read_jsonl in var-dump-analyze.py."""
     rows = []
     with open(path) as f:
         for number, line in enumerate(f, 1):
             if not line.strip():
                 continue
             try:
-                rows.append(json.loads(line))
+                row = json.loads(line)
             except json.JSONDecodeError:
+                row = None
+            if not isinstance(row, dict):
                 print(f"{path}:{number}: skipping unparsable line", file=sys.stderr)
+                continue
+            rows.append(row)
     return rows
 
 

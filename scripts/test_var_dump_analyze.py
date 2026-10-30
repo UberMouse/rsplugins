@@ -5,7 +5,9 @@
 They pin the vars.csv catalog contract (tests/harness/catalog.lua reads it by column position),
 the VarBit helpers it relies on and the redaction policy, on a four-var in-memory snapshot."""
 
+import contextlib
 import importlib.util
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,27 +27,17 @@ SNAPSHOT = [
 ]
 
 
-def catalog_rows(vars_):
-    """The tree and vars.csv rows, built the way main() builds them (annotate, tree, one row per var)."""
+def annotated(snapshot):
+    """Copies of the snapshot's vars with the per-var fields main() sets before building rows."""
+    vars_ = [dict(v) for v in snapshot]
+    base_names = {v["baseVar"] for v in vars_ if v.get("isVarBit")}
     for var in vars_:
         var["_path"] = analyze.group_path(var["name"])
         var["_state"] = analyze.state_of(var)
-        var["_packed"] = False
-    tree = analyze.build_tree(vars_)
-    analyze.assign_themes(tree)
-    group_of = {}
-    for _, node, _ in analyze.walk(tree):
-        for var in node["members"]:
-            group_of[id(var)] = node["label"]
-    rows = []
-    for v in vars_:
-        span = analyze.bit_range(v["mask"]) if v.get("isVarBit") else None
-        rows.append({
-            "domain": v["domain"], "id": v["id"], "name": v["name"], "family": group_of[id(v)],
-            "group": group_of[id(v)], "type": analyze.type_label(v), "base_var": v.get("baseVar", ""),
-            "bits": f"{span[0]}-{span[1]}" if span else "",
-        })
-    return tree, rows
+        var["_packed"] = (var["domain"] == "VarPlayer" and not var.get("isVarBit")
+                          and var["name"] in base_names)
+        var["_hint"] = analyze.value_hint(var, 0)
+    return vars_
 
 
 class BitRange(unittest.TestCase):
@@ -82,9 +74,9 @@ class StateOf(unittest.TestCase):
 
 class WriteCatalog(unittest.TestCase):
     def write(self):
-        """Run write_catalog; return (vars.csv lines, vars.csv text)."""
-        vars_ = [dict(v) for v in SNAPSHOT]
-        tree, rows = catalog_rows(vars_)
+        """Run write_catalog on rows from catalog_rows; return (vars.csv lines, vars.csv text)."""
+        vars_ = annotated(SNAPSHOT)
+        tree, rows = analyze.catalog_rows(vars_)
         bases = analyze.build_basevars(vars_)
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
@@ -102,8 +94,19 @@ class WriteCatalog(unittest.TestCase):
         self.assertEqual(row, "VarPlayer,7,DEMO_FLAGS,DEMO,DEMO,INTEGER,DEMO_BASE,3-5")
 
     def test_catalog_has_no_values(self):
+        # SNAPSHOT carries values (5 and 12345); none may reach vars.csv.
         _, text = self.write()
         self.assertNotIn("12345", text)
+
+
+class ReadJsonl(unittest.TestCase):
+    def test_torn_and_non_object_lines_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "changes.jsonl"
+            path.write_text('{"seq": 1}\n5\n{"seq": 2\n[1]\n{"seq": 3}\n')
+            with contextlib.redirect_stderr(io.StringIO()):
+                rows = list(analyze.read_jsonl(path))
+        self.assertEqual(rows, [{"seq": 1}, {"seq": 3}])
 
 
 class Snapshots(unittest.TestCase):

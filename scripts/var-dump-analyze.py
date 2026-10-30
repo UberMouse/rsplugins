@@ -223,16 +223,21 @@ PROFILE_VARS = {
 
 # --- Loading ------------------------------------------------------------------
 def read_jsonl(path):
-    """Yield one object per line. A torn last line (the receiver may still be
-    appending) is skipped with a warning rather than aborting."""
+    """Yield one object per line. A torn last line (the receiver may still be appending) or a
+    line that isn't an object is skipped with a warning rather than aborting. Sibling of
+    read_jsonl in var-dump-changes.py."""
     with open(path) as f:
         for number, line in enumerate(f, 1):
             line = line.strip()
             if not line:
                 continue
             try:
-                yield json.loads(line)
+                row = json.loads(line)
             except json.JSONDecodeError:
+                row = None
+            if isinstance(row, dict):
+                yield row
+            else:
                 print(f"{path}:{number}: skipping unparsable line", file=sys.stderr)
 
 
@@ -802,6 +807,33 @@ def write_catalog(out, snapshot_day, vars_, var_rows, tree, bases):
     path.write_text("\n".join(md) + "\n")
 
 
+def catalog_rows(vars_):
+    """Build the family tree and one vars.csv row per var; the vars need _packed, _state and
+    _hint set. Sets _family and _theme on each var. Returns (tree, rows)."""
+    # Each var's family is its top-level node; its group the deepest one.
+    tree = build_tree(vars_)
+    assign_themes(tree)
+    group_of = {}
+    for depth, node, parents in walk(tree):
+        for var in node["members"]:
+            group_of[id(var)] = node["label"]  # deeper nodes overwrite their parents
+            if depth == 0:
+                var["_family"], var["_theme"] = node["label"], node["theme"]
+
+    rows = []
+    for v in vars_:
+        span = bit_range(v["mask"]) if v.get("isVarBit") else None
+        rows.append({
+            "domain": v["domain"], "id": v["id"], "name": v["name"], "family": v["_family"],
+            "group": group_of[id(v)], "theme": v["_theme"],
+            "type": type_label(v),
+            "varbit": bool(v.get("isVarBit")), "base_var": v.get("baseVar", ""),
+            "bits": f"{span[0]}-{span[1]}" if span else "", "packed_base": v["_packed"],
+            "state": v["_state"], "value": show_value(v), "hint": v["_hint"],
+        })
+    return tree, rows
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("snapshot", nargs="?", type=Path)
@@ -841,31 +873,10 @@ def main():
         var["_hint"] = value_hint(var, now)
     print(f"{len(vars_)} vars from {snapshot}")
 
-    # Family tree. Each var's family is its top-level node; its group the deepest one.
-    tree = build_tree(vars_)
-    assign_themes(tree)
-    group_of = {}
-    for depth, node, parents in walk(tree):
-        for var in node["members"]:
-            group_of[id(var)] = node["label"]  # deeper nodes overwrite their parents
-            if depth == 0:
-                var["_family"], var["_theme"] = node["label"], node["theme"]
-
+    tree, var_rows = catalog_rows(vars_)
     bases = build_basevars(vars_)
     bases_by_name = {b["name"]: b for b in bases}
 
-    # vars.csv: the master table.
-    var_rows = []
-    for v in vars_:
-        span = bit_range(v["mask"]) if v.get("isVarBit") else None
-        var_rows.append({
-            "domain": v["domain"], "id": v["id"], "name": v["name"], "family": v["_family"],
-            "group": group_of[id(v)], "theme": v["_theme"],
-            "type": type_label(v),
-            "varbit": bool(v.get("isVarBit")), "base_var": v.get("baseVar", ""),
-            "bits": f"{span[0]}-{span[1]}" if span else "", "packed_base": v["_packed"],
-            "state": v["_state"], "value": show_value(v), "hint": v["_hint"],
-        })
     var_rows.sort(key=lambda r: (r["family"], r["group"], r["name"]))
     write_csv(out / "vars.csv", var_rows, VAR_FIELDS)
 

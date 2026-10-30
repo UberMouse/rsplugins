@@ -12,21 +12,38 @@ Listens on 127.0.0.1:8765 (the plugin's "sink" URL) for:
 """
 
 import json
+import re
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
 
 HOST, PORT = "127.0.0.1", 8765
 
-out_dir = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "dumps/var-dump")
+out_dir = Path(__file__).resolve().parents[1] / "dumps/var-dump"  # main() replaces it from argv
 current_snapshot = None  # path of the snapshot file parts are being added to
 
+# Host: loopback name, optionally with a port. Exact, so a userinfo Host like
+# "evil.com@127.0.0.1" or "[::1]" is refused.
+LOOPBACK_HOST = re.compile(r"(127\.0\.0\.1|localhost)(:[0-9]+)?", re.IGNORECASE)
 
-def local_name(value):
-    """The hostname of a Host header or Origin URL, or None if it has none."""
-    return urlsplit(value if "//" in value else "//" + value).hostname
+
+def problem(path, payload):
+    """Why a request body can't be handled (a one-line reason), or None if its shape is right."""
+    if not isinstance(payload, dict):
+        return "body is not a JSON object"
+    if path == "/snapshot":
+        for key in ("part", "totalParts"):
+            if type(payload.get(key)) is not int:
+                return f"{key} is not an integer"
+        items = payload.get("vars")
+    elif path == "/changes":
+        items = payload.get("changes")
+    else:
+        return None
+    if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
+        return "vars/changes is not a list of objects"
+    return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -35,14 +52,14 @@ class Handler(BaseHTTPRequestHandler):
 
         A web page can POST to 127.0.0.1 without a preflight, and DNS rebinding can point
         another hostname at it, so binding to loopback alone doesn't keep pages out. The
-        plugin's HTTP client sends no Origin (docs/api-concepts.md) and a loopback Host."""
+        plugin's HTTP client sends no Origin (docs/api-concepts.md) and a loopback Host.
+        Like rsdev.py's refused(), but any port is accepted and a bare host is too."""
         host = self.headers.get("Host")
-        if host is None or local_name(host) not in ("127.0.0.1", "localhost"):
+        if host is None or not LOOPBACK_HOST.fullmatch(host):
             print(f"refused {self.path}: Host {host!r}")
             return self.reply(403) or True
-        origin = self.headers.get("Origin")
-        if origin is not None and local_name(origin) not in ("127.0.0.1", "localhost"):
-            print(f"refused {self.path}: Origin {origin!r}")
+        if "Origin" in self.headers:
+            print(f"refused {self.path}: Origin {self.headers['Origin']!r}")
             return self.reply(403) or True
         return False
 
@@ -50,13 +67,23 @@ class Handler(BaseHTTPRequestHandler):
         global current_snapshot
         if self.refused():
             return
-        length = int(self.headers.get("Content-Length", 0))
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length < 0:
+                raise ValueError
+        except ValueError:
+            print(f"bad Content-Length on {self.path}: {self.headers['Content-Length']!r}")
+            return self.reply(400)
         raw = self.rfile.read(length)
         try:
             # Game text isn't always valid UTF-8, and one bad byte shouldn't lose a part.
             payload = json.loads(raw.decode("utf-8", errors="replace"))
         except json.JSONDecodeError as err:
             print(f"bad JSON on {self.path}: {err}; {len(raw)} bytes, starts {raw[:80]!r}")
+            return self.reply(400)
+        reason = problem(self.path, payload)
+        if reason:
+            print(f"bad request on {self.path}: {reason}")
             return self.reply(400)
 
         received = time.time()
@@ -66,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
                 # An earlier .partial (abandoned upload) stays on disk; analyze ignores it.
                 current_snapshot = out_dir / f"snapshot-{stamp}.jsonl.partial"
                 current_snapshot.unlink(missing_ok=True)  # same-second restart: don't append
-                print(f"snapshot: {payload['totalVars']} vars -> {current_snapshot}")
+                print(f"snapshot: {payload.get('totalVars')} vars -> {current_snapshot}")
             if current_snapshot is None:
                 print("snapshot part arrived without part 1; ignoring")
                 return self.reply(409)
@@ -100,8 +127,15 @@ class Handler(BaseHTTPRequestHandler):
         pass  # the per-request access log is noise; we print our own summary
 
 
-if __name__ == "__main__":
+def main():
+    global out_dir
+    if len(sys.argv) > 1:
+        out_dir = Path(sys.argv[1])
     sys.stdout.reconfigure(line_buffering=True)  # show output promptly even when piped
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"listening on http://{HOST}:{PORT}, writing to {out_dir}/")
     HTTPServer((HOST, PORT), Handler).serve_forever()
+
+
+if __name__ == "__main__":
+    main()

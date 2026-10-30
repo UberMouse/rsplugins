@@ -901,15 +901,37 @@ local ResizeController = strict.class("prettyui.Window resize", {
     },
 })
 
+-- A field that faults once the object is destroyed, as its methods do. The members left bare
+-- below read nil instead, as 1.2.0 clears them on Destroy.
+---@param read fun(s: table): any
+---@return fun(s: table): any
+local function liveField(read)
+    return function(s)
+        live(s)
+        return read(s)
+    end
+end
+
+-- 1.2.0's internal scroll controller: only `scrollY` is modelled, a snapshot at the read, so
+-- any other key faults instead of reading nil.
+local ScrollController = strict.class("prettyui.Window instance._scroll", {
+    undeclared = true,
+    fields = {
+        scrollY = function(s)
+            return s.scrollY
+        end,
+    },
+})
+
 local Window = strict.class("prettyui.Window instance", {
     undeclared = true,
     fields = {
         root = function(s)
             return s.root
         end,
-        closeButton = function(s)
+        closeButton = liveField(function(s)
             return s.closeButton
-        end,
+        end),
         -- The scrolling layer the rows live in, for a plugin's own components.
         content = function(s)
             if s.destroyed then return nil end
@@ -923,13 +945,12 @@ local Window = strict.class("prettyui.Window instance", {
         end,
         -- 1.2.0's internal wheel handler (also set on the window by its scroll controller):
         -- a plugin hands it to a row's ONSCROLLWHEEL so the wheel still scrolls the window.
-        _onScrollWheel = function(s)
+        _onScrollWheel = liveField(function(s)
             return s.onWheel
-        end,
-        -- 1.2.0's internal scroll controller; only its scrollY is modelled, as a snapshot.
+        end),
         _scroll = function(s)
             if s.destroyed then return nil end
-            return { scrollY = s.scrollY }
+            return ScrollController.new({ scrollY = s.scrollY })
         end,
         -- 1.2.0's internal title-bar drag layer (a titled window's only), a sibling of the root
         -- on the window's parent. Only its stacking and `hidden` are modelled: its rect is left
@@ -956,12 +977,12 @@ local Window = strict.class("prettyui.Window instance", {
             end
             return ResizeController.new({ handles = handles, win = s })
         end,
-        _RegisterOverlay = function(s)
+        _RegisterOverlay = liveField(function(s)
             return overlayMethod(s, "_RegisterOverlay", registerOverlay)
-        end,
-        _UnregisterOverlay = function(s)
+        end),
+        _UnregisterOverlay = liveField(function(s)
             return overlayMethod(s, "_UnregisterOverlay", unregisterOverlay)
-        end,
+        end),
     },
     methods = {
         SetSize = function(s, width, height)
@@ -1026,12 +1047,12 @@ local Panel = strict.class("prettyui.Panel instance", {
         root = function(s)
             return s.root
         end,
-        width = function(s)
+        width = liveField(function(s)
             return s.width
-        end,
-        height = function(s)
+        end),
+        height = liveField(function(s)
             return s.height
-        end,
+        end),
     },
     methods = {
         -- Clamped to at least 9x9, then kept inside the parent; also makes the current

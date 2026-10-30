@@ -281,6 +281,51 @@ describe("a plugin's own components", function()
         end
     end)
 
+    it("check a hidden or content value's type, and fault writing either once destroyed", function()
+        assert.matches(
+            "ui.Layer.hidden must be a boolean",
+            harness.errorOf(loadRows, "row.hidden = 'yes'")
+        )
+        assert.matches(
+            "ui.Text.content must be a string",
+            harness.errorOf(loadRows, "t = ui.Text.new(row); t.content = 5")
+        )
+        local h = loadRows("t = ui.Text.new(row); t.hidden = true; t.content = 'a'")
+        assert.are.same({ true, "a" }, { h.env.t.hidden, h.env.t.content })
+        for _, code in ipairs({ "t.hidden = true", "t.content = 'x'", "local _ = t.content" }) do
+            assert.matches(
+                "used after Destroy",
+                harness.errorOf(loadRows, "t = ui.Text.new(row); t:Destroy()\n" .. code)
+            )
+        end
+    end)
+
+    it("hand out one cursorConfig and opConfig per component", function()
+        local row = loadRows("").env.row
+        assert.is_true(rawequal(row.cursorConfig, row.cursorConfig))
+        assert.is_true(rawequal(row.opConfig, row.opConfig))
+    end)
+
+    it("fault on a cursorConfig or opConfig kept across the component's Destroy", function()
+        for _, code in ipairs({
+            "local _ = cfg.mouseOverCursor",
+            "cfg.mouseOverCursor = -1",
+            "ops:SetOpCursor(0, id.Cursor.CURSOR_PUSH)",
+            "ops:GetOpCursor(0)",
+            "ops:ClearOpCursors()",
+        }) do
+            assert.matches(
+                "used after Destroy",
+                harness.errorOf(
+                    loadRows,
+                    "cfg, ops = row.cursorConfig, row.opConfig\n"
+                        .. "cfg.mouseOverCursor = -1\nrow:Destroy()\n"
+                        .. code
+                )
+            )
+        end
+    end)
+
     it("give a sprite spriteID and an associated object from docs/api/consts/Obj.lua", function()
         local h = loadRows([[
             box = ui.Sprite.new(row)

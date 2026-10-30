@@ -340,6 +340,16 @@ win:_RegisterOverlay(overlay, function() return visible end, function() syncs = 
         )
     end)
 
+    it("faults closing an untitled window whose registered overlay was destroyed", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, {})
+            overlay = ui.Layer.new(parent)
+            w:_RegisterOverlay(overlay, nil, function() end)
+            overlay:Destroy()
+        ]])
+        assert.matches("used after Destroy", harness.errorOf(h.env.w.Close, h.env.w))
+    end)
+
     it("hides its title-bar drag layer on Close, and Show raises the root then it", function()
         local h = load(WINDOW .. [[
 other = ui.Layer.new(parent)
@@ -511,6 +521,38 @@ other = ui.Layer.new(parent)
         )
     end)
 
+    it("reads nil on the fields 1.2.0 clears and faults on the rest after Destroy", function()
+        local h = load(WINDOW .. "win:Destroy()")
+        local win = h.env.win
+        for _, key in ipairs({ "root", "content", "viewport", "_scroll", "titleDrag", "resize" }) do
+            assert.is_nil(win[key])
+        end
+        for _, key in ipairs({
+            "closeButton",
+            "_onScrollWheel",
+            "_RegisterOverlay",
+            "_UnregisterOverlay",
+        }) do
+            assert.matches(
+                "used after Destroy",
+                harness.errorOf(function()
+                    return win[key]
+                end)
+            )
+        end
+    end)
+
+    it("faults on an unmodelled key of _scroll, and reads its scrollY", function()
+        local h = load(WINDOW)
+        assert.are.equal(0, h.env.win._scroll.scrollY)
+        assert.matches(
+            "unmocked API",
+            harness.errorOf(function()
+                return h.env.win._scroll.scrollPosition
+            end)
+        )
+    end)
+
     it("faults when the driver clicks a destroyed button or close X", function()
         local h = load(WINDOW .. "x = win.closeButton; win:Destroy()")
         for _, target in ipairs({ h.env.menu, h.env.x }) do
@@ -590,6 +632,20 @@ describe("prettyui Panel", function()
             backgroundAlpha = 0 })
         btn = holder:AddSpriteButton("MENU", function() clicks = clicks + 1 end, { size = 20 })
     ]]
+
+    it("reads root as nil and faults on width and height after Destroy", function()
+        local h = load(MAIN .. "holder:Destroy()")
+        local holder = h.env.holder
+        assert.is_nil(holder.root)
+        for _, key in ipairs({ "width", "height" }) do
+            assert.matches(
+                "used after Destroy",
+                harness.errorOf(function()
+                    return holder[key]
+                end)
+            )
+        end
+    end)
 
     it("puts its first child at +18,+16 (probe)", function()
         local h = load(

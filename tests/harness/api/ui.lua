@@ -283,7 +283,7 @@ end
 ---@return fun(s: table, value: any)
 local function checkedSetter(member, accepts, expected)
     return function(s, value)
-        if s.destroyed then strict.fault(s.class .. " used after Destroy()") end
+        live(s.owner or s)
         if not accepts(value) then
             strict.fault(s.class .. "." .. member .. " must be " .. expected)
         end
@@ -305,9 +305,15 @@ local function isCursor(value)
 end
 
 -- ui.ComponentCursorConfig: only `mouseOverCursor` is modelled. Its state is a table of the
--- component's own (`s.cursor`), so a destroyed component's config faults on use.
+-- component's own (`s.cursorState`) holding `owner`, so a handle kept across the component's
+-- Destroy() faults on use.
 local CursorConfig = strict.class("ui.ComponentCursorConfig", {
-    fields = { mouseOverCursor = storedField("mouseOverCursor") },
+    fields = {
+        mouseOverCursor = function(s)
+            live(s.owner)
+            return storedField("mouseOverCursor")(s)
+        end,
+    },
     setters = {
         mouseOverCursor = checkedSetter("mouseOverCursor", isCursor, "-1 or an id.Cursor member"),
     },
@@ -317,6 +323,7 @@ local CursorConfig = strict.class("ui.ComponentCursorConfig", {
 local OpConfig = strict.class("ui.ComponentOpConfig", {
     methods = {
         SetOpCursor = function(s, opIndex, cursorID, ...)
+            live(s.owner)
             if not (isInteger(opIndex) and opIndex >= 0) or select("#", ...) > 0 then
                 strict.fault(
                     "ui.ComponentOpConfig:SetOpCursor(opIndex, cursorID) needs an op index"
@@ -332,9 +339,11 @@ local OpConfig = strict.class("ui.ComponentOpConfig", {
         -- The page says what an unset op gives only as a filter description; -1 is the
         -- "no cursor" value mouseOverCursor uses.
         GetOpCursor = function(s, opIndex)
+            live(s.owner)
             return s.opCursors[opIndex] or -1
         end,
         ClearOpCursors = function(s)
+            live(s.owner)
             s.opCursors = {}
         end,
     },
@@ -366,14 +375,20 @@ local FIELDS = {
     hidden = function(s)
         return s.hidden
     end,
+    -- One proxy per component, so `c.cursorConfig == c.cursorConfig` and no proxy per read.
     cursorConfig = function(s)
-        s.cursorState = s.cursorState or { class = "ui.ComponentCursorConfig", destroyed = false }
-        s.cursorState.destroyed = s.destroyed
-        return CursorConfig.new(s.cursorState)
+        if not s.cursorProxy then
+            s.cursorState = { class = "ui.ComponentCursorConfig", owner = s }
+            s.cursorProxy = CursorConfig.new(s.cursorState)
+        end
+        return s.cursorProxy
     end,
     opConfig = function(s)
-        s.opState = s.opState or { opCursors = {}, destroyed = false }
-        return OpConfig.new(s.opState)
+        if not s.opProxy then
+            s.opState = { class = "ui.ComponentOpConfig", opCursors = {}, owner = s }
+            s.opProxy = OpConfig.new(s.opState)
+        end
+        return s.opProxy
     end,
     xyGlobal = function(s)
         local x, y = M.globalPos(s)
@@ -479,18 +494,20 @@ local SETTERS = {
     alpha = checkedSetter("alpha", function(v)
         return type(v) == "number"
     end, "a number"),
+    hidden = checkedSetter("hidden", function(v)
+        return type(v) == "boolean"
+    end, "a boolean"),
     rgba = checkedSetter("rgba", function(v)
         return isInteger(v) and v >= 0 and v <= 0xFFFFFFFF
     end, "an integer from 0 to 0xFFFFFFFF"),
 }
 
 ---@param name string the stub class
----@param extra table? more fields, plain and assignable
 ---@param more { fields: table?, setters: table?, methods: table? }? members of this kind
 ---@return table class
-local function componentClass(name, extra, more)
+local function componentClass(name, more)
     more = more or {}
-    local fields, methods, writable = {}, {}, { hidden = true }
+    local fields, methods = {}, {}
     local setters = {}
     for k, fn in pairs(FIELDS) do
         fields[k] = function(s)
@@ -503,10 +520,6 @@ local function componentClass(name, extra, more)
             live(s)
             return fn(s)
         end
-    end
-    for k, fn in pairs(extra or {}) do
-        fields[k] = fn
-        writable[k] = true
     end
     for _, set in ipairs({ SETTERS, more.setters or {} }) do
         for k, fn in pairs(set) do
@@ -521,10 +534,7 @@ local function componentClass(name, extra, more)
             end
         end
     end
-    return strict.class(
-        name,
-        { fields = fields, methods = methods, writable = writable, setters = setters }
-    )
+    return strict.class(name, { fields = fields, methods = methods, setters = setters })
 end
 
 -- Text:AlignTo(horizontal[, vertical]) takes ui.AlignMode members.
@@ -547,7 +557,7 @@ end
 local CLASSES = {
     Component = componentClass("ui.Component"),
     Layer = componentClass("ui.Layer"),
-    Sprite = componentClass("ui.Sprite", nil, {
+    Sprite = componentClass("ui.Sprite", {
         fields = {
             spriteID = storedField("spriteID"),
             -- -1 while none is associated (ui/decorative_components/sprite.html).
@@ -578,13 +588,18 @@ local CLASSES = {
         },
     }),
     Text = componentClass("ui.Text", {
-        content = function(s)
-            live(s)
-            return s.content
-        end,
-    }, {
-        fields = { font = storedField("font") },
-        setters = { font = checkedSetter("font", isInteger, "an integer") },
+        fields = {
+            font = storedField("font"),
+            content = function(s)
+                return s.content
+            end,
+        },
+        setters = {
+            font = checkedSetter("font", isInteger, "an integer"),
+            content = checkedSetter("content", function(v)
+                return type(v) == "string"
+            end, "a string"),
+        },
         methods = { AlignTo = alignTo },
     }),
 }

@@ -1,7 +1,7 @@
 # Review lens: API grounding
 
 Cross-check every Client Plugin API use the diff adds or changes against the **real** API
-reference. This is the one lens whose ground truth is outside the repo. `scripts/check-lua.sh`
+reference. This is the one lens whose ground truth is outside the repo. `scripts/check.sh`
 runs LuaLS against the community stubs in `docs/api/`, so where a value's type is known it already
 catches an undefined member or global, a wrong argument type and an unchecked `T?`. It is blind
 wherever the type is `any` (a `pcall` result, an untyped table, a value passed through our own

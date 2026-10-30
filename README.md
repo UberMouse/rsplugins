@@ -10,8 +10,8 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
 - [docs/](docs/README.md): our notes on the plugin API, dev environment, guidelines and Mod.io
   submission. `docs/api/` is the API reference as LuaLS stubs. The dev shell links it, and
   `.luarc.json` points editors at it, so you get completion and type checks.
-- `scripts/check-lua.sh`: the lint gate (luac, manifests, selene, stylua, LuaLS type check,
-  plugin tests). The tests need the var catalog in `docs/vars/`, which isn't committed: build it
+- `scripts/check.sh`: the gate for Lua, Python, JS and shell (its header lists the
+  steps). The plugin tests need the var catalog in `docs/vars/`, which isn't committed: build it
   from a var dump first (see
   [plugins/var-dump/README.md](plugins/var-dump/README.md#building-the-var-catalog)).
 - `plugins/<name>/`: one folder per plugin (`main.lua` + `plugin.json`). The folder name is the

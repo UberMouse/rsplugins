@@ -22,7 +22,7 @@ Console lines from the plugin are tagged `[VARDUMP]` (grep regex: `\[VARDUMP\]`)
 
 ## Building the var catalog
 
-The plugin tests (`scripts/test-lua.sh`, and so `scripts/check-lua.sh`) need `docs/vars/`, the
+The plugin tests (`scripts/test-lua.sh`, and so `scripts/check.sh`) need `docs/vars/`, the
 catalog of every var's name, ID, type and VarBit layout. It isn't committed, so build it once
 per checkout: take a snapshot as above, then run
 `python3 -I scripts/var-dump-analyze.py --catalog` from the repo root. That writes

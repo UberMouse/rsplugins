@@ -127,7 +127,7 @@ check("batched comment block narrows count and pathspec to its files", [
 // ---- lensPrecheck ---------------------------------------------------------------
 
 check("it skips a plugin-only lens when nothing under plugins/ changed",
-  api.lensPrecheck({ pluginOnly: true }, ["scripts/check-lua.sh", "docs/README.md"]), "precheck: no plugin changes in the diff")
+  api.lensPrecheck({ pluginOnly: true }, ["scripts/check.sh", "docs/README.md"]), "precheck: no plugin changes in the diff")
 check("it runs a plugin-only lens when a plugin file changed",
   api.lensPrecheck({ pluginOnly: true }, ["docs/README.md", "plugins/x/main.lua"]), null)
 check("it never skips a lens that is not plugin-only",

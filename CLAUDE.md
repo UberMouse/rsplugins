@@ -21,7 +21,7 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
   a change work in game), don't guess or build on the assumption. Write a probe (a throwaway
   plugin, tagged logging, or a session for the dev recorder in `lib/dev/`) and get it run. Record
   what it showed in `docs/api-concepts.md`. A probe that sits in `plugins/` must keep
-  `scripts/check-lua.sh` green, and is deleted once it has answered.
+  `scripts/check.sh` green, and is deleted once it has answered.
 - When the client is open, drive it yourself through the dev bridge
   ([docs/dev-environment.md](docs/dev-environment.md#dev-bridge)). Run `scripts/rsdev.py status`
   first, and if the daemon is down, start it yourself (`scripts/rsdev.py start`). If the bridge is
@@ -38,10 +38,8 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
   this checkout's `plugins/`, so a worktree's plugins would be invisible to the client.
 - Moderation rejects unreadable code. Keep Lua lean and clearly commented, and write a plain-English
   description per plugin.
-- Every change must pass `scripts/check-lua.sh` (luac, manifest JSON, selene, stylua, LuaLS
-  against `docs/api/`, the busted plugin tests in `tests/` via `scripts/test-lua.sh`, which run
-  plugins against the mock API harness described in `docs/testing.md`, and the Python tests of the
-  recording sanitiser, `scripts/test_recording_sanitise.py`; run `stylua` first). When LuaLS flags an API name, member or argument, it is
+- Every change must pass `scripts/check.sh` (the header of that script lists the steps; run
+  `stylua` first). When LuaLS flags an API name, member or argument, it is
   most likely an invented API: fix the code. Only if the official page proves the stub wrong,
   suppress that one line with `---@diagnostic disable-next-line: <code>` and a comment citing the
   page.

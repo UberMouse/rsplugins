@@ -10,7 +10,7 @@ stops doing its job, the overlay that never draws or never clears, the setting t
 client freeze or crash. Say whether it bites on a path the change can reach. Never report the form
 of a line in isolation; trace it to the behaviour it causes.
 
-`scripts/check-lua.sh` runs `luac -p`, selene, stylua, LuaLS against the API stubs in `docs/api/`,
+`scripts/check.sh` runs `luac -p`, selene, stylua, LuaLS against the API stubs in `docs/api/`,
 and the busted suite in `tests/`, which runs plugins against a mock of the API. The mock models
 only what the fidelity ledger in `docs/testing.md` lists: a passing test says nothing about
 behaviour outside it, so don't dismiss a finding as "the tests would catch it" unless a spec
@@ -45,7 +45,7 @@ own finding. A pattern fixed in one plugin but left in a sibling is a common mis
 
 ## Do not report
 
-- What `scripts/check-lua.sh` already rejects: Lua syntax errors, invalid `plugin.json` JSON,
+- What `scripts/check.sh` already rejects: Lua syntax errors, invalid `plugin.json` JSON,
   formatting (stylua), what selene flags (unused variables, accidental globals, shadowing), and
   what LuaLS flags on typed values (undefined globals and members, argument type mismatches,
   unchecked nil). Assume the gate ran and passed.

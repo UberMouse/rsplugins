@@ -104,7 +104,7 @@ copied into `plugins/` as real directories by the dev shell's `shellHook`, so th
 folder inside `dev_plugins` (probe 2026-10-26; see
 [Runtime limits](api-concepts.md#runtime-limits-weve-hit)).
 The copies are gitignored, `.luarc.json` skips them (`workspace.ignoreDir`), and
-`scripts/check-lua.sh` skips any `plugins/*` folder holding a `.flake-source` marker, so selene,
+`scripts/check.sh` skips any `plugins/*` folder holding a `.flake-source` marker, so selene,
 stylua, LuaLS and the tests never reach them. Neither is ours: they are never submitted, and they
 are not held to this repo's code rules.
 

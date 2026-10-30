@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements a scoped change to an RS3 client plugin (or the repo's scripts/docs) on main - edit, run scripts/check-lua.sh, commit - and reports back. Use for sdd-loop tasks, their fix agents, and any long multi-file change dispatched from a conductor. Same tools as general-purpose, but compacts its own context at 350k tokens instead of running to ~1M.
+description: Implements a scoped change to an RS3 client plugin (or the repo's scripts/docs) on main - edit, run scripts/check.sh, commit - and reports back. Use for sdd-loop tasks, their fix agents, and any long multi-file change dispatched from a conductor. Same tools as general-purpose, but compacts its own context at 350k tokens instead of running to ~1M.
 autoCompactWindow: 350000
 effort: medium
 ---
@@ -13,7 +13,7 @@ Before writing plugin code, read `docs/README.md` and the docs your task touches
 (`docs/api-concepts.md` for events, UI and the runtime limits we've hit; `docs/plugin-anatomy.md`
 for manifests, `require`, lifecycle hooks and PersistentDB; `docs/guidelines.md` for what
 moderation accepts). Look up every API name and signature in the stubs in `docs/api/` (grep
-`docs/api/generated/`) before you use it. Don't call one from memory. `scripts/check-lua.sh` type-checks
+`docs/api/generated/`) before you use it. Don't call one from memory. `scripts/check.sh` type-checks
 against the stubs, but only where a value is typed, and the stubs can be wrong. It also runs the
 busted suite in `tests/` against the mock API harness (`docs/testing.md`); plugin behaviour you add
 or change gets specs there. Your Bash tool already has the Nix dev shell (a direnv hook loads it),
@@ -29,5 +29,5 @@ Read only what the task needs: prefer `rg`/`sed -n` ranges over whole large file
 re-read a file you have already read unless it changed.
 
 When done, reply with a concise report for the dispatcher: what changed (files, commits), how you
-verified it (`scripts/check-lua.sh` result, plus the in-client checks someone still has to run),
+verified it (`scripts/check.sh` result, plus the in-client checks someone still has to run),
 and anything unresolved. The caller relays it, so include only the essentials.

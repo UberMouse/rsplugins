@@ -5,7 +5,7 @@ of a run and again after any compaction or resume.
 
 Give each subagent the **full task text inline**; never make it read a criteria file. Provide
 scene-setting context (where the task fits, what earlier tasks already landed). Every dispatch
-passes `model` explicitly. Never tell an agent it may skip `scripts/check-lua.sh` or work around a
+passes `model` explicitly. Never tell an agent it may skip `scripts/check.sh` or work around a
 failing check (a missing tool means the dev shell is not loaded: stop and report it).
 
 ## Slots
@@ -75,7 +75,7 @@ Agent(implementer, model=implModel):
        (the client kills any Lua call over 1000 ms). Debug logging goes through the plugin's
        tagged `say()`. Every function you add or change that returns a value gets a LuaLS
        `---@return <type>` line (`CLAUDE.md`); use `T?` where it can return nil.
-    2. Format, then verify: `stylua <the .lua files you changed>`, then `scripts/check-lua.sh`
+    2. Format, then verify: `stylua <the .lua files you changed>`, then `scripts/check.sh`
        must exit 0; it also runs the busted suite in `tests/`. Behaviour you add or change in a
        plugin gets specs in `tests/<plugin>/*_spec.lua` against the mock harness
        (`docs/testing.md`): scripted world-builder specs for scoped logic, recorded-timeline
@@ -101,7 +101,7 @@ Agent(implementer, model=implModel):
 
     ## Report
     Lead with the commit SHA and the output of `git status --short`. Then, briefly: what you
-    implemented, the `scripts/check-lua.sh` result, API uses you could not confirm, the
+    implemented, the `scripts/check.sh` result, API uses you could not confirm, the
     in-client checks the user still has to run (`prl <plugin>`, what to do, what they should
     see, the log tag to grep), self-review findings, concerns — facts only, no restated diff or
     praise. State blocking questions in full.
@@ -147,7 +147,7 @@ Agent(general-purpose, model=reviewModel):
 
     ## Verification scope — do NOT re-run the implementer's work
     Reading the diff is the job. The only commands you need are `git diff`/`git log`, reads,
-    greps, and at most one `scripts/check-lua.sh`. Do NOT dispatch your own subagents.
+    greps, and at most one `scripts/check.sh`. Do NOT dispatch your own subagents.
 
     ## You never modify the tree
     Another reviewer is reading this same tree right now. Never edit a tracked file and never
@@ -175,7 +175,7 @@ Agent(general-purpose, model=reviewModel|haiku):
     Code-review this task's committed change for QUALITY only. Do NOT re-check spec conformance —
     a separate spec-compliance reviewer runs in parallel on the same commit and owns that.
     Read the diff (`git diff <TASK_PARENT>..HEAD`) and the touched files in full. Report ONLY
-    clear, high-impact issues; skip nitpicks and anything `scripts/check-lua.sh` rejects (syntax,
+    clear, high-impact issues; skip nitpicks and anything `scripts/check.sh` rejects (syntax,
     manifest JSON, formatting, selene's unused / accidental globals, LuaLS's undefined names and
     type mismatches on typed values). LuaLS is blind through `any` (pcall results, untyped
     tables) and trusts the stubs, so API member names, call forms and nil flow there are YOURS.
@@ -204,7 +204,7 @@ Agent(general-purpose, model=reviewModel|haiku):
      Omit the section if there are none.>
 
     ## Verification scope — do NOT re-run the implementer's work
-    Reading the diff is the job. If you genuinely need a build signal, run `scripts/check-lua.sh`
+    Reading the diff is the job. If you genuinely need a build signal, run `scripts/check.sh`
     once — nothing wider. Do NOT dispatch your own subagents.
 
     ## You never modify the tree
@@ -266,13 +266,13 @@ Agent(implementer, model=implModel):
        cases, any fallback you might defeat (`x or default` after a change that makes `x` false),
        and that any API call you add or change matches the reference (`docs/` or
        https://developer.runescape.com/rs/).
-    2. `stylua <changed .lua files>`, then `scripts/check-lua.sh` must exit 0.
+    2. `stylua <changed .lua files>`, then `scripts/check.sh` must exit 0.
     3. STAGE the files you changed (`git add <the specific files>` — never `-A` or `.`). Do NOT
        commit and do NOT push — the conductor reviews the staged diff and commits.
     4. Self-review: did you address every listed finding, change nothing extra, keep the gate
        green?
 
     ## Report
-    Per finding id: fixed / couldn't (why). Files staged, `scripts/check-lua.sh` result, any
+    Per finding id: fixed / couldn't (why). Files staged, `scripts/check.sh` result, any
     in-client check the fix changes, any blocker.
 ```

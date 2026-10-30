@@ -3,7 +3,7 @@
 std = "lua53+rs"
 
 # LuaLS owns undefined names: it knows the Client Plugin API from the stubs in docs/api/, which
-# rs.yml no longer duplicates. See scripts/check-lua.sh step 5.
+# rs.yml no longer duplicates. See scripts/check.sh step 5.
 [rules]
 undefined_variable = "allow"
 

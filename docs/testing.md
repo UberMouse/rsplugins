@@ -9,8 +9,8 @@ client (`prl <plugin>`).
 - Run the suite with `scripts/test-lua.sh`: busted, every `tests/**/*_spec.lua`, from the repo root
   (`.busted` holds the config). Pass busted arguments through, e.g.
   `scripts/test-lua.sh tests/chore-tracker` or `--filter=reload`.
-- `scripts/check-lua.sh` always runs the whole suite as its last step, so the gate fails on a
-  failing test.
+- `scripts/check.sh` always runs the whole suite (its header lists the steps), so the gate
+  fails on a failing test.
 - Nothing under `tests/` ships in a plugin.
 
 ## Layout
@@ -225,7 +225,7 @@ Check a finding against the official page before building on it.
 
 ## Lint and type-check config for tests/
 
-`scripts/check-lua.sh` lints `tests/` with its own config, because spec and harness code run in
+`scripts/check.sh` lints `tests/` with its own config, because spec and harness code run in
 plain Lua and busted, not in the plugin sandbox:
 
 - `tests/selene.toml` + `tests/tests.yml`: the root std plus the luassert assertions specs call.
@@ -527,7 +527,8 @@ spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
    its own (1920 slots), so leave bank changes out of the window unless the test needs one.
 5. Replay it in a spec with `h:useRecording("tests/fixtures/<name>.jsonl")`.
 
-`scripts/check-lua.sh` also runs the sanitiser's tests, `scripts/test_recording_sanitise.py`.
+`scripts/check.sh` also runs the sanitiser's tests, `scripts/test_recording_sanitise.py`, among the
+Python tests it discovers.
 
 ## Fidelity ledger
 

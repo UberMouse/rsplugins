@@ -1,7 +1,7 @@
 ---
 # selene standard library for RS3 client plugins: the Lua 5.4 grammar and the stdlib members
 # selene's lua53 std lacks. The Client Plugin API is not declared here: LuaLS checks API
-# names, members and argument types against the stubs in docs/api/ (scripts/check-lua.sh step 5),
+# names, members and argument types against the stubs in docs/api/ (scripts/check.sh step 5),
 # so selene's undefined_variable is off (selene.toml) and this file stays small.
 name: rs
 lua_versions:

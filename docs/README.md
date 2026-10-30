@@ -35,7 +35,7 @@ with `nix flake update api-stubs`.
 - `types.lua` holds hand-written aliases and the `id`/`config`/`var` ID types.
 - `consts/` has every named ID (`id.Obj.*`, `var.VarPlayer.*`...), about 50 MB. It is not loaded
   by `.luarc.json` (it makes LuaLS crawl), but you can grep it for names.
-- The same stubs drive the LuaLS step of `scripts/check-lua.sh`, so an API call that does not
+- The same stubs drive the LuaLS step of `scripts/check.sh`, so an API call that does not
   match them fails the gate.
 
 They're generated from the official HTML and partly hand-edited, so they inherit the docs' gaps

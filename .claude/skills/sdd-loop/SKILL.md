@@ -34,7 +34,7 @@ planning gates."
   3. SDD loop      per task, sequentially:
                      implement ─► ⟨spec-review ∥ quality-review⟩ ─► one combined fix
                        ─►(re-review what the fix addressed)*─► task done, committed
-  4. Verify        scripts/check-lua.sh exits 0 (+ workflow tests / hook selftest if touched)
+  4. Verify        scripts/check.sh exits 0 (it also runs the JS tests and hook selftests)
   5. Code review   Workflow(branch-code-review.js, base: BASE) ─► auto-fix every PRIMARY finding
                      ─► conductor adjudicates each appendix finding (fix / reject / defer) ─► re-verify
   6. Hand back     reviewed commits on main + the in-client checks for the user; phase done
@@ -64,9 +64,9 @@ If mid-loop the work turns out to need genuine design work, do **not** silently 
 - **Work on `main`, in this checkout.** No branch, no worktree (`CLAUDE.md`): the beta client's
   `dev_plugins` symlink points at this checkout's `plugins/`, so a worktree's changes would be
   invisible to the user's in-client testing. Every task commits to `main`.
-- **The dev shell** (direnv or `nix develop`): `scripts/check-lua.sh` needs `luac`, `selene`,
-  `stylua`, `lua-language-server`, `python3` and the `docs/api/` stubs symlink the shell makes,
-  and the workflow tests need `node`. Claude Code's direnv hooks load the shell into every Bash
+- **The dev shell** (direnv or `nix develop`): `scripts/check.sh` needs `luac`, `selene`,
+  `stylua`, `lua-language-server`, `python3`, `busted`, `node`, `jq` and the `docs/api/` stubs
+  symlink the shell makes. Claude Code's direnv hooks load the shell into every Bash
   tool, subagents' included (`README.md`), so run tools directly. `lua: command not found` means
   the hook failed (e.g. `.envrc` not allowed): stop and say so.
 - **Stop a background process by its task id or PID, never `pkill -f <pattern>`**: the shell
@@ -237,7 +237,7 @@ write them to a file for an agent to read (`tasks.json` is the conductor's copy)
 ```bash
 git rev-parse --abbrev-ref HEAD      # must be main
 git status --short                   # see below
-scripts/check-lua.sh                 # must exit 0 before any task is dispatched
+scripts/check.sh                     # must exit 0 before any task is dispatched
 S=.durable-state/state.json
 mkdir -p .durable-state
 [ -f "$S" ] || jq -n --arg sid "$CLAUDE_CODE_SESSION_ID" '{skill: "sdd-loop", sessionId: $sid}' > "$S"
@@ -254,7 +254,7 @@ fi
   reconcile with the user, because building on an unknown state makes every review diff
   meaningless. Other uncommitted files (the user's own edits) are left alone: record them in
   `notes` so no agent stages them (every template uses explicit `git add <paths>`).
-- **`scripts/check-lua.sh` red at start**: stop and report it. Do not let a task inherit a red
+- **`scripts/check.sh` red at start**: stop and report it. Do not let a task inherit a red
   gate; its reviewers would spend their pass on someone else's failure.
 - A missing tool means the dev shell is not loaded: stop and say so.
 
@@ -279,7 +279,7 @@ the durable state.
 
 1. **Dispatch the implementer** (`Agent`, `implementer`, `model: implModel` — explicitly) with
    the *Implementer* template from `references/dispatch-templates.md` (Read it before the first
-   dispatch). It implements the task, runs `scripts/check-lua.sh`, **commits**, and self-reviews.
+   dispatch). It implements the task, runs `scripts/check.sh`, **commits**, and self-reviews.
    Record it in state.json (`in-progress`, `agentInFlight`, `inFlight`).
    - If it returns a **blocking question**, route it through `AskUserQuestion` and re-dispatch
      with the answer. Do not answer on the user's behalf when the answer is a real decision
@@ -351,10 +351,8 @@ the durable state.
 The conductor runs these itself (they are read-only checks):
 
 ```bash
-scripts/check-lua.sh                                   # always; must exit 0
+scripts/check.sh                                   # always; must exit 0 (its header lists the steps)
 git diff --name-only "$BASE" HEAD                      # what the run touched, to pick the rest:
-for t in .claude/workflows/*.test.js; do node "$t" || echo "FAILED $t"; done   # always: one test reads the repo's Lua history
-.claude/hooks/durable-state-resume.selftest.sh         # if .claude/hooks/ changed
 python3 -m py_compile scripts/<changed>.py             # if a Python script changed
 ```
 
@@ -444,7 +442,7 @@ Fix them:
 
    If it surfaces a problem, re-dispatch the fix agent on the same group with the correction
    before committing. Keep it proportionate: a one-line rename needs only a glance.
-4. **Commit the group** (per *Fix commit messages* below), then confirm `scripts/check-lua.sh`
+4. **Commit the group** (per *Fix commit messages* below), then confirm `scripts/check.sh`
    exits 0 before the next group.
 
 If a finding cannot be fixed without a refactor beyond its own scope, **do not force a bad fix**:
@@ -490,7 +488,7 @@ After the final §4 passes, write `phase: "done"` to state.json, then give the *
 - Code review: primary findings fixed (by id); each appendix finding's adjudication (by id:
   fixed, rejected with the reason, or deferred with why); anything else deferred (with why); and
   the report path.
-- The final `scripts/check-lua.sh` result, and the workflow tests / hook selftest if they ran.
+- The final `scripts/check.sh` result.
 - **In-client checks**, as a numbered list the user can follow in the beta client: `prf` if a
   manifest or plugin was added, `prl <name>` (or `pon <name>`), each action from the criteria's
   in-client lines, the expected result, and the plugin's log tag with a grep regex for its lines
@@ -551,4 +549,4 @@ before dispatching the next implementer. Fold what they found into the next task
   `.claude/review-lenses/review-*.md`, and its tests are the `*.test.js` beside it.
 - `.claude/skills/durable-state/SKILL.md` and `.claude/hooks/durable-state-resume.sh`: the state
   contract and the resume hook.
-- `scripts/check-lua.sh`: the gate.
+- `scripts/check.sh`: the gate.

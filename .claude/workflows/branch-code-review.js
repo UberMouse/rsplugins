@@ -253,7 +253,7 @@ const SYNTH_SCHEMA = {
 // file and reads to the finder as a complete statement of the bar. Add criteria to the lens file.
 //
 // review-conventions.md holds the cross-lens policy every finder needs (severity calibration,
-// consequence tracing, pattern-consistency sweeps, what scripts/check-lua.sh already catches).
+// consequence tracing, pattern-consistency sweeps, what scripts/check.sh already catches).
 //
 // A `scoring` string is VERIFY protocol, not a criterion: it defines the lens's bands A-D (which
 // decide main report vs appendix, see BAND_SCORE) in examples from its own lens. Name findings by
@@ -300,7 +300,7 @@ function lensBlock(dim) {
 const DEPTH_TEXT = {
   shallow:
     "DEPTH: high-signal scan. Surface clear, high-impact issues. Ignore pure formatting and " +
-    "anything scripts/check-lua.sh rejects. Read a file's full context (and the callers of anything " +
+    "anything scripts/check.sh rejects. Read a file's full context (and the callers of anything " +
     "that changed) when you need it to confirm a finding or its consequence — do not report from the " +
     "raw diff alone.",
   deep:
@@ -654,7 +654,7 @@ const REFUTE_ONLY_IF =
   "Set refuted=true ONLY when the finding is FACTUALLY WRONG — i.e. one of:\n" +
   "  - the code it describes does not exist, or the finding misreads what the code actually does;\n" +
   "  - the concern is already handled elsewhere (a guard, a pcall, a nil check the finding overlooked);\n" +
-  "  - it is purely something scripts/check-lua.sh rejects (Lua syntax, plugin.json JSON, stylua formatting, what " +
+  "  - it is purely something scripts/check.sh rejects (Lua syntax, plugin.json JSON, stylua formatting, what " +
   "selene flags: unused variables, accidental globals; or what LuaLS flags against the docs/api/ stubs: an undefined " +
   "global) — assume the gate ran and passed. LuaLS only checks API members, call forms (. vs :), argument order and " +
   "nil flow where the value is typed, and trusts the stubs, so never refute those on this ground;\n" +

@@ -1,4 +1,4 @@
-"""Tests for scripts/recording-sanitise.py, run by scripts/check-lua.sh:
+"""Tests for scripts/recording-sanitise.py, run by scripts/check.sh:
 
     python3 -m unittest scripts/test_recording_sanitise.py
 

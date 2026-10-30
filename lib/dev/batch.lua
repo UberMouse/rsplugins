@@ -27,6 +27,36 @@ function batch.manifestUrl(urls, name)
     return indexed and value or nil
 end
 
+-- The console steps that grant a plugin httpAccess, as a parenthesised hint. `ppr` first: `ppe`
+-- on a permission the plugin hasn't requested silently does nothing (docs/plugin-anatomy.md).
+-- `extra`, if given, is one more step after them (the tee only starts at load, so it adds the
+-- `prl`).
+---@param plugin string
+---@param extra string?
+---@return string
+function batch.permissionHint(plugin, extra)
+    return string.format(
+        "(`ppr %s`, then `ppe %s httpAccess`%s)",
+        plugin,
+        plugin,
+        extra and (", then " .. extra) or ""
+    )
+end
+
+-- Why a finished request failed, for a console line: "timed out", or "response X, error Y Z"
+-- (code, error code, error text). The dev tools prefix their own context.
+---@param request HTTPRequest a finished request
+---@return string
+function batch.failureText(request)
+    if request.timedOut then return "timed out" end
+    return string.format(
+        "response %s, error %s %s",
+        tostring(request.responseCode),
+        tostring(request.errorCode),
+        tostring(request.errorInfo)
+    )
+end
+
 -- Any value as text, never raising: tostring() can, through a bad __tostring.
 ---@param v any
 ---@return string

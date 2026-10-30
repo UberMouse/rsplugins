@@ -33,6 +33,7 @@
 
 local teelog = require("dev/teelog")
 local batch = require("dev/batch")
+local post = require("dev/post")
 
 local tee = {}
 
@@ -77,7 +78,7 @@ local seq = 0 -- POSTs so far
 local nextPost = 0
 local failures = 0 -- POSTs in a row that failed
 local warned = false -- whether this failure streak has had its console line
-local inFlight = nil ---@type { request: HTTPRequest, body: string, lines: string[] }?
+local inFlight = nil ---@type { post: { request: HTTPRequest, body: string }, lines: string[] }?
 
 ---@param level string
 ---@param text string
@@ -209,15 +210,7 @@ local function onPosted(finished)
         return
     end
     giveBack(sent.lines)
-    warnOnce(
-        finished.timedOut and "POST timed out"
-            or string.format(
-                "POST failed: %s %s, response %s",
-                tostring(finished.errorCode),
-                tostring(finished.errorInfo),
-                tostring(finished.responseCode)
-            )
-    )
+    warnOnce("POST failed: " .. batch.failureText(finished))
 end
 
 -- Send the next batch when one is due and none is in flight.
@@ -235,19 +228,15 @@ local function flush()
         seq = seq,
         dropped = dropped,
     }, lines)
-    -- A closure, never an API function straight to pcall (that aborts the client).
-    local started, err = pcall(function()
-        local request = http.new(url, PATH)
-        request:AddHeader("Content-Type", "application/json")
-        -- Keep the request and its body referenced until it finishes, in case the client
-        -- doesn't copy the body (docs/api-concepts.md).
-        inFlight = { request = request, body = body, lines = lines }
-        request:Post(body, onPosted)
-    end)
-    if started then return end
+    -- Starting is the one step that can fail without the tee being broken; the request and body
+    -- stay referenced in inFlight until it finishes (dev/post.lua).
+    local pending, err = post.startPost(http, url, PATH, body, onPosted)
+    if pending then
+        inFlight = { post = pending, lines = lines }
+        return
+    end
     -- The request never started, so no completion callback will come: free the slot, keep the
     -- lines for a later tick and wait out a retry.
-    inFlight = nil
     giveBack(lines)
     backOff()
     warnOnce("could not start a POST: " .. tostring(err))
@@ -283,15 +272,10 @@ function tee.install(env, plugin)
         return
     end
     if not Plugin.HasPermission(PluginPermissions.httpAccess) then
-        -- ppr first: ppe on a permission the plugin hasn't requested silently does nothing.
         say(
-            string.format(
-                "httpAccess not granted (`ppr %s`, `ppe %s httpAccess`, then `prl %s`), "
-                    .. "so not teeing",
-                plugin,
-                plugin,
-                plugin
-            )
+            "httpAccess not granted "
+                .. batch.permissionHint(plugin, "`prl " .. plugin .. "`")
+                .. ", so not teeing"
         )
         return
     end
@@ -321,12 +305,7 @@ function tee.shutdown()
     realEvent.Logic.Unsubscribe(FLUSH_NAME)
     local sent = inFlight
     inFlight = nil
-    if sent then
-        -- A Lua closure around the API call, never the API function itself.
-        pcall(function()
-            sent.request:Cancel()
-        end)
-    end
+    if sent then post.cancel(sent.post) end
 end
 
 return tee

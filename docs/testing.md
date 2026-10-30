@@ -299,10 +299,10 @@ harness. `plugins/recorder-demo` is the worked example.
    ```
 
 3. In `plugin.json`, add `"httpAccess"` to `optionalPermissions` and
-   `"urls": { "recorder": "http://127.0.0.1:8766" }`.
+   `"urls": { "rsdev": "http://127.0.0.1:8766" }`.
 
 `install()` swaps the API globals in the environment it is given for stand-ins that forward
-every use to the real API. Without `urls.recorder` it logs one `[RECORDER]` line and changes
+every use to the real API. Without `urls.rsdev` it logs one `[RECORDER]` line and changes
 nothing. Without httpAccess it logs one line, records into its buffer and sends nothing, then
 starts sending once the permission is granted (no reload needed). If the recorder itself fails,
 it logs once and stops recording, and the plugin carries on. `recorder.shutdown()` (from
@@ -314,7 +314,7 @@ it logs once and stops recording, and the plugin carries on. `recorder.shutdown(
 of the plugin's other modules too.
 
 **Moderation.** The recorder and recorder-demo are dev tools, never for submission. A plugin
-for submission ships without `dev/`, without the two lines above, and without `urls.recorder`.
+for submission ships without `dev/`, without the two lines above, and without `urls.rsdev`.
 It keeps httpAccess only if a feature of its own needs it. Recordings hold the plugin's request
 headers (an `Authorization` header included) and bodies, chat lines and display names, so keep
 them local.
@@ -367,18 +367,18 @@ so any other member is nil where the harness would fault.
 **Limits.** Batches are POSTed only from the recorder's own `Logic` subscription, at most one a
 second and one at a time, never from an HTTP callback. Each body stays referenced until its
 request finishes. A batch holds up to 256 KB of entries. The buffer keeps up to 8 MB. Past that
-the oldest entries are dropped, and so is a batch the receiver doesn't take, after which the next
-POST waits 5 s (also when starting the request raises). A failed batch isn't re-sent, so the
-buffer bounds memory but doesn't carry data across a receiver outage: start the receiver before
-granting httpAccess. Drops (buffer overflow and failed batches) are counted, and the first one
-logs one console line. One value is capped
+the oldest entries are dropped. A batch the receiver doesn't take (or whose request fails to
+start) goes back in front of the buffer and is sent again after 5 s, so a short receiver outage
+loses nothing and the recording has no gap; a long one overflows the buffer and drops the oldest
+entries. Drops are counted, and the first one logs one console line, as does the first failure of
+a streak. One value is capped
 at 10,000 nodes and each string at 4096 bytes, so recording a full bank stays well inside a
 call's 1000 ms. Entries not yet sent when the plugin is disabled are lost (normally under a
 second's worth), because nothing is sent from `PluginShutdown`.
 
 ### Format (schema 1)
 
-A batch is `POST <urls.recorder>/record` with
+A batch is `POST <urls.rsdev>/record` with
 `{"schema": 1, "plugin", "session", "seq", "dropped", "entries": [...]}`. `seq` counts batches
 from 1 each enable, and `dropped` is the running total of entries lost. The receiver writes a
 `{"k": "session", "schema", "plugin", "session", "started"}` line when a session starts, then

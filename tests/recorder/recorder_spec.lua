@@ -205,7 +205,7 @@ describe("dev recorder", function()
         ]],
                 [[{ "name": "T", "version": "0.0.1", "contactEmailAddress": "t@example.com",
                     "optionalPermissions": [ "httpAccess", "chatAccess" ],
-                    "urls": { "recorder": "http://127.0.0.1:8766" } }]]
+                    "urls": { "rsdev": "http://127.0.0.1:8766" } }]]
             ),
             { grant = { "httpAccess", "chatAccess" } }
         )
@@ -320,7 +320,7 @@ describe("dev recorder", function()
         end }, { __index = real })
     ]]
 
-    it("drops a batch whose request fails to start, and keeps sending", function()
+    it("requeues a batch whose request fails to start, and keeps sending", function()
         local h = harness.new(
             support.plugin(
                 FAILING_NEW
@@ -334,19 +334,81 @@ describe("dev recorder", function()
         h.env.failStart = true
         h:advance(100)
         assert.are.equal(0, #h.requests)
-        assert.are.equal(1, h:consoleCount("[RECORDER] dropping the oldest entries"))
-        assert.matches("starting the request failed", h:output())
+        assert.are.equal(1, h:consoleCount("[RECORDER] starting the request failed"))
         assert.is_nil(h:output():find("sending stopped", 1, true))
+        assert.are.equal(0, h:consoleCount("[RECORDER] dropping"))
 
-        -- The next batch is still sent once the retry wait is over, and counts what was lost.
+        -- The batch is sent once the retry wait is over, nothing lost.
         h.env.failStart = false
-        h.world:setVar("VarPlayer", "QP", 11)
         h:advance(6000)
         local batches = support.batches(h)
         assert.are.equal(1, #batches)
-        assert.is_true(batches[1].dropped > 0)
-        assert.are.equal(1, h:consoleCount("[RECORDER] dropping"))
+        assert.are.equal(0, batches[1].dropped)
+        assert.are.equal(1, #support.where(batches[1].entries, { path = "var.VarPlayer.QP.value" }))
+        assert.are.equal(1, h:consoleCount("[RECORDER]"))
     end)
+
+    it("resends a batch the receiver failed, then goes on", function()
+        local h = harness.new(
+            support.plugin(support.INSTALL .. "local qp = var.VarPlayer.QP.value"),
+            { grant = { "httpAccess" } }
+        )
+        h.world:setVar("VarPlayer", "QP", 10)
+        h:load()
+        h.env.require("dev/recorder").limits.retryTicks = 10
+        h:step()
+        assert.are.equal(1, #support.posts(h))
+        support.answer(h, { error = "refused", errorCode = 7 })
+        h:advance(200)
+        assert.are.equal(2, #support.posts(h))
+        support.answer(h, { timedOut = true }) -- a second failure, same streak
+        h:advance(200)
+        assert.are.equal(3, #support.posts(h))
+        support.answer(h)
+        h:advance(2000)
+        local batches = support.batches(h)
+        assert.are.equal(3, #batches) -- nothing left to send after the success
+        assert.are.same(batches[1].entries, batches[2].entries)
+        assert.are.same(batches[1].entries, batches[3].entries)
+        assert.are.same({ 1, 2, 3 }, { batches[1].seq, batches[2].seq, batches[3].seq })
+        assert.are.equal(0, batches[3].dropped)
+        -- One console line for the streak.
+        assert.are.equal(1, h:consoleCount("[RECORDER] POST failed"))
+    end)
+
+    it(
+        "drops the oldest entries, not the newest, when a requeued batch overflows the buffer",
+        function()
+            local h = harness.new(
+                support.plugin(
+                    support.INSTALL
+                        .. 'Event.Logic.Subscribe("read", function() local _ = var.VarPlayer.QP.value end)'
+                ),
+                { grant = { "httpAccess" } }
+            )
+            h.world:setVar("VarPlayer", "QP", 10)
+            h:load()
+            local limits = h.env.require("dev/recorder").limits
+            limits.bufferBytes, limits.retryTicks = 600, 10
+            h:step()
+            h:step() -- batch 1 holds the QP = 10 read and is now in flight
+            assert.are.equal(1, #support.posts(h))
+            for value = 11, 30 do -- fills and overflows the buffer behind it
+                h.world:setVar("VarPlayer", "QP", value)
+                h:step()
+            end
+            support.answer(h, { error = "refused" })
+            h:advance(1200)
+            local batches = support.batches(h)
+            assert.are.equal(2, #batches)
+            assert.is_true(batches[2].dropped > 0)
+            local reads = support.where(batches[2].entries, { path = "var.VarPlayer.QP.value" })
+            assert.are.equal(30, reads[#reads].v) -- the newest survived
+            for _, read in ipairs(reads) do
+                assert.is_true(read.v ~= 10) -- the requeued, oldest read went first
+            end
+        end
+    )
 
     it("ignores a batch completing after shutdown, and cancels the request in flight", function()
         local h = harness.new(
@@ -382,7 +444,7 @@ describe("dev recorder", function()
         recorder.shutdown() -- twice is fine
     end)
 
-    it("shuts down as a no-op without urls.recorder", function()
+    it("shuts down as a no-op without urls.rsdev", function()
         local h = harness.new(
             support.plugin(
                 support.INSTALL .. "require('dev/recorder').shutdown()",
@@ -392,7 +454,7 @@ describe("dev recorder", function()
             { grant = { "httpAccess" } }
         )
         h:load()
-        assert.are.equal(1, h:consoleCount("[RECORDER] no urls.recorder"))
+        assert.are.equal(1, h:consoleCount("[RECORDER] no urls.rsdev"))
         h:unload()
     end)
 
@@ -439,7 +501,7 @@ describe("dev recorder", function()
         assert.are.equal("hi", http[2].data)
     end)
 
-    it("changes nothing without urls.recorder in the manifest", function()
+    it("changes nothing without urls.rsdev in the manifest", function()
         local h = harness.load(
             support.plugin(
                 support.INSTALL .. "available = Player.IsAvailable()",
@@ -449,14 +511,14 @@ describe("dev recorder", function()
             { grant = { "httpAccess" } }
         )
         h:advance(2000)
-        assert.are.equal("[RECORDER] no urls.recorder in plugin.json, so not recording", h:output())
+        assert.are.equal("[RECORDER] no urls.rsdev in plugin.json, so not recording", h:output())
         assert.is_false(h.env.available)
         -- Still the harness's own Player, not a stand-in.
         assert.are.equal("Player", getmetatable(h.env.Player).__name)
         assert.are.equal(0, #h.requests)
     end)
 
-    it("finds urls.recorder by indexing when Plugin.urls iterates to nothing", function()
+    it("finds urls.rsdev by indexing when Plugin.urls iterates to nothing", function()
         -- Stands in for a client whose urls answer through __index but can't be listed.
         local hidePairs =
             "getmetatable(Plugin.urls).__pairs = function() return next, {}, nil end\n"

@@ -147,3 +147,32 @@ describe("batch.cap", function()
         assert.are.same({ "abcde<+3 bytes>", true }, { batch.cap("abcdefgh", 5) })
     end)
 end)
+
+describe("batch.failureText", function()
+    it("says timed out for a timeout, whatever else the request holds", function()
+        assert.are.equal(
+            "timed out",
+            batch.failureText({ timedOut = true, responseCode = 0, errorCode = 28 } --[[@as table]])
+        )
+    end)
+
+    it("gives the response code, error code and error text otherwise", function()
+        assert.are.equal(
+            "response 500, error 0 nil",
+            batch.failureText({ timedOut = false, responseCode = 500, errorCode = 0 } --[[@as table]])
+        )
+    end)
+end)
+
+describe("batch.permissionHint", function()
+    it("names the ppr and ppe steps for the plugin", function()
+        assert.are.equal("(`ppr p`, then `ppe p httpAccess`)", batch.permissionHint("p"))
+    end)
+
+    it("adds one more step when given", function()
+        assert.are.equal(
+            "(`ppr p`, then `ppe p httpAccess`, then `prl p`)",
+            batch.permissionHint("p", "`prl p`")
+        )
+    end)
+end)

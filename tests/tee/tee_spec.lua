@@ -456,7 +456,7 @@ HTTPRequest = {
         local MANIFEST = [[{
             "name": "T", "version": "0.0.1", "contactEmailAddress": "t@example.com",
             "optionalPermissions": [ "httpAccess" ],
-            "urls": { "rsdev": "http://127.0.0.1:8766", "recorder": "http://127.0.0.1:8766" }
+            "urls": { "rsdev": "http://127.0.0.1:8766" }
         }]]
 
         -- Both modules first, then the tee, then the recorder (tee.lua's header).

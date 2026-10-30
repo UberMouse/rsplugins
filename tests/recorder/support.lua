@@ -14,7 +14,7 @@ M.RECORDER_URL = "http://127.0.0.1:8766/record"
 M.MANIFEST = [[{
     "name": "T", "version": "0.0.1", "contactEmailAddress": "t@example.com",
     "optionalPermissions": [ "httpAccess" ],
-    "urls": { "recorder": "http://127.0.0.1:8766", "api": "http://127.0.0.1:9000" }
+    "urls": { "rsdev": "http://127.0.0.1:8766", "api": "http://127.0.0.1:9000" }
 }]]
 
 -- What every recording test plugin starts with.

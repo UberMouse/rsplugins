@@ -3,5 +3,5 @@
     "version": "0.0.1",
     "contactEmailAddress": "you@example.com",
     "optionalPermissions": [ "httpAccess", "chatAccess" ],
-    "urls": { "recorder": "http://127.0.0.1:8766" }
+    "urls": { "rsdev": "http://127.0.0.1:8766" }
 }

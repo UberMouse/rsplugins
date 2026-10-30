@@ -278,7 +278,7 @@ it with location or a var. There is no interface-opened event.
 
 - `plugin.json`'s `contactEmailAddress` is the placeholder `you@example.com`.
 - Prove or drop the unproven rows: shop entries and var rules with `proven = false`.
-- Ship without dev tooling: no `dev/` symlink and no `urls.recorder` (Chore Tracker has neither
+- Ship without dev tooling: no `dev/` symlink and no `urls.rsdev` (Chore Tracker has neither
   today). There is no packaging check for this yet.
 - Check the README's Mod.io sections against `docs/submission.md`.
 

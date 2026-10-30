@@ -12,14 +12,15 @@
 --         if recorder then recorder.shutdown() end
 --     end
 --
--- and lists "httpAccess" in optionalPermissions and "recorder": "http://127.0.0.1:8766" in
+-- and lists "httpAccess" in optionalPermissions and "rsdev": "http://127.0.0.1:8766" in
 -- urls. install() swaps the API globals in that environment for stand-ins that forward every
 -- use to the real API and note what came back: events delivered to the plugin's
 -- subscriptions, reads (vars, player, inventories, configs), PersistentDB calls, permission
 -- checks and the plugin's own HTTP requests. Entries are buffered and POSTed in batches from
 -- the Logic event, never from an HTTP callback (starting a request in one crashed the client;
--- docs/api-concepts.md). With the receiver down, the oldest entries are dropped and counted,
--- and the plugin carries on.
+-- docs/api-concepts.md). With the receiver down, a failed batch goes back in front of the
+-- buffer and is resent after a wait; once the buffer is full the oldest entries are dropped and
+-- counted, and the plugin carries on.
 --
 -- recorder.shutdown() stops the recorder's flush and cancels a batch in flight.
 --
@@ -29,6 +30,7 @@ local json = require("dev/json")
 local payloads = require("dev/payloads")
 local recording = require("dev/recording")
 local batch = require("dev/batch")
+local post = require("dev/post")
 
 local recorder = {}
 
@@ -40,8 +42,8 @@ recorder.limits = {
     bufferBytes = 8 * 1024 * 1024, -- encoded entries kept while they can't be sent
 }
 
--- The manifest url the batches go to: urls.recorder in plugin.json.
-local URL_NAME = "recorder"
+-- The manifest url the batches go to: urls.rsdev in plugin.json (the tee's and the bridge's key: one daemon).
+local URL_NAME = "rsdev"
 local PATH = "/record"
 local FLUSH_NAME = "devRecorderFlush" -- the recorder's own Logic subscription
 
@@ -70,11 +72,12 @@ local url = nil ---@type PluginURL?
 local pluginName, session = "", ""
 local tick = 0 -- Logic ticks since install
 local buffer = batch.newBuffer()
-local dropped = 0 -- entries lost so far (buffer full, or a batch the receiver didn't take)
+local dropped = 0 -- entries lost so far (buffer full while the receiver was unreachable)
 local warnedDrop = false
+local warnedFail = false -- whether this failure streak has had its console line
 local seq = 0 -- batches sent, so the receiver can tell a new enable from a late batch
 local nextPost = 0
-local inFlight = nil ---@type { request: HTTPRequest, body: string, count: integer }?
+local inFlight = nil ---@type { post: { request: HTTPRequest, body: string }, entries: string[] }?
 local httpCount = 0 -- the plugin's own requests, numbered for their start/done entries
 
 -- Encoded value last recorded per read path (and per permission), so a value the plugin
@@ -633,28 +636,43 @@ end
 -- Sending batches
 ---------------------------------------------------------------------------
 
+-- Put a batch that was not delivered back in front of the buffer, oldest first. The buffer cap
+-- still applies and what it drops (the oldest, never the newest) is counted.
+---@param entries string[]
+---@param why string
+local function giveBack(entries, why)
+    local lost = batch.requeue(buffer, entries, recorder.limits.bufferBytes)
+    if lost > 0 then noteDropped(lost, why) end
+    nextPost = tick + recorder.limits.retryTicks
+end
+
+-- One console line the first time a failure streak starts, so the console isn't flooded.
+---@param why string
+local function warnFailed(why)
+    if warnedFail then return end
+    warnedFail = true
+    say(why .. "; resending when the receiver is back (is scripts/rsdev.py running?)")
+end
+
 -- The HTTP completion callback for a batch. It must not start a request (that crashed the
--- client), so a failure only records the loss; the next Logic tick posts again.
+-- client), so a failure only requeues the batch; the next Logic tick posts again.
 ---@param finished HTTPRequest
 local function onPosted(finished)
     if not active then return end -- shutdown() cancelled the request; a late completion is ignored
     local sent = assert(inFlight, "a batch is in flight")
     inFlight = nil -- the request has finished, so its body may go
-    if finished.successful and finished.responseCode == 200 then return end
-    local why = finished.timedOut and "request timed out"
-        or string.format(
-            "POST failed: %s %s, response %s",
-            tostring(finished.errorCode),
-            tostring(finished.errorInfo),
-            tostring(finished.responseCode)
-        )
-    noteDropped(sent.count, why)
-    nextPost = tick + recorder.limits.retryTicks
+    if finished.successful and finished.responseCode == 200 then
+        warnedFail = false
+        return
+    end
+    local why = "POST failed: " .. batch.failureText(finished)
+    giveBack(sent.entries, why)
+    warnFailed(why)
 end
 
 -- Called every Logic tick: send the next batch when one is due and none is in flight.
 local function flush()
-    assert(url, "install() found urls.recorder")
+    assert(url, "install() found urls.rsdev")
     if inFlight or tick < nextPost or batch.count(buffer) == 0 then return end
     nextPost = tick + recorder.limits.postEveryTicks
     if not realPlugin.HasPermission(PluginPermissions.httpAccess) then return end
@@ -668,29 +686,23 @@ local function flush()
         dropped = dropped,
     }, entries)
     -- Starting the request is the one step that can fail without the recorder being broken (say
-    -- the client refuses a new request): that batch is dropped like a failed POST, and sending
+    -- the client refuses a new request): that batch is requeued like a failed POST, and sending
     -- continues. Any other error in flush still reaches onLogic's pcall and stops sending.
-    -- A Lua closure around the API calls, never an API function handed to pcall.
-    local started, err = pcall(function()
-        -- realHTTP is nil if the client only provides HTTPRequest once httpAccess is granted
-        -- (undocumented); the global is there by now.
-        local request = (realHTTP or HTTPRequest).new(url, PATH)
-        request:AddHeader("Content-Type", "application/json")
-        -- Keep the request and its body referenced until it finishes, in case the client
-        -- doesn't copy the body (docs/api-concepts.md).
-        inFlight = { request = request, body = body, count = #entries }
-        request:Post(body, onPosted)
-    end)
-    if not started then
-        inFlight = nil
-        noteDropped(#entries, "starting the request failed: " .. tostring(err))
-        nextPost = tick + recorder.limits.retryTicks
+    -- realHTTP is nil if the client only provides HTTPRequest once httpAccess is granted
+    -- (undocumented); the global is there by now.
+    local pending, err = post.startPost(realHTTP or HTTPRequest, url, PATH, body, onPosted)
+    if pending then
+        inFlight = { post = pending, entries = entries }
+        return
     end
+    local why = "starting the request failed: " .. tostring(err)
+    giveBack(entries, why)
+    warnFailed(why)
 end
 
 -- Not guard(flush): the entries just before a recording error are what explain it, so the
 -- buffer keeps draining after recording stops. Only an unexpected error in flush stops sending;
--- a request that fails to start just drops its batch.
+-- a request that fails to start just requeues its batch.
 local function onLogic()
     if not active then return end
     tick = tick + 1
@@ -720,7 +732,7 @@ for _, name in ipairs({ "var", "config", "Player", "Inventory" }) do
 end
 
 -- Start recording the plugin whose global environment is `env` (pass `_ENV` from main.lua,
--- before requiring anything else). `plugin` names its recordings folder. Without urls.recorder
+-- before requiring anything else). `plugin` names its recordings folder. Without urls.rsdev
 -- in the manifest it logs once and changes nothing. Without httpAccess it records into the
 -- buffer and sends nothing until the permission is granted.
 ---@param env table
@@ -736,14 +748,10 @@ function recorder.install(env, plugin)
     pluginName = plugin
     session = batch.newSession()
     if not realPlugin.HasPermission(PluginPermissions.httpAccess) then
-        -- ppr first: ppe on a permission the plugin hasn't requested silently does nothing.
         say(
-            string.format(
-                "waiting for httpAccess (`ppr %s`, then `ppe %s httpAccess`); "
-                    .. "recording into a buffer until then",
-                plugin,
-                plugin
-            )
+            "waiting for httpAccess "
+                .. batch.permissionHint(plugin)
+                .. "; recording into a buffer until then"
         )
     end
     realEvent.Logic.Subscribe(FLUSH_NAME, onLogic)
@@ -765,12 +773,7 @@ function recorder.shutdown()
     realEvent.Logic.Unsubscribe(FLUSH_NAME)
     local sent = inFlight
     inFlight = nil
-    if sent then
-        -- A Lua closure around the API call, never the API function itself.
-        pcall(function()
-            sent.request:Cancel()
-        end)
-    end
+    if sent then post.cancel(sent.post) end
 end
 
 return recorder

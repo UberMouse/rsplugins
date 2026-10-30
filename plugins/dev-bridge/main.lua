@@ -35,6 +35,7 @@ local protocol = require("protocol")
 -- dev/ is a symlink to lib/dev (the dev recorder's modules); require gives nil without it.
 local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is missing")
 local batch = assert(require("dev/batch"), "dev/ (a link to lib/dev) is missing")
+local post = assert(require("dev/post"), "dev/ (a link to lib/dev) is missing")
 local payloads = assert(require("dev/payloads"), "dev/ (a link to lib/dev) is missing")
 local eval = assert(require("eval"), "eval.lua is missing")
 
@@ -64,7 +65,7 @@ local buffer = batch.newBuffer() -- encoded events waiting to be sent
 local dropped = 0 -- events lost so far: buffer full, or in a sync the daemon never got
 local queue = {} -- commands from the daemon not yet run, oldest first
 local results = {} -- results not yet sent, encoded (protocol.resultEntry)
-local inFlight = nil ---@type { request: HTTPRequest?, body: string, count: integer, results: string[], done: boolean }?
+local inFlight = nil ---@type { post: { request: HTTPRequest, body: string }, count: integer, results: string[], done: boolean }?
 -- Set by stop(): every handler of ours does nothing from then on, so no probe runs either.
 -- Stopping makes no client call; PluginShutdown unsubscribes everything.
 local stopped = false
@@ -319,15 +320,9 @@ end
 local function finishSync()
     local sent = assert(inFlight, "a sync is in flight")
     inFlight = nil -- the request has finished, so its body may go
-    local request = assert(sent.request, "a sync in flight has a request")
+    local request = sent.post.request
     if not (request.successful and request.responseCode == 200) then
-        local why = request.timedOut and "timed out"
-            or string.format(
-                "response %s, error %s %s",
-                tostring(request.responseCode),
-                tostring(request.errorCode),
-                tostring(request.errorInfo)
-            )
+        local why = batch.failureText(request)
         return syncFailed(sent, why, false, request.responseCode == 400)
     end
     if type(request.data) ~= "string" then return syncFailed(sent, "reply had no body", true) end
@@ -363,19 +358,19 @@ local function startSync()
         dropped = dropped,
         hello = HELLO,
     }, events, sending)
-    -- Kept referenced until the request finishes, body included, in case the client doesn't
-    -- copy it (docs/api-concepts.md). The callback only marks it done; Logic handles it.
-    local pending = { body = body, count = #events, results = sending, done = false }
-    local ok, err = pcall(function()
-        assert(url, "the manifest has no urls.rsdev")
-        local request = HTTPRequest.new(url, SYNC_PATH)
-        request:AddHeader("Content-Type", "application/json")
-        pending.request = request
-        request:Post(body, function()
+    -- post.startPost keeps the request and body referenced in `pending.post` until the request
+    -- finishes (dev/post.lua). The callback only marks it done; Logic handles it.
+    local pending = { count = #events, results = sending, done = false }
+    local started, err
+    if url then
+        started, err = post.startPost(HTTPRequest, url, SYNC_PATH, body, function()
             pending.done = true
         end)
-    end)
-    if ok then
+    else
+        err = "the manifest has no urls.rsdev"
+    end
+    if started then
+        pending.post = started
         inFlight = pending
     else
         syncFailed(pending, "could not start the request: " .. tostring(err), false)
@@ -402,7 +397,7 @@ local function onLogic(ev)
     if not Plugin.HasPermission(PluginPermissions.httpAccess) then
         if not warned.waiting then
             warned.waiting = true
-            say("waiting for httpAccess (`ppr dev-bridge`, then `ppe dev-bridge httpAccess`)")
+            say("waiting for httpAccess " .. batch.permissionHint(protocol.PLUGIN))
         end
         return
     end
@@ -416,19 +411,15 @@ end
 -- Stop everything from inside a callback: our handlers become no-ops, the probes are
 -- cleared, and any sync in flight is cancelled. Nothing is unsubscribed (clearing the probes
 -- only empties lazyWanted, which a stopped onLogic never reconciles); PluginShutdown does it.
--- Safe to call twice (an error stop, then shutdown). Cancel runs under pcall so a raise can't
--- skip the "stopped" message.
+-- Safe to call twice (an error stop, then shutdown).
 local function stop()
     if stopped then return end
     stopped = true
     evaluator.clear()
-    local request = inFlight and inFlight.request
-    -- Called from a Lua closure: an API method passed straight to pcall is the shape behind
-    -- every client abort (docs/api-concepts.md, "Runtime limits we've hit").
-    local function cancel()
-        if request then request:Cancel() end
-    end
-    pcall(cancel)
+    -- post.cancel runs the API call from a Lua closure under pcall: an API method passed
+    -- straight to pcall is the shape behind every client abort (docs/api-concepts.md, "Runtime
+    -- limits we've hit"), and a raise must not skip the "stopped" message.
+    post.cancel(inFlight and inFlight.post)
     inFlight = nil
 end
 

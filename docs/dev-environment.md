@@ -156,8 +156,8 @@ requests; the CLI sends none. `/cli/*` also needs the header `X-Rsdev: 1`, which
 sends and which makes a browser preflight the request (the daemon never answers a preflight with
 CORS headers). If the in-client bridge plugin's HTTP library sends an `Origin`, the log will show
 `refused /bridge/sync: Origin ...`. A plugin names the daemon
-with the manifest URL `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the recorder's `recorder`
-URL is the same address).
+with the manifest URL `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the recorder uses the same
+`rsdev` key).
 
 **`exec`** queues one console command, waits for the plugin's result and exits: 0 ok; 1 the plugin
 reported an error (printed); 2 never delivered before the timeout (the command is withdrawn, so it
@@ -324,7 +324,7 @@ never for submission. A plugin opts in like the recorder does:
    serves both).
 
 Before uploading, remove the opt-in: `scripts/check-submission.sh <plugin> --root <prepared copy>`
-fails while any piece of it is left.
+fails while any piece of it is left, and on any `urls` entry pointing at 127.0.0.1 or localhost.
 
 Then `scripts/rsdev.py exec "prl <name>"` and `scripts/rsdev.py logs --plugin <name>` shows what
 the plugin printed, as `n [<name>] print|log|error: text`. An `error` line reads

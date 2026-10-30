@@ -147,6 +147,8 @@ function M.rowShown(h, name)
     local tips = h.ui:tooltips()
     h.ui:leave()
     assert(#tips == 1, "want one tooltip, got " .. #tips)
+    -- A row's leave listener that doesn't return true blocks the tooltip's own, which sticks.
+    assert(#h.ui:tooltips() == 0, "tooltip still up after leaving the row")
     return row.text, tips[1]
 end
 

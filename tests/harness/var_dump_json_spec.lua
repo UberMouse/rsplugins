@@ -22,4 +22,12 @@ describe("var-dump json.encode", function()
             dkjson.decode(json.encode(t))
         )
     end)
+
+    it("escapes control characters as JSON, \\u-escaped when they have no short form", function()
+        assert.are.equal('"a\\u0001b\\n"', json.encode("a\1b\n"))
+        -- NUL and DEL are control characters too; raw ones would make the line invalid JSON.
+        local s = "x\0y\127z"
+        assert.are.equal('"x\\u0000y\\u007fz"', json.encode(s))
+        assert.are.equal(s, dkjson.decode(json.encode(s)))
+    end)
 end)

@@ -34,14 +34,22 @@ describe("chore-tracker settings rows", function()
             h.ui:get("Title", { text = group.title })
             for _, chore in ipairs(group.chores) do
                 local r = helpers.settingsRow(h, chore.id)
-                local want = chore.shop and chore.name .. " (shop)" or chore.name
-                assert.are.equal(want, r.label.content)
-                if chore.shop then shop = shop + 1 end
+                if chore.shop then
+                    assert.are.equal(chore.name, r.label.content:sub(1, #chore.name))
+                    assert.are.equal(" (shop)", r.label.content:sub(#chore.name + 1))
+                    shop = shop + 1
+                else
+                    assert.are.equal(chore.name, r.label.content)
+                end
                 assert.is_not_nil(r.icon)
                 assert.are.equal(BOX_EMPTY, r.box.spriteID)
             end
         end
         assert.is_true(shop > 0)
+        assert.are.equal(
+            "Pure Essence from Wizard Cromperty (shop)",
+            helpers.settingsRow(h, "cromperty-pure-essence").label.content
+        )
         -- The Celebrations switches stay in PrettyUI's flow, above the rows.
         local switches = h.ui:find("CheckboxButton")
         assert.are.equal(1, #switches)
@@ -199,5 +207,20 @@ describe("chore-tracker row hover", function()
         assert.is_true(h.ui:hover(r.layer))
         assert.are.equal(1, #h.ui:tooltips())
         assert.are.equal(BOX_EMPTY_HOVERED, r.box.spriteID)
+    end)
+
+    it("takes the tooltip down when the mouse leaves a list row or a settings row", function()
+        local h = loaded()
+        helpers.pick(h, { "daily-challenge" })
+        local r = helpers.row(h, "Daily Challenge")
+        assert.is_true(h.ui:hover(r.layer))
+        h.ui:leave()
+        assert.are.equal(0, #h.ui:tooltips())
+        openSettings(h)
+        local s = helpers.settingsRow(h, "daily-challenge")
+        assert.is_true(h.ui:hover(s.layer))
+        assert.are.equal(1, #h.ui:tooltips())
+        h.ui:leave()
+        assert.are.equal(0, #h.ui:tooltips())
     end)
 end)

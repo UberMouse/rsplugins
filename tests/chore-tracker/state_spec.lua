@@ -34,6 +34,14 @@ describe("chore-tracker state", function()
             assert.are.same({ "d2", "d1" }, s.selected)
         end)
 
+        it("keeps a chore's completion through a deselect and reselect", function()
+            local now = M["2026-10-25 01:43"]
+            local s = state.mark(state.select(state.new(), chores, "d1"), "d1", now)
+            s = state.select(state.deselect(s, "d1"), chores, "d1")
+            assert.is_true(state.isDone(s, byId.d1, now))
+            assert.are.equal(now, s.done.d1)
+        end)
+
         it("ignores selecting an id twice", function()
             local s = state.select(state.new(), chores, "d1")
             assert.are.same({ "d1" }, state.select(s, chores, "d1").selected)
@@ -47,7 +55,7 @@ describe("chore-tracker state", function()
         it("treats an id not in the chore list as a no-op", function()
             local s = state.select(state.new(), chores, "d1")
             assert.are.same(s, state.select(s, chores, "nope"))
-            assert.are.same(s, state.deselect(s, "nope"))
+            assert.are.equal(s, state.deselect(s, "nope"))
         end)
 
         it("gives back the same state when selecting an id not in the chore list", function()

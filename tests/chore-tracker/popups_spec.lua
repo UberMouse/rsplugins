@@ -323,6 +323,18 @@ describe("chore-tracker popups", function()
             assert.is_nil(p.played)
         end)
 
+        it("keeps sound off across a reload", function()
+            local h = settled()
+            pick(h, { BERT.id, GEOFF.id })
+            toggle(h, "sound")
+            h:reload()
+            h:advance(SETTLE_MS)
+            helpers.openSettings(h)
+            assert.is_false(helpers.picked(h, "sound"))
+            claim(h, BERT.flag)
+            assert.are.equal(false, h.ui:popups()[1].sound)
+        end)
+
         it("falls back to the defaults for a malformed stored value", function()
             local h = loaded({ load = false })
             h.db.celebrations = {

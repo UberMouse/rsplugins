@@ -341,6 +341,9 @@ describe("protocol.takeResults", function()
         taken, rest = protocol.takeResults({ "aaaaaaaa", "b" }, 6)
         assert.are.same({ { "aaaaaaaa" }, { "b" } }, { taken, rest })
         assert.are.same({ {}, {} }, { protocol.takeResults({}, 6) })
+        -- ccc overflows but d would fit: d must still wait behind ccc, or results swap order.
+        taken, rest = protocol.takeResults({ "aaaa", "ccc", "d" }, 6)
+        assert.are.same({ { "aaaa" }, { "ccc", "d" } }, { taken, rest })
     end)
 end)
 

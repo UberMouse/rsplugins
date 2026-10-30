@@ -28,4 +28,12 @@ describe("json.encode", function()
         mixed.x = "b"
         assert.are.same({ ["1"] = "a", x = "b" }, dkjson.decode(json.encode(mixed)))
     end)
+
+    it("escapes control characters as JSON, \\u-escaped when they have no short form", function()
+        assert.are.equal('"a\\u0001b\\n"', json.encode("a\1b\n"))
+        -- NUL and DEL are control characters too; raw ones would make the line invalid JSON.
+        local s = "x\0y\127z"
+        assert.are.equal('"x\\u0000y\\u007fz"', json.encode(s))
+        assert.are.equal(s, dkjson.decode(json.encode(s)))
+    end)
 end)

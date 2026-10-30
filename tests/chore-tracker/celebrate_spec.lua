@@ -166,8 +166,13 @@ describe("chore-tracker settings", function()
     end)
 
     it("round-trips through serialise and fromStored", function()
-        local s = { popups = false, sound = true }
-        assert.are.same(s, settings.fromStored(settings.serialise(s)))
+        for _, s in ipairs({
+            { popups = false, sound = true },
+            { popups = true, sound = false },
+            { popups = false, sound = false },
+        }) do
+            assert.are.same(s, settings.fromStored(settings.serialise(s)))
+        end
     end)
 
     it("gives the defaults for a missing or malformed value", function()

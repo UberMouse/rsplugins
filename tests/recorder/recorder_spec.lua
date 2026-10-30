@@ -114,7 +114,27 @@ describe("dev recorder", function()
         }, support.where(support.entries(h), { path = "Inventory.Find(config.Inv.INV)" }))
     end)
 
-    it("records each delivery once, whatever the number of subscribers", function()
+    it("records each delivery once with two live subscribers", function()
+        local h = harness.new(
+            support.plugin(support.INSTALL .. [[
+            calls = { a = 0, b = 0 }
+            Event.VarTransmit.Subscribe("a", function() calls.a = calls.a + 1 end)
+            Event.VarTransmit.Subscribe("b", function() calls.b = calls.b + 1 end)
+        ]]),
+            { grant = { "httpAccess" } }
+        )
+        h.world:setVar("VarPlayer", "QP", 10)
+        h:load()
+        h.world:setVar("VarPlayer", "QP", 11)
+        h.world:setVar("VarPlayer", "QP", 12)
+        h:step()
+        assert.are.same({ a = 2, b = 2 }, h.env.calls)
+        local events = support.where(support.entries(h), { k = "event", name = "VarTransmit" })
+        assert.are.equal(2, #events)
+        -- No unload here: the harness faults on subscriptions a plugin leaves behind.
+    end)
+
+    it("hands recording over to the next subscriber when the first unsubscribes", function()
         local h = harness.new(
             support.plugin(support.INSTALL .. [[
             calls = { a = 0, b = 0 }

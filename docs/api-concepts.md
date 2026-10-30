@@ -219,7 +219,9 @@ The official reference annotates Lua with pseudo-types:
 - **Dispatch edge cases** (dev-bridge eval, 2026-10-30, beta 951-1, session 38ac205778; real
   `ServerLogic` subscriptions). Within a dispatch of an event, a subscriber added is first called
   on the next dispatch, and an `Unsubscribe` of that same event is deferred to the end of the
-  dispatch, so a `Subscribe` of the same name meanwhile does nothing and the name is gone
+  dispatch. The unsubscribed callback is skipped for the rest of the pass at once (as `rD` is in
+  "Subscribing a name twice keeps the first" above), but its name stays registered until the
+  dispatch ends, so a `Subscribe` of the same name meanwhile does nothing and the name is gone
   afterwards (the new callback never runs and a later `Unsubscribe` returns false). The same pair
   made from another event's dispatch keeps the subscription, placed last. Calls seen:
   `A1 B1 A2 N2 A3 N3 ...` (`N`, subscribed by `A` in pass 1, first ran in pass 2); `A`
@@ -613,7 +615,7 @@ example, `InventoryProxy` has `GetCategoryTotal`, `GetSlot`, `GetSlots`, `GetTot
 
 ## Inventories
 
-- **Inventories.** `Inv:GetSlots()` is dense: every slot up to `slotCount`, with an empty one as
+- **Slot layout.** `Inv:GetSlots()` is dense: every slot up to `slotCount`, with an empty one as
   obj -1 (configName `UNKNOWN`) and count 0, so `ipairs` walks them all. A bought-out shop line
   stays in the shop inventory with count 0 (`GENERALSHOP1` slot 7 was obj 590 x0;
   `GENERALSHOP1_FREEBIES` slot 4 too). Updates were seen for `INV` (93), `BANK` (95, 1920

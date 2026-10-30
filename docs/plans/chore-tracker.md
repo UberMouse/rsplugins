@@ -153,7 +153,8 @@ cover every chore that can be covered, not only the ones they do.
 The user did each chore on their main account (plugin dev server) while the dev bridge
 forwarded every var change, inventory update, system chat line and menu pick (session
 1b4060db2c; the cross-chore findings are in
-[api-concepts.md](../api-concepts.md#vars)). Each signal
+[api-concepts.md](../api-concepts.md#vars) and, tagged "chore probe, 2026-10-30", under
+[Inventories](../api-concepts.md#inventories)). Each signal
 below was seen moving when the chore was done. "Rule" is the proposed detector; none is built.
 
 | Chore | Signal seen | Rule | Build needs |

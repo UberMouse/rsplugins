@@ -18,11 +18,11 @@ import time
 import unittest
 import urllib.error
 import urllib.request
-from unittest import mock
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 SCRIPT = Path(__file__).with_name("rsdev.py")
 spec = importlib.util.spec_from_file_location("rsdev", SCRIPT)
@@ -514,7 +514,7 @@ class StopTests(DaemonCase):
         for bad in (0, -1, 1, "x", True, 1.5, None):
             with self.subTest(status_pid=bad):
                 with mock.patch.object(rsdev.os, "kill") as kill, mock.patch.object(
-                    rsdev, "call", lambda *a, **k: {"pid": bad}
+                    rsdev, "call", lambda *a, _bad=bad, **k: {"pid": _bad}
                 ), mock.patch("sys.stderr", StringIO()):
                     self.assertEqual(rsdev.cmd_stop(self.args()), 1)
                 kill.assert_not_called()

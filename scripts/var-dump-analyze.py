@@ -519,7 +519,7 @@ def split_sessions(changes):
 def classify(values, steps):
     """Name the pattern a var's updates follow. `steps` are the numeric deltas of
     the real changes (empty for non-numbers)."""
-    real = sum(1 for a, b in zip(values, values[1:]) if a != b)
+    real = sum(1 for a, b in zip(values, values[1:], strict=False) if a != b)
     if real == 0:
         return "re-sent, never changed"
     if real == 1:
@@ -828,7 +828,7 @@ def catalog_rows(vars_):
     tree = build_tree(vars_)
     assign_themes(tree)
     group_of = {}
-    for depth, node, parents in walk(tree):
+    for depth, node, _parents in walk(tree):
         for var in node["members"]:
             group_of[id(var)] = node["label"]  # deeper nodes overwrite their parents
             if depth == 0:

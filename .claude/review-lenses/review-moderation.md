@@ -75,8 +75,8 @@ owns comment quality; this Part is about whether the *code* can be moderated at 
 
 ## Dev-only plugins
 
-A plugin whose README and header say it is a dev tool "not for submission" (as `var-dump` and
-`walkable-flood` do) is never uploaded, so Part A/B findings on it are **info**, and Part C does
+A plugin whose README and header say it is a dev tool "not for submission" (as `var-dump` does)
+is never uploaded, so Part A/B findings on it are **info**, and Part C does
 not apply, *unless* the change removes that marking, or builds a feature that would be prohibited
 for any plugin and could be lifted into one. A dev tool that exports other players' info is still
 a finding: `CLAUDE.md` forbids building it at all.

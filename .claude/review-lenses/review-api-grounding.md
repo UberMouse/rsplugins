@@ -31,7 +31,7 @@ odd, confirm it against 1 or 2 below. Where they disagree, the official referenc
    behaviour the official docs do not state) and `docs/vars/vars.csv` (every var the API exposes:
    grep the name there for any `var.VarPlayer.X` / `var.VarClient.X` the diff reads).
 4. **Existing plugins** that already use the same member and are known to work in the client
-   (`plugins/var-dump`, `plugins/walkable-flood`): evidence, but weaker than the reference.
+   (`plugins/var-dump`): evidence, but weaker than the reference.
 
 ## Step 1 — extract
 

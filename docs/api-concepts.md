@@ -16,6 +16,9 @@ the tag keeps that provenance next to the fact:
   ([testing.md](testing.md#fidelity-ledger)). The probe sources aren't kept; each finding says what
   was called.
 - *rsdev shot, 2026-10-26*: probing the client's window on X11 (i3, one 3840x2160 VMware monitor).
+- *walkable-flood, 2026-10-20*: `plugins/walkable-flood` (deleted; commit `0bb7291`) never ran in the
+  client with results recorded, so facts so tagged are the plugin's assumptions or stub/docs
+  readings, marked open or *(stub)*.
 - *chore probe, 2026-10-30*: the user did chores on their main account on the plugin dev server
   while the bridge forwarded `VarTransmit`, `InventoryUpdated`, system chat and menu picks (bridge
   session 1b4060db2c), and `rsdev.py eval` read vars and inventories. The chore-by-chore results
@@ -163,6 +166,87 @@ The official reference annotates Lua with pseudo-types:
   `level,mapSquareX,mapSquareZ,localX,localZ` (`0,50,50,25,23`). One read before the player walked
   still held the old tile afterwards, and wasn't `==` a fresh one. CoordGrids also support `<`. Two
   reads of one tile are `==` but not `rawequal` (see "API objects"). (dev-bridge eval, 2026-10-26)
+
+## Locs, shapes and walkability
+
+Findings from `plugins/walkable-flood`, a dev experiment (deleted; recoverable from commit
+`0bb7291`, 2026-10-20) that tried to rebuild "where can I walk" from loc data, flood-fill it from
+the player's tile and draw it. **It was never validated in the client**: its README listed
+checks to try, and no result was ever recorded. So every client-behaviour claim below is **open**,
+and facts marked *(stub)* come from the API stubs/docs, not from seeing the client. The tag
+*(walkable-flood, 2026-10-20)* means "assumed by that plugin's code, not confirmed". If the
+experiment is revived, run the checks in "Open checks" first.
+
+- **No walkability getter exists.** The API has no collision-flag or walkability getter. The
+  experiment approximated one from `LocType.blockWalk`, `LocEntity.shapeType`,
+  `LocEntity.rotationType`, `width`/`length` and `coordGrid`. It could not see terrain blocking
+  (water, cliffs, some map edges: map tile flags, not locs), level changes (only the player's
+  level's locs were used), or NPCs and players. (stub; walkable-flood, 2026-10-20)
+- **`LocList.ByDistance(coordGrid, range, sameLevel)`** lists nearby locs. The plugin searched
+  `ceil(32 * 1.5)` tiles for a 65×65-tile square, in case distance is a straight line (corners are
+  1.41× the radius away) and to catch big locs whose anchor is just outside. Whether `range` is
+  Chebyshev or Euclidean is **open**. (stub for the signature; the range choice is walkable-flood,
+  2026-10-20, open)
+- **`LocShapeType` values 0-24** (from the docs, `game/config/loctype`): 0 WALL_STRAIGHT,
+  1 WALL_DIAGONALCORNER, 2 WALL_L, 3 WALL_SQUARECORNER, 4 WALLDECOR_STRAIGHT_NOOFFSET,
+  5 WALLDECOR_STRAIGHT_OFFSET, 6 WALLDECOR_DIAGONAL_OFFSET, 7 WALLDECOR_DIAGONAL_NOOFFSET,
+  8 WALLDECOR_DIAGONAL_BOTH, 9 WALL_DIAGONAL, 10 CENTREPIECE_STRAIGHT, 11 CENTREPIECE_DIAGONAL,
+  12 ROOF_STRAIGHT, 13 ROOF_DIAGONAL_WITH_ROOFEDGE, 14 ROOF_DIAGONAL, 15 ROOF_L_CONCAVE,
+  16 ROOF_L_CONVEX, 17 ROOF_FLAT, 18 ROOFEDGE_STRAIGHT, 19 ROOFEDGE_DIAGONALCORNER,
+  20 ROOFEDGE_L, 21 ROOFEDGE_SQUARECORNER, 22 GROUNDDECOR, 23 WALL_L_ALT,
+  24 WALLDECOR_DIAGONAL_BOTH_ALT. (stub)
+- **Which shapes block (assumed, old-engine rules).** Shapes 9 (diagonal wall), 10-11
+  (centrepieces: trees, tables, rocks) and 12-21 (roofs) block every tile of their
+  `width × length` footprint (`width`/`length` are already rotated). Straight walls (0) block one
+  side of their tile; L walls (2, 23) block two; the neighbouring tile gets the matching side so the
+  wall blocks both ways. Wall decoration never blocks. Corner pillars (1, 3) only block diagonal
+  steps and a diagonal step needs both straight routes clear, so a fill using straight steps
+  reaches the same tiles. Only locs whose `config.blockWalk` is true were applied. (walkable-flood,
+  2026-10-20, open)
+- **Footprint anchor.** The plugin assumed `loc.coordGrid` is the **south-west** tile of a
+  multi-tile footprint. It logged `anchor check:` lines (size, `coordGrid`, `position/512`) to test
+  this, but no output was recorded. (walkable-flood, 2026-10-20, open)
+- **Rotation to wall side** (old-engine convention, open in RS3). Straight walls by
+  `rotationType`: 0 = W, 1 = N, 2 = E, 3 = S. L walls: 0 = W+N, 1 = N+E, 2 = E+S, 3 = S+W. Z points
+  north. A wrong side on a fence means this table is off. (walkable-flood, 2026-10-20, open)
+- **Ground decoration (shape 22).** Most grass, flowers and rugs report `config.blockWalk = true`
+  although the player walks over them; in the old engine only decoration that explicitly blocks
+  does, and the API cannot tell the two apart. The plugin treated all of it as non-blocking
+  (`GROUNDDECOR_BLOCKS = false`). Whether the `blockWalk` reading is true in RS3 is **open**.
+  (walkable-flood, 2026-10-20, open)
+- **Doors.** Whether a closed door is a `WALL_STRAIGHT` with `blockWalk` (and flips when opened)
+  was never checked. (walkable-flood, 2026-10-20, open)
+- **`World.GetGroundHeight(level, x, z)`** takes fine coordinates (512 = one tile) and returns
+  `height, ok`; the plugin used `ok == false` as "map not loaded here" and stopped the fill at the
+  edge of the loaded area. That a failed call really means "not loaded" is **open**. Heights are
+  per tile corner, so overlay quads followed the slope. (stub for the signature;
+  walkable-flood, 2026-10-20, open)
+- **Overlay drawing.** One `ShapeData` was filled with `positions` (`Vector3`), `rgba`
+  (`0xRRGGBBAA`), `tris` and `lines` (0-based vertex indices), then
+  `ShapeList.CreateInstance(name)` plus `instance:SetShapeData(data)` (returns false on failure;
+  destroy the instance then). Instances were set `ignoreDepth = false`, `lineWidth = 4`, and
+  toggled with `visible`. Fill sat 16 fine units above the ground and wall lines at 48
+  to avoid flicker into terrain; tiles were split into instances of 1000 items to keep each `ShapeData`
+  modest. Whether it rendered as intended was never confirmed. (stub; walkable-flood, 2026-10-20,
+  open)
+- **Slicing.** The experiment spread loc application, flood and drawing over `Logic` ticks at 500
+  units each, because of the 1000 ms Lua-call limit (see "Runtime limits we've hit"). Whether 500
+  units per tick was cheap enough was not measured; it logged elapsed ticks per run. (walkable-flood,
+  2026-10-20, open)
+- **Moderation.** Automatically showing walkable areas is close to the guidelines' ban on
+  "automatically showing where to stand or move" ([guidelines.md](guidelines.md)), so it was dev
+  only. Any player-facing version needs a moderation-friendly framing first.
+
+### Open checks (the experiment's validation table, never run)
+
+| Where | Look for | If it's wrong |
+|---|---|---|
+| A fenced field (Lumbridge sheep/cow pens) | Wall lines along the fence, fill stops at it | Wrong side: the rotation-to-side table is off |
+| A building with doors | Closed door is a wall; opened and recomputed, the fill flows in | Doors may not be `WALL_STRAIGHT` or not set `blockWalk` |
+| A big object (furnace, large rock, 2×2+ table) | Blocked area is exactly its footprint | Offset by a tile: `coordGrid` isn't the south-west tile |
+| Grass/flower patches | Fill covers them | If you really can't walk there, ground decoration blocks |
+| A riverbank or lake | Fill spills onto water | Expected: terrain blocking isn't visible from locs |
+| A tile the game won't walk to but the fill reaches | Inspect the tile (loc name, ID, shape, rotation, ground height) | Shows what kind of blocker is missing |
 
 ## Events
 

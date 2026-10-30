@@ -31,7 +31,6 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
 | [`dev-bridge`](plugins/dev-bridge/README.md) | Runs the console commands and Lua snippets the local rsdev daemon queues, and forwards events and logs to it | Dev only |
 | [`recorder-demo`](plugins/recorder-demo/README.md) | A small plugin that exercises the dev recorder in the real client | Dev only |
 | [`var-dump`](plugins/var-dump/README.md) | Dumps every var the client can read for your character, then logs each change, to a local receiver | Dev only |
-| [`walkable-flood`](plugins/walkable-flood/README.md) | An experiment that draws which tiles around you look walkable | Dev only |
 | `debug-plugin`, `dev-kit` | Community dev tools pinned in `flake.nix` and copied in by the dev shell (gitignored; not ours) | Dev only |
 
 ## Scripts

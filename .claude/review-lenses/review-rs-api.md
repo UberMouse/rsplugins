@@ -12,8 +12,8 @@ the way the client needs.
   execution time of 1000 ms exceeded"). Flag work in one callback, or in `main.lua`'s top level,
   whose cost grows with the world or the data: a loop over `LocList`/`NPCList` results, a var or id
   scan, a flood fill, building many shapes, encoding a large table. It must be sliced across
-  `Logic` ticks with a bounded amount of work per tick, as `plugins/var-dump` and
-  `plugins/walkable-flood` do. Judge the realistic worst case (a busy area, a full bank), not the
+  `Logic` ticks with a bounded amount of work per tick, as `plugins/var-dump` does.
+  Judge the realistic worst case (a busy area, a full bank), not the
   case on your screen.
 - **Per-frame cost.** `Draw` fires every rendered frame. Allocation, list queries or shape
   rebuilding in `Draw` that could run once per change (or per `ServerLogic` tick) costs frame rate

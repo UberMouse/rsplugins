@@ -489,8 +489,8 @@ From `plugins/dev-bridge` in the beta client.
   chore-tracker's `PluginShutdown` (`lib/dev/tee.lua` at 11b307e), `prl chore-tracker` from
   the bridge with the tee on left the client up (2026-10-26) and the tee started a new session.
   The rule we follow: unsubscribe every subscription in `PluginShutdown`, including ones a
-  `lib/dev` module made (`tee.shutdown()`). The dev recorder's `devRecorderFlush` has the same
-  gap and isn't fixed yet.
+  `lib/dev` module made (`tee.shutdown()`, `recorder.shutdown()`). The harness's `h:unload`
+  faults on any subscription `PluginShutdown` leaves behind (`docs/testing.md`).
 - **Closing the client segfaults** (2026-10-26, beta client 951-1): closing it gave a SIGSEGV
   three times out of three, at 15:09:17 (pid 2637620), 15:12:49 (pid 2649914) and 15:15:07 (pid
   2656263). `coredumpctl` shows the same stack each time, frame #4 jumping into a heap address.

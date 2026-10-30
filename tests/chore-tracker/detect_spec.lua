@@ -79,9 +79,9 @@ describe("chore-tracker detect", function()
 
     it("leaves an inventory or note the config lacks unwatched, saying so once", initAndCheck)
 
-    -- The harness always sends InventoryAdded after a removal, which re-baselines on its own, so
-    -- this drives detect directly: a client that sends only an update after the backpack is
-    -- removed must not read the rise against the counts from before it went.
+    -- removeInventory fires only InventoryRemoved; the harness sends InventoryAdded when the
+    -- backpack is set again, which re-baselines. So this drives detect directly: a lone update
+    -- after a removal must not read as a rise against the old counts.
     it("takes no rise against a backpack's counts from before it was removed", function()
         local total, applied = 1, 0
         _G.Inventory.Find = function()

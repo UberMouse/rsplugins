@@ -1726,10 +1726,9 @@ describe("prettyui Window resize and title-bar state", function()
                 viewport = w.viewport ~= nil,
                 _onScrollWheel = w._onScrollWheel ~= nil,
             }, mode)
-            -- The fake's own scrolling and wheel handler don't go through the getters.
+            -- The fake's own scrolling and wheel listener don't go through the getters.
             local s = h.ui:record(w, "Window").s
-            local onWheel = s.onWheel ---@type fun(component: any, delta: number): boolean
-            assert.is_false(onWheel(w.content, 1))
+            assert.are.equal(1, ui.fire(s.contentState, ui.Hook.ONSCROLLWHEEL, 1), mode)
             assert.are.equal(32, s.scrollY, mode)
             w:SetScrollPosition(40)
             assert.are.equal(40, s.scrollY, mode)

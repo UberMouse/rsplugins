@@ -53,6 +53,38 @@ local function liveOrphanTips(lib)
     return n
 end
 
+-- Every daily chore's id: enough picks that the list scrolls.
+---@return string[]
+local function dailyIds()
+    local ids = {}
+    for _, c in ipairs(chores) do
+        if c.period == "daily" then ids[#ids + 1] = c.id end
+    end
+    return ids
+end
+
+-- How far a window's content is scrolled, read off the fake (not through `_scroll`, which a spec
+-- may have removed).
+---@param h table
+---@return number
+local function scrollOf(h)
+    return h.ui:record(window(h), "Window").s.scrollY
+end
+
+-- Scrolls the list under the not-ready notice, then the clock starting rebuilds it to the
+-- list. Returns the scroll before and after.
+---@param h table
+---@return number before
+---@return number after
+local function scrollThenRebuild(h)
+    assert.are.same({ true, 1 }, { h.ui:wheel(helpers.rows(h)[1].label, 1) })
+    local before = scrollOf(h)
+    assert.is_true(before > 0)
+    helpers.setClock(h, helpers.NOW)
+    h:advance(helpers.POLL_MS)
+    return before, scrollOf(h)
+end
+
 describe("chore-tracker window", function()
     it("opens titled Chores, with the hint, and logs a tagged line", function()
         local h = loaded()
@@ -180,10 +212,7 @@ describe("chore-tracker window", function()
 
     it("scrolls the window from the wheel over a row, down to the last row", function()
         local h = loaded()
-        local daily = {}
-        for _, c in ipairs(chores) do
-            if c.period == "daily" then daily[#daily + 1] = c.id end
-        end
+        local daily = dailyIds()
         togglePicks(h, daily)
         local list = helpers.rows(h)
         assert.are.equal(#daily, #list)
@@ -194,7 +223,7 @@ describe("chore-tracker window", function()
         })
 
         assert.are.same({ true, 1 }, { h.ui:wheel(first.label, 1) })
-        assert.are.equal(32, window(h)._scroll.scrollY)
+        assert.are.equal(32, scrollOf(h))
         for _ = 1, 40 do
             h.ui:wheel(list[#list // 2].layer, 1)
         end
@@ -207,21 +236,15 @@ describe("chore-tracker window", function()
 
     it("keeps the list's scroll when the clock starting rebuilds the window", function()
         local h = loaded({ load = false, clock = 0 })
-        local selected = {}
-        for _, c in ipairs(chores) do
-            if c.period == "daily" then selected[#selected + 1] = c.id end
-        end
+        local selected = dailyIds()
         helpers.seed(h, "state:Zezima", { version = 2, selected = selected, done = {}, shops = {} })
         h:load()
         local before = window(h)
-        assert.are.same({ true, 1 }, { h.ui:wheel(helpers.rows(h)[1].label, 1) })
-        assert.are.equal(32, before._scroll.scrollY)
-
-        -- The not-ready notice gives way to the list: a rebuild, to a taller list at the same scroll.
-        helpers.setClock(h, helpers.NOW)
-        h:advance(helpers.POLL_MS)
+        local scrolled, kept = scrollThenRebuild(h)
+        assert.are.equal(32, scrolled)
+        -- The rebuild is to a taller list, at the same scroll.
         assert.are_not.equal(before, window(h))
-        assert.are.equal(32, window(h)._scroll.scrollY)
+        assert.are.equal(scrolled, kept)
     end)
 
     it("shows a chore's tooltip without a blank description line, links last", function()
@@ -584,10 +607,7 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
     ---@return table
     local function drifted(setup, clock)
         local h = loaded({ load = false, clock = clock })
-        local selected = {}
-        for _, c in ipairs(chores) do
-            if c.period == "daily" then selected[#selected + 1] = c.id end
-        end
+        local selected = dailyIds()
         selected[#selected + 1] = "bert-sand" -- the weekly the signal ticks
         helpers.seed(h, "state:Zezima", { version = 2, selected = selected, done = {}, shops = {} })
         setup(h)
@@ -596,13 +616,16 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
         return h
     end
 
-    -- How far a window's content is scrolled, read off the fake (not through `_scroll`, which
-    -- a spec may have removed).
+    -- How many live uiRoot children satisfy `pred` (all of them when it is nil).
     ---@param h table
-    ---@param win table
-    ---@return number
-    local function scrolled(h, win)
-        return h.ui:record(win, "Window").s.scrollY
+    ---@param pred (fun(child: table): boolean)?
+    ---@return integer
+    local function liveChildren(h, pred)
+        local n = 0
+        for _, child in ipairs(h.instance.uiRoot.children) do
+            if not child.destroyed and (not pred or pred(child)) then n = n + 1 end
+        end
+        return n
     end
 
     -- How many grip press targets (live layers with the grip's push cursor) the plugin has.
@@ -610,18 +633,11 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
     ---@return integer
     local function gripTargets(h)
         local push = h.env.id.Cursor.CURSOR_PUSH
-        local n = 0
-        for _, child in ipairs(h.instance.uiRoot.children) do
-            if
-                child.class == "ui.Layer"
-                and not child.destroyed
-                and child.cursorState
+        return liveChildren(h, function(child)
+            return child.class == "ui.Layer"
+                and child.cursorState ~= nil
                 and child.cursorState.mouseOverCursor == push
-            then
-                n = n + 1
-            end
-        end
-        return n
+        end)
     end
 
     -- A real chore signal ticks its row, and a view switch both ways still rebuilds the window.
@@ -638,19 +654,6 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
     end
 
     it("loses only the scroll kept through a rebuild and the grips without _scroll", function()
-        -- Scrolls the list under the not-ready notice, then the clock starting rebuilds it with
-        -- the scroll kept (a view switch would start at the top). Returns the scroll before and
-        -- after.
-        local function scrollThenRebuild(h)
-            local first = helpers.rows(h)[1]
-            assert.are.same({ true, 1 }, { h.ui:wheel(first.label, 1) })
-            local before = scrolled(h, window(h))
-            assert.is_true(before > 0)
-            helpers.setClock(h, helpers.NOW)
-            h:advance(helpers.POLL_MS)
-            return before, scrolled(h, window(h))
-        end
-
         -- With the internal, the scroll survives the rebuild and the grips are built.
         local control = drifted(function() end, 0)
         local before, after = scrollThenRebuild(control)
@@ -676,12 +679,11 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
         assert.are.equal(0, gripTargets(h))
         assertStillWorks(h)
         assert.are.equal(0, gripTargets(h))
-        -- Last: the settings button is the first thing in the scrolling content, so a scrolled
-        -- window puts it out of the viewport and the harness refuses its click (internals on too).
-        -- The rows still scroll with the wheel.
+        -- Last, because scrolling moves the settings button (first in the content) out of the
+        -- viewport and the harness refuses clicks on it, even with every internal present.
         local first = helpers.rows(h)[1]
         assert.are.same({ true, 1 }, { h.ui:wheel(first.label, 1) })
-        assert.is_true(scrolled(h, window(h)) > 0)
+        assert.is_true(scrollOf(h) > 0)
     end)
 
     it("loses only the wheel over a row without _onScrollWheel", function()
@@ -692,7 +694,7 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
         local first = helpers.rows(h)[1]
         -- The row has no wheel listener, so it swallows the wheel.
         assert.are.same({ true, 0 }, { h.ui:wheel(first.label, 1) })
-        assert.are.equal(0, scrolled(h, window(h)))
+        assert.are.equal(0, scrollOf(h))
         assert.is_true(gripTargets(h) > 0)
         assertStillWorks(h)
     end)
@@ -707,14 +709,7 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
         -- than with the registration working.
         assert.are.equal(0, #h.ui:overlays(win))
         assert.are.equal(1, #control.ui:overlays(window(control)))
-        local function liveLayers(x)
-            local n = 0
-            for _, child in ipairs(x.instance.uiRoot.children) do
-                if not child.destroyed then n = n + 1 end
-            end
-            return n
-        end
-        assert.are.equal(liveLayers(control) - 1, liveLayers(h))
+        assert.are.equal(liveChildren(control) - 1, liveChildren(h))
         -- The grips are still built, and a title-bar press (which would raise them) is harmless.
         assert.are.equal(gripTargets(control), gripTargets(h))
         h.ui:dragTitle(win, 10, 10)

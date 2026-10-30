@@ -297,8 +297,8 @@ function M.lookup(name, lookup, opts)
     })
 end
 
--- Fault if a destroyed object is used. Every member of a destroyed component faults: the
--- client's behaviour is undocumented, and a plugin that keeps using one has lost track of it.
+-- Fault if a destroyed object is used. Every member faults: the client's behaviour after
+-- Destroy is undocumented, so a plugin that keeps using one has lost track of it.
 ---@param s table object state, `destroyed` set once it is gone
 ---@param label string names the object in the fault
 ---@param why string? what ended it, for objects with no Destroy(); default "Destroy()"

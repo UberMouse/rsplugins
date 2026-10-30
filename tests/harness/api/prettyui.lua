@@ -387,8 +387,7 @@ end
 
 -- A library object's class: `def` as for strict.class, plus a `root` field and an idempotent
 -- Destroy. Destroy marks the object destroyed, runs `teardown(s)` for what the object owns,
--- then destroys and forgets the root. (Window orders its teardown differently, so it keeps its
--- own Destroy.)
+-- then destroys and forgets the root.
 ---@param name string
 ---@param def table
 ---@param teardown fun(s: table)

@@ -324,7 +324,7 @@ function ops.setPermission(state, op)
     end
     local enabled = op.enabled and true or false
     perms.known[op.permission] = true
-    if (perms.granted[op.permission] or false) == enabled then return {} end
+    if M.granted(state, op.permission) == enabled then return {} end
     perms.granted[op.permission] = enabled or nil
     if kind ~= "optionalPermissions" then return {} end
     return {

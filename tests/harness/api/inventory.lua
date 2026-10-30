@@ -99,16 +99,24 @@ local InvSlot = strict.class("InvSlot", {
     },
 })
 
--- The live inventory behind an Inv, or a fault if it has been removed (or re-added as a
--- new Inv) since this one was handed out. A removed inventory stays removed, so `destroyed`
--- sticks on the Inv's state.
+-- The world inventory this Inv still refers to, or nil once it has been removed (or re-added
+-- as a new Inv) since this one was handed out.
+---@param s table Inv state
+---@return table? inventory
+local function current(s)
+    local inv = s.h.world.state.invs[s.id]
+    return inv and inv.generation == s.generation and inv or nil
+end
+
+-- `current`, or a fault if the inventory is gone.
 ---@param s table Inv state
 ---@return table
 local function live(s)
-    local inv = s.h.world.state.invs[s.id]
-    -- Marking it destroyed is what lets strict.live see the removal.
-    if not (inv and inv.generation == s.generation) then s.destroyed = true end
+    local inv = current(s)
+    -- strict.live reads `destroyed`; a removed inventory never comes back, so it sticks.
+    if not inv then s.destroyed = true end
     strict.live(s, "Inv", "its inventory was removed (check inv.isValid)")
+    assert(inv, "strict.live faults when the inventory is gone")
     return inv
 end
 
@@ -153,8 +161,7 @@ local Inv = strict.class("Inv", {
             return configProxy(s.h, "Inv", live(s).id)
         end,
         isValid = function(s)
-            local inv = s.h.world.state.invs[s.id]
-            return inv ~= nil and inv.generation == s.generation
+            return current(s) ~= nil
         end,
         slotCount = function(s)
             return live(s).size

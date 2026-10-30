@@ -92,15 +92,17 @@ def escape_arg(text):
     )
 
 
-def unescape_arg(text):
-    """Inverse of escape_arg (the plugin does this in Lua; tests use it to check the round trip)."""
-    table = {"\\": "\\", "t": "\t", "n": "\n", "r": "\r"}
-    return re.sub(r"\\(.)", lambda m: table.get(m.group(1), m.group(0)), text)
+def _lost(store, key, dropped):
+    """How many more events the sender lost since its last batch (`dropped` is cumulative), and
+    remember the highest count in `store[key]`. Not positive when nothing new was lost."""
+    seen = store.get(key, 0)
+    store[key] = max(seen, dropped)
+    return dropped - seen
 
 
 class RecSession:
     def __init__(self, path, seq):
-        self.path, self.seq, self.dropped = path, seq, 0
+        self.path, self.seq = path, seq
 
 
 class Command:
@@ -127,7 +129,9 @@ class State:
         self.events = deque(maxlen=MAX_EVENTS)
         self.last_n = 0  # n of the newest event
         self.total_dropped = 0
-        self.tee_dropped = {}  # (plugin, session) -> the cumulative dropped count last seen
+        # (plugin, session) -> the cumulative dropped count last seen, per POST path
+        self.rec_dropped = {}
+        self.tee_dropped = {}
         self.run = secrets.token_hex(4)  # event numbers restart per daemon run; followers check it
 
     # --- recorder (POST /record) -------------------------------------------------------------
@@ -137,12 +141,11 @@ class State:
         entries = batch["entries"]
         with self.cond:
             session = self._rec_session(batch)
-            lost = batch.get("dropped", 0) - session.dropped
+            lost = _lost(self.rec_dropped, (batch["plugin"], batch["session"]), batch.get("dropped", 0))
             with session.path.open("a") as f:
                 if lost > 0:
                     first_t = entries[0].get("t") if entries else None
                     f.write(json.dumps({"t": first_t, "k": "dropped", "n": lost}) + "\n")
-                    session.dropped = batch["dropped"]
                 for entry in entries:
                     f.write(json.dumps(ordered(entry)) + "\n")
         note = f", {lost} dropped before it" if lost > 0 else ""
@@ -169,6 +172,7 @@ class State:
                 path = folder / f"{stamp}-{batch['session']}-{n}.jsonl"
             current = RecSession(path, batch["seq"])
             self.rec_sessions[key] = current
+            self.rec_dropped[key] = 0
             header = {
                 "k": "session",
                 "schema": batch["schema"],
@@ -207,8 +211,7 @@ class State:
                 else:  # e.g. the late result of an exec that already gave up on it
                     print(f"ignored result for unknown command id {result['id']!r}")
 
-            lost = body.get("dropped", 0) - bridge["dropped"]
-            bridge["dropped"] = max(bridge["dropped"], body.get("dropped", 0))
+            lost = _lost(bridge, "dropped", body.get("dropped", 0))
             events = self._with_drop_marker(body.get("events", []), lost)
             self._add_events(f"{body['session']}.jsonl", body["session"], events)
 
@@ -225,8 +228,7 @@ class State:
         """Apply one validated tee batch: each line becomes a Log event. Returns nothing."""
         with self.cond:
             key = (body["plugin"], body["session"])
-            seen = self.tee_dropped.get(key, 0)
-            self.tee_dropped[key] = max(seen, body.get("dropped", 0))
+            lost = _lost(self.tee_dropped, key, body.get("dropped", 0))
             events = [
                 {
                     "t": line["t"],
@@ -239,7 +241,6 @@ class State:
                 }
                 for line in body["lines"]
             ]
-            lost = body.get("dropped", 0) - seen
             if lost > 0:
                 # A Log event, not the bridge's bare marker: carrying the plugin is what lets
                 # `logs` (and `logs --plugin X`) show which plugin lost lines.
@@ -375,22 +376,30 @@ def ordered(entry):
     return {**head, **entry}
 
 
-def batch_error(batch):
-    """Why a decoded recorder batch can't be written, or None if it can."""
-    if not isinstance(batch, dict):
+def envelope_error(body):
+    """Why the fields every POST body shares (names, schema, seq, dropped) are bad, or None."""
+    if not isinstance(body, dict):
         return "not a JSON object"
     for key in ("plugin", "session"):
-        if not isinstance(batch.get(key), str) or not SAFE_NAME.fullmatch(batch[key]):
-            return f"bad {key} name {batch.get(key)!r}"
+        if not isinstance(body.get(key), str) or not SAFE_NAME.fullmatch(body[key]):
+            return f"bad {key} name {body.get(key)!r}"
     for key in ("schema", "seq"):
-        if not is_int(batch.get(key)):
+        if not is_int(body.get(key)):
             return f"{key} is not an integer"
-    if batch["seq"] < 1:
+    if body["seq"] < 1:
         return "seq is under 1 (the recorder counts batches from 1)"
-    if not is_int(batch.get("dropped", 0)):
+    if not is_int(body.get("dropped", 0)):
         return "dropped is not an integer"
-    if batch.get("dropped", 0) < 0:
+    if body.get("dropped", 0) < 0:
         return "dropped is negative"
+    return None
+
+
+def batch_error(batch):
+    """Why a decoded recorder batch can't be written, or None if it can."""
+    err = envelope_error(batch)
+    if err:
+        return err
     entries = batch.get("entries")
     if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
         return "entries is not a list of objects"
@@ -399,7 +408,7 @@ def batch_error(batch):
 
 def sync_error(body):
     """Why a decoded bridge sync can't be applied, or None if it can."""
-    err = batch_error({**body, "entries": []}) if isinstance(body, dict) else "not a JSON object"
+    err = envelope_error(body)
     if err:
         return err
     hello = body.get("hello")
@@ -440,7 +449,7 @@ def sync_error(body):
 
 def tee_error(body):
     """Why a decoded tee batch can't be applied, or None if it can."""
-    err = batch_error({**body, "entries": []}) if isinstance(body, dict) else "not a JSON object"
+    err = envelope_error(body)
     if err:
         return err
     lines = body.get("lines")

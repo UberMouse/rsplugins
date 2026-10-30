@@ -8,6 +8,7 @@ over HTTP the way the recorder, the bridge plugin and the CLI do."""
 import importlib.util
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -75,11 +76,32 @@ def sync_body(**over):
     }
 
 
+def unescape_arg(text):
+    """Inverse of rsdev.escape_arg (the plugin does this in Lua; tests use it for the round trip)."""
+    table = {"\\": "\\", "t": "\t", "n": "\n", "r": "\r"}
+    return re.sub(r"\\(.)", lambda m: table.get(m.group(1), m.group(0)), text)
+
+
+def scripted_call(replies, paths=None):
+    """A stand-in for rsdev.call that answers from `replies` in order. Once they run out it raises
+    KeyboardInterrupt, which is how a --follow loop under test is ended. Each path asked for is
+    appended to `paths`."""
+
+    def fake_call(args, path, payload=None, timeout=5.0):
+        if paths is not None:
+            paths.append(path)
+        if not replies:
+            raise KeyboardInterrupt
+        return replies.pop(0)
+
+    return fake_call
+
+
 def parse_lines(text):
     """The sync response as (id, kind, unescaped arg) tuples."""
     assert text == "" or text.endswith("\n")
     return [
-        (i, k, rsdev.unescape_arg(a)) for i, k, a in (ln.split("\t") for ln in text.splitlines())
+        (i, k, unescape_arg(a)) for i, k, a in (ln.split("\t") for ln in text.splitlines())
     ]
 
 
@@ -108,16 +130,28 @@ class DaemonCase(unittest.TestCase):
         self.assertEqual(status, 200)
         return parse_lines(text)
 
-    def exec_async(self, command, timeout=5):
-        """Run `exec` on another thread; returns (thread, result dict filled in when done)."""
+    def exec_async(self, command, timeout=5, kind=None):
+        """Run `exec` (or another `kind`) on another thread; returns (thread, result dict filled in
+        when done)."""
         result = {}
+        body = {"command": command, "timeout": timeout, **({} if kind is None else {"kind": kind})}
 
         def run():
-            result.update(json.loads(post(self.port, "/cli/exec", {"command": command, "timeout": timeout})[1]))
+            result.update(json.loads(post(self.port, "/cli/exec", body)[1]))
 
         t = threading.Thread(target=run)
         t.start()
         return t, result
+
+    def raw_post(self, path, length):
+        """POST with a hand-written Content-Length and no body; returns the status code."""
+        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as s:
+            head = f"POST {path} HTTP/1.0\r\nHost: 127.0.0.1:{self.port}\r\n" + (f"Content-Length: {length}\r\n" if length else "")
+            s.sendall((head + "\r\n").encode())
+            with s.makefile("rb") as reply:
+                code = int(reply.readline().split()[1])
+                reply.read()  # HTTP/1.0: the server closes after answering; closing first would race it
+            return code
 
     def wait_queued(self, n=1):
         for _ in range(500):
@@ -183,15 +217,6 @@ class RecordTests(DaemonCase):
         for length in ("", "-1", "abc", "1" * 11):
             self.assertEqual(self.raw_post("/record", length), 400, length)
         self.assertEqual(self.raw_post("/record", str(rsdev.MAX_BODY + 1)), 413)
-
-    def raw_post(self, path, length):
-        """POST with a hand-written Content-Length and no body."""
-        import socket
-
-        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as s:
-            head = f"POST {path} HTTP/1.0\r\nHost: 127.0.0.1:{self.port}\r\n" + (f"Content-Length: {length}\r\n" if length else "")
-            s.sendall((head + "\r\n").encode())
-            return int(s.recv(100).split()[1])
 
 
 class SyncTests(DaemonCase):
@@ -594,6 +619,81 @@ class CliCase(DaemonCase):
         return line
 
 
+class StatusStartTests(CliCase):
+    def status_lines(self):
+        t, out = self.run_cli("status")
+        t.join()
+        self.assertEqual(out["code"], 0)
+        return out["stdout"].splitlines()
+
+    def test_status_before_any_bridge_has_connected(self):
+        self.assertEqual(
+            self.status_lines(),
+            [
+                f"daemon: up on port {self.port}",
+                "bridge: never connected",
+                "commands: 0 queued, 0 awaiting a result",
+                "events: 0, dropped: 0",
+            ],
+        )
+
+    def test_status_after_a_sync_with_hello_shows_the_session_and_env(self):
+        self.sync(seq=1)
+        lines = self.status_lines()
+        self.assertRegex(lines[1], r"^bridge: connected \(last sync \d+\.\ds ago\)$")
+        self.assertEqual(
+            lines[2:],
+            [
+                "session: b1, seq 1",
+                "version: Lua 5.4",
+                "env: io=nil, load=function",
+                "commands: 0 queued, 0 awaiting a result",
+                "events: 0, dropped: 0",
+            ],
+        )
+
+    def test_status_after_a_sync_without_hello_shows_blanks(self):
+        body = sync_body()
+        del body["hello"]
+        post(self.port, "/bridge/sync", body)
+        lines = self.status_lines()
+        self.assertEqual(lines[2:5], ["session: b1, seq 1", "version: None", "env: (none)"])
+
+    def test_start_when_a_daemon_is_up_says_so_and_spawns_nothing(self):
+        args = SimpleNamespace(port=self.port, out=self.out)
+        out = StringIO()
+        with mock.patch.object(subprocess, "Popen") as popen, redirect_stdout(out):
+            self.assertEqual(rsdev.cmd_start(args), 0)
+        self.assertEqual(out.getvalue(), f"rsdev already running on port {self.port}\n")
+        popen.assert_not_called()
+        self.assertFalse((self.out / "rsdev" / "daemon.pid").exists())
+
+    def test_start_writes_the_pid_file_for_the_process_it_spawns(self):
+        args = SimpleNamespace(port=self.port, out=self.out / "fresh")
+        proc = mock.Mock(pid=4242)
+        out = StringIO()
+        # Down on the first check, up on the next: the stubbed process never really serves.
+        with (
+            mock.patch.object(rsdev, "daemon_up", side_effect=[False, True]),
+            mock.patch.object(subprocess, "Popen", return_value=proc) as popen,
+            redirect_stdout(out),
+        ):
+            self.assertEqual(rsdev.cmd_start(args), 0)
+        self.assertEqual((args.out / "rsdev" / "daemon.pid").read_text(), "4242\n")
+        self.assertEqual(out.getvalue(), f"rsdev started (pid 4242), log {args.out / 'rsdev' / 'daemon.log'}\n")
+        argv = popen.call_args.args[0]
+        self.assertEqual(argv[2:], ["daemon", "--port", str(self.port), "--out", str(args.out)])
+
+
+class EventsQueryTests(DaemonCase):
+    def test_a_non_numeric_since_or_wait_is_a_400(self):
+        for query in ("since=x", "wait=x", "since=1.5"):
+            with self.subTest(query), self.assertRaises(urllib.error.HTTPError) as caught:
+                get(self.port, f"/cli/events?{query}")
+            self.assertEqual(caught.exception.code, 400)
+            caught.exception.close()
+
+
 class EvalTests(CliCase):
     def test_round_trip_prints_the_result_as_json(self):
         t, out = self.run_cli("eval", "return", "1,\tnil\nx\\")
@@ -686,24 +786,13 @@ class EvalTests(CliCase):
     def test_the_audit_log_names_each_eval_and_reset_and_cuts_long_sources(self):
         source = "x" * 250
         for kind, text in (("eval", source), ("reset", "")):
-            t, result = self.exec_kind(kind, text)
+            t, result = self.exec_async(text, kind=kind)
             line = self.deliver(ok=True)
             t.join()
             self.assertIn(f"queued command {line[0]}: {kind}", self.log.getvalue())
         log = self.log.getvalue()
         self.assertIn("x" * 200 + "' (+50 more characters)", log)
         self.assertNotIn("x" * 201, log)
-
-    def exec_kind(self, kind, text):
-        result = {}
-
-        def run():
-            body = {"kind": kind, "command": text, "timeout": 5}
-            result.update(json.loads(post(self.port, "/cli/exec", body)[1]))
-
-        t = threading.Thread(target=run)
-        t.start()
-        return t, result
 
 
 class StaleDaemonTests(DaemonCase):
@@ -822,8 +911,8 @@ class TeeTests(DaemonCase):
         self.assertEqual(post(self.port, "/tee", tee_body(), {"Host": "evil.test"})[0], 403)
         self.assertEqual(post(self.port, "/tee", b"{", cli=False)[0], 400)
         # Same Content-Length rules as /record: refused before the body is read.
-        self.assertEqual(RecordTests.raw_post(self, "/tee", str(rsdev.MAX_BODY + 1)), 413)
-        self.assertEqual(RecordTests.raw_post(self, "/tee", "-1"), 400)
+        self.assertEqual(self.raw_post("/tee", str(rsdev.MAX_BODY + 1)), 413)
+        self.assertEqual(self.raw_post("/tee", "-1"), 400)
 
 
 class LogsTests(CliCase):
@@ -874,13 +963,7 @@ class LogsTests(CliCase):
         log = lambda n, plugin: {"n": n, "name": "Log", "payload": {"plugin": plugin, "level": "log", "text": "t"}}  # noqa: E731
         replies = [{"events": [log(1, "a"), log(2, "b")], "last": 2, "run": "r"}]
         paths = []
-
-        def fake_call(args, path, payload=None, timeout=5.0):
-            paths.append(path)
-            if not replies:
-                raise KeyboardInterrupt
-            return replies.pop(0)
-
+        fake_call = scripted_call(replies, paths)
         args = SimpleNamespace(port=1, since=0, follow=True, plugin="b", json=False)
         out = StringIO()
         with mock.patch.object(rsdev, "call", fake_call), redirect_stdout(out):
@@ -939,13 +1022,7 @@ class EventsTests(DaemonCase):
             {"events": [ev(1)], "last": 1, "run": "new"},
         ]
         paths = []
-
-        def fake_call(args, path, payload=None, timeout=5.0):
-            paths.append(path)
-            if not replies:
-                raise KeyboardInterrupt
-            return replies.pop(0)
-
+        fake_call = scripted_call(replies, paths)
         args = SimpleNamespace(port=1, since=0, follow=True, name=None)
         err, out = StringIO(), StringIO()
         with mock.patch.object(rsdev, "call", fake_call), mock.patch("sys.stderr", err), redirect_stdout(out):
@@ -960,16 +1037,10 @@ class EventsTests(DaemonCase):
             {"events": [{"n": 9, "name": "stale"}], "last": 9, "run": "new"},
             {"events": [{"n": 1}], "last": 1, "run": "new"},
         ]
-
-        def fake_call(args, path, payload=None, timeout=5.0):
-            if not replies:
-                raise KeyboardInterrupt
-            return replies.pop(0)
-
         args = SimpleNamespace(port=1, since=0, follow=True, name=None)
         out = StringIO()
         with (
-            mock.patch.object(rsdev, "call", fake_call),
+            mock.patch.object(rsdev, "call", scripted_call(replies)),
             mock.patch("sys.stderr", StringIO()),
             redirect_stdout(out),
         ):
@@ -990,18 +1061,23 @@ class FollowRestartTests(unittest.TestCase):
     """--follow against real daemon processes, since only a dead process drops the long poll."""
 
     def start_daemon(self, port, out):
-        proc = subprocess.Popen(
-            [sys.executable, str(SCRIPT), "daemon", "--port", str(port), "--out", str(out)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        self.addCleanup(lambda: (proc.poll() is None and proc.kill(), proc.wait()))
-        for _ in range(100):
-            try:
-                get(port, "/cli/status")
-                return proc
-            except OSError:
-                time.sleep(0.05)
+        """Start a daemon on `port`. A freed port can be taken by someone else before the daemon
+        binds it, which kills the daemon at startup; retry a few times before giving up."""
+        for _ in range(3):
+            proc = subprocess.Popen(
+                [sys.executable, str(SCRIPT), "daemon", "--port", str(port), "--out", str(out)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            self.addCleanup(lambda proc=proc: (proc.poll() is None and proc.kill(), proc.wait()))
+            for _ in range(100):
+                if proc.poll() is not None:
+                    break  # it exited (bind failed): try again
+                try:
+                    get(port, "/cli/status")
+                    return proc
+                except OSError:
+                    time.sleep(0.05)
         self.fail("daemon did not come up")
 
     def wait_for(self, cond):
@@ -1044,7 +1120,7 @@ class FollowRestartTests(unittest.TestCase):
                 second = self.start_daemon(port, out_dir)
                 post(port, "/bridge/sync", sync_body(session="b2", events=[{"t": 9, "name": "NEW", "payload": 9}]))
                 self.wait_for(lambda: len(out.getvalue().splitlines()) >= 2)
-                time.sleep(0.5)  # a duplicate would show up by now
+                time.sleep(0.5)  # the duplicate-detection window: a repeated event would show up by now
                 self.assertEqual(result, [])  # still following; the daemon thread dies with the process
                 # Killing the daemon drops the long poll; the next call then stops the follower
                 # before the patches are undone, so it cannot write to the real stderr.
@@ -1067,13 +1143,13 @@ class EscapeTests(unittest.TestCase):
         raw = "say a\tb\nc\\d\re \\t"
         escaped = "say a\\tb\\nc\\\\d\\re \\\\t"
         self.assertEqual(rsdev.escape_arg(raw), escaped)
-        self.assertEqual(rsdev.unescape_arg(escaped), raw)
+        self.assertEqual(unescape_arg(escaped), raw)
 
     def test_round_trip(self):
         for text in ("", "plain", "a\tb", "a\nb", "a\rb", "\\", "\\t", "\\\t\n\r\\n"):
             escaped = rsdev.escape_arg(text)
             self.assertNotRegex(escaped, r"[\t\n\r]")
-            self.assertEqual(rsdev.unescape_arg(escaped), text)
+            self.assertEqual(unescape_arg(escaped), text)
 
 
 RS_CLASS = 'WM_CLASS(STRING) = "rs2client", "RuneScape"'

@@ -47,6 +47,54 @@ def session(*extra):
             *extra]
 
 
+class CarriedStateTest(unittest.TestCase):
+    def test_carries_the_latest_state_of_each_key_in_order(self):
+        before = [
+            {"t": 1, "k": "read", "path": "A", "v": 1},
+            {"t": 1, "k": "perm", "permission": "x", "v": True},
+            {"t": 2, "k": "db", "op": "GetInt", "key": "a", "v": 1},
+            {"t": 2, "k": "read", "path": "A", "v": 2},  # the later read of A wins
+            {"t": 3, "k": "db", "op": "Clear"},  # a and every other key set so far is now unset
+            {"t": 4, "k": "db", "op": "SetBool", "key": "b", "value": False, "v": True},
+            {"t": 4, "k": "db", "op": "Set", "key": "skipped", "value": 1, "v": False},
+            {"t": 5, "k": "db", "op": "Delete", "key": "c"},
+            {"t": 5, "k": "db", "op": "Get", "key": "e"},  # a plain Get: found nothing
+            {"t": 6, "k": "db", "op": "GetInt", "key": "d", "v": 7},
+            {"t": 6, "k": "perm", "permission": "y", "v": False},
+        ]
+        self.assertEqual(
+            [
+                {"t": 0, "k": "read", "path": "A", "v": 2},
+                {"t": 0, "k": "perm", "permission": "x", "v": True},
+                {"t": 0, "k": "perm", "permission": "y", "v": False},
+                {"t": 0, "k": "db", "op": "Get", "key": "a"},
+                {"t": 0, "k": "db", "op": "GetBool", "key": "b", "v": False},
+                {"t": 0, "k": "db", "op": "Get", "key": "c"},
+                {"t": 0, "k": "db", "op": "Get", "key": "e"},
+                {"t": 0, "k": "db", "op": "GetInt", "key": "d", "v": 7},
+            ],
+            sanitiser.carried_state(before),
+        )
+
+
+class DedupReadsTest(unittest.TestCase):
+    def test_drops_a_repeat_until_a_dropped_marker_resets_the_comparison(self):
+        read = lambda t, v, path="p": {"t": t, "k": "read", "path": path, "v": v}  # noqa: E731
+        entries = [
+            read(1, {"b": 1, "a": 2}),
+            read(2, {"a": 2, "b": 1}),  # same value, keys in another order: dropped
+            read(2, 5, path="q"),  # another path is compared on its own
+            {"t": 3, "k": "dropped", "n": 2},
+            read(4, {"a": 2, "b": 1}),  # the same value again, after the gap: kept
+            read(5, {"a": 2, "b": 1}),
+            read(6, 9),
+        ]
+        self.assertEqual(
+            [entries[0], entries[2], entries[3], entries[4], entries[6]],
+            sanitiser.dedup_reads(entries),
+        )
+
+
 class SanitiseTest(unittest.TestCase):
     def run_script(self, lines, *flags, start=0, end=100):
         """Run main() on `lines`; returns (exit code, the output's text or None, stderr)."""
@@ -161,8 +209,41 @@ class SanitiseTest(unittest.TestCase):
     def test_trims_and_rebases_to_the_window(self):
         _, text, _ = self.run_script(session(), start=6, end=7)
         entries = self.entries(text)
-        self.assertEqual([6, 7], entries[0]["window"])
-        self.assertEqual([0, 0, 0, 0, 1, 1], [e["t"] for e in entries[1:]])
+        self.assertEqual(
+            [
+                {"k": "session", "schema": 1, "plugin": "t", "session": "s", "started": 0,
+                 "window": [6, 7]},
+                # Carried in at t = 0: the reads from before the window, name replaced.
+                {"t": 0, "k": "read", "path": sanitiser.NAME_PATH, "v": "Fixture Player"},
+                {"t": 0, "k": "read", "path": "Some.table",
+                 "v": {"Fixture Player": "Fixture Player was here"}},
+                chat(0, "You pick the target's pocket."),
+                chat(0, "3 coins have been added to your money pouch."),
+                chat(1, "<redacted:18 chars>", chat_type=0),
+                chat(1, "<redacted:20 chars>", chat_type=0),
+            ],
+            entries,
+        )
+
+    def test_strips_object_addresses_before_deduping_reads(self):
+        lines = [
+            HEADER,
+            {"t": 0, "k": "read", "path": sanitiser.NAME_PATH, "v": NAME},
+            {"t": 1, "k": "read", "path": "Inv", "v": "sol.jag::InventoryProxy: 0x591c"},
+            # Same object at another address: once stripped it repeats, so it is dropped.
+            {"t": 2, "k": "read", "path": "Inv", "v": "sol.jag::InventoryProxy: 0x7f00"},
+            {"t": 3, "k": "read", "path": "Nested", "v": ["a: 0x1f", {"k: 0x2": "b: 0xAB"}]},
+        ]
+        code, text, err = self.run_script(lines)
+        self.assertEqual(0, code, err)
+        self.assertNotIn("0x", text)
+        self.assertEqual(
+            [
+                {"t": 1, "k": "read", "path": "Inv", "v": "sol.jag::InventoryProxy"},
+                {"t": 3, "k": "read", "path": "Nested", "v": ["a", {"k": "b"}]},
+            ],
+            self.entries(text)[2:],  # past the header and the name read
+        )
 
     def load(self, *patterns):
         """load_allowlist on a file of `patterns`."""

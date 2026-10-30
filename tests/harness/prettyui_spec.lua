@@ -1102,6 +1102,7 @@ describe("prettyui driver on hand-built rows", function()
             row.clickthrough = false
             row:Subscribe(ui.Hook.ONCLICK, function() while true do end end)
         ]])
+        h.budgetMs = 50
         assert.matches(
             "Maximum function execution time",
             harness.errorOf(h.ui.click, h.ui, h.env.row)
@@ -1384,6 +1385,7 @@ describe("prettyui driver press, hold and release", function()
                 .. "bar:Unsubscribe(ui.Hook.ONHOLD)\n"
                 .. "bar:Subscribe(ui.Hook.ONHOLD, 'spin', function() while true do end end)"
         )
+        h.budgetMs = 50
         h.ui:press(h.env.bar)
         assert.matches(
             "Maximum function execution time",

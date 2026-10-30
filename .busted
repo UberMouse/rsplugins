@@ -4,6 +4,7 @@
 return {
     default = {
         ROOT = { "tests" },
+        helper = "tests/warm.lua",
         pattern = "_spec%.lua$",
         lpath = "./?.lua;./?/init.lua;./lib/?.lua",
     },

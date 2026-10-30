@@ -4,6 +4,8 @@
 local helpers = require("tests.chore-tracker.helpers")
 local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
+local layout = require("core/layout")
+local listlayout = require("core/listlayout")
 local loaded, row, togglePicks, ticked =
     helpers.loaded, helpers.row, helpers.togglePicks, helpers.ticked
 
@@ -11,8 +13,7 @@ local ELLIPSIS = require("core/fit").ELLIPSIS
 local fonts = require("tests.harness.api.fonts")
 
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
--- shell/rows.lua's text colours for a row not done and done.
-local TEXT_COLOUR, DONE_COLOUR = 0xE7D7B0FF, 0x7A7262FF
+local TEXT_COLOUR, DONE_COLOUR = helpers.TEXT_COLOUR, helpers.DONE_COLOUR
 
 local window = helpers.window
 
@@ -59,7 +60,7 @@ describe("chore-tracker window", function()
         assert.is_true(h.ui:layout(win).visible)
         assert.is_true(win.closeButton.hidden)
         h.ui:get("Text", { text = "settings button" })
-        assert.matches("%[CHORES%] loaded 67 chores", h:output())
+        assert.matches("%[CHORES%] loaded " .. #chores .. " chores", h:output())
     end)
 
     it("shows each picked chore as a row with its icon, its name and an empty box", function()
@@ -84,7 +85,7 @@ describe("chore-tracker window", function()
         -- The grip at the left, then the icon, the box at the right edge, the names in one
         -- column.
         local rowBox, box = h.ui:layout(challenge.layer), h.ui:layout(challenge.box)
-        assert.are.equal(28, rowBox.height)
+        assert.are.equal(listlayout.ROW_HEIGHT, rowBox.height)
         assert.are.equal(0, h.ui:layout(challenge.grip).x)
         assert.are.equal(20, h.ui:layout(challenge.icon).x)
         assert.are.equal(rowBox.width - 16, box.x)
@@ -329,10 +330,13 @@ describe("chore-tracker window", function()
         local back = h.ui:get("SpriteButton", { sprite = "BACK" })
         assert.are.same({}, h.ui:find("SpriteButton", { sprite = "MENU" }))
         local slot = h.ui:layout(back)
-        assert.are.same({ before.globalX + before.width - 28, before.globalY + 7 }, {
-            slot.globalX,
-            slot.globalY,
-        })
+        assert.are.same(
+            { before.globalX + before.width + layout.SLOT_X, before.globalY + layout.SLOT_Y },
+            {
+                slot.globalX,
+                slot.globalY,
+            }
+        )
         assert.is_true(h.ui:hover(back))
         assert.are.same({ "Back to the list" }, h.ui:tooltips())
         h.ui:leave()
@@ -358,28 +362,21 @@ end)
 
 describe("chore-tracker long names", function()
     local CROMPERTY = "Pure Essence from Wizard Cromperty"
-    -- shell/rows.lua keeps a list row's label clear of the grip (20), the icon (30), the box
-    -- (16) and a 6 px gap.
-    local LABEL_INSET = 72
-
-    -- The label's text, its tooltip (by hovering), and the label width available to it.
+    -- The chore's label text, its tooltip (by hovering), and the label width available to it.
     ---@param h table
+    ---@param name string
     ---@return string shown
     ---@return string tooltip
     ---@return integer avail
-    local function onlyRow(h)
-        local r = helpers.rows(h)[1]
-        local shown = r.label.content
-        assert(h.ui:hover(r.layer))
-        local tips = h.ui:tooltips()
-        h.ui:leave()
-        return shown, tips[1], r.layer.width - LABEL_INSET
+    local function onlyRow(h, name)
+        local shown, tip = helpers.rowShown(h, name)
+        return shown, tip, h.ui:layout(helpers.row(h, name).label).width
     end
 
     it("cuts a long name with dots, leads its tooltip with the full name, and re-fits", function()
         local h = loaded()
         togglePicks(h, { "cromperty-pure-essence" })
-        local shown, tip, avail = onlyRow(h)
+        local shown, tip, avail = onlyRow(h, CROMPERTY)
         assert.is_true(fonts.width(CROMPERTY, false) > avail)
         assert.are.equal("...", shown:sub(-3))
         assert.is_true(fonts.width(shown, false) <= avail)
@@ -388,19 +385,19 @@ describe("chore-tracker long names", function()
         -- A wider window shows more of it, and all of it once it fits, with the plain tooltip.
         h.ui:resize(window(h), 60, 0)
         h:advance(600)
-        local wider, _, avail2 = onlyRow(h)
+        local wider, _, avail2 = onlyRow(h, CROMPERTY)
         assert.is_true(#wider > #shown)
         assert.is_true(fonts.width(wider, false) <= avail2)
         h.ui:resize(window(h), 400, 0)
         h:advance(600)
-        local whole, tip3 = onlyRow(h)
+        local whole, tip3 = onlyRow(h, CROMPERTY)
         assert.are.equal(CROMPERTY, whole)
         assert.are.equal("Weekly stock", tip3:sub(1, 12))
 
         -- And back to narrow: cut again.
         h.ui:resize(window(h), -460, 0)
         h:advance(600)
-        local again, tip4 = onlyRow(h)
+        local again, tip4 = onlyRow(h, CROMPERTY)
         assert.are.equal(shown, again)
         assert.are.equal(CROMPERTY .. "<br>", tip4:sub(1, #CROMPERTY + 4))
     end)
@@ -408,7 +405,7 @@ describe("chore-tracker long names", function()
     it("leaves a short name and its tooltip alone", function()
         local h = loaded()
         togglePicks(h, { "daily-challenge" })
-        local shown, tip = onlyRow(h)
+        local shown, tip = onlyRow(h, "Daily Challenge")
         assert.are.equal("Daily Challenge", shown)
         assert.is_nil(tip:find("Daily Challenge", 1, true))
     end)
@@ -420,15 +417,15 @@ describe("chore-tracker long names", function()
         -- narrower than a '0' in the fake font.
         local fits = fonts.width("Feather Shop Run (1/4)", false)
         local r = helpers.rows(h)[1]
-        h.ui:resize(window(h), fits + LABEL_INSET - r.layer.width, 0)
+        h.ui:resize(window(h), fits - h.ui:layout(r.label).width, 0)
         h:advance(600)
-        local shown, tip = onlyRow(h)
+        local shown, tip = onlyRow(h, FEATHERS.name)
         assert.are.equal("...", shown:sub(-3))
         assert.are.equal("Feather Shop Run (0/4)<br>", tip:sub(1, 26))
 
         helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         h:advance(20)
-        local after, tip2 = onlyRow(h)
+        local after, tip2 = onlyRow(h, FEATHERS.name)
         assert.are.equal("Feather Shop Run (1/4)", after)
         assert.is_nil(tip2:find("Feather Shop Run", 1, true))
     end)
@@ -438,7 +435,7 @@ describe("chore-tracker long names", function()
         togglePicks(h, { FEATHERS.id })
         local fits = fonts.width("Feather Shop Run (1/4)", false)
         local r = helpers.rows(h)[1]
-        h.ui:resize(window(h), fits + LABEL_INSET - r.layer.width, 0)
+        h.ui:resize(window(h), fits - h.ui:layout(r.label).width, 0)
         h:advance(600)
         local lib = h.ui:lib()
         local before = #lib.tooltips

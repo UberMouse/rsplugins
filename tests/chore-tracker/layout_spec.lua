@@ -7,7 +7,10 @@ describe("chore-tracker layout", function()
     it("defaults to an open window with its button in the close X's slot", function()
         local l = layout.default()
         assert.is_false(l.collapsed)
-        assert.are.same({ l.x + l.width - 28, l.y + 7 }, { l.buttonX, l.buttonY })
+        assert.are.same(
+            { l.x + l.width + layout.SLOT_X, l.y + layout.SLOT_Y },
+            { l.buttonX, l.buttonY }
+        )
     end)
 
     it("round-trips through serialise and fromStored", function()

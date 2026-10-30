@@ -11,6 +11,7 @@ local varCore = require("core/vars")
 local varRules = require("data/vars")
 local chores = require("data/chores")
 local view = require("core/view")
+local state = require("core/state")
 
 local M = {}
 
@@ -25,14 +26,16 @@ end
 M.click = click
 
 -- The checkbox sprites by state: shell/rows.lua draws a hovered row with _1 (empty) or _3 (ticked).
-local TICKED_SPRITES = {
-    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")] = true,
-    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_3")] = true,
-}
-local EMPTY_SPRITES = {
-    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_0")] = true,
-    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_1")] = true,
-}
+M.BOX_EMPTY = catalog.config("Sprite", "RS3_BTN_CHECKBOX_0")
+M.BOX_EMPTY_HOVERED = catalog.config("Sprite", "RS3_BTN_CHECKBOX_1")
+M.BOX_TICKED = catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")
+M.BOX_TICKED_HOVERED = catalog.config("Sprite", "RS3_BTN_CHECKBOX_3")
+local TICKED_SPRITES = { [M.BOX_TICKED] = true, [M.BOX_TICKED_HOVERED] = true }
+local EMPTY_SPRITES = { [M.BOX_EMPTY] = true, [M.BOX_EMPTY_HOVERED] = true }
+
+-- A row label's colour when not done and done. shell/rows.lua keeps these private, so they are
+-- copied here, once; change them with rows.lua.
+M.TEXT_COLOUR, M.DONE_COLOUR = 0xE7D7B0FF, 0x7A7262FF
 
 -- Whether a checkbox sprite is a ticked one, plain or hovered. A missing or unknown sprite
 -- errors, so a box that never drew can't read as unticked.
@@ -178,6 +181,13 @@ function M.rows(h)
         return a.layer.y < b.layer.y
     end)
     return out
+end
+
+-- A chore's display name, from data/chores.
+---@param id string
+---@return string
+function M.name(id)
+    return assert(state.find(chores, id), "no chore " .. id).name
 end
 
 -- The list row for a chore name (its text is the name, or the name and a shop count, or the start

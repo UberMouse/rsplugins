@@ -7,12 +7,10 @@ local chores = require("data/chores")
 local fonts = require("tests.harness.api.fonts")
 local loaded, openSettings = helpers.loaded, helpers.openSettings
 
-local BOX_EMPTY = catalog.config("Sprite", "RS3_BTN_CHECKBOX_0")
-local BOX_EMPTY_HOVERED = catalog.config("Sprite", "RS3_BTN_CHECKBOX_1")
-local BOX_TICKED = catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")
-local BOX_TICKED_HOVERED = catalog.config("Sprite", "RS3_BTN_CHECKBOX_3")
+local BOX_EMPTY, BOX_EMPTY_HOVERED = helpers.BOX_EMPTY, helpers.BOX_EMPTY_HOVERED
+local BOX_TICKED, BOX_TICKED_HOVERED = helpers.BOX_TICKED, helpers.BOX_TICKED_HOVERED
 local HAND = catalog.config("Cursor", "CURSOR_HYPERLINK_HAND")
-local TEXT_COLOUR = 0xE7D7B0FF
+local TEXT_COLOUR = helpers.TEXT_COLOUR
 
 local window = helpers.window
 
@@ -94,7 +92,7 @@ describe("chore-tracker settings rows", function()
         local r = helpers.settingsRow(h, "cromperty-pure-essence")
         local full = "Pure Essence from Wizard Cromperty (shop)"
         assert.are.equal("...", r.label.content:sub(-3))
-        assert.is_true(fonts.width(r.label.content, false) <= r.layer.width - 52)
+        assert.is_true(fonts.width(r.label.content, false) <= h.ui:layout(r.label).width)
         window(h):SetScrollPosition(r.layer.y - 40)
         assert.is_true(h.ui:hover(r.layer))
         assert.are.equal(full .. "<br>Weekly stock", h.ui:tooltips()[1]:sub(1, #full + 16))

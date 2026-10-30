@@ -2,12 +2,15 @@
 -- the two settings, and what logout and shutdown do to a popup on screen.
 
 local helpers = require("tests.chore-tracker.helpers")
+local catalog = require("tests.harness.catalog")
+local uiFake = require("tests.harness.api.ui")
 local loaded, togglePicks, toggleTick = helpers.loaded, helpers.togglePicks, helpers.toggleTick
 
 local BERT = { name = "Sand from Bert", id = "bert-sand", flag = "HANDSAND_BUCKETS_CLAIMED_TODAY" }
 local GEOFF =
     { name = "Flax from Geoffrey", id = "geoffrey-flax", flag = "ATSEER_REWARD_FLAX_GIVEN_TODAY" }
-local ARCH_INFO_POPUP, LEAGUE2_HARD_TASK_COMPLETE = 48145, 60041
+local ARCH_INFO_POPUP = catalog.config("Sound", "ARCH_INFO_POPUP")
+local LEAGUE2_HARD_TASK_COMPLETE = catalog.config("Sound", "LEAGUE2_HARD_TASK_COMPLETE")
 
 -- A popup lasts 200 Logic ticks and ends on the next one (20 ms each), and the plugin's login
 -- poll runs every 25.
@@ -67,8 +70,8 @@ describe("chore-tracker popups", function()
         local layer =
             h.env.ui.Interfaces:GetComponent(h.env.id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)
         assert.are.equal(layer, p.parent)
-        assert.are.equal(3836 / 2 - 150, p.root.x)
-        assert.are.equal(math.floor(2121 / 3 - 46 + 0.5), p.root.y)
+        assert.are.equal(uiFake.ROOT_WIDTH / 2 - 150, p.root.x)
+        assert.are.equal(math.floor(uiFake.ROOT_HEIGHT / 3 - 46 + 0.5), p.root.y)
         assert.matches("%[CHORES%] celebrate bert%-sand", h:output())
     end)
 

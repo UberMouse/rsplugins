@@ -4,9 +4,12 @@
 
 local uiFake = require("tests.harness.api.ui")
 local helpers = require("tests.chore-tracker.helpers")
+local listlayout = require("core/listlayout")
+local reorder = require("core/reorder")
 local loaded, row, rows = helpers.loaded, helpers.row, helpers.rows
 
-local ROW = 28
+local ROW = listlayout.ROW_HEIGHT
+local SCROLL_STEP = reorder.SCROLL_STEP
 -- Five daily chores, two weekly and one monthly, in this stored order.
 local DAILY = {
     "daily-challenge",
@@ -15,18 +18,15 @@ local DAILY = {
     "crystal-tree-blossom",
     "invention-machine",
 }
-local NAMES = {
-    ["daily-challenge"] = "Daily Challenge",
-    ["player-owned-ports"] = "Player Owned Ports",
-    ["player-owned-farm"] = "Player Owned Farm",
-    ["crystal-tree-blossom"] = "Crystal Tree Blossom",
-    ["invention-machine"] = "Invention Machine",
-    ["soul-reaper"] = "Soul Reaper",
-    ["feather-shop-run"] = "Feather Shop Run",
-    ["giant-oyster"] = "Giant Oyster",
-}
 local WEEKLY = { "soul-reaper", "feather-shop-run" }
 local MONTHLY = { "giant-oyster" }
+-- The chores these specs know (id -> display name, from data/chores).
+local NAMES = {}
+for _, ids in ipairs({ DAILY, WEEKLY, MONTHLY }) do
+    for _, id in ipairs(ids) do
+        NAMES[id] = helpers.name(id)
+    end
+end
 
 -- `who`'s stored picks: the lists given, concatenated in order.
 ---@param h table
@@ -692,7 +692,7 @@ describe("chore-tracker drag", function()
             assert.is_true(h.ui:moveTo(x, bottom + 20))
             scrolls[#scrolls + 1] = win._scroll.scrollY
         end
-        assert.are.same({ 8, 16, 24 }, scrolls)
+        assert.are.same({ SCROLL_STEP, 2 * SCROLL_STEP, 3 * SCROLL_STEP }, scrolls)
         -- To the end of the content and no further.
         for _ = 1, 100 do
             h.ui:moveTo(x, bottom + 20)
@@ -704,7 +704,7 @@ describe("chore-tracker drag", function()
         assert.is_true(h.ui:moveTo(x, bottom - 30))
         assert.are.equal(most, win._scroll.scrollY)
         assert.is_true(h.ui:moveTo(x, view.globalY - 5))
-        assert.are.equal(most - 8, win._scroll.scrollY)
+        assert.are.equal(most - SCROLL_STEP, win._scroll.scrollY)
         assert.is_true(h.ui:release())
     end)
 
@@ -886,8 +886,8 @@ describe("chore-tracker drag and other events", function()
         for _, child in ipairs(h.instance.uiRoot.children) do
             assert.is_true(child.destroyed)
         end
-        -- Only the layout may be saved on the way out, not an order.
+        -- Nothing is saved on the way out: not an order, and an unmoved layout is not rewritten.
         assert.are.same(DAILY, { table.unpack(stored(h), 1, 5) })
-        assert.is_true(h.dbWrites <= writes + 1)
+        assert.are.equal(writes, h.dbWrites)
     end)
 end)

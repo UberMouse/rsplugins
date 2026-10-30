@@ -2,6 +2,7 @@
 -- and its resets, being logged out or waiting for the clock, and the saved layout.
 
 local helpers = require("tests.chore-tracker.helpers")
+local uiFake = require("tests.harness.api.ui")
 local loaded, row, ticked, toggleTick, togglePicks =
     helpers.loaded, helpers.row, helpers.ticked, helpers.toggleTick, helpers.togglePicks
 
@@ -230,7 +231,7 @@ describe("chore-tracker saved layout", function()
         local stored = h.db.layout.value
         stored.x, stored.y, stored.width, stored.height = 5000, -40, 9000, 300
         h:load()
-        assert.are.same({ 0, 0, 3836, 300 }, geometry(h))
+        assert.are.same({ 0, 0, uiFake.ROOT_WIDTH, 300 }, geometry(h))
         h:advance(POLL_MS)
         assert.are.same(0, h.db.layout.value.x)
     end)

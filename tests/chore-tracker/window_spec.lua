@@ -537,6 +537,156 @@ describe("chore-tracker resize cursors", function()
     end)
 end)
 
+-- The plugin promises that a PrettyUI version without one of the internals it reaches into
+-- loses only what that internal gave it (the header of main.lua lists them). The harness
+-- toggles stand in for such a version; nothing is probed against one.
+describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
+    local BERT_FLAG = "HANDSAND_BUCKETS_CLAIMED_TODAY"
+
+    -- A tracker with every daily chore and Bert's sand picked (so the list scrolls), loaded after `setup`
+    -- has toggled the fake, and past the settle window so var ticks count.
+    ---@param setup fun(h: table)
+    ---@param clock integer? # the game clock at load (default NOW; 0 for not ready)
+    ---@return table
+    local function drifted(setup, clock)
+        local h = loaded({ load = false, clock = clock })
+        local selected = {}
+        for _, c in ipairs(chores) do
+            if c.period == "daily" then selected[#selected + 1] = c.id end
+        end
+        selected[#selected + 1] = "bert-sand" -- the weekly the signal ticks
+        helpers.seed(h, "state:Zezima", { version = 2, selected = selected, done = {}, shops = {} })
+        setup(h)
+        h:load()
+        h:advance(helpers.SETTLE_MS)
+        return h
+    end
+
+    -- How far a window's content is scrolled, read off the fake (not through `_scroll`, which
+    -- a spec may have removed).
+    ---@param h table
+    ---@param win table
+    ---@return number
+    local function scrolled(h, win)
+        return h.ui:record(win, "Window").s.scrollY
+    end
+
+    -- How many grip press targets (live layers with the grip's push cursor) the plugin has.
+    ---@param h table
+    ---@return integer
+    local function gripTargets(h)
+        local push = h.env.id.Cursor.CURSOR_PUSH
+        local n = 0
+        for _, child in ipairs(h.instance.uiRoot.children) do
+            if
+                child.class == "ui.Layer"
+                and not child.destroyed
+                and child.cursorState
+                and child.cursorState.mouseOverCursor == push
+            then
+                n = n + 1
+            end
+        end
+        return n
+    end
+
+    -- A real chore signal ticks its row, and a view switch both ways still rebuilds the window.
+    ---@param h table
+    local function assertStillWorks(h)
+        assert.is_false(ticked(h, "Sand from Bert"))
+        h.world:setVar("VarPlayer", BERT_FLAG, 1)
+        h:advance(helpers.POLL_MS)
+        assert.is_true(ticked(h, "Sand from Bert"))
+        helpers.openSettings(h)
+        helpers.back(h)
+        assert.is_true(h.ui:layout(window(h)).visible)
+        assert.is_true(ticked(h, "Sand from Bert"))
+    end
+
+    it("loses only the scroll kept through a rebuild and the grips without _scroll", function()
+        -- Scrolls the list under the not-ready notice, then the clock starting rebuilds it with
+        -- the scroll kept (a view switch would start at the top). Returns the scroll before and
+        -- after.
+        local function scrollThenRebuild(h)
+            local first = helpers.rows(h)[1]
+            assert.are.same({ true, 1 }, { h.ui:wheel(first.label, 1) })
+            local before = scrolled(h, window(h))
+            assert.is_true(before > 0)
+            helpers.setClock(h, helpers.NOW)
+            h:advance(helpers.POLL_MS)
+            return before, scrolled(h, window(h))
+        end
+
+        -- With the internal, the scroll survives the rebuild and the grips are built.
+        local control = drifted(function() end, 0)
+        local before, after = scrollThenRebuild(control)
+        assert.are.equal(before, after)
+        assert.is_true(gripTargets(control) > 0)
+
+        local h = drifted(function(fake)
+            fake.ui:scrollInternals("noScroll")
+        end, 0)
+        assert.is_nil(window(h)._scroll)
+        before, after = scrollThenRebuild(h)
+        assert.is_true(before > 0)
+        assert.are.equal(0, after)
+        assert.are.equal(0, gripTargets(h))
+        assertStillWorks(h)
+    end)
+
+    it("loses only the grips without a viewport", function()
+        local h = drifted(function(fake)
+            fake.ui:scrollInternals("noViewport")
+        end)
+        assert.is_nil(window(h).viewport)
+        assert.are.equal(0, gripTargets(h))
+        assertStillWorks(h)
+        assert.are.equal(0, gripTargets(h))
+        -- The rows still scroll with the wheel.
+        local first = helpers.rows(h)[1]
+        assert.are.same({ true, 1 }, { h.ui:wheel(first.label, 1) })
+        assert.is_true(scrolled(h, window(h)) > 0)
+    end)
+
+    it("loses only the wheel over a row without _onScrollWheel", function()
+        local h = drifted(function(fake)
+            fake.ui:scrollInternals("noWheel")
+        end)
+        assert.is_nil(window(h)._onScrollWheel)
+        local first = helpers.rows(h)[1]
+        -- The row has no wheel listener, so it swallows the wheel.
+        assert.are.same({ true, 0 }, { h.ui:wheel(first.label, 1) })
+        assert.are.equal(0, scrolled(h, window(h)))
+        assert.is_true(gripTargets(h) > 0)
+        assertStillWorks(h)
+    end)
+
+    it("loses only the grips' raise when _RegisterOverlay raises", function()
+        local control = drifted(function() end)
+        local h = drifted(function(fake)
+            fake.ui:overlayRaises(true)
+        end)
+        local win = window(h)
+        -- The sentinel the plugin made was destroyed, not left over the window: one layer fewer
+        -- than with the registration working.
+        assert.are.equal(0, #h.ui:overlays(win))
+        assert.are.equal(1, #control.ui:overlays(window(control)))
+        local function liveLayers(x)
+            local n = 0
+            for _, child in ipairs(x.instance.uiRoot.children) do
+                if not child.destroyed then n = n + 1 end
+            end
+            return n
+        end
+        assert.are.equal(liveLayers(control) - 1, liveLayers(h))
+        -- The grips are still built, and a title-bar press (which would raise them) is harmless.
+        assert.are.equal(gripTargets(control), gripTargets(h))
+        h.ui:dragTitle(win, 10, 10)
+        h:advance(40)
+        assertStillWorks(h)
+    end)
+end)
+
 -- PrettyUI 1.2.0 leaves the window's resize off after a quick title-bar click (the press
 -- reaches it after the release); the plugin turns it back on once the title bar isn't held.
 describe("chore-tracker resize after a title-bar click", function()

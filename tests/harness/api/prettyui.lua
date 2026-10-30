@@ -819,6 +819,10 @@ end
 ---@param layout any
 local function registerOverlay(s, component, isVisible, layout)
     live(s)
+    -- `h.ui:overlayRaises(true)`: a version whose internal takes other arguments raises here.
+    if s.registerRaises then
+        strict.fault("prettyui Window:_RegisterOverlay: stand-in for a changed signature", true)
+    end
     if ui.stateOf(component) == nil then
         strict.fault("prettyui Window:_RegisterOverlay(component, ...) needs a component")
     end
@@ -946,20 +950,21 @@ local Window = strict.class("prettyui.Window instance", {
         -- The layer the content scrolls in: its rect is the part of the content on show.
         -- Public state 1.2.0's scroll controller syncs onto the window (`syncOwner`).
         viewport = function(s)
-            if s.destroyed then return nil end
+            if s.destroyed or s.scrollMode == "noViewport" then return nil end
             return s.viewport
         end,
         -- 1.2.0's internal wheel handler (also set on the window by its scroll controller):
         -- a plugin hands it to a row's ONSCROLLWHEEL so the wheel still scrolls the window.
         _onScrollWheel = liveField(
-            ---@return function
+            ---@return function?
             function(s)
+                if s.scrollMode == "noWheel" then return nil end
                 return s.onWheel
             end
         ),
         ---@return table?
         _scroll = function(s)
-            if s.destroyed then return nil end
+            if s.destroyed or s.scrollMode == "noScroll" then return nil end
             return ScrollController.new({ scrollY = s.scrollY, owner = s })
         end,
         -- 1.2.0's internal title-bar drag layer (a titled window's only), a sibling of the root
@@ -1160,6 +1165,8 @@ local WindowModule = module("Window", function(lib, parent, options)
     syncContent(s)
     s.overlays = {}
     s.noOverlayInternals = lib.h.ui.noOverlayInternals
+    s.registerRaises = lib.h.ui.registerRaises
+    s.scrollMode = lib.h.ui.scrollMode
     if s.title then
         local drag, dragState = ui.create("Layer", ps)
         s.titleDrag = drag
@@ -1434,10 +1441,14 @@ Driver.__index = Driver
 ---@param h table
 ---@return table
 function M.driver(h)
-    return setmetatable(
-        { h = h, altHeld = false, noOverlayInternals = false, resizeMode = "all" },
-        Driver
-    )
+    return setmetatable({
+        h = h,
+        altHeld = false,
+        noOverlayInternals = false,
+        registerRaises = false,
+        scrollMode = "all",
+        resizeMode = "all",
+    }, Driver)
 end
 
 ---@return table lib
@@ -1466,6 +1477,24 @@ end
 ---@param on boolean
 function Driver:overlayInternals(on)
     self.noOverlayInternals = not on
+end
+
+-- Make every Window made from now on raise from `_RegisterOverlay` (true), as a PrettyUI version
+-- whose internal takes other arguments would, or work again (false). A separate toggle, not a
+-- mode of `overlayInternals`, which is a boolean for the internals being there at all. Set it
+-- before `h:load()` for a window made at load.
+---@param on boolean
+function Driver:overlayRaises(on)
+    self.registerRaises = on
+end
+
+-- Make every Window made from now on lack 1.2.0's internal `_scroll` ("noScroll"), its public
+-- `viewport` ("noViewport") or its internal `_onScrollWheel` ("noWheel"), each reading nil as on
+-- a PrettyUI version without it; "all" (the default) restores them. Set it before `h:load()`
+-- for a window made at load.
+---@param mode "all"|"noScroll"|"noViewport"|"noWheel"
+function Driver:scrollInternals(mode)
+    self.scrollMode = mode
 end
 
 -- Make every Window made from now on lack 1.2.0's internal `resize` ("none") or its `handles`

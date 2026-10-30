@@ -12,49 +12,20 @@ local FORWARDED = {
     "GameStateChanged",
 }
 
--- Load the bridge, recording every real Event.<X>.Subscribe it makes while main.lua runs, as
--- "<event> <name>", in call order (the harness keeps subscriptions per event, not in order).
----@return table h
----@return string[] calls
-local function loadRecordingSubscribes()
-    local sandbox = require("tests.harness.sandbox")
-    local build = sandbox.build
-    local calls = {}
-    rawset(sandbox, "build", function(...)
-        local env = build(...)
-        local real = env.Event
-        env.Event = setmetatable({}, {
-            __index = function(_, event)
-                local sub = real[event]
-                return {
-                    Subscribe = function(name, fn)
-                        calls[#calls + 1] = event .. " " .. name
-                        return sub.Subscribe(name, fn)
-                    end,
-                    Unsubscribe = sub.Unsubscribe,
-                }
-            end,
-        })
-        return env
-    end)
-    local ok, h = pcall(support.load)
-    rawset(sandbox, "build", build)
-    assert(ok, h)
-    return h, calls
-end
-
 describe("dev-bridge", function()
     it("subscribes the six load events at load, in order, as devBridge<Event>", function()
         -- PluginShutdown and the reload path unsubscribe by these exact names. The other
         -- probe-able events are subscribed only once a probe needs them.
-        local h, calls = loadRecordingSubscribes()
+        local h = support.new()
+        local calls = support.spyEvent(h, true)
+        h:load()
         assert.are.same({
-            "Logic devBridgeLogic",
-            "ChatMessage devBridgeChatMessage",
-            "VarTransmit devBridgeVarTransmit",
-            "InventoryUpdated devBridgeInventoryUpdated",
-            "MiniMenuEntrySelected devBridgeMiniMenuEntrySelected",
-            "GameStateChanged devBridgeGameStateChanged",
+            "Subscribe Logic devBridgeLogic",
+            "Subscribe ChatMessage devBridgeChatMessage",
+            "Subscribe VarTransmit devBridgeVarTransmit",
+            "Subscribe InventoryUpdated devBridgeInventoryUpdated",
+            "Subscribe MiniMenuEntrySelected devBridgeMiniMenuEntrySelected",
+            "Subscribe GameStateChanged devBridgeGameStateChanged",
         }, calls)
         local protocol = h.env.require("protocol")
         local loaded = {}
@@ -116,9 +87,7 @@ describe("dev-bridge", function()
         local h = support.load()
         h:step()
         local first = support.last(h)
-        support.answer(h)
-        h:advance(20 * 10)
-        local second = support.last(h)
+        local second = support.cycle(h)
 
         assert.are.equal(1, first.schema)
         assert.are.equal("dev-bridge", first.plugin)
@@ -166,9 +135,7 @@ describe("dev-bridge", function()
                 { id = "c2", ok = true },
                 { id = "c3", ok = true },
             }, support.last(h).results)
-            support.answer(h)
-            h:advance(20 * 10)
-            assert.are.same({}, support.last(h).results) -- each result is sent once
+            assert.are.same({}, support.cycle(h).results) -- each result is sent once
         end
     )
 
@@ -180,16 +147,14 @@ describe("dev-bridge", function()
                 if command == "boom" then error("no such command") end
             end
             h:step()
-            support.answer(h, {
+            local results = support.cycle(h, {
                 status = 200,
                 body = support.line("k1", "bogus", "1 + 1")
                     .. support.line("k2", "exec", "  POFF  dev-bridge")
                     .. support.line("k3", "exec", "plugins_setenabled dev-bridge true")
                     .. support.line("k4", "exec", "boom")
                     .. support.line("k5", "exec", "prl dev-bridge"),
-            })
-            h:advance(20 * 10)
-            local results = support.last(h).results
+            }).results
             assert.are.same({ id = "k1", ok = false, error = "unknown kind bogus" }, results[1])
             assert.is_false(results[2].ok)
             assert.matches("client console", results[2].error)
@@ -247,10 +212,7 @@ describe("dev-bridge", function()
         h.world:setInventory("INV", { [1] = { obj = "LOGS", count = 2 } })
         h:fire("MiniMenuEntrySelected", { entry = { verbText = "Walk here", actionType = 23 } })
         h:fire("GameStateChanged", { oldState = 30, newState = 10 })
-        support.answer(h)
-        h:advance(20 * 10)
-
-        local events = support.forwarded(support.last(h))
+        local events = support.forwarded(support.cycle(h))
         local names = {}
         for i, e in ipairs(events) do
             names[i] = e.name
@@ -287,14 +249,13 @@ describe("dev-bridge", function()
         h.world:chat("bob whispers", { chatType = 3, sender = "Bob" })
         h.world:chat("News: Farmer Hampe has done a feat", { chatType = 138 })
         h.world:chat("Bob has logged in.", { chatType = 5 })
-        support.answer(h)
-        h:advance(20 * 10)
+        local body = support.cycle(h)
         local texts = {}
-        for _, e in ipairs(support.forwarded(support.last(h))) do
+        for _, e in ipairs(support.forwarded(body)) do
             texts[#texts + 1] = e.payload.chatMessage
         end
         assert.are.same({ "a dwarf smith", "Test" }, texts)
-        assert.are.equal(0, support.last(h).dropped) -- filtered, not lost
+        assert.are.equal(0, body.dropped) -- filtered, not lost
     end)
 
     it("drops speech while the player's name can't be read", function()
@@ -302,9 +263,7 @@ describe("dev-bridge", function()
         h:step()
         h.world:chat("Test", { chatType = 2, sender = "UberMouse894" })
         h.world:chat("system", { chatType = 0 })
-        support.answer(h)
-        h:advance(20 * 10)
-        local events = support.forwarded(support.last(h))
+        local events = support.forwarded(support.cycle(h))
         assert.are.equal(1, #events)
         assert.are.equal("system", events[1].payload.chatMessage)
     end)
@@ -323,9 +282,7 @@ describe("dev-bridge", function()
                 playerData = {},
             },
         })
-        support.answer(h)
-        h:advance(20 * 10)
-        local entry = support.forwarded(support.last(h))[1].payload.entry
+        local entry = support.forwarded(support.cycle(h))[1].payload.entry
         assert.are.equal("Trade with", entry.verbText)
         assert.are.equal("<player>", entry.subjectText)
         assert.are.equal("<player>", entry.fullText)
@@ -337,9 +294,7 @@ describe("dev-bridge", function()
         local h = support.load()
         h:step()
         h:fire("MiniMenuEntrySelected", { entry = entry })
-        support.answer(h)
-        h:advance(20 * 10)
-        return support.forwarded(support.last(h))[1].payload.entry
+        return support.forwarded(support.cycle(h))[1].payload.entry
     end
 
     it("forwards a Walk here entry with its text intact", function()
@@ -407,22 +362,17 @@ describe("dev-bridge", function()
         h:step()
         local sent = #support.forwarded(support.last(h))
         assert.is_true(sent >= 1 and sent < 6)
-        support.answer(h)
-        h:advance(20 * 10)
-        local next = support.forwarded(support.last(h))[1]
+        local next = support.forwarded(support.cycle(h))[1]
         assert.are.equal("message " .. (sent + 1), next.payload.chatMessage)
     end)
 
     it("backs off while the daemon is down, logging once, and resends results", function()
         local h = support.load()
         h:step()
-        support.answer(h, { status = 200, body = support.line("r1", "exec", "plist") })
-        h:advance(20 * 10)
+        support.cycle(h, { status = 200, body = support.line("r1", "exec", "plist") })
         h.world:chat("lost")
-        support.answer(h, { error = "connection refused", errorCode = 7 })
-        h:advance(20 * 250)
-        support.answer(h, { timedOut = true })
-        h:advance(20 * 250)
+        support.cycle(h, { error = "connection refused", errorCode = 7 })
+        support.cycle(h, { timedOut = true })
 
         assert.are.equal(4, #support.syncs(h))
         assert.are.equal(1, h:consoleCount("[BRIDGE] sync failed"))
@@ -443,20 +393,18 @@ describe("dev-bridge", function()
         support.answer(h, { status = 200, body = "c1\texec\tplist" })
         assert.are.same({}, support.ran(h))
         assert.are.equal(1, h:consoleCount("[BRIDGE] sync failed (reply does not end"))
-        h:advance(20 * 250)
+        support.untilRetry(h)
         assert.are.equal(0, support.last(h).dropped)
     end)
 
     it("drops a sync the daemon refuses with 400 and sends later results", function()
         local h = support.load()
         h:step()
-        support.answer(h, { status = 200, body = support.line("r1", "exec", "plist") })
-        h:advance(20 * 10)
+        support.cycle(h, { status = 200, body = support.line("r1", "exec", "plist") })
         h.world:chat("refused")
-        support.answer(h, { status = 400, body = "bad" }) -- carries r1's result and the chat
+        -- The sync that is refused carries r1's result and the chat.
+        local body = support.cycle(h, { status = 400, body = "bad" })
         assert.are.equal(1, h:consoleCount("[BRIDGE] sync failed"))
-        h:advance(20 * 250)
-        local body = support.last(h)
         assert.are.same({}, body.results)
         assert.is_true(body.dropped >= 1)
         support.answer(h)
@@ -469,7 +417,7 @@ describe("dev-bridge", function()
         support.answer(h, { status = 200, noBody = true })
         assert.are.equal(1, h:consoleCount("[BRIDGE] sync failed (reply had no body"))
         assert.are.equal(0, h:consoleCount("[BRIDGE] stopped after an error"))
-        h:advance(20 * 250)
+        support.untilRetry(h)
         support.answer(h)
         assert.are.equal(1, h:consoleCount("[BRIDGE] connected to rsdev"))
     end)
@@ -481,8 +429,7 @@ describe("dev-bridge", function()
         for i = 1, 14 do -- still queued when the second sync starts
             body = body .. support.line("c" .. i, "exec", "plist")
         end
-        support.answer(h, { status = 200, body = body })
-        h:advance(20 * 10)
+        support.cycle(h, { status = 200, body = body })
         local open = support.open(h)
         assert.are.equal(1, #open)
         h.env.require("protocol").refusal = function()
@@ -500,6 +447,93 @@ describe("dev-bridge", function()
         assert.are.equal(requests, #h.requests)
         assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         h:unload()
+    end)
+
+    it("counts an event whose payload can't be read as dropped and says so once", function()
+        local h = support.load()
+        h:step()
+        local unreadable = setmetatable({}, {
+            __index = function()
+                error("unreadable", 0)
+            end,
+        })
+        h.instance.subs.GameStateChanged[1].fn(unreadable)
+        local body = support.cycle(h)
+        assert.are.equal(1, body.dropped)
+        assert.are.equal(0, #support.payloads(body, "GameStateChanged"))
+        assert.are.equal(
+            1,
+            h:consoleCount("[BRIDGE] could not forward a GameStateChanged event: unreadable")
+        )
+    end)
+
+    it("without urls.rsdev starts no request, says so once and keeps retrying", function()
+        local h = support.new()
+        h.manifest.urls = nil
+        h:load()
+        -- Every sync attempt, started or not, takes the pending results first.
+        local attempts = 0
+        local protocol = h.env.require("protocol")
+        local takeResults = protocol.takeResults
+        protocol.takeResults = function(...)
+            attempts = attempts + 1
+            return takeResults(...)
+        end
+        h:step()
+        assert.are.equal(1, attempts)
+        local failed =
+            "[BRIDGE] sync failed (could not start the request: the manifest has no urls.rsdev)"
+        assert.are.equal(1, h:consoleCount(failed))
+        assert.are.equal(1, h:consoleCount("is scripts/rsdev.py running? Retrying every 5 s"))
+        support.untilRetry(h)
+        assert.are.equal(2, attempts)
+        assert.are.equal(0, #h.requests)
+        assert.are.equal(1, h:consoleCount(failed)) -- once per outage, not per retry
+    end)
+
+    it("logs a self-grant command that raises and carries on with the rest", function()
+        local h = support.new()
+        h.onConsoleCommand = function(command)
+            if command:find("^ppr ") then error("no such plugin", 0) end
+        end
+        h:load()
+        assert.are.equal(1, h:consoleCount("[BRIDGE] `ppr dev-bridge` failed: no such plugin"))
+        assert.are.same({
+            "ppr dev-bridge",
+            "ppe dev-bridge httpAccess",
+            "ppe dev-bridge chatAccess",
+        }, h.consoleCommands)
+        h:step()
+        assert.are.equal(1, #support.syncs(h)) -- loaded and syncing regardless
+    end)
+
+    it("sends results over several syncs when they exceed resultBytes, losing none", function()
+        local h = support.loadEval()
+        local commands = {}
+        for _, id in ipairs({ "e1", "e2", "e3" }) do
+            commands[#commands + 1] = support.line(id, "eval", "1")
+        end
+        local entry = #h.env.require("protocol").resultEntry({
+            id = "e1",
+            ok = true,
+            values = { 1 },
+            nvalues = 1,
+            output = { lines = {}, truncated = false },
+        })
+        h.env.require("protocol").limits.resultBytes = entry * 2 + 1 -- room for two, not three
+        local first = support.cycle(h, { status = 200, body = table.concat(commands) })
+        local second = support.cycle(h)
+        local ids = {}
+        for _, body in ipairs({ first, second }) do
+            for _, result in ipairs(body.results) do
+                assert.is_true(result.ok)
+                ids[#ids + 1] = result.id
+            end
+        end
+        assert.are.same({ "e1", "e2" }, { first.results[1].id, first.results[2].id })
+        assert.are.same({ "e3" }, { second.results[1].id })
+        assert.are.same({ "e1", "e2", "e3" }, ids)
+        assert.are.same({}, support.cycle(h).results)
     end)
 
     it("unsubscribes everything and cancels the sync in flight on shutdown", function()

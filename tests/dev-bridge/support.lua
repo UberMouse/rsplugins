@@ -49,6 +49,99 @@ function M.loadEval()
     return h
 end
 
+-- protocol.limits of the loaded bridge (specs shrink them in place), so the helpers below
+-- follow the plugin's pacing instead of repeating its numbers.
+---@param h table
+---@return table
+local function limits(h)
+    return h.env.require("protocol").limits
+end
+
+-- Run `n` Logic ticks (20 ms each).
+---@param h table
+---@param n integer
+function M.ticks(h, n)
+    h:advance(n * 20)
+end
+
+-- Run the wait after a failed sync (limits.retryTicks), at the end of which the next starts.
+---@param h table
+function M.untilRetry(h)
+    M.ticks(h, limits(h).retryTicks)
+end
+
+-- Answer the one open sync with `response` (a 200 with an empty body by default) and run
+-- until the next sync has started, which is when the bridge reports what that answer led to.
+-- Returns the next sync's body, decoded. A finished sync waits syncEveryTicks for the next, a
+-- failed one retryTicks, so it gives up after the longer.
+---@param h table
+---@param response table?
+---@return table body
+function M.cycle(h, response)
+    local before = #M.syncs(h)
+    M.answer(h, response)
+    for _ = 1, limits(h).retryTicks + 1 do
+        if #M.syncs(h) > before then return M.last(h) end
+        h:step()
+    end
+    error("no sync started after the answer", 2)
+end
+
+-- Record every real Event.<X>.Subscribe/Unsubscribe the bridge makes, as
+-- "Subscribe <event> <name>" or "Unsubscribe <event> <name>", and the Logic tick of each. The
+-- spy tail-calls the real function, so the harness still sees the bridge's own frame as the
+-- caller and still faults an Unsubscribe the bridge passes straight to pcall. On a harness not
+-- yet loaded, `atLoad` records the calls main.lua makes while h:load() runs (the harness keeps
+-- subscriptions per event, not in call order); otherwise it spies from now on.
+---@param h table
+---@param atLoad boolean?
+---@return string[] calls
+---@return integer[] ticks
+function M.spyEvent(h, atLoad)
+    local calls, ticks = {}, {}
+    local function note(text)
+        calls[#calls + 1] = text
+        ticks[#ticks + 1] = h.tick
+    end
+    local function wrap(env)
+        local real = env.Event
+        env.Event = setmetatable({}, {
+            __index = function(_, event)
+                local sub = real[event]
+                return {
+                    Subscribe = function(name, fn)
+                        note("Subscribe " .. event .. " " .. name)
+                        return sub.Subscribe(name, fn)
+                    end,
+                    Unsubscribe = function(name)
+                        note("Unsubscribe " .. event .. " " .. name)
+                        return sub.Unsubscribe(name)
+                    end,
+                }
+            end,
+        })
+    end
+    if not atLoad then
+        wrap(h.instance.env)
+        return calls, ticks
+    end
+    -- The sandbox is built inside h:load(), so wrap its builder for the length of that call.
+    local sandbox = require("tests.harness.sandbox")
+    local build = sandbox.build
+    h.load = function(self)
+        h.load = nil -- back to Harness.load
+        rawset(sandbox, "build", function(...)
+            local env = build(...)
+            wrap(env)
+            return env
+        end)
+        local ok, err = pcall(self.load, self)
+        rawset(sandbox, "build", build)
+        assert(ok, err)
+    end
+    return calls, ticks
+end
+
 -- Answer the open sync with `commands` ({ id, kind, arg } each, at most 10, which run one per
 -- tick), run until the next sync starts and return its results by id, and its body.
 ---@param h table
@@ -60,9 +153,7 @@ function M.run(h, commands)
     for _, c in ipairs(commands) do
         reply = reply .. M.line(c[1], c[2], c[3])
     end
-    M.answer(h, { status = 200, body = reply })
-    h:advance(20 * 10)
-    local body = M.last(h)
+    local body = M.cycle(h, { status = 200, body = reply })
     local byId = {}
     for _, result in ipairs(body.results) do
         byId[result.id] = result

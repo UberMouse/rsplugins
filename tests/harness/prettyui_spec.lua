@@ -1706,7 +1706,7 @@ describe("prettyui Window resize and title-bar state", function()
             assert.is_not_nil(handles[key])
         end
         assert.matches(
-            "nn",
+            "unmocked API: prettyui%.Window resize handles%.nn",
             harness.errorOf(function()
                 local _ = handles.nn
             end)
@@ -1738,11 +1738,12 @@ btn = prettyui.SpriteButton.new(win.root, "TRASH", nil,
     it("hides a shown tooltip on SetTooltip with a table or nil, until the next hover", function()
         for _, new in ipairs({ "table", "nil" }) do
             local h = load(SPRITE)
-            h.ui:hover(h.env.btn)
+            assert.is_true(h.ui:hover(h.env.btn))
+            assert.are.same({ "Bin" }, h.ui:tooltips(), new)
             h.env.btn:SetTooltip(new == "table" and { text = "Skip" } or nil)
             assert.are.same({}, h.ui:tooltips(), new)
-            h.ui:hover(h.env.menu)
-            h.ui:hover(h.env.btn)
+            -- A fresh hover (which leaves the button first) shows the replacement.
+            assert.is_true(h.ui:hover(h.env.btn))
             assert.are.same(new == "table" and { "Skip" } or {}, h.ui:tooltips(), new)
         end
     end)
@@ -1762,12 +1763,11 @@ box = win:AddCheckboxButton({ { text = "A", value = "a", tooltip = "Aye" }, "b" 
         assert.are.same({ "Ayes" }, h.ui:tooltips())
         box:SetOptionTooltip("a", { text = "Table" })
         assert.are.same({}, h.ui:tooltips())
-        h.ui:hover(box, "b")
-        h.ui:hover(box, "a")
+        assert.is_true(h.ui:hover(box, "a"))
         assert.are.same({ "Table" }, h.ui:tooltips())
         box:SetOptionTooltip("a", nil)
-        h.ui:hover(box, "b")
-        h.ui:hover(box, "a")
+        assert.are.same({}, h.ui:tooltips())
+        assert.is_true(h.ui:hover(box, "a"))
         assert.are.same({}, h.ui:tooltips())
         assert.is_false(box:SetOptionTooltip("zzz", "x"))
     end)

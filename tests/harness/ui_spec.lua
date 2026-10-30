@@ -306,6 +306,32 @@ describe("a plugin's own components", function()
         assert.is_true(rawequal(row.opConfig, row.opConfig))
     end)
 
+    it("fault on a mouseOverCursor read before it is set, and keep what is assigned", function()
+        assert.matches(
+            "read before it was set",
+            harness.errorOf(loadRows, "local _ = row.cursorConfig.mouseOverCursor")
+        )
+        local h = loadRows([[
+            row.cursorConfig.mouseOverCursor = id.Cursor.CURSOR_PUSH
+            pushed = row.cursorConfig.mouseOverCursor
+            row.cursorConfig.mouseOverCursor = -1
+            none = row.cursorConfig.mouseOverCursor
+        ]])
+        assert.are.same({ 196, -1 }, { h.env.pushed, h.env.none })
+    end)
+
+    it("store an op cursor per index, and ClearOpCursors gives the -1 of no cursor back", function()
+        local h = loadRows([[
+            ops = row.opConfig
+            unset = ops:GetOpCursor(1)
+            ops:SetOpCursor(1, id.Cursor.CURSOR_PUSH)
+            set = { ops:GetOpCursor(1), ops:GetOpCursor(2) }
+            ops:ClearOpCursors()
+            cleared = ops:GetOpCursor(1)
+        ]])
+        assert.are.same({ -1, { 196, -1 }, -1 }, { h.env.unset, h.env.set, h.env.cleared })
+    end)
+
     it("fault on a cursorConfig or opConfig kept across the component's Destroy", function()
         for _, code in ipairs({
             "local _ = cfg.mouseOverCursor",

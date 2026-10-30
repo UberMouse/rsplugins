@@ -1633,3 +1633,167 @@ describe("prettyui Tooltip.attach on hand-built rows", function()
         end
     )
 end)
+
+describe("prettyui Window resize and title-bar state", function()
+    it("starts with its resize enabled, and a drag leaves it enabled", function()
+        local h = load(WINDOW)
+        assert.is_true(h.env.win.resize.enabled)
+        h.ui:dragTitle(h.env.win, 5, 5)
+        assert.is_true(h.env.win.resize.enabled)
+    end)
+
+    -- 1.2.0 delivers a quick click backwards, so it ends with the resize off and no hold.
+    it("ends a quick title-bar click with the resize off and the bar not held", function()
+        local h = load(WINDOW)
+        h.ui:clickTitle(h.env.win)
+        assert.is_false(h.env.win.resize.enabled)
+        assert.is_false(h.env.win.titleDrag.isClicked)
+    end)
+
+    it("holds the bar clicked with the resize off until it is released", function()
+        local h = load(WINDOW)
+        h.ui:holdTitleBar(h.env.win)
+        assert.is_true(h.env.win.titleDrag.isClicked)
+        assert.is_false(h.env.win.resize.enabled)
+        h.ui:releaseTitleBar(h.env.win)
+        assert.is_false(h.env.win.titleDrag.isClicked)
+        assert.is_true(h.env.win.resize.enabled)
+    end)
+
+    it("refuses a drag of the corner while its resize is disabled, until it is enabled", function()
+        local h = load(WINDOW)
+        local win = h.env.win
+        h.ui:clickTitle(win)
+        assert.matches(
+            "its resize is disabled",
+            harness.errorOf(function()
+                h.ui:resize(win, 10, 10)
+            end)
+        )
+        win.resize:SetEnabled(true)
+        h.ui:resize(win, 10, 10)
+        local r = h.ui:layout(win)
+        assert.are.same({ 310, 210 }, { r.width, r.height })
+    end)
+
+    it("names the field each resizeInternals mode takes away, and 'all' has every one", function()
+        local expected = {
+            all = { resize = true, handles = true, n = true, titleDrag = true },
+            none = { resize = false, handles = false, n = false, titleDrag = true },
+            noHandles = { resize = true, handles = false, n = false, titleDrag = true },
+            noN = { resize = true, handles = true, n = false, titleDrag = true },
+            noTitleDrag = { resize = true, handles = true, n = true, titleDrag = false },
+        }
+        for mode, shape in pairs(expected) do
+            local h = load(WINDOW)
+            h.ui:resizeInternals(mode)
+            local w = h.env.prettyui.Window.new(h.env.parent, { title = "T", resizable = true })
+            local resize = w.resize
+            local handles = resize and resize.handles
+            assert.are.same(shape, {
+                resize = resize ~= nil,
+                handles = handles ~= nil,
+                n = handles ~= nil and handles.n ~= nil,
+                titleDrag = w.titleDrag ~= nil,
+            }, mode)
+        end
+    end)
+
+    it("has the eight handles, and faults on any other key", function()
+        local h = load(WINDOW)
+        local handles = h.env.win.resize.handles
+        for _, key in ipairs({ "n", "s", "e", "w", "nw", "ne", "sw", "se" }) do
+            assert.is_not_nil(handles[key])
+        end
+        assert.matches(
+            "nn",
+            harness.errorOf(function()
+                local _ = handles.nn
+            end)
+        )
+    end)
+end)
+
+describe("prettyui tooltips", function()
+    local SPRITE = WINDOW
+        .. [[
+btn = prettyui.SpriteButton.new(win.root, "TRASH", nil,
+    { x = 20, y = 50, size = 20, tooltip = "Bin" })
+]]
+
+    it("shows a SpriteButton's tooltip on hover", function()
+        local h = load(SPRITE)
+        assert.are.same({}, h.ui:tooltips())
+        assert.is_true(h.ui:hover(h.env.btn))
+        assert.are.same({ "Bin" }, h.ui:tooltips())
+    end)
+
+    it("keeps a shown tooltip shown when SetTooltip gives a string", function()
+        local h = load(SPRITE)
+        h.ui:hover(h.env.btn)
+        h.env.btn:SetTooltip("Rubbish")
+        assert.are.same({ "Rubbish" }, h.ui:tooltips())
+    end)
+
+    it("hides a shown tooltip on SetTooltip with a table or nil, until the next hover", function()
+        for _, new in ipairs({ "table", "nil" }) do
+            local h = load(SPRITE)
+            h.ui:hover(h.env.btn)
+            h.env.btn:SetTooltip(new == "table" and { text = "Skip" } or nil)
+            assert.are.same({}, h.ui:tooltips(), new)
+            h.ui:hover(h.env.menu)
+            h.ui:hover(h.env.btn)
+            assert.are.same(new == "table" and { "Skip" } or {}, h.ui:tooltips(), new)
+        end
+    end)
+
+    local BOX = WINDOW
+        .. [[
+box = win:AddCheckboxButton({ { text = "A", value = "a", tooltip = "Aye" }, "b" },
+    { colour = 0xff0000 })
+]]
+
+    it("does the same for a CheckboxButton choice through SetOptionTooltip", function()
+        local h = load(BOX)
+        local box = h.env.box
+        assert.is_true(h.ui:hover(box, "a"))
+        assert.are.same({ "Aye" }, h.ui:tooltips())
+        box:SetOptionTooltip("a", "Ayes")
+        assert.are.same({ "Ayes" }, h.ui:tooltips())
+        box:SetOptionTooltip("a", { text = "Table" })
+        assert.are.same({}, h.ui:tooltips())
+        h.ui:hover(box, "b")
+        h.ui:hover(box, "a")
+        assert.are.same({ "Table" }, h.ui:tooltips())
+        box:SetOptionTooltip("a", nil)
+        h.ui:hover(box, "b")
+        h.ui:hover(box, "a")
+        assert.are.same({}, h.ui:tooltips())
+        assert.is_false(box:SetOptionTooltip("zzz", "x"))
+    end)
+
+    it("reports each choice's fields, and the group's colour, through choices", function()
+        local h = load(BOX .. [[box:SetSelected("b", true)]])
+        local choices, colour = h.ui:choices(h.env.box)
+        assert.are.same({
+            { text = "A", value = "a", selected = false, disabled = false, tooltip = "Aye" },
+            { text = "b", value = "b", selected = true, disabled = false },
+        }, choices)
+        assert.are.equal(0xff0000, colour)
+        local plain = load(WINDOW .. [[box = win:AddCheckboxButton({ "x" })]])
+        assert.is_nil(select(2, plain.ui:choices(plain.env.box)))
+    end)
+end)
+
+describe("prettyui find with visible", function()
+    it("drops a button under a closed window and keeps one under an open window", function()
+        local h = load(WINDOW .. [[
+            other = prettyui.Window.new(parent, { title = "Open" })
+            kept = prettyui.SpriteButton.new(other.root, "TRASH", nil, { size = 20 })
+            win:Close()
+        ]])
+        assert.are.same({ h.env.kept }, h.ui:find("SpriteButton", { visible = true }))
+        assert.are.equal(2, #h.ui:find("SpriteButton"))
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "MENU", visible = true }))
+    end)
+end)

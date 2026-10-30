@@ -16,10 +16,10 @@ cwd=$(jq -r '.cwd // ""' <<<"$hook_input" 2>/dev/null) || exit 0
 [[ -n "$cwd" ]] || exit 0
 
 # A compacting subagent fires SessionStart with the parent's session id, and this text is the
-# conductor's: an implementer that got it was told to resume the run as conductor. The hooks docs
-# don't say which fields mark a subagent's SessionStart. `agent_id` marks one on other events,
-# and SessionStart's `agent_type` is otherwise set only for `claude --agent` sessions, which don't
-# conduct runs here. So either one means "not the conductor".
+# conductor's: an implementer that got it was told to resume the run as conductor. The main
+# session's SessionStart carries `agent_type=claude` (logged since 2026-10-29), so only a non-empty
+# `agent_id` or an `agent_type` other than `claude` (a subagent, or a `claude --agent` session,
+# which doesn't conduct runs here) means "not the conductor".
 agent_id=$(jq -r '.agent_id // ""' <<<"$hook_input" 2>/dev/null)
 agent_type=$(jq -r '.agent_type // ""' <<<"$hook_input" 2>/dev/null)
 
@@ -33,7 +33,7 @@ if [[ -d "$cwd/.durable-state" ]]; then
     >>"$cwd/.durable-state/hook-payloads.log" 2>/dev/null || true
 fi
 
-[[ -z "$agent_id" && -z "$agent_type" ]] || exit 0
+[[ -z "$agent_id" && ( -z "$agent_type" || "$agent_type" == claude ) ]] || exit 0
 
 state="$cwd/.durable-state/state.json"
 [[ -f "$state" ]] || exit 0

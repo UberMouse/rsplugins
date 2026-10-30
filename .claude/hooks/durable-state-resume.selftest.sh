@@ -84,6 +84,14 @@ subagent_row() {
 }
 subagent_row "subagent compact (agent_id) -> silent" agent_id agent-xyz
 subagent_row "subagent compact (agent_type) -> silent" agent_type implementer
+# The main session's SessionStart carries agent_type=claude and no agent_id: it must get the pointer.
+out=$(jq -n --arg cwd "$SDD" '{cwd: $cwd, session_id: "sess-a", source: "compact", agent_type: "claude"}' | bash "$HOOK")
+if grep -qE 'Read \.claude/skills/sdd-loop/SKILL\.md §Resuming' <<<"$out"; then
+  echo "ok   main session (agent_type=claude) -> pointer"
+else
+  failures=$((failures + 1))
+  printf 'FAIL main session (agent_type=claude) -> pointer\n---- output ----\n%s\n----------------\n' "$out"
+fi
 grep -q '^\[DSHOOK\] .*agent_type=implementer' "$SDD/.durable-state/hook-payloads.log" &&
   echo "ok   payload fields are logged for the guard" ||
   { failures=$((failures + 1)); echo "FAIL payload fields are logged for the guard"; }

@@ -491,16 +491,16 @@ From `plugins/dev-bridge` in the beta client.
   The rule we follow: unsubscribe every subscription in `PluginShutdown`, including ones a
   `lib/dev` module made (`tee.shutdown()`, `recorder.shutdown()`). The harness's `h:unload`
   faults on any subscription `PluginShutdown` leaves behind (`docs/testing.md`).
-- **Crash 9 (SIGSEGV x3, 2026-10-30 21:43:56 pid 4006356, 21:59:55 pid 254718, 22:03:31 pid
-  292870)**: `ppe var-dump httpAccess` sent through the dev bridge (`rsdev.py exec`) while
-  `recorder-demo` was running with `httpAccess`. `coredumpctl` showed the same main-thread
-  stack each time, shallow and with no Lua frames: rs2client+0x3c76a4, +0xe3f8b, +0x1c110c,
-  +0x16648f5, +0x1402ec8. It took all three conditions: typing the same `ppe` in the console
-  instead did not crash, and the same bridge `ppe` without `recorder-demo` did not crash
-  (21:59:13). Ruled out: the bridge's `ppe` dispatch itself (`probe-perm`, whose handler only
-  printed) and subscribing `Logic`, `ServerLogic` and `VarTransmit` inside that dispatch with
-  `recorder-demo` granted and posting (`probe-perm-sub`, runs 4 and 5b); both probes are
-  deleted. Remaining suspects: the synchronous part of var-dump's `start()` (snapshot init,
+- **Crash 9 (SIGSEGV x3, 2026-10-30 21:43:56, 21:59:55 and 22:03:31)**: `ppe var-dump httpAccess`
+  sent through the dev bridge (`rsdev.py exec`) while `recorder-demo` was running with
+  `httpAccess`. The core dumps show the same shallow main-thread stack each time, with no Lua
+  frames: rs2client+0x3c76a4, +0xe3f8b, +0x1c110c, +0x16648f5, +0x1402ec8. It crashed only with
+  all three conditions so far. The one-run controls were the same `ppe` typed in the console
+  (no crash) and the bridge `ppe` without `recorder-demo` (no crash, 21:59:13). Probe runs did
+  not reproduce it for the bridge `ppe` dispatch alone (`probe-perm`, whose handler only
+  printed), nor for subscribing `Logic`, `ServerLogic` and `VarTransmit` inside that dispatch
+  with `recorder-demo` granted and posting (`probe-perm-sub`); both probes are deleted.
+  Remaining suspects: the synchronous part of var-dump's `start()` (snapshot init,
   `beginDomain`'s `pcall(nameLister)` starting `pairs(id.VarPlayer)`). The cause is
   unconfirmed. The rule we follow: grant var-dump's `httpAccess` by typing `ppe` in the
   console, never through the bridge.
@@ -603,11 +603,9 @@ The probe sources aren't kept; each finding says what was called.
   Probed 2026-10-30: a subscriber added during a dispatch first runs on the next; an
   `Unsubscribe` and `Subscribe` of one name inside a dispatch of the same event loses the
   subscription (see the testing.md fidelity ledger).
-- **A reload console command run from a plugin's own event callback is synchronous**
-  (2026-10-30, beta 951-1): `ExecuteConsoleCommand("prl <self>")` from a `ServerLogic`
-  subscriber unloads the old instance (`PluginShutdown`) and loads the new one inside that
-  call, and the old instance's later subscribers of that dispatch are skipped. The dispatch
-  rules are in the testing.md fidelity ledger; the probe was `probe-reload`, now deleted.
+- **A reload command run from a plugin's own event callback is synchronous** (2026-10-30, beta
+  951-1): it unloads and loads inside `ExecuteConsoleCommand`; the dispatch rules that follow
+  are in the [testing.md ledger](testing.md#fidelity-ledger) (probe `probe-reload`, deleted).
 - **A `PersistentDB:Set('gen', n)` made at load read back as absent** (2026-10-30, observation,
   cause unknown): across three successive loads of `probe-reload`, `PersistentDB:GetInt('gen')`
   returned nil each time, while a `PersistentDB:Set('fired', true)` made in a `ServerLogic`

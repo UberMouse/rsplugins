@@ -1,4 +1,5 @@
--- What the window shows, as plain data: one section per period that has selected chores.
+-- What the window shows, as plain data: one section per period that has selected chores, plus the
+-- text for its tooltips, headings and settings rows.
 
 local period = require("core/period")
 local state = require("core/state")
@@ -9,7 +10,7 @@ local M = {}
 M.TITLES = { daily = "Daily", weekly = "Weekly", monthly = "Monthly" }
 
 -- Tooltips wrap at this width; wiki URLs are long.
-M.TOOLTIP_WIDTH = 360
+local TOOLTIP_WIDTH = 360
 
 -- Each period as a word for "this <word>".
 M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
@@ -144,7 +145,8 @@ function M.shopTooltip(row, p)
 end
 
 -- A chore's tooltip: its description, then `extra` lines (a list row's shops), then its wiki
--- page and any other links, as text. Takes a Chore or a ChoreRow, which share these fields.
+-- page and any other links, as text; "<br>" is the tooltip's line-break tag. Takes a Chore or a
+-- ChoreRow, which share these fields.
 ---@param chore { desc: string, url: string, links: string[] }
 ---@param extra string[]?
 ---@return ChoreTooltip
@@ -158,7 +160,7 @@ function M.tooltip(chore, extra)
     for _, link in ipairs(chore.links) do
         lines[#lines + 1] = link
     end
-    return { text = table.concat(lines, "<br>"), maxWidth = M.TOOLTIP_WIDTH }
+    return { text = table.concat(lines, "<br>"), maxWidth = TOOLTIP_WIDTH }
 end
 
 -- A section's heading: its period's title and how many of its rows are done.

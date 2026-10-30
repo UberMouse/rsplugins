@@ -45,15 +45,22 @@ M.enums = {
     ValueType = vars.ValueType,
 }
 
--- Decode JSON text a test expects to be valid, failing with what it was and where it broke.
----@param text string
+-- Decode JSON text a test expects to be a non-null JSON value, failing with what it was and where
+-- it broke.
+---@param text string?
 ---@param what string what the text is, for the failure message
 ---@return any
 function M.decodeJson(text, what)
+    assert(type(text) == "string", what .. " has no body")
     local value, pos, msg = dkjson.decode(text)
-    if value == nil and msg then
+    if value == nil then
         error(
-            ("%s is not JSON: %s at %s: %s"):format(what, msg, tostring(pos), text:sub(1, 200)),
+            ("%s is not JSON: %s at %s: %s"):format(
+                what,
+                msg or "decodes to null",
+                tostring(pos),
+                text:sub(1, 200)
+            ),
             2
         )
     end
@@ -114,8 +121,7 @@ function M.new(plugin, opts)
 
     local manifestText = h.readFile("plugin.json")
     -- A manifest is optional during development (docs/plugin-anatomy.md).
-    h.manifest = manifestText and assert(dkjson.decode(manifestText), "plugin.json is not JSON")
-        or {}
+    h.manifest = manifestText and M.decodeJson(manifestText, "plugin.json") or {}
     if #(h.manifest.requiredPermissions or {}) > 0 then
         error(
             "plugin.json requiredPermissions is broken in the client (the plugin doesn't run); "

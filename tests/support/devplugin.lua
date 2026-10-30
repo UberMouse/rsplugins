@@ -3,6 +3,7 @@
 -- all of them, and a new lib/dev module is added here once.
 
 local paths = require("tests.harness.paths")
+local specSupport = require("tests.harness.spec_support")
 
 local M = {}
 
@@ -13,12 +14,11 @@ M.MODULES = { "json", "payloads", "recorder", "recording", "tee", "teelog" }
 ---@param manifest string
 ---@return table
 function M.inlinePlugin(main, manifest)
-    local files = { ["main.lua"] = main, ["plugin.json"] = manifest }
+    local dev = {}
     for _, name in ipairs(M.MODULES) do
-        files["dev/" .. name .. ".lua"] =
-            assert(paths.read(paths.repo("lib/dev/" .. name .. ".lua")))
+        dev["dev/" .. name .. ".lua"] = assert(paths.read(paths.repo("lib/dev/" .. name .. ".lua")))
     end
-    return files
+    return specSupport.inline(main, { manifest = manifest, files = dev })
 end
 
 return M

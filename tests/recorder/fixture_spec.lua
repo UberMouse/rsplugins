@@ -94,8 +94,8 @@ describe("plugins/recorder-demo replaying a sanitised client session", function(
         assert.are.equal("Fixture Player", h.world.state.player.displayName)
     end)
 
-    -- The demo keeps its re-read state to itself, so the asserts only read back what the test set:
-    -- the point is that advance() after playRecording() doesn't fault.
+    -- The demo's re-read state is private, so these asserts only read back what the test set; the
+    -- check is that advance() after playRecording() doesn't fault.
     it("keeps running without a fault when a test advances past the recording's end", function()
         local h = replayed()
         h.world:setInventory("MONEY_POUCH", { { obj = "COINS", count = 5 } })

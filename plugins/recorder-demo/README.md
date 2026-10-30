@@ -31,4 +31,5 @@ What this checks in the client, which the test harness can't:
 ## Why it isn't for submission
 
 It exists to record API traffic to a localhost URL for development. A plugin for submission
-ships without `dev/`, the recorder lines in `main.lua`, and the `urls.rsdev` entry and the httpAccess permission.
+ships without `dev/`, the recorder lines in `main.lua`, the `urls.rsdev` entry and the
+httpAccess permission.

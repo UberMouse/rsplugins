@@ -42,7 +42,8 @@ recorder.limits = {
     bufferBytes = 8 * 1024 * 1024, -- encoded entries kept while they can't be sent
 }
 
--- The manifest url the batches go to: urls.rsdev in plugin.json (the tee's and the bridge's key: one daemon).
+-- The manifest url the batches go to: urls.rsdev in plugin.json, the key the tee and bridge
+-- use too (one daemon).
 local URL_NAME = "rsdev"
 local PATH = "/record"
 local FLUSH_NAME = "devRecorderFlush" -- the recorder's own Logic subscription
@@ -84,7 +85,9 @@ local httpCount = 0 -- the plugin's own requests, numbered for their start/done 
 -- reads every tick is recorded only when it changes. A replay serves each read the latest
 -- recorded value, so nothing is lost, unless that entry was dropped: `recordedAt` holds each
 -- one's buffer index, and anything at or below `lostThrough` may have been dropped, so a read
--- deduplicated against it is recorded again.
+-- deduplicated against it is recorded again. An index is the entry's place when recorded; a
+-- requeued batch can land at higher ones after a drop, which also raises `lostThrough` past
+-- them, so the worst case is re-recording an unchanged read, never skipping a changed one.
 local lastRecorded, recordedAt = {}, {}
 local lostThrough = 0
 

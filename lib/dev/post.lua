@@ -16,7 +16,8 @@
 --
 -- The caller stores the returned record only after startPost returns, so a completion callback
 -- must not run inside the Post call itself. The client delivers completions later, from its
--- own tick, and the harness only on h:respond.
+-- own tick; the test harness (tests/harness) delivers one only when a spec calls
+-- `h:respond`.
 
 local post = {}
 

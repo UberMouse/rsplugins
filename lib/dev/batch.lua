@@ -94,7 +94,10 @@ end
 
 -- Entries sit at buffer[first..last]. An entry keeps its index until it leaves, and leaving
 -- is normally from the front, so everything below `first` has been taken or dropped. A
--- failed batch goes back in front of `first` (requeue).
+-- failed batch goes back in front of `first` (requeue). It only returns what take removed, so
+-- `first` stays at 1 or above, and each entry gets its old index back unless a trim dropped
+-- later entries meanwhile, in which case it lands at a higher one. Callers compare indices
+-- and never treat them as positions in an array.
 ---@return table
 function batch.newBuffer()
     return { first = 1, last = 0, bytes = 0 }

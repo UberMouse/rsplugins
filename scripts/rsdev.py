@@ -10,7 +10,8 @@ Usage: scripts/rsdev.py daemon [--port 8766] [--out dumps]     run the daemon in
        scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S]
        scripts/rsdev.py exec <console command...> --shot [--shot-delay 1.0]
 
-The daemon listens on 127.0.0.1 only, port 8766 (the plugins' "rsdev" URL, one for the recorder, tee and bridge).
+The daemon listens on 127.0.0.1 only, port 8766 (the "rsdev" url name, shared by the
+recorder, tee and bridge).
 
   POST /record       a batch from the dev recorder (lib/dev/recorder.lua):
     {"schema": 1, "plugin": "...", "session": "...", "seq": n, "dropped": n, "entries": [...]}

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Fails while a plugin still carries any lib/dev opt-in (the recorder, the log tee, the dev bridge's
-# transport): the dev/ link, the require and tee.install/tee.shutdown calls, the httpAccess
-# permission, the urls.rsdev key and any url in plugin.json's urls that points at this machine
-# (127.0.0.1 or localhost), whatever its name. Its own test is scripts/check-submission.selftest.sh,
-# which scripts/check.sh runs.
+# Fails while a plugin still carries any lib/dev opt-in (the recorder and the log tee, or any
+# dev/ user such as the dev bridge): the dev/ link, the require and tee.install/tee.shutdown
+# calls, the httpAccess permission, the urls.rsdev key and any url in plugin.json's urls that
+# points at this machine (127.x.x.x, localhost, [::1] or 0.0.0.0), whatever its name. Its own
+# test is scripts/check-submission.selftest.sh, which scripts/check.sh runs.
 # Run it on a copy of the plugin prepared for upload, not on the dev tree, where it is expected
 # to fail.
 #
@@ -73,11 +73,12 @@ if [[ -f "$manifest" ]]; then
         report "urls.rsdev in plugins/$plugin/plugin.json"
     fi
     # The dev daemon is on this machine; a submitted plugin can't reach it, whatever the key is
-    # called. Matches the host part only, so "http://127.0.0.1.example.com" is left alone.
+    # called. Matches the whole host (a trailing dot allowed), so "http://127.0.0.1.example.com" is
+    # left alone.
     while IFS= read -r name; do
         report "loopback url urls.$name in plugins/$plugin/plugin.json"
     done < <(jq -r '(.urls // {}) | to_entries[]
-        | select(.value | tostring | test("^[a-zA-Z][a-zA-Z0-9+.-]*://([^/@]*@)?(127\\.0\\.0\\.1|localhost)([:/?#]|$)"; "i"))
+        | select(.value | tostring | test("^[a-zA-Z][a-zA-Z0-9+.-]*://([^/@]*@)?(127(\\.[0-9]+)*|localhost|\\[::1\\]|0\\.0\\.0\\.0)\\.?([:/?#]|$)"; "i"))
         | .key' "$manifest")
 fi
 

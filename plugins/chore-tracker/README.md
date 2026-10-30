@@ -200,19 +200,22 @@ show no icon` (or `id.Sprite.<name>`), and its rows show no icon. Grep regex:
 
 The development checkout opts into the dev log tee (`lib/dev/tee.lua`, docs/dev-environment.md),
 which forwards the plugin's console lines and callback errors to `scripts/rsdev.py` on the
-same machine. None of it ships. Remove all of it from the copy:
+same machine. None of it ships. The generic pieces to strip are listed in
+[Preparing the zip from this repo](../../docs/submission.md#preparing-the-zip-from-this-repo).
+In this plugin they are:
 
-- the `dev/` symlink in this folder,
 - the two tee lines at the top of `main.lua` (`local tee = require("dev/tee")` and
   `if tee then tee.install(...) end`, with the comment above them),
 - the `if tee then tee.shutdown() end` line in `PluginShutdown` (with its comment),
-- `"httpAccess"` from `optionalPermissions` in `plugin.json`, and
-- `urls.rsdev` from `plugin.json` (leaving no `urls` and no `optionalPermissions`).
+- the "Dev checkout only" comment block in the header of `main.lua`, which says the tee asks for
+  `httpAccess` and that `check-submission.sh` fails until it is stripped (that script does not
+  flag it, so delete it by hand), and
+- `"httpAccess"` and `urls.rsdev` in `plugin.json`, leaving no `urls` and no
+  `optionalPermissions`.
 
-Do it on a copy and check it as
-[Preparing the zip from this repo](../../docs/submission.md#preparing-the-zip-from-this-repo)
-describes; `check-submission.sh` must pass before upload. The Mod.io text below ("This plugin
-requests no permissions") is true only after that check passes.
+Do it on a copy and check it as that section describes;
+`check-submission.sh` must pass before upload. The Mod.io text below ("This plugin requests no
+permissions") is true only after that check passes.
 
 ## Files
 

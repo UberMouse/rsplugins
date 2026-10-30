@@ -91,7 +91,9 @@ lines, `urls.rsdev`, `httpAccess`). Build the upload from a copy, never from the
    rsync -a --exclude dev plugins/<name> dumps/submission/plugins/
    ```
 
-   (`cp -rP` copies the `dev` symlink as a link, not its target; delete it from the copy.)
+   The dev shell has neither `rsync` nor `zip`. Without rsync, use
+   `cp -rP plugins/<name> dumps/submission/plugins/` (`-P` copies the `dev` symlink as a link,
+   not its target) and then `rm dumps/submission/plugins/<name>/dev`.
 2. Strip the rest of the opt-in from the copy's `main.lua` and `plugin.json`: the
    `require("dev/...")` lines, `tee.install`/`tee.shutdown` and `recorder.install`/`shutdown`
    calls with their comments, `"httpAccess"` from `optionalPermissions` (unless a feature of the
@@ -101,8 +103,8 @@ lines, `urls.rsdev`, `httpAccess`). Build the upload from a copy, never from the
    every dev piece left. Then run `scripts/check.sh dumps/submission/plugins/<name>`: it runs
    luac, the manifest, selene and stylua checks on the copy (then the whole suite). LuaLS ignores
    `dumps/`, so type checking only happens on the dev tree.
-4. Zip from inside the plugin folder, so `main.lua` and `plugin.json` sit at the zip root (any
-   zip tool; with Info-ZIP):
+4. Zip from inside the plugin folder, so `main.lua` and `plugin.json` sit at the zip root. Any
+   zip tool works if the plugin's files are at the archive root; with Info-ZIP:
 
    ```sh
    cd dumps/submission/plugins/<name> && zip -r ../<name>.zip .

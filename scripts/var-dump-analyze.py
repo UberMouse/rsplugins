@@ -807,8 +807,13 @@ def var_kind(v):
 
 
 def unsupported_count(vars_):
-    """Vars whose value type the plugin can't convert (type_label UNSUPPORTED)."""
-    return sum(1 for v in vars_ if type_label(v) == "UNSUPPORTED")
+    """Vars whose value type the plugin can't convert. The plugin tags any unnamed
+    valueType with this error, not just -1, so the error string counts as well."""
+    return sum(
+        1
+        for v in vars_
+        if type_label(v) == "UNSUPPORTED" or v.get("error") == "unsupported ValueType"
+    )
 
 
 def md_cell(text):
@@ -964,7 +969,7 @@ def write_catalog(out, snapshot_day, vars_, var_rows, tree, bases):
     add(overlap_line + "\n")
 
     add("## Reading values: what we've seen\n")
-    add(f"From the {snapshot_day} snapshot of one account; check before relying on them.\n")
+    add("Observed in one account's dumps (2026-10-20); check before relying on them.\n")
     add(f"- {BOOLEAN_NOTE}")
     add(
         f"- COMPONENT vars ({types.get('COMPONENT', 0)}) return no value through the API. Types "
@@ -1232,8 +1237,8 @@ def write_report(
     add("### Caveats\n")
     add(f"- {BOOLEAN_NOTE}")
     add(
-        f"- COMPONENT vars return no value through the API, and {summary['unsupported']} vars have value types the "
-        "plugin can't convert (`unsupported ValueType`)."
+        f"- COMPONENT vars return no value through the API, and {summary['unsupported']} vars "
+        "have value types the plugin can't convert (`unsupported ValueType`)."
     )
     add(
         '- "Default" means 0 / -1 / empty / null coordinate / config id -1. A var whose real '

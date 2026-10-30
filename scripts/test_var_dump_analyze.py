@@ -116,6 +116,11 @@ class SharedSections(unittest.TestCase):
             vars_[i].pop("valueTypeName")
             vars_[i]["valueType"] = -1
         self.assertEqual(analyze.unsupported_count(vars_), 2)
+        # the plugin also writes the error for an unnamed valueType other than -1
+        vars_[1].pop("valueTypeName", None)
+        vars_[1]["valueType"] = 7
+        vars_[1]["error"] = "unsupported ValueType"
+        self.assertEqual(analyze.unsupported_count(vars_), 3)
 
     def test_var_kind(self):
         self.assertEqual(

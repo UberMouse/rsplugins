@@ -219,6 +219,64 @@ describe("chore-tracker view", function()
         assert.are.equal("Daily  1/3", view.headingText(section))
     end)
 
+    describe("strip", function()
+        local NOW = M["2026-10-25 01:43"]
+
+        ---@param ids string[] picked, in the player's order
+        ---@param done string[] marked done at NOW
+        ---@param now integer?
+        ---@return table[]
+        local function sections(ids, done, now)
+            local s = support.stateWith(chores, ids)
+            for _, id in ipairs(done) do
+                s = state.mark(s, id, NOW)
+            end
+            return view.view(s, chores, now == nil and NOW or now)
+        end
+
+        it("shows the first chore not done, in the player's order within its period", function()
+            local strip = view.strip(sections({ "w1", "d2", "d1" }, {}))
+            assert.are.equal("d2", strip.id)
+            assert.are.equal("Daily: D2", strip.text)
+            strip = view.strip(sections({ "w1", "d2", "d1" }, { "d2" }))
+            assert.are.same({ "d1", "Daily: D1" }, { strip.id, strip.text })
+        end)
+
+        it("moves on to Weekly, then Monthly, once the earlier periods are done", function()
+            local picks = { "m1", "w1", "d1" }
+            local strip = view.strip(sections(picks, { "d1" }))
+            assert.are.same({ "w1", "Weekly: W1" }, { strip.id, strip.text })
+            strip = view.strip(sections(picks, { "d1", "w1" }))
+            assert.are.same({ "m1", "Monthly: M1" }, { strip.id, strip.text })
+        end)
+
+        it("says so when everything is done or nothing is picked", function()
+            local strip = view.strip(sections({ "d1", "m1" }, { "d1", "m1" }))
+            assert.are.same({ nil, view.ALL_DONE }, { strip.id, strip.text })
+            strip = view.strip(sections({}, {}))
+            assert.are.same({ nil, view.NOTHING_PICKED }, { strip.id, strip.text })
+            assert.are.same({ view.NOTHING_PICKED }, strip.texts)
+        end)
+
+        it("shows a notice instead of a chore when given one", function()
+            local strip = view.strip(sections({ "d1" }, {}), "Waiting")
+            assert.are.same({ nil, "Waiting" }, { strip.id, strip.text })
+            assert.are.same({ "Daily: D1", "Waiting" }, strip.texts)
+        end)
+
+        it(
+            "fits every picked chore's text, done or not, so its width holds as they tick",
+            function()
+                local picks = { "w1", "d1", "d2" }
+                local expected = { "Daily: D1", "Daily: D2", "Weekly: W1" }
+                assert.are.same(expected, view.strip(sections(picks, {})).texts)
+                assert.are.same(expected, view.strip(sections(picks, { "d1", "d2" })).texts)
+                table.insert(expected, view.ALL_DONE)
+                assert.are.same(expected, view.strip(sections(picks, { "d1", "d2", "w1" })).texts)
+            end
+        )
+    end)
+
     it("marks a shop run in a settings row's text, and a plain chore not", function()
         assert.are.equal(
             "Feather Shop Run (shop)",

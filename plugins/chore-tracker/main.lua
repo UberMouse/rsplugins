@@ -13,6 +13,8 @@
 -- (shell/popups.lua); settings turn the popups or their sound off. Picks, their order and
 -- ticks are saved per character, by display name; the window's place, size and collapsed
 -- state (shell/window.lua) and the celebration settings are saved for all characters.
+-- Collapsed, the window becomes a strip showing the next chore not done, Daily first, then
+-- Weekly, then Monthly, in the player's order, which a click ticks (shell/strip.lua).
 --
 -- It reads only what the game already gives your client: the game clock, your own display
 -- name and position, your backpack, an open shop's stock and your own game vars. It asks for
@@ -117,8 +119,8 @@ end
 -- List view
 ---------------------------------------------------------------------------
 
--- Bring the list's headings, rows and tooltips up to date with the tracker and the clock,
--- in place: each row changes only what differs (rows.lua).
+-- Bring the list's headings, rows and tooltips, and the collapsed strip, up to date with the
+-- tracker and the clock, in place: each row changes only what differs (rows.lua).
 local function refreshList()
     local win = window.current()
     assert(win, "the list is only refreshed while its window exists")
@@ -133,6 +135,7 @@ local function refreshList()
             end
         end
     end
+    window.refreshStrip()
 end
 
 -- Re-fit the rows' names to their widths (ui.Text can't clip, so a name is cut with "..." to
@@ -322,6 +325,18 @@ local function inSettings()
     return phase ~= "loggedOut" and mode == "settings"
 end
 
+-- What the collapsed strip shows: the next chore not done, or a notice while logged out or
+-- waiting for the clock.
+---@return ChoreStrip
+local function stripContent()
+    local notice = phase == "loggedOut" and "Log in to see your chores"
+        or phase == "waiting" and "Waiting for the game clock"
+        or nil
+    local content = view.strip(view.view(tracker, chores, clockNow(), shops), notice)
+    if content.id then content.icon = icons[content.id] end
+    return content
+end
+
 -- A new window's content for the current phase and mode.
 ---@param w prettyui.Window
 local function buildContent(w)
@@ -357,6 +372,9 @@ window.init({
             rows.unhover(rowView)
         end
     end,
+    strip = stripContent,
+    -- The strip only shows a chore not done, so its click ticks it, as on its list row.
+    onStripTick = onTick,
 })
 
 ---------------------------------------------------------------------------

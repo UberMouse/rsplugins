@@ -43,11 +43,17 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Details.** Hover a chore for its description and its RuneScape Wiki links. The links are
   shown as text, because plugins can't open web pages.
 - **Collapsing it.** The menu button at the top-right corner of the window, where
-  a close button usually sits, folds the window into just that button, at the same spot. Click
-  the button to open the window again: it opens leftwards and down from the button.
+  a close button usually sits, folds the window into a small strip with that button at the same
+  spot. The strip shows your next chore not yet done, as "Daily: Sand from Bert": the first
+  unticked one in your Daily order, or once those are all done the first in Weekly, then
+  Monthly. Click it to tick that chore, as you would its row in the list, and the strip moves on
+  to the next. With nothing left it says "All chores done" (or "No chores picked"). The strip is
+  as wide as the longest of your picked chores, so it keeps its size while you work through
+  them. It shows no tooltip. Click the menu button to open the window again: it opens leftwards
+  and down from the button.
 - **Moving it.** Drag the window by its title bar, and resize it from its edges or corners,
   which show a resize cursor when you hover them. While it is collapsed, hold **Alt** and drag
-  the button to move it. Alt-dragging only works with the console closed.
+  the strip to move it. Alt-dragging only works with the console closed.
 
 - **Celebrations.** When the plugin ticks a chore you picked, a small popup, "CHORE COMPLETE"
   with the chore's name, shows upper-middle of the screen with a short jingle. When your picked
@@ -152,7 +158,7 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
   them, under your character's display name, so each character on the same computer has its own
   list. While you are logged out the window says "Log in to see your chores".
 - **Where the window is**, for all characters: its position, its size, whether it is collapsed,
-  and where the collapsed button is. These are saved within a second of a change and restored
+  and where the collapsed strip's button is. These are saved within a second of a change and restored
   next time, moved back on screen if they no longer fit.
 - **Whether celebrations are on, and with sound**, for all characters.
 - Until the game clock is available (just after logging in), the window shows "Waiting for the
@@ -229,7 +235,8 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | File | What |
 |---|---|
 | `main.lua` | The two views, list and settings, ticking and picking, and following the login and clock |
-| `shell/window.lua` | The window itself: making it, collapsing it to its button and opening it again, and saving where it is |
+| `shell/window.lua` | The window itself: making it, collapsing it to its strip and opening it again, and saving where it is |
+| `shell/strip.lua` | The collapsed strip's content: the next chore's row, which a click ticks, or a message |
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
@@ -241,9 +248,9 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
 | `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
-| `core/view.lua` | What the list shows, as plain data |
+| `core/view.lua` | What the list and the collapsed strip show, as plain data |
 | `core/fit.lua` | Cutting a row's name short with "..." so it fits before the tick box |
-| `core/layout.lua` | The saved window layout, read back and kept on screen |
+| `core/layout.lua` | The saved window layout, read back and kept on screen, and where the collapsed strip goes |
 | `core/listlayout.lua` | Where the list's headings and rows go in the window |
 | `core/reorder.lua` | Where a dragged row and its neighbours go, and when the list scrolls under a drag |
 | `core/celebrate.lua` | Which celebrations a change to the picks and ticks earns |

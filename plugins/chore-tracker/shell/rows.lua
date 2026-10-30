@@ -1,5 +1,6 @@
 -- One chore's row in the list or settings view, hand-built from plain components inside the
--- window's content: the chore's icon at the left, its text, and a tick box at the right edge.
+-- window's content, or in the collapsed strip (shell/strip.lua, whose row changes its icon as it
+-- moves to the next chore): the chore's icon at the left, its text, and a tick box at the right edge.
 -- A list row also has a drag grip left of the icon (shell/grips.lua takes the presses on it).
 -- The row layer takes the clicks; the icon, text and box let them through to it. While the
 -- mouse is over the row it shows the hyperlink hand, and its box shows a hovered sprite. A
@@ -64,7 +65,10 @@ local reported = {} ---@type table<string, boolean>
 
 ---@class ChoreRowView
 ---@field layer ui.Layer
----@field icon ui.Sprite? nil when the icon's name didn't resolve
+---@field icon ui.Sprite? the icon showing; nil when there is none or its name didn't resolve
+---@field iconX integer where the icon goes in the row
+---@field iconSprites { obj: ui.Sprite?, sprite: ui.Sprite? } one sprite per kind of icon, made
+--- as first needed
 ---@field label ui.Text
 ---@field box ui.Sprite
 ---@field textX integer where the label starts in the row
@@ -121,6 +125,48 @@ function M.unhover(row)
     drawBox(row)
 end
 
+-- A text in the rows' font and colour under `parent`, letting clicks through.
+---@param parent ui.ComponentCollection
+---@return ui.Text
+function M.newText(parent)
+    local text = ui.Text.new(parent)
+    text.font = id.Font[FONT_NAME]
+    text.rgba = TEXT_COLOUR
+    text:AlignTo(ui.AlignMode.TOPLEFT, ui.AlignMode.CENTRE)
+    text.clickthrough = true
+    return text
+end
+
+-- Show `icon` on the row, or no icon for nil or a name that doesn't resolve. An item's icon and
+-- an interface sprite each get their own sprite, so a row whose icon changes kind never has
+-- both set on one sprite (how the client draws that is unchecked).
+---@param row ChoreRowView
+---@param icon ChoreIcon?
+function M.setIcon(row, icon)
+    local found = icon and resolve(icon)
+    local kind = icon and icon.obj and "obj" or "sprite"
+    row.icon = nil
+    for k, sprite in pairs(row.iconSprites) do
+        sprite.hidden = k ~= kind or found == nil
+    end
+    if not (icon and found) then return end
+    local sprite = row.iconSprites[kind]
+    if not sprite then
+        sprite = ui.Sprite.new(row.layer)
+        sprite:SetPos(row.iconX, (ROW_HEIGHT - ICON_SIZE) // 2)
+        sprite:SetSize(ICON_SIZE, ICON_SIZE)
+        sprite.clickthrough = true
+        row.iconSprites[kind] = sprite
+    end
+    if icon.obj then
+        sprite:SetAssociatedObject(found)
+    else
+        sprite.spriteID = found
+    end
+    sprite.alpha = row.dimmed and DONE_ALPHA or 1
+    row.icon = sprite
+end
+
 -- Show `cursor` while the mouse is over `layer`. Both settings are made: whether
 -- mouseOverCursor alone is enough is unsettled (docs/api-concepts.md).
 ---@param layer ui.Layer
@@ -130,22 +176,24 @@ function M.setCursor(layer, cursor)
     layer.opConfig:SetOpCursor(0, cursor)
 end
 
--- Make a row at content height `y` under `content`, showing `icon` (nothing if its name doesn't
--- resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick click can
--- arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
+-- Make a row at content height `y` under `content`, showing `icon` (nothing if it is nil or its
+-- name doesn't resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick
+-- click can arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
 -- `ui.Layer`"). `opts.wheel`, when given, takes the mouse wheel over the row, which the row
 -- would otherwise swallow. With `opts.grip`, the row gets a drag grip at its left and the rest
--- moves right to make room. Call M.show to give it its text and state.
+-- moves right to make room. `opts.margins` sets the space left free at the content's sides
+-- (PrettyUI's flow padding by default). Call M.show to give it its text and state.
 ---@param content ui.Layer
 ---@param y integer
----@param icon ChoreIcon
+---@param icon ChoreIcon?
 ---@param onClick fun()
----@param opts { wheel: ChoreWheelHandler?, grip: boolean? }
+---@param opts { wheel: ChoreWheelHandler?, grip: boolean?, margins: { left: integer, right: integer }? }
 ---@return ChoreRowView
 function M.new(content, y, icon, onClick, opts)
+    local margins = opts.margins or { left = PADDING, right = PADDING }
     local layer = ui.Layer.new(content)
-    layer:SetPos(PADDING, y)
-    layer:SetSize(-PADDING * 2, ROW_HEIGHT, 1.0, 0)
+    layer:SetPos(margins.left, y)
+    layer:SetSize(-(margins.left + margins.right), ROW_HEIGHT, 1.0, 0)
     layer.clickthrough = false
     M.setCursor(layer, ROW_CURSOR)
     layer:Subscribe(ui.Hook.ONCLICK, function()
@@ -163,28 +211,11 @@ function M.new(content, y, icon, onClick, opts)
         left = GRIP_WIDTH
     end
 
-    local sprite = nil ---@type ui.Sprite?
-    local found = resolve(icon)
-    if found then
-        sprite = ui.Sprite.new(layer)
-        sprite:SetPos(left, (ROW_HEIGHT - ICON_SIZE) // 2)
-        sprite:SetSize(ICON_SIZE, ICON_SIZE)
-        sprite.clickthrough = true
-        if icon.obj then
-            sprite:SetAssociatedObject(found)
-        else
-            sprite.spriteID = found
-        end
-    end
-
     -- At the same x whether or not there is an icon, so the names line up.
     local textX = left + TEXT_X
-    local label = ui.Text.new(layer)
+    local label = M.newText(layer)
     label:SetPos(textX, 0)
     label:SetSize(-(textX + BOX_SIZE + LABEL_GAP), ROW_HEIGHT, 1.0, 0)
-    label.font = id.Font[FONT_NAME]
-    label:AlignTo(ui.AlignMode.TOPLEFT, ui.AlignMode.CENTRE)
-    label.clickthrough = true
 
     local box = ui.Sprite.new(layer)
     box:SetPos(-BOX_SIZE, (ROW_HEIGHT - BOX_SIZE) // 2, 1.0, 0)
@@ -195,13 +226,15 @@ function M.new(content, y, icon, onClick, opts)
         {
             layer = layer,
             content = content,
-            icon = sprite,
+            iconX = left,
+            iconSprites = {},
             label = label,
             box = box,
             textX = textX,
             shortened = false,
             hovered = false,
         }
+    M.setIcon(row, icon)
     -- Under the default id: Tooltip.attach subscribes the same hooks under its own id
     -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other. Both return
     -- true: in the client a listener that returns nothing stops the ones after it, the
@@ -253,6 +286,32 @@ local function applyTooltip(row)
     row.tooltipText = tooltip.text
 end
 
+-- Log, once per load, that the client font can't measure text.
+---@param err any the measurement's error
+local function reportMeasure(err)
+    assert(say, "rows.init sets say first")
+    if measureReported then return end
+    measureReported = true
+    say("cannot measure text with the client font; names stay unshortened: " .. tostring(err))
+end
+
+-- The width a row without a grip needs to show the widest of `texts` uncut, or nil when the
+-- client font can't measure (logged once).
+---@param texts string[]
+---@return integer?
+function M.widthFor(texts)
+    local widest = 0
+    for _, text in ipairs(texts) do
+        local ok, width = pcall(measure, text)
+        if not ok then
+            reportMeasure(width)
+            return nil
+        end
+        widest = math.max(widest, width)
+    end
+    return TEXT_X + math.ceil(widest) + LABEL_GAP + BOX_SIZE
+end
+
 -- Show the row's text cut to the label's width, leaving the tooltip to the caller. Does
 -- nothing when that width hasn't changed since the text was last fitted, so it is cheap to
 -- call for every row. Until the row has a width the full text shows, and the next call tries
@@ -260,7 +319,6 @@ end
 -- that can't measure leaves the full text, logged once.
 ---@param row ChoreRowView
 local function fitLabel(row)
-    assert(say, "rows.init sets say first")
     local text = row.text
     assert(text, "a row is fitted after show gave it text")
     if row.layer.width <= 0 then return end
@@ -268,10 +326,7 @@ local function fitLabel(row)
     if avail == row.availWidth then return end
     local ok, shown, shortened = pcall(fit.fit, text, avail, measure)
     if not ok then
-        if not measureReported then
-            measureReported = true
-            say("cannot measure text with the client font; names stay unshortened: " .. shown)
-        end
+        reportMeasure(shown)
         shown, shortened = text, false
     end
     row.availWidth = avail

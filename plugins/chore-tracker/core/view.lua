@@ -167,6 +167,49 @@ function M.headingText(section)
     return string.format("%s  %d/%d", section.title, section.done, section.total)
 end
 
+-- The collapsed strip's messages, for when it has no chore to show.
+M.NOTHING_PICKED = "No chores picked"
+M.ALL_DONE = "All chores done"
+
+---@class ChoreStrip
+---@field id string? the chore shown; nil when `text` is a message
+---@field text string
+---@field texts string[] every text the strip should fit uncut, for its width
+---@field icon ChoreIcon? the chore's icon, added by the shell
+
+-- A row's text in the collapsed strip: its period's title, then its list text.
+---@param section ChoreSection
+---@param row ChoreRow
+---@return string
+function M.stripText(section, row)
+    return section.title .. ": " .. M.rowText(row)
+end
+
+-- What the collapsed strip shows: the first chore not done, Daily first, then Weekly, then
+-- Monthly, each in the player's order; else `notice` when given (logged out, waiting for the
+-- clock), or a message when nothing is picked or everything is done. Its `texts` hold every
+-- picked chore's strip text, done or not, and any message shown, so the strip can be wide
+-- enough for all of them and keep its width while the chores are ticked off.
+---@param sections ChoreSection[]
+---@param notice string?
+---@return ChoreStrip
+function M.strip(sections, notice)
+    local texts, first = {}, nil ---@type string[], ChoreStrip?
+    for _, section in ipairs(sections) do
+        for _, row in ipairs(section.rows) do
+            local text = M.stripText(section, row)
+            texts[#texts + 1] = text
+            if first == nil and not row.done then
+                first = { id = row.id, text = text, texts = texts }
+            end
+        end
+    end
+    if notice == nil and first then return first end
+    local message = notice or (#texts == 0 and M.NOTHING_PICKED or M.ALL_DONE)
+    texts[#texts + 1] = message
+    return { text = message, texts = texts }
+end
+
 -- A settings row's text: the chore's name, marked when it is a shop run.
 ---@param chore Chore
 ---@return string

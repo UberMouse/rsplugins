@@ -156,6 +156,12 @@ end
 function M.rows(h)
     local content = M.window(h).content
     local grip = catalog.config("Sprite", "HAMBURGER_MENU_ICON")
+    local boxes = {
+        [M.BOX_EMPTY] = true,
+        [M.BOX_EMPTY_HOVERED] = true,
+        [M.BOX_TICKED] = true,
+        [M.BOX_TICKED_HOVERED] = true,
+    }
     local out = {}
     for _, layer in ipairs(h.ui:children(content)) do
         if assert(uiFake.stateOf(layer)).class == "ui.Layer" then
@@ -166,13 +172,10 @@ function M.rows(h)
                     row.label, row.text = proxy, part.content
                 elseif part.class == "ui.Sprite" and part.spriteID == grip then
                     row.grip = proxy
-                elseif part.class == "ui.Sprite" then
-                    -- The icon is left of the box, which sits at the row's right edge.
-                    if row.box then
-                        row.icon, row.box = row.box, proxy
-                    else
-                        row.box = proxy
-                    end
+                elseif part.class == "ui.Sprite" and boxes[part.spriteID] then
+                    row.box = proxy
+                elseif part.class == "ui.Sprite" and not part.hidden then
+                    row.icon = proxy
                 end
             end
             -- The Celebrations switches are a layer too, but hold no text of ours.

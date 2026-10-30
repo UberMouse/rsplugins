@@ -8,7 +8,7 @@ that built it lived in the gitignored `.durable-state/`; what a later run needs 
 From the original request: a plugin tracking RS3's daily, weekly and monthly chores, where you
 pick which chores show, chores tick themselves where the game makes that possible (a detection
 method per class of chore), you can still tick any chore by hand, and the window is a draggable,
-resizable PrettyUI window that collapses to a small hamburger button. The chore list comes from
+resizable PrettyUI window that collapses to a strip showing the next chore not done. The chore list comes from
 [dailyscape](https://github.com/dailyscape/dailyscape.github.io) (MIT), keeping its wiki links.
 Alongside it: a test harness that mocks the world and API (`docs/testing.md`) and a dev recorder
 that dumps what a plugin sees to a local server (`lib/dev/`).

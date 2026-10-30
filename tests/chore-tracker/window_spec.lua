@@ -6,6 +6,7 @@ local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
 local layout = require("core/layout")
 local listlayout = require("core/listlayout")
+local view = require("core/view")
 local loaded, row, togglePicks, ticked =
     helpers.loaded, helpers.row, helpers.togglePicks, helpers.ticked
 
@@ -385,6 +386,79 @@ describe("chore-tracker window", function()
         end
         h:advance(20)
         assert.are.same({}, h.ui:find("Panel"))
+    end)
+
+    -- What the collapsed strip shows, read off its panel's root: the row's label and text when
+    -- the row shows, else the message's text.
+    ---@param h table
+    ---@return { text: string, label: table? }
+    local function strip(h)
+        for _, proxy in ipairs(h.ui:children(h.ui:get("Panel").root)) do
+            local part = assert(uiFake.stateOf(proxy))
+            if part.class == "ui.Text" and not part.hidden then
+                return { text = part.content }
+            elseif part.class == "ui.Layer" and not part.hidden then
+                for _, child in ipairs(h.ui:children(proxy)) do
+                    local cs = assert(uiFake.stateOf(child))
+                    if cs.class == "ui.Text" then return { text = cs.content, label = child } end
+                end
+            end
+        end
+        error("the strip shows nothing")
+    end
+
+    it("collapses to a strip of the next chore, which a click ticks and moves on from", function()
+        local h = loaded()
+        togglePicks(h, { "player-owned-ports", "daily-challenge", "player-owned-farm" })
+        helpers.click(h, row(h, "Daily Challenge").label)
+        helpers.collapse(h)
+        local shown = strip(h)
+        assert.are.equal("Daily: Player Owned Ports", shown.text)
+
+        local writes = h.dbWrites
+        assert.is_true(h.ui:click(shown.label))
+        assert.are.equal(writes + 1, h.dbWrites)
+        shown = strip(h)
+        assert.are.equal("Daily: Player Owned Farm", shown.text)
+        assert.is_true(h.ui:click(shown.label))
+        assert.are.same({ text = view.ALL_DONE }, strip(h))
+        h:advance(20)
+        assert.matches("%[CHORES%] celebrate daily cleared", h:output())
+
+        helpers.expand(h)
+        assert.is_true(ticked(h, "Player Owned Ports"))
+        assert.is_true(ticked(h, "Player Owned Farm"))
+        h.ui:get("Title", { text = "Daily  3/3" })
+    end)
+
+    it("keeps the strip's width and its hamburger's spot as chores are ticked", function()
+        local h = loaded()
+        togglePicks(h, { "player-owned-ports", "daily-challenge" })
+        local menu = h.ui:layout(h.ui:get("SpriteButton", { sprite = "MENU" }))
+        helpers.collapse(h)
+        local panel = h.ui:get("Panel")
+        local before = h.ui:layout(panel)
+        local button = h.ui:layout(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+        assert.are.same({ menu.globalX, menu.globalY }, { button.globalX, button.globalY })
+        assert.is_true(h.ui:click(assert(strip(h).label, "the strip shows a chore")))
+        assert.is_true(h.ui:click(assert(strip(h).label, "the strip shows a chore")))
+        assert.are.same(before, h.ui:layout(panel))
+    end)
+
+    it("shows the logged-out notice while collapsed, narrowed with its hamburger put", function()
+        local h = loaded()
+        -- A long name, so the notice needs a narrower strip.
+        togglePicks(h, { "cromperty-pure-essence" })
+        helpers.collapse(h)
+        local panel = h.ui:get("Panel")
+        local button = h.ui:get("SpriteButton", { sprite = "MENU", visible = true })
+        local at, wide = h.ui:layout(button), h.ui:layout(panel).width
+        h.world:logout()
+        h:advance(helpers.POLL_MS)
+        assert.are.same({ text = "Log in to see your chores" }, strip(h))
+        assert.is_true(h.ui:layout(panel).width < wide)
+        local now = h.ui:layout(button)
+        assert.are.same({ at.globalX, at.globalY }, { now.globalX, now.globalY })
     end)
 
     it("swaps the title-bar slot for a back button in settings, and back again", function()

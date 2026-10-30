@@ -919,6 +919,11 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   (`backgroundAlpha = 0`, `scrollable = false`) with a 20 px SpriteButton made on
   `panel.root` at 0,0, not in its content, covers the frame and looks like the same button on a
   window's title bar. It still Alt-drags, and its screen spot is the Panel's own.
+- **A Panel clips tooltips drawn on its root** (Chore Tracker's collapsed strip, user-checked
+  2026-10-31). A hand-built row made on `panel.root` of a 40 px high Panel, with its tooltip
+  attached through `prettyui.Tooltip.attach(row, panel.root, ...)`, showed the tooltip cut to
+  the panel's bounds. Otherwise the strip worked as built: a hand-built `ui.Layer` row on
+  `panel.root` that ticks on click, beside a SpriteButton on the same root at `xAnchor = 1.0`.
 - **Rows that change colour.** A CheckboxButton's `colour` is fixed once made. Two copies of
   a row at the same `y` (an explicit `y` keeps the second out of the flow), one shown at a
   time with `root.hidden`, looked right in the client (user-checked 2026-10-25).

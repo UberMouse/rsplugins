@@ -2,6 +2,8 @@
 -- stored layout back, and keeping one inside the plugin layer. Pure: the shell reads the
 -- live components and the parent's size, and passes them in.
 
+local listlayout = require("core/listlayout")
+
 local M = {}
 
 -- The persisted shape's version. fromStored ignores any other.
@@ -118,6 +120,42 @@ function M.keepInside(saved, parentWidth, parentHeight)
         collapsed = saved.collapsed,
         buttonX = within(saved.buttonX, M.BUTTON_SIZE, parentWidth),
         buttonY = within(saved.buttonY, M.BUTTON_SIZE, parentHeight),
+    }
+end
+
+-- The collapsed strip: a panel holding the next chore's row with the button at its right.
+-- STRIP_INSET is the space inside the panel's edges (its frame is 4 px) around the row and
+-- the button, and STRIP_GAP the space between them.
+M.STRIP_INSET, M.STRIP_GAP = 6, 4
+M.STRIP_HEIGHT = listlayout.ROW_HEIGHT + 2 * M.STRIP_INSET
+-- The button's spot in the strip: from the panel's right edge (xAnchor 1.0), and from its top,
+-- centred.
+M.STRIP_BUTTON_X = -(M.STRIP_INSET + M.BUTTON_SIZE)
+M.STRIP_BUTTON_Y = (M.STRIP_HEIGHT - M.BUTTON_SIZE) // 2
+
+---@class ChoreStripBox
+---@field x integer the strip's panel, in the plugin layer
+---@field y integer
+---@field width integer
+---@field height integer
+
+-- Where the collapsed strip's panel goes, for a row `rowWidth` wide, so its button lands on
+-- (`buttonX`, `buttonY`): the row runs left from the button. Kept inside a `parentWidth` x
+-- `parentHeight` parent: narrowed to fit, and near an edge shifted off the button's spot.
+---@param buttonX integer
+---@param buttonY integer
+---@param rowWidth integer
+---@param parentWidth integer
+---@param parentHeight integer
+---@return ChoreStripBox
+function M.stripForButton(buttonX, buttonY, rowWidth, parentWidth, parentHeight)
+    local full = M.STRIP_INSET + rowWidth + M.STRIP_GAP + M.BUTTON_SIZE + M.STRIP_INSET
+    local width = math.min(full, math.max(parentWidth, -M.STRIP_BUTTON_X))
+    return {
+        x = within(buttonX - (width + M.STRIP_BUTTON_X), width, parentWidth),
+        y = within(buttonY - M.STRIP_BUTTON_Y, M.STRIP_HEIGHT, parentHeight),
+        width = width,
+        height = M.STRIP_HEIGHT,
     }
 end
 

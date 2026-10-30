@@ -5,13 +5,16 @@
 --
 -- The title-bar slot (where PrettyUI's close X would be) holds the hamburger, which collapses
 -- the window, or in the settings view a back button to the list. Collapsed, the window is
--- closed and a lone hamburger stands where its slot was: Alt-drag it to move it (with the
--- console closed), click it to open the window again, grown left and down from the button.
+-- closed and a strip stands with its hamburger where the slot was, and the next chore to do
+-- (shell/strip.lua) to its left: Alt-drag it to move it (with the console closed), click the
+-- chore to tick it, or click the hamburger to open the window again, grown left and down from
+-- the button.
 
 local grips = require("shell/grips")
 local prettyuiInternals = require("shell/prettyui_internals")
 local layout = require("core/layout")
 local store = require("shell/store")
+local strip = require("shell/strip")
 
 local M = {}
 
@@ -31,6 +34,8 @@ local BACK_TOOLTIP = { text = "Back to the list" }
 ---@field clearViews fun() forget the old window's content views; called once it is destroyed
 ---@field build fun(w: prettyui.Window) fill a new window's content for the current view
 ---@field onCollapse fun() called as the window closes to its button, just before Close
+---@field strip fun(): ChoreStrip what the collapsed strip shows now
+---@field onStripTick fun(id: string) the collapsed strip's chore was clicked
 
 local opts = nil ---@type ChoreWindowOpts?
 local win = nil ---@type prettyui.Window?
@@ -38,6 +43,9 @@ local win = nil ---@type prettyui.Window?
 local openButton = nil ---@type prettyui.SpriteButton?
 local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
 local collapsedButton = nil ---@type prettyui.SpriteButton?
+local stripView = nil ---@type ChoreStripView? the collapsed panel's chore row and message
+-- The row width the collapsed panel was sized for.
+local stripWidth = nil ---@type integer?
 -- A button's action mustn't destroy the button while PrettyUI is still handling its click, so
 -- the collapsed panel left behind by expanding waits here for the next Logic tick (dropRetired).
 local retiring = nil ---@type prettyui.Panel?
@@ -89,18 +97,20 @@ local function expand()
     -- An earlier panel still waiting for the tick is past its click, so it can go now.
     if retiring then retiring:Destroy() end
     retiring, collapsed, collapsedButton = collapsed, nil, nil
+    stripView, stripWidth = nil, nil
     M.followGrips()
     opts.say("expanded from", x, y)
 end
 
--- Close the window and put a lone hamburger at (x, y) in the plugin layer.
+-- Close the window and put the collapsed strip so its hamburger is at (x, y) in the plugin
+-- layer.
 --
--- The collapsed button is a PrettyUI Panel exactly the button's size, with no
--- background, scrolling off, and the hamburger as a child of the Panel's own root at its
--- origin, so the button covers the Panel's 4 px frame. A Panel always draws that frame, but
--- it is what makes Alt-drag work, and the button's screen spot is then the Panel's own.
--- The Panel is made on collapse and destroyed on expand: kept hidden while the window is
--- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
+-- The strip is a PrettyUI Panel (it is what makes Alt-drag work), scrolling off, with the
+-- hamburger and the strip's row as children of the Panel's own root, at the spots
+-- core/layout.lua gives: the hamburger anchored to the right edge, so a resize leaves it put
+-- once the panel is moved by the width it changed. The Panel is made on collapse and
+-- destroyed on expand: kept hidden while the window is open, it would still take Alt-drags,
+-- and so clicks, over the window.
 ---@param x integer
 ---@param y integer
 local function collapseAt(x, y)
@@ -116,18 +126,46 @@ local function collapseAt(x, y)
     win:Close()
     -- Not followGrips: that reads `collapsed`, which is only assigned below.
     grips.follow(false)
-    collapsed = prettyui.Panel.new(opts.parent, {
-        x = x,
-        y = y,
-        width = BUTTON_SIZE,
-        height = BUTTON_SIZE,
-        backgroundAlpha = 0,
+    local parent = opts.parent
+    local content = opts.strip()
+    local rowWidth = strip.rowWidth(content)
+    local box = layout.stripForButton(x, y, rowWidth, parent.width, parent.height)
+    collapsed = prettyui.Panel.new(parent, {
+        x = box.x,
+        y = box.y,
+        width = box.width,
+        height = box.height,
         scrollable = false,
     })
     collapsedButton = prettyui.SpriteButton.new(collapsed.root, "MENU", expand, {
+        x = layout.STRIP_BUTTON_X,
+        y = layout.STRIP_BUTTON_Y,
+        xAnchor = 1.0,
         size = BUTTON_SIZE,
         tooltip = "Chores (Alt-drag to move)",
     })
+    stripView, stripWidth = strip.new(collapsed.root, opts.onStripTick), rowWidth
+    strip.show(stripView, content)
+end
+
+-- Bring the collapsed strip up to date: the chore it shows, and its width when the texts it
+-- fits changed (a login change), keeping its hamburger where it is. Nothing while open.
+function M.refreshStrip()
+    assert(opts, "window.init runs before any window function")
+    if not collapsed then return end
+    assert(collapsedButton and stripView, "the strip is made with the collapsed panel")
+    local content = opts.strip()
+    local rowWidth = strip.rowWidth(content)
+    if rowWidth ~= stripWidth then
+        local parent = opts.parent
+        local x, y = screenPos(collapsedButton.root)
+        local box = layout.stripForButton(x, y, rowWidth, parent.width, parent.height)
+        -- As in expand: SetSize after the SetPos makes the spot stick.
+        collapsed.root:SetPos(box.x, box.y)
+        collapsed:SetSize(box.width, box.height)
+        stripWidth = rowWidth
+    end
+    strip.show(stripView, content)
 end
 
 -- The window's hamburger: collapse where it is.
@@ -195,7 +233,10 @@ function M.rebuild(keepScroll)
     local scrollY = keepScroll and prettyuiInternals.scrollPosition(win) or nil
     build({ x = r.x, y = r.y, width = r.width, height = r.height })
     if scrollY then win:SetScrollPosition(scrollY) end
-    if collapsed then win:Close() end
+    if collapsed then
+        win:Close()
+        M.refreshStrip()
+    end
 end
 
 -- Open the window where the store says, collapsed if it was. The stored layout is fitted to

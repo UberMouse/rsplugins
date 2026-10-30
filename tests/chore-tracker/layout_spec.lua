@@ -94,6 +94,39 @@ describe("chore-tracker layout", function()
         )
     end)
 
+    describe("stripForButton", function()
+        local ROW = 200
+        local FULL = 2 * layout.STRIP_INSET + ROW + layout.STRIP_GAP + layout.BUTTON_SIZE
+
+        -- Where the strip's button lands for a panel at `box`.
+        ---@param box table a ChoreStripBox
+        ---@return integer[]
+        local function button(box)
+            return {
+                box.x + box.width + layout.STRIP_BUTTON_X,
+                box.y + layout.STRIP_BUTTON_Y,
+            }
+        end
+
+        it("puts the button on its spot, with the row to its left", function()
+            local box = layout.stripForButton(500, 300, ROW, 1000, 800)
+            assert.are.same({ 500, 300 }, button(box))
+            assert.are.same({ FULL, layout.STRIP_HEIGHT }, { box.width, box.height })
+            assert.is_true(box.x < 500 - ROW)
+        end)
+
+        it("shifts the strip in near the left and top edges", function()
+            local box = layout.stripForButton(50, 0, ROW, 1000, 800)
+            assert.are.same({ 0, 0 }, { box.x, box.y })
+            assert.are.same({ FULL + layout.STRIP_BUTTON_X, layout.STRIP_BUTTON_Y }, button(box))
+        end)
+
+        it("narrows the strip to a parent narrower than it", function()
+            local box = layout.stripForButton(100, 300, ROW, 150, 800)
+            assert.are.same({ 0, 150 }, { box.x, box.width })
+        end)
+    end)
+
     describe("windowForButton", function()
         it("puts the window's button slot on the button", function()
             local x, y = layout.windowForButton(500, 300, 320, 420, 1000, 800)

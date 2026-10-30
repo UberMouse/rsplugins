@@ -137,15 +137,19 @@ function M.dispatch(h, event, payload)
     -- Counted, since a subscriber may dispatch the same event again (nested).
     local dispatching = instance.dispatching
     dispatching[event] = (dispatching[event] or 0) + 1
-    for _, entry in ipairs(list) do
-        -- Alive is checked per subscriber: a subscriber that reloads the plugin ends the old
-        -- instance's dispatch (probe 2026-10-30).
-        if not instance.alive then break end
-        if not entry.removed then
-            local label = string.format("Event.%s subscriber '%s'", event, entry.name)
-            runtime.call(h.budgetMs, label, entry.fn, payload)
+    -- A subscriber's error still has to end the dispatch (counter and deferred removals), or
+    -- the harness, reused after the error, would defer every later Unsubscribe forever.
+    local ok, err = pcall(function()
+        for _, entry in ipairs(list) do
+            -- Alive is checked per subscriber: a subscriber that reloads the plugin ends the old
+            -- instance's dispatch (probe 2026-10-30).
+            if not instance.alive then break end
+            if not entry.removed then
+                local label = string.format("Event.%s subscriber '%s'", event, entry.name)
+                runtime.call(h.budgetMs, label, entry.fn, payload)
+            end
         end
-    end
+    end)
     dispatching[event] = dispatching[event] - 1
     if dispatching[event] == 0 then
         dispatching[event] = nil
@@ -158,6 +162,8 @@ function M.dispatch(h, event, payload)
             subs[i] = kept[i]
         end
     end
+    -- The original error, untouched, so callers and specs see what runtime.call raised.
+    if not ok then error(err, 0) end
 end
 
 -- The `Event` global for one plugin instance.

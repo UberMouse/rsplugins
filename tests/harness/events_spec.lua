@@ -239,6 +239,59 @@ describe("Event subscriptions", function()
         end
     )
 
+    it(
+        "still ends the dispatch when a subscriber errors, so later removals apply at once",
+        function()
+            local h = harness.load(plugin([[
+            local armed = true
+            Event.ServerLogic.Subscribe("boom", function()
+                if armed then
+                    armed = false
+                    error("kaboom")
+                end
+            end)
+            Event.ServerLogic.Subscribe("x", function() print("x") end)
+            Event.ServerLogic.Subscribe("tail", function() end)
+            function swap()
+                Event.ServerLogic.Unsubscribe("x")
+                Event.ServerLogic.Subscribe("x", function() print("x2") end)
+            end
+        ]]))
+            assert.matches(
+                "kaboom",
+                harness.errorOf(function()
+                    h:fire("ServerLogic")
+                end)
+            )
+            h.env.swap()
+            h:fire("ServerLogic")
+            assert.are.equal("x2", h:output())
+        end
+    )
+
+    it("defers a removal until the outermost of nested dispatches ends", function()
+        local h = harness.load(plugin([[
+            local nested = false
+            Event.ServerLogic.Subscribe("A", function()
+                if nested then return end
+                nested = true
+                Event.ServerLogic.Unsubscribe("B")
+                ExecuteConsoleCommand("inner") -- dispatches ServerLogic again
+                -- the inner dispatch has ended; the outer one has not
+                Event.ServerLogic.Subscribe("B", function() print("B'") end)
+            end)
+            Event.ServerLogic.Subscribe("B", function() print("B") end)
+        ]]))
+        h.onConsoleCommand = function()
+            h:fire("ServerLogic")
+        end
+        h:fire("ServerLogic")
+        h:fire("ServerLogic")
+        -- B' was dropped as a no-op Subscribe, and B itself is gone
+        assert.are.equal("", h:output())
+        assert.are.equal(1, #h.instance.subs.ServerLogic)
+    end)
+
     it("allows a direct Unsubscribe inside an HTTP completion callback", function()
         local h = harness.load({
             ["main.lua"] = [[

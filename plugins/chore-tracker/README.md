@@ -200,7 +200,7 @@ show no icon` (or `id.Sprite.<name>`), and its rows show no icon. Grep regex:
 
 The development checkout opts into the dev log tee (`lib/dev/tee.lua`, docs/dev-environment.md),
 which forwards the plugin's console lines and callback errors to `scripts/rsdev.py` on the
-same machine. None of it ships. Remove all of it first:
+same machine. None of it ships. Remove all of it from the copy:
 
 - the `dev/` symlink in this folder,
 - the two tee lines at the top of `main.lua` (`local tee = require("dev/tee")` and
@@ -209,9 +209,10 @@ same machine. None of it ships. Remove all of it first:
 - `"httpAccess"` from `optionalPermissions` in `plugin.json`, and
 - `urls.rsdev` from `plugin.json` (leaving no `urls` and no `optionalPermissions`).
 
-Then run `scripts/check-submission.sh chore-tracker` on the prepared copy (see the script's
-header); it must pass before upload. The Mod.io text below ("This plugin requests no
-permissions") is true only after that check passes.
+Do it on a copy and check it as
+[Preparing the zip from this repo](../../docs/submission.md#preparing-the-zip-from-this-repo)
+describes; `check-submission.sh` must pass before upload. The Mod.io text below ("This plugin
+requests no permissions") is true only after that check passes.
 
 ## Files
 

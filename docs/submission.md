@@ -78,6 +78,36 @@ For Jagex: I request that the supplied email is hidden from public view.   <!-- 
 
 The EULA paragraph is Jagex's required wording (including its typos). Copy it verbatim.
 
+## Preparing the zip from this repo
+
+A plugin in `plugins/` may carry dev opt-ins (the `dev/` link to `lib/dev/`, the recorder and tee
+lines, `urls.rsdev`, `httpAccess`). Build the upload from a copy, never from the dev tree:
+
+1. Copy the plugin without `dev/`, inside the repo so the lint configs apply. `dumps/` is
+   gitignored:
+
+   ```sh
+   mkdir -p dumps/submission/plugins
+   rsync -a --exclude dev plugins/<name> dumps/submission/plugins/
+   ```
+
+   (`cp -rP` copies the `dev` symlink as a link, not its target; delete it from the copy.)
+2. Strip the rest of the opt-in from the copy's `main.lua` and `plugin.json`: the
+   `require("dev/...")` lines, `tee.install`/`tee.shutdown` and `recorder.install`/`shutdown`
+   calls with their comments, `"httpAccess"` from `optionalPermissions` (unless a feature of the
+   plugin needs it), and `urls.rsdev`. The plugin's README lists its own pieces (Chore Tracker:
+   "Before submitting").
+3. Run `scripts/check-submission.sh <name> --root dumps/submission`. It must exit 0; it names
+   every dev piece left. Then run `scripts/check.sh dumps/submission/plugins/<name>`: it runs
+   luac, the manifest, selene and stylua checks on the copy (then the whole suite). LuaLS ignores
+   `dumps/`, so type checking only happens on the dev tree.
+4. Zip from inside the plugin folder, so `main.lua` and `plugin.json` sit at the zip root (any
+   zip tool; with Info-ZIP):
+
+   ```sh
+   cd dumps/submission/plugins/<name> && zip -r ../<name>.zip .
+   ```
+
 ## Moderation
 
 - You can keep editing the listing or uploading files **until a moderator starts**. They will then

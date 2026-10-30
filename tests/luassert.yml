@@ -2,7 +2,7 @@
 # selene standard library for tests/: the luassert assertions the specs call. selene checks
 # every `assert.<member>` against this list, so add a member here when a spec needs a new
 # one. busted's own globals (describe, it...) need no entry: undefined_variable is off.
-name: tests
+name: luassert
 globals:
   assert.are.equal:
     args: [{ type: any }, { type: any }, { required: false, type: any }]

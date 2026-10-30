@@ -25,16 +25,22 @@ client (`prl <plugin>`).
 | `tests/harness/world.lua` | The world as plain data, changed only by world ops |
 | `tests/harness/api/*.lua` | The mocks, one module per API area; `api/prettyui/` is the PrettyUI fake (`init.lua`, with `window.lua`, `objects.lua`, `popup.lua`, shared `internal.lua`) and the `h.ui` driver (`driver.lua`) ([Testing a PrettyUI plugin](#testing-a-prettyui-plugin)) |
 | `types/prettyui.lua` | LuaLS types for the PrettyUI subset the fake models, loaded by `.luarc.json` |
+| `tests/harness/paths.lua` | Repo-root path resolution (`paths.repo`) and file reading (`paths.read`), independent of the working directory |
 | `tests/harness/sandbox.lua`, `runtime.lua`, `strict.lua` | The plugin's environment, client limits, strict proxies |
 | `tests/harness/stubs.lua`, `catalog.lua` | Reads `docs/api/` and `docs/vars/vars.csv` |
 | `tests/harness/timeline.lua`, `replay.lua` | Replaying a recording: grouping its entries by tick (pure), and driving the world from them |
 | `tests/harness/*_spec.lua` | The harness's own tests |
 | `tests/harness/spec_support.lua` | Boilerplate the harness specs share (not a spec): `inline(main, { manifest?, files? })` builds an inline plugin's files table, `PRETTYUI_MANIFEST` / `HTTP_MANIFEST` and `pluginLayer(name)` the manifests and plugin-layer prelude. Specs for the dev tools use `tests/support/devplugin.lua` instead |
 | `tests/<plugin>/*_spec.lua` | A plugin's tests |
-| `lib/dev/`, `scripts/rsdev.py` | The dev recorder and the daemon that receives it ([Recordings](#recordings)) |
+| `lib/dev/`, `scripts/rsdev.py` | The dev recorder and the daemon that receives it ([Recordings](#recordings)); `lib/dev/tee.lua` and `teelog.lua` are the log tee ([Opting a plugin into the log tee](#opting-a-plugin-into-the-log-tee)) |
 | `scripts/recording-sanitise.py`, `recording-chat-allowlist.txt`, `test_recording_sanitise.py`, `tests/fixtures/` | Recorded sessions made into committed fixtures, the game chat a fixture may keep, and the sanitiser's tests ([Turning a session into a fixture](#turning-a-session-into-a-fixture)) |
 | `tests/recorder/` | The recorder's tests, with `plugins/recorder-demo` |
 | `tests/var-dump/` | `plugins/var-dump`'s specs |
+| `tests/chore-tracker/` | `plugins/chore-tracker`'s specs |
+| `tests/tee/` | The log tee's specs (`tee.lua`, `teelog.lua`) |
+| `tests/dev-bridge/` | `plugins/dev-bridge`'s specs |
+| `tests/support/devplugin.lua` | Inline test plugins that carry `lib/dev/` as their `dev/` folder, for the dev tools' specs |
+| `tests/warm.lua`, `tests/selene.toml`, `tests/luassert.yml` | The busted helper, and the selene config with its luassert std ([Lint and type-check config](#lint-and-type-check-config-for-tests)) |
 | `tests/fixtures/plugins/` | Minimal plugins that exist only to be loaded by path, e.g. `hello/` for `sandbox_spec.lua` |
 | `tests/fixtures/client-surface.json`, `tests/harness/client_surface_spec.lua`, `tests/harness/surface_report.lua`, `scripts/client-surface.py`, `plugins/dev-bridge/probes/client-surface.lua` | The live client's API surface, the spec that checks the mocks against it, and the stub-vs-client report ([below](#checking-the-mocks-against-the-live-client)) |
 
@@ -100,10 +106,10 @@ n end` gives `utils.CalcTextWidth` its font metrics (without it, the call faults
 | Member | Does |
 |---|---|
 | `h:load()` / `h:unload()` / `h:reload()` | Enable (fresh env, run `main.lua`), disable (call a global `PluginShutdown`, drop subscriptions and pending HTTP callbacks), or both. After `PluginShutdown` (or with none), `h:unload()` faults, naming each event and subscription name, if the instance still holds a subscription; `h:reload()` inherits it. A `PluginShutdown` that raises or times out is reported alone, without the leak check |
-| `h:advance(ms)` | Run the clock forward in 20 ms logic steps; a remainder carries over. Each step: deliver answered HTTP requests, deliver queued `Chat.AddMessage` messages, fire `Logic`, and every 30th step `ServerLogic` |
-| `h:step()` | One Logic step: advances the tick, delivers answered HTTP and queued chat, fires `Logic`, and fires `ServerLogic` on every 30th tick. `h:advance(20)` runs exactly one |
+| `h:advance(ms)` | Run the clock forward in 20 ms logic steps; a remainder carries over. Each step: deliver answered HTTP requests, deliver queued `Chat.AddMessage` messages, snap back moved PrettyUI roots, fire `Logic`, and every 30th step `ServerLogic` |
+| `h:step()` | One Logic step: advances the tick, delivers answered HTTP and queued chat, snaps back moved PrettyUI roots, fires `Logic`, and fires `ServerLogic` on every 30th tick. `h:advance(20)` runs exactly one |
 | `h:fire(event, fields?)` | Fire any stub event; `fields` must be fields of the stub's `<Event>EventPayload`. For events the world builder doesn't model (`KeyDown`, `SkillTransmit`...) |
-| `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "" }` (a status of 400 or more arrives failed), `{ timedOut = true }` or `{ error = "info", errorCode = n }`; any other field faults. Delivered on the next step. A request left unanswered for 10 s (500 steps) times out by itself |
+| `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "", noBody = true }` (a status of 400 or more arrives failed; `noBody` is a 200 whose data is nil), `{ timedOut = true }` or `{ error = "info", errorCode = n }`; any other field faults. Delivered on the next step. A request left unanswered for 10 s (500 steps) times out by itself |
 | `h:useRecording(source, opts?)` | Drive the world from a recording (a `.jsonl` path, repo-relative or absolute, or a list of entries); call before `h:load()`. A recording with `dropped` entries is refused unless `opts.allowDropped`. See [Replaying a recording](#replaying-a-recording) |
 | `h:playRecording()` | Step the clock to the recording's last tick |
 | `h:subscriptions(event)` | The names the plugin has subscribed to `event`, in dispatch order; one unsubscribed during a running dispatch is already left out |
@@ -166,6 +172,8 @@ event subscribers.
 | `clickTitle(win)` | A quick click on a titled Window's title bar, delivered release-first as the client does a one-tick click: the overlays sync, then the root and `titleDrag` are raised over them. The window is left with `resize.enabled` false and `titleDrag.isClicked` false, as PrettyUI 1.2.0 leaves it |
 | `holdTitleBar(win)` / `releaseTitleBar(win)` | Press a titled Window's title bar and keep holding it (`resize` disabled, `titleDrag.isClicked` true, nothing moves), then let go (`resize` enabled again, overlays sync); ticks can pass between |
 | `resize(win, dw, dh, held?)` | Drag a resizable Window's bottom-right corner; clamped to its min/max and the parent's edge. The press shows the window (raising its root, as 1.2.0's resize does) and syncs its overlays; the new size syncs them again. With `held`, a further move of the same held resize: no press, so no show, just the new size and its syncs. A held press gets a move each Logic tick, so a spec makes a multi-tick resize one `held` call per `h:advance(20)` |
+| `popups()` | Every AchievementPopup the plugin has made, oldest first, as its state: `title`, `text`, `width`, `height`, `sound`, `soundID`, `played`, `root`, `elapsed` Logic ticks, `destroyed` and `completed` (ended on its own, so `onComplete` ran) |
+| `popupsFail(on)` | `true`: `AchievementPopup.show` returns nil from then on, standing in for a client with nowhere to put the popup; `false` restores it |
 | `overlays(win)` | The components registered as a Window's overlays (`_RegisterOverlay`), in the order registered |
 | `overlayInternals(on)` | `false`: every Window made from then on lacks the internal `_RegisterOverlay` and `_UnregisterOverlay` (they read nil), standing in for a PrettyUI version without them; `true` (the default) restores them. Set it before `h:load()` for a window made at load |
 | `resizeInternals(mode)` | `"none"`: every Window made from then on reads the internal `resize` as nil; `"noHandles"`: it has no `handles`; `"noN"`: its `n` handle reads nil; `"noTitleDrag"`: the internal `titleDrag` reads nil; `"all"` (the default) restores them. Set it before `h:load()` for a window made at load |
@@ -252,8 +260,8 @@ Check a finding against the official page before building on it.
 `scripts/check.sh` lints `tests/` with its own config, because spec and harness code run in
 plain Lua and busted, not in the plugin sandbox:
 
-- `tests/selene.toml` + `tests/tests.yml`: the root std plus the luassert assertions specs call.
-  Add an `assert.*` member to `tests.yml` when a spec needs a new one.
+- `tests/selene.toml` + `tests/luassert.yml`: the root std plus the luassert assertions specs call.
+  Add an `assert.*` member to `luassert.yml` when a spec needs a new one.
 - `tests/.luarc.json`: LuaLS against LuaLS's bundled busted and luassert definitions, *without*
   the API stubs. An API global used in a spec is a bug, since it is nil there. The root
   `.luarc.json` ignores `tests/`.

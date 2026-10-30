@@ -323,8 +323,10 @@ never for submission. A plugin opts in like the recorder does:
    `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the dev bridge's url name, so one entry
    serves both).
 
-Before uploading, remove the opt-in: `scripts/check-submission.sh <plugin> --root <prepared copy>`
-fails while any piece of it is left, and on any `urls` entry pointing at 127.0.0.1 or localhost.
+Before uploading, strip the opt-in from a copy of the plugin:
+[Preparing the zip from this repo](submission.md#preparing-the-zip-from-this-repo).
+`scripts/check-submission.sh` fails while any piece of it is left, and on any `urls` entry
+pointing at 127.0.0.1 or localhost.
 
 Then `scripts/rsdev.py exec "prl <name>"` and `scripts/rsdev.py logs --plugin <name>` shows what
 the plugin printed, as `n [<name>] print|log|error: text`. An `error` line reads

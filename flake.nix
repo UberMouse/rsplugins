@@ -68,10 +68,12 @@
               pkgs.lua-language-server
               pkgs.stylua
               pkgs.selene
-              # scripts/var-dump-receiver.py (stdlib only).
+              # The Python scripts (stdlib only) and check.sh, which uses it to validate plugin.json
+              # and to filter LuaLS's report.
               pkgs.python3
               pkgs.git
-              # Tests for the .claude/workflows/ review workflow; jq for the durable-state hook.
+              # node runs the .claude/workflows/ tests; jq is needed by check.sh, check-submission.sh
+              # and the durable-state hook.
               pkgs.nodejs
               pkgs.jq
               # scripts/rsdev.py shot: capture the client window (X11 only).
@@ -169,12 +171,8 @@
               echo "  lua / luac                    Lua $(lua -v 2>&1 | cut -d' ' -f2) (client runs 5.4.8)"
               echo "  lua-language-server           LSP for editors; docs/api/ holds the API stubs"
               echo "  stylua / selene               Lua formatter / linter"
-              echo "  scripts/check.sh              the gate; its header lists the steps"
-              echo "  scripts/test-lua.sh           run the plugin tests (busted, tests/**/*_spec.lua)"
-              echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
-              echo "  plugins/debug-plugin, plugins/dev-kit  third-party dev plugins (flake inputs, gitignored copies)"
-              echo "  scripts/var-dump-receiver.py  receiver for the var-dump plugin"
-              echo "  scripts/rsdev.py              dev daemon + CLI: recorder receiver, dev bridge; shot = client screenshot"
+              echo "  plugins and scripts           indexed in README.md (tables: Plugins, Scripts)"
+              echo "  scripts/check.sh              the gate; run it before committing"
             '';
           };
         }

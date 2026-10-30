@@ -1,6 +1,0 @@
-{
-    "name": "probe-perm-sub",
-    "version": "0.0.1",
-    "contactEmailAddress": "you@example.com",
-    "optionalPermissions": [ "httpAccess" ]
-}

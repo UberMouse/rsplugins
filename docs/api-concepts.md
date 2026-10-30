@@ -491,6 +491,19 @@ From `plugins/dev-bridge` in the beta client.
   The rule we follow: unsubscribe every subscription in `PluginShutdown`, including ones a
   `lib/dev` module made (`tee.shutdown()`, `recorder.shutdown()`). The harness's `h:unload`
   faults on any subscription `PluginShutdown` leaves behind (`docs/testing.md`).
+- **Crash 9 (SIGSEGV x3, 2026-10-30 21:43:56 pid 4006356, 21:59:55 pid 254718, 22:03:31 pid
+  292870)**: `ppe var-dump httpAccess` sent through the dev bridge (`rsdev.py exec`) while
+  `recorder-demo` was running with `httpAccess`. `coredumpctl` showed the same main-thread
+  stack each time, shallow and with no Lua frames: rs2client+0x3c76a4, +0xe3f8b, +0x1c110c,
+  +0x16648f5, +0x1402ec8. It took all three conditions: typing the same `ppe` in the console
+  instead did not crash, and the same bridge `ppe` without `recorder-demo` did not crash
+  (21:59:13). Ruled out: the bridge's `ppe` dispatch itself (`probe-perm`, whose handler only
+  printed) and subscribing `Logic`, `ServerLogic` and `VarTransmit` inside that dispatch with
+  `recorder-demo` granted and posting (`probe-perm-sub`, runs 4 and 5b); both probes are
+  deleted. Remaining suspects: the synchronous part of var-dump's `start()` (snapshot init,
+  `beginDomain`'s `pcall(nameLister)` starting `pairs(id.VarPlayer)`). The cause is
+  unconfirmed. The rule we follow: grant var-dump's `httpAccess` by typing `ppe` in the
+  console, never through the bridge.
 - **Closing the client segfaults** (2026-10-26, beta client 951-1): closing it gave a SIGSEGV
   three times out of three, at 15:09:17 (pid 2637620), 15:12:49 (pid 2649914) and 15:15:07 (pid
   2656263). `coredumpctl` shows the same stack each time, frame #4 jumping into a heap address.
@@ -590,6 +603,17 @@ The probe sources aren't kept; each finding says what was called.
   Probed 2026-10-30: a subscriber added during a dispatch first runs on the next; an
   `Unsubscribe` and `Subscribe` of one name inside a dispatch of the same event loses the
   subscription (see the testing.md fidelity ledger).
+- **A reload console command run from a plugin's own event callback is synchronous**
+  (2026-10-30, beta 951-1): `ExecuteConsoleCommand("prl <self>")` from a `ServerLogic`
+  subscriber unloads the old instance (`PluginShutdown`) and loads the new one inside that
+  call, and the old instance's later subscribers of that dispatch are skipped. The dispatch
+  rules are in the testing.md fidelity ledger; the probe was `probe-reload`, now deleted.
+- **A `PersistentDB:Set('gen', n)` made at load read back as absent** (2026-10-30, observation,
+  cause unknown): across three successive loads of `probe-reload`, `PersistentDB:GetInt('gen')`
+  returned nil each time, while a `PersistentDB:Set('fired', true)` made in a `ServerLogic`
+  callback was read by `GetBool('fired')` in the next instance. Whether load-time writes don't
+  persist, or `Set` of an integer or `GetInt` differs from the bool pair, is untested; don't
+  rely on a load-time `Set` surviving a reload until it is.
 - **HTTP failures, from requests to the rsdev daemon.** The client's HTTP is libcurl.
   - A 404 (GET) and a 400 (POST) finish with `failed` true and `successful` false,
     `responseCode` set, `errorCode` 0, `errorInfo` "", `data` "" and `progress` nil. `header`
@@ -606,6 +630,10 @@ The probe sources aren't kept; each finding says what was called.
   - **`Cancel` never calls the completion callback.** Right after `Cancel` (one tick after
     `Get`) the request read `cancelled` true and `finished`, `failed` false. Read again 20 s
     later, `finished` and `failed` were true too.
+  - **Cancelling an in-flight POST from `PluginShutdown` still delivers it** (2026-10-30,
+    var-dump `prl` mid-upload, 3 times): the receiver got the request with a 0-byte body, and
+    the plugin logged no failure line for it. So a receiver may see empty POSTs from a plugin
+    that was reloaded mid-upload.
   - `Get` or `AddHeader` on a request that hasn't finished raises
     `This request is already being executed`.
 - **API objects are fresh userdata per call, and only some compare equal.** Two

@@ -4,7 +4,9 @@
 --   * On enable it takes a full snapshot of VarPlayer and VarClient (including
 --     their VarBits) and POSTs it to <sink>/snapshot in parts.
 --   * While enabled it records every VarTransmit event and POSTs them to
---     <sink>/changes once per server tick.
+--     <sink>/changes, at most one request in flight; bodies built while one is pending queue
+--     up (MAX_QUEUED_CHANGES, oldest dropped first) and the next goes out from a later tick.
+--   * A sink outage logs one warning when it starts and one line when uploads recover.
 --
 -- Run `prl var-dump` to take a fresh snapshot. NOT for submission: dumping all
 -- vars is a research tool, not a player-facing feature.
@@ -19,9 +21,9 @@ local SUBS = {
     Logic = "varDumpSnapshot",
 }
 
--- Requests still running, mapped to their body. Holding both stops them being
--- garbage collected before the request finishes, in case the client doesn't
--- copy the body. PluginShutdown cancels them.
+-- Requests still running, as dev/post.lua's pending records ({ request, body }). Holding the
+-- record stops the body being garbage collected before the request finishes, in case the client
+-- doesn't copy it. PluginShutdown cancels them.
 local inFlight = {}
 
 -- Defined before anything below can fail, so a failing load still unsubscribes. Unsubscribing
@@ -36,9 +38,9 @@ function PluginShutdown()
     -- and `running` keeps every body referenced until the cancels finish.
     local running = inFlight
     inFlight = {}
-    for request in pairs(running) do
+    for pending in pairs(running) do
         pcall(function()
-            request:Cancel()
+            pending.request:Cancel()
         end)
     end
 end
@@ -48,6 +50,8 @@ end
 -- plugin in").
 local json = require("dev/json")
 local recording = require("dev/recording")
+local batch = require("dev/batch")
+local httpPost = require("dev/post")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
 local function say(...)
@@ -186,38 +190,65 @@ end
 -- Sending to the receiver
 ---------------------------------------------------------------------------
 
--- Log why a request failed, with a hint for the common case.
-local function reportFailure(request)
-    if request.timedOut then
-        say("request to", request.url, "timed out")
-    else
-        say(
-            "request to",
-            request.url,
-            "failed:",
-            request.errorCode,
-            request.errorInfo,
-            "response",
-            request.responseCode
-        )
+-- Sink outages, shared by the snapshot and /changes uploads: the first failure of a run of
+-- failures logs one warning, the next success logs one recovery line, so a receiver that is
+-- down doesn't flood the console.
+local sinkDown = false
+
+-- Dropped /changes bodies not yet reported; the count is logged once uploads next succeed.
+local droppedBodies, droppedChanges = 0, 0
+
+-- Note one finished upload. `why` says what went wrong when `success` is false.
+local function noteResult(success, path, why)
+    if not success then
+        if not sinkDown then
+            sinkDown = true
+            say(
+                "upload to",
+                path,
+                "failed:",
+                why,
+                "- is scripts/var-dump-receiver.py running? Will say when uploads recover."
+            )
+        end
+        return
     end
-    say("is scripts/var-dump-receiver.py running?")
+    if sinkDown then
+        sinkDown = false
+        say("uploads to the receiver recovered")
+    end
+    if droppedBodies > 0 then
+        say(
+            formatStr(
+                "dropped {} queued /changes uploads ({} changes) while the receiver was unreachable",
+                droppedBodies,
+                droppedChanges
+            )
+        )
+        droppedBodies, droppedChanges = 0, 0
+    end
 end
 
 -- POST a JSON body to a path on the sink, then call onDone(success).
 -- onDone runs inside the HTTP callback, so it must not start another request:
 -- doing that froze and then crashed the client. Record the result instead,
--- and let the next Logic tick act on it.
+-- and let the next tick act on it. A request the client refuses to start calls
+-- onDone(false) at once, from the caller's own tick, which is safe.
 local function post(path, body, onDone)
-    local request = HTTPRequest.new(Plugin.urls.sink, path)
-    request:AddHeader("Content-Type", "application/json")
-    inFlight[request] = body
-    request:Post(body, function(finished)
-        inFlight[request] = nil
+    local pending, err
+    pending, err = httpPost.startPost(HTTPRequest, Plugin.urls.sink, path, body, function(finished)
+        assert(pending, "completions arrive after startPost returned")
+        inFlight[pending] = nil
         local success = finished.successful and finished.responseCode == 200
-        if not success then reportFailure(finished) end
+        noteResult(success, path, batch.failureText(finished))
         if onDone then onDone(success) end
     end)
+    if not pending then
+        noteResult(false, path, "could not start: " .. batch.text(err))
+        if onDone then onDone(false) end
+        return
+    end
+    inFlight[pending] = true
 end
 
 -- Snapshot parts are queued as they're built and sent one at a time by
@@ -297,30 +328,30 @@ end
 -- first, which also tells the type checker it is set from there on.
 local snap = nil ---@type table?
 
+-- Switch the current domain to the ID scan (name listing failed or found nothing).
+local function useScan(reason)
+    assert(snap, "no snapshot running")
+    local domain = DOMAINS[snap.domainIndex]
+    say(domain, "name iteration failed or was empty:", reason)
+    snap.found = newFoundList()
+    snap.lister = scanLister(domain, snap.found)
+    snap.scanning = true
+    snap.method = formatStr("FromID scan {}..{}", SCAN_MIN, SCAN_MAX)
+end
+
 -- Begin listing the current domain, by name if possible.
 local function beginDomain()
     assert(snap, "no snapshot running")
     local domain = DOMAINS[snap.domainIndex]
     say("listing", domain, "vars...")
     snap.found = newFoundList()
+    snap.scanning = false
     local ok, lister = pcall(nameLister, domain, snap.found)
     if ok then
         snap.lister, snap.method = lister, "pairs(id." .. domain .. ")"
     else
-        say(domain, "can't iterate names:", lister)
-        snap.lister = scanLister(domain, snap.found)
-        snap.method = formatStr("FromID scan {}..{}", SCAN_MIN, SCAN_MAX)
+        useScan(lister)
     end
-end
-
--- Switch the current domain to the ID scan (name listing failed or found nothing).
-local function fallBackToScan(reason)
-    assert(snap, "no snapshot running")
-    local domain = DOMAINS[snap.domainIndex]
-    say(domain, "name iteration failed or was empty:", reason)
-    snap.found = newFoundList()
-    snap.lister = scanLister(domain, snap.found)
-    snap.method = formatStr("FromID scan {}..{}", SCAN_MIN, SCAN_MAX)
 end
 
 -- The current domain is fully listed: report it and move to the next domain,
@@ -341,25 +372,18 @@ local function finishDomain()
     end
 end
 
--- One unit of listing work: check one candidate in the current domain.
+-- One unit of listing work: check one candidate in the current domain. When the listing fails
+-- or ends having found nothing, retry with the scan unless it already is the scan.
 local function listStep()
     assert(snap, "no snapshot running")
     local ok, more = pcall(snap.lister)
-    local scanning = snap.method:find("scan")
-    if not ok then
-        if not scanning and #snap.found.vars == 0 then
-            fallBackToScan(more)
-        else
-            say(DOMAINS[snap.domainIndex], "listing stopped early:", more)
-            finishDomain()
-        end
-    elseif not more then
-        if not scanning and #snap.found.vars == 0 then
-            fallBackToScan("0 vars")
-        else
-            finishDomain()
-        end
+    if ok and more then return end
+    if not snap.scanning and #snap.found.vars == 0 then
+        useScan(ok and "0 vars" or more)
+        return
     end
+    if not ok then say(DOMAINS[snap.domainIndex], "listing stopped early:", more) end
+    finishDomain()
 end
 
 -- Encode the vars described so far as one part and queue it for upload.
@@ -431,6 +455,12 @@ end
 local pendingChanges = {}
 local changeSeq = 0
 
+-- /changes bodies waiting for the one request in flight to finish: { body, count }. At most
+-- MAX_QUEUED_CHANGES (about a minute of server ticks); past that the oldest is dropped.
+local MAX_QUEUED_CHANGES = 100
+local changeQueue = {}
+local changesInFlight = false
+
 -- Record one var update from the server. It fires even if the value didn't change.
 local function onVarTransmit(ev)
     local v = ev.var
@@ -446,13 +476,35 @@ local function onVarTransmit(ev)
     }
 end
 
--- Once per server tick, send whatever changes have built up.
+-- Once per server tick: queue whatever changes have built up, then start the next /changes
+-- upload if none is in flight. Starting here, never in a completion callback, is the rule.
 local function onServerLogic()
     tick = tick + 1
-    if #pendingChanges == 0 then return end
-    local body = json.encode({ changes = pendingChanges })
-    pendingChanges = {}
-    post("/changes", body)
+    if #pendingChanges > 0 then
+        changeQueue[#changeQueue + 1] = {
+            body = json.encode({ changes = pendingChanges }),
+            count = #pendingChanges,
+        }
+        pendingChanges = {}
+        while #changeQueue > MAX_QUEUED_CHANGES do
+            local dropped = table.remove(changeQueue, 1)
+            droppedBodies = droppedBodies + 1
+            droppedChanges = droppedChanges + dropped.count
+        end
+    end
+    if changesInFlight or #changeQueue == 0 then return end
+    local entry = table.remove(changeQueue, 1)
+    changesInFlight = true
+    post("/changes", entry.body, function(success)
+        changesInFlight = false
+        -- Keep the body for the next tick's retry (it is the oldest), within the bound.
+        if not success and #changeQueue < MAX_QUEUED_CHANGES then
+            table.insert(changeQueue, 1, entry)
+        elseif not success then
+            droppedBodies = droppedBodies + 1
+            droppedChanges = droppedChanges + entry.count
+        end
+    end)
 end
 
 ---------------------------------------------------------------------------

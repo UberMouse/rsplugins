@@ -79,6 +79,56 @@ describe("chore-tracker detect", function()
 
     it("leaves an inventory or note the config lacks unwatched, saying so once", initAndCheck)
 
+    -- The harness always sends InventoryAdded after a removal, which re-baselines on its own, so
+    -- this drives detect directly: a client that sends only an update after the backpack is
+    -- removed must not read the rise against the counts from before it went.
+    it("takes no rise against a backpack's counts from before it was removed", function()
+        local total, applied = 1, 0
+        _G.Inventory.Find = function()
+            return {
+                isValid = true,
+                GetTotal = function()
+                    return total
+                end,
+            }
+        end
+        _G.Player = {
+            IsAvailable = function()
+                return true
+            end,
+            GetEntity = function()
+                return { coordGrid = { x = 0, z = 0, level = 0 } }
+            end,
+        }
+        detect.init({
+            chores = support.chores(),
+            shops = {},
+            collections = {
+                {
+                    chore = "d1",
+                    npc = "someone",
+                    notes = { "CERT_KNOWN" },
+                    tile = { x = 0, z = 0, level = 0 },
+                    range = 10,
+                    proven = true,
+                },
+            },
+            say = function() end,
+            apply = function()
+                applied = applied + 1
+            end,
+        })
+        detect.scan()
+        detect.onInventoryRemoved({ inv = { configName = "INV" } })
+        total = 5
+        detect.onInventoryUpdated({ inv = { configName = "INV" } })
+        assert.are.equal(0, applied)
+        -- The update was the new baseline: a further rise counts.
+        total = 9
+        detect.onInventoryUpdated({ inv = { configName = "INV" } })
+        assert.are.equal(1, applied)
+    end)
+
     it("treats a config lookup that raises like a name the config lacks", function()
         for _, domain in ipairs({ "Inv", "Obj" }) do
             setmetatable(_G.config[domain], {

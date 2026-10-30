@@ -205,6 +205,40 @@ describe("chore-tracker window", function()
         })
     end)
 
+    it("keeps the list's scroll when the clock starting rebuilds the window", function()
+        local h = loaded({ load = false, clock = 0 })
+        local selected = {}
+        for _, c in ipairs(chores) do
+            if c.period == "daily" then selected[#selected + 1] = c.id end
+        end
+        helpers.seed(h, "state:Zezima", { version = 2, selected = selected, done = {}, shops = {} })
+        h:load()
+        local before = window(h)
+        assert.are.same({ true, 1 }, { h.ui:wheel(helpers.rows(h)[1].label, 1) })
+        assert.are.equal(32, before._scroll.scrollY)
+
+        -- The not-ready notice gives way to the list: a rebuild, to a taller list at the same scroll.
+        helpers.setClock(h, helpers.NOW)
+        h:advance(helpers.POLL_MS)
+        assert.are_not.equal(before, window(h))
+        assert.are.equal(32, window(h)._scroll.scrollY)
+    end)
+
+    it("shows a chore's tooltip without a blank description line, links last", function()
+        local h = loaded()
+        togglePicks(h, { "bert-sand", "nemi-forest" })
+        -- No description and no shops: the wiki page alone, with no blank line before it.
+        local _, bert = helpers.rowShown(h, "Sand from Bert")
+        assert.are.equal("https://runescape.wiki/w/Bert", bert)
+        -- A description, the wiki page, then the extra link.
+        local _, nemi = helpers.rowShown(h, "Nemi Forest")
+        assert.are.equal(
+            "'NemiForest' FC. See also Daily Maps<br>https://runescape.wiki/w/Nemi_Forest"
+                .. "<br>https://www.reddit.com/r/NemiForest/new/",
+            nemi
+        )
+    end)
+
     it("leaves no tooltip attachment behind a view switch, a rebuild or a reload", function()
         local h = loaded()
         togglePicks(h, { FEATHERS.id, "daily-challenge" })

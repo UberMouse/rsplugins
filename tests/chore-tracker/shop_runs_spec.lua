@@ -416,4 +416,22 @@ describe("chore-tracker collections", function()
             end
         end)
     end
+
+    it("re-baselines on a backpack that closes and returns with more notes, not ticking", function()
+        local c = COLLECTORS[1]
+        local h = collectorAt(c.chore, c.notes, c.x, c.z)
+        local writes = h.dbWrites
+        -- The backpack goes (10 notes) and comes back with 40, standing at the giver: a rise
+        -- against nothing the plugin kept, so only a baseline.
+        h.world:removeInventory("INV")
+        gain(h, c.notes)
+        assert.is_false(ticked(h, c.name))
+        assert.are.equal(writes, h.dbWrites)
+        assert.is_nil(h:output():find("collected", 1, true))
+        assert.is_nil(h:output():find("fault", 1, true))
+        -- The detector is live: a rise from that baseline ticks.
+        h.world:setInventory("INV", { { obj = c.notes, count = 99 } }, 28)
+        assert.is_true(ticked(h, c.name))
+        assert.are.equal(writes + 1, h.dbWrites)
+    end)
 end)

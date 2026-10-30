@@ -347,6 +347,18 @@ describe("dev recorder", function()
         h:advance(3000)
         assert.are.equal(1, #support.posts(h))
         assert.are.equal(0, support.lines(h, "[RECORDER]"))
+
+        -- A completion racing the Cancel must be ignored too. The harness never delivers a
+        -- cancelled request (h:respond is a no-op for it), so call the captured callback
+        -- directly, as the client would if the completion won the race.
+        local record, fields = posts[1], posts[1].state.fields
+        fields.successful, fields.failed, fields.responseCode = true, false, 200
+        record.onDone(record.request)
+        fields.successful, fields.failed, fields.responseCode = false, true, 500
+        record.onDone(record.request)
+        h:advance(3000)
+        assert.are.equal(1, #support.posts(h))
+        assert.are.equal(0, support.lines(h, "[RECORDER]"))
         recorder.shutdown() -- twice is fine
     end)
 

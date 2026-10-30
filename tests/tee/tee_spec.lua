@@ -99,7 +99,7 @@ describe("dev tee", function()
             local h = loaded('HAS_UTF8 = rawget(_G, "utf8") ~= nil\nprint("caf\195\169 \255")')
             assert.is_false(h.env.HAS_UTF8)
             h:step()
-            assert.are.same({ "caf\195\169 ?" }, support.batchTexts(h))
+            assert.are.same({ "caf\195\169 \255" }, support.batchTexts(h))
         end)
     end)
 

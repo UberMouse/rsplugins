@@ -43,7 +43,8 @@ function PluginShutdown()
     end
 end
 
-local json = require("json")
+local json = require("dev/json")
+local recording = require("dev/recording")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
 local function say(...)
@@ -91,21 +92,13 @@ local VALUE_TYPE_NAMES = {
     [73] = "STRUCT", [14] = "SYNTH", [209] = "VAR_INT", [57] = "VORBIS",
 }
 
--- Turn a var's value into something JSON can hold. Config values (NPCType,
--- ObjType, ...) become { config = name, id = n }. Other game types such as
--- CoordGrid become their tostring() text.
+-- Turn a var's value into something JSON can hold: numbers and strings pass through, config
+-- values (NPCType, ObjType, ...) become { config = name, id = n, type = typeName } and other
+-- game types such as CoordGrid become their tostring() text.
+---@param value any
+---@return any
 local function plainValue(value)
-    if type(value) ~= "userdata" then return value end
-    local ok, name = pcall(function()
-        return value.configName
-    end)
-    if ok and name then
-        local _, configId = pcall(function()
-            return value.id
-        end)
-        return { config = name, id = configId }
-    end
-    return tostring(value)
+    return recording.serialise(value, recording.objectData)
 end
 
 -- Everything we can read about one VarType, as a plain table.

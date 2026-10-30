@@ -152,8 +152,9 @@ local function wrapEvent(real)
             if sub == nil then return nil end
             local handle = {
                 Subscribe = function(name, callback, ...)
-                    -- Not tail calls: those would drop this Lua frame, which the client
-                    -- seems to use to identify the calling plugin (docs/api-concepts.md).
+                    -- Kept as non-tail calls out of caution. The theory that a tail call
+                    -- breaks the client's caller identification was withdrawn (see
+                    -- docs/api-concepts.md).
                     -- A bad name or callback is passed on as given: the API reports it.
                     if type(name) == "string" and type(callback) == "function" then
                         callback = guarded(event, name, callback)

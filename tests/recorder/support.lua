@@ -29,7 +29,7 @@ function M.plugin(main, manifest)
 end
 
 -- plugins/recorder-demo with a world it can read: vars set before load (so VarTransmit has an
--- oldValue), logged in, a backpack. The demo's probe reads os and io, hence the opt-in.
+-- oldValue), logged in, a backpack.
 ---@param opts table? { grant = string[] (default httpAccess and chatAccess), clock = integer
 ---  (CLOCK_TIME_DATE_MINUTES, default 5), db = table (PersistentDB entries set before load) }
 ---@return table h
@@ -37,7 +37,6 @@ function M.demo(opts)
     opts = opts or {}
     local h = harness.new("recorder-demo", {
         grant = opts.grant or { "httpAccess", "chatAccess" },
-        stdlib = { os = true, io = true },
     })
     for key, entry in pairs(opts.db or {}) do
         h.db[key] = entry
@@ -55,7 +54,7 @@ end
 ---@return table # inline files for harness.new
 function M.demoFiles()
     local files = {}
-    for _, name in ipairs({ "main.lua", "envprobe.lua", "plugin.json" }) do
+    for _, name in ipairs({ "main.lua", "plugin.json" }) do
         files[name] = assert(paths.read(paths.repo("plugins/recorder-demo/" .. name)))
     end
     return files

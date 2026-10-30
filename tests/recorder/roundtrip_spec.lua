@@ -9,14 +9,13 @@ local support = require("tests.recorder.support")
 
 local ChatType = harness.enums.ChatType
 
--- The demo's console lines, without the probe line: that one names the recorder and prints
--- os.clock(), so it differs between any two runs.
+-- The demo's console lines.
 ---@param h table
 ---@return string[]
 local function demoLines(h)
     local out = {}
     for line in h:output():gmatch("[^\n]+") do
-        if not line:find("[RECDEMO] probe:", 1, true) then out[#out + 1] = line end
+        out[#out + 1] = line
     end
     return out
 end
@@ -47,17 +46,13 @@ describe("plugins/recorder-demo round trip", function()
         local entries = support.entries(recorded)
 
         -- Replayed: the same plugin without dev/, in a world the recording alone describes.
-        local replayed = harness.new(
-            support.demoFiles(),
-            { grant = { "chatAccess" }, stdlib = { os = true, io = true } }
-        )
+        local replayed = harness.new(support.demoFiles(), { grant = { "chatAccess" } })
         replayed:useRecording(entries)
         replayed:load()
         replayed:playRecording()
 
         assert.are.same({ "[RECDEMO] enabled 5 times" }, demoLines(recorded))
         assert.are.same(demoLines(recorded), demoLines(replayed))
-        assert.matches("recorder=false", replayed:output())
         assert.are.same(recorded.db, replayed.db)
         assert.are.same(recorded.chatLog, replayed.chatLog)
         -- The world the plugin read, rebuilt from its reads and the recorded events: logged in

@@ -1,7 +1,6 @@
 -- Recorder Demo: a dev plugin (not for submission) that exercises the dev recorder
 -- (dev/recorder.lua, a symlink to lib/dev/) in the real client. It touches each kind of API
--- traffic the recorder captures (events, vars, the player, an inventory, PersistentDB), and
--- logs one probe line about the client's Lua environment, which the docs don't describe.
+-- traffic the recorder captures (events, vars, the player, an inventory, PersistentDB).
 
 -- First, before anything else can capture the API globals: install the recorder. require
 -- gives nil if dev/ isn't there, and then the plugin runs unrecorded.
@@ -29,49 +28,6 @@ end
 -- Every console line from this plugin carries this tag, so it's easy to grep.
 local function say(...)
     log("[RECDEMO]", ...)
-end
-
----------------------------------------------------------------------------
--- Environment probe
----------------------------------------------------------------------------
-
--- The result of `fn` as text, or "error" if it raises (a stripped library, say).
----@param fn function
----@return string
-local function try(fn)
-    local ok, value = pcall(fn)
-    return ok and tostring(value) or "error"
-end
-
--- One line saying what the client gives a plugin: the Lua version, whether os and io exist
--- (and what the clock functions return), and whether a required module sees the same
--- globals as main.lua. That last one decides whether dev/recorder also records what the
--- plugin's other modules do: install() swaps the globals of the environment it is given.
-local function probe()
-    local hasOs = try(function()
-        return os ~= nil
-    end)
-    local module = require("envprobe")
-    say(
-        "probe:",
-        "_VERSION=" .. tostring(_VERSION),
-        "os=" .. hasOs,
-        "io=" .. try(function()
-            return io ~= nil
-        end),
-        "os.time=" .. try(function()
-            return os.time()
-        end),
-        "os.date=" .. try(function()
-            return os.date("%Y-%m-%d %H:%M:%S")
-        end),
-        "os.clock=" .. try(function()
-            return os.clock()
-        end),
-        "recorder=" .. tostring(recorder ~= nil),
-        "moduleSharesEnv=" .. tostring(module ~= nil and module.env == _ENV),
-        "moduleSeesSameEvent=" .. tostring(module ~= nil and module.event == Event)
-    )
 end
 
 ---------------------------------------------------------------------------
@@ -139,8 +95,6 @@ end
 ---------------------------------------------------------------------------
 -- Start up
 ---------------------------------------------------------------------------
-
-probe()
 
 -- A PersistentDB counter: how many times this plugin has been enabled.
 local enables = (PersistentDB:GetInt("enables") or 0) + 1

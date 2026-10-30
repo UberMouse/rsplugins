@@ -55,7 +55,7 @@ To find which var something you do in game moves, run
 rerun with `--after <seq>`. It prints each change in order with the VarBits it moved (an update
 can name the base var rather than the VarBit); `--match <regex>` narrows it.
 
-Config-typed values (NPC, Obj, ...) are written as `{"config": NAME, "id": n}`. Other game types
+Config-typed values (NPC, Obj, ...) are written as `{"config": NAME, "id": n, "type": TYPE}`. Other game types
 (e.g. CoordGrid) are written as their text form. If a value couldn't be read, there's an
 `error` field instead of `value`.
 

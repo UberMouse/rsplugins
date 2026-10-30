@@ -12,10 +12,7 @@ local FIXTURE = "tests/fixtures/recorder-demo-shop.jsonl"
 
 ---@return table h
 local function replayed()
-    local h = harness.new(
-        support.demoFiles(),
-        { grant = { "chatAccess" }, stdlib = { os = true, io = true } }
-    )
+    local h = harness.new(support.demoFiles(), { grant = { "chatAccess" } })
     h:useRecording(FIXTURE)
     h:load()
     h:playRecording()

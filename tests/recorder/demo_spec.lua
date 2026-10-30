@@ -14,14 +14,8 @@ local function one(list, fields)
 end
 
 describe("plugins/recorder-demo with the recorder", function()
-    it("logs one environment probe line", function()
+    it("logs its enabled line and no recorder trouble", function()
         local h = support.demo()
-        assert.are.equal(1, h:consoleCount("[RECDEMO] probe:"))
-        assert.matches(
-            "_VERSION=Lua 5.4 os=true io=true .* recorder=true moduleSharesEnv=true "
-                .. "moduleSeesSameEvent=true",
-            h:output()
-        )
         assert.matches("%[RECDEMO%] enabled 1 times", h:output())
         assert.are.equal(0, h:consoleCount("[RECORDER]"))
     end)
@@ -173,17 +167,14 @@ describe("plugins/recorder-demo with the recorder", function()
     end)
 
     it("runs without dev/", function()
-        local h = harness.new(
-            support.demoFiles(),
-            { grant = { "httpAccess" }, stdlib = { os = true, io = true } }
-        )
+        local h = harness.new(support.demoFiles(), { grant = { "httpAccess" } })
         h.world:login("Zezima")
         h.world:setVar("VarPlayer", "QP", 10)
         h.world:setVar("VarPlayer", "OPTION_RUN", 0)
         h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", 5)
         h:load()
         h:advance(7000)
-        assert.matches("recorder=false", h:output())
+        assert.matches("%[RECDEMO%] enabled 1 times", h:output())
         assert.are.equal(0, #h.requests)
     end)
 end)

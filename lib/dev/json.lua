@@ -1,5 +1,5 @@
--- Minimal JSON encoder for the dev recorder (the plugin API has no JSON library), kept separate
--- from plugins/var-dump/json.lua so a dev tool and a submitted plugin share no code.
+-- Minimal JSON encoder for the dev tools (the plugin API has no JSON library), shared by
+-- the recorder, the log tee, dev-bridge and var-dump through their dev/ symlinks.
 -- Handles nil, booleans, numbers, strings and tables. A table with keys 1..n becomes an array,
 -- any other table becomes an object. Anything else is written as its tostring() text.
 

@@ -8,10 +8,7 @@ describe("chore-tracker state", function()
     local chores, byId
     before_each(function()
         chores = support.chores()
-        byId = {}
-        for _, c in ipairs(chores) do
-            byId[c.id] = c
-        end
+        byId = support.byId(chores)
     end)
 
     describe("selection", function()
@@ -210,16 +207,8 @@ describe("chore-tracker state", function()
     end)
 
     describe("move", function()
-        local function picked(ids)
-            local s = state.new()
-            for _, id in ipairs(ids) do
-                s = state.select(s, chores, id)
-            end
-            return s
-        end
-
         it("moves a chore within its period, leaving other periods' places alone", function()
-            local s = picked({ "d1", "w1", "d2", "m1", "dshop" })
+            local s = support.picked(chores, { "d1", "w1", "d2", "m1", "dshop" })
             assert.are.same(
                 { "dshop", "w1", "d1", "m1", "d2" },
                 state.move(s, chores, "dshop", 1).selected
@@ -231,13 +220,13 @@ describe("chore-tracker state", function()
         end)
 
         it("clamps the index to the period's range", function()
-            local s = picked({ "d1", "w1", "d2" })
+            local s = support.picked(chores, { "d1", "w1", "d2" })
             assert.are.same({ "d2", "w1", "d1" }, state.move(s, chores, "d2", -5).selected)
             assert.are.same({ "d2", "w1", "d1" }, state.move(s, chores, "d1", 99).selected)
         end)
 
         it("gives back the same state for an unselected id or the current place", function()
-            local s = picked({ "d1", "w1", "d2" })
+            local s = support.picked(chores, { "d1", "w1", "d2" })
             assert.are.equal(s, state.move(s, chores, "d2", 5))
             assert.are.equal(s, state.move(s, chores, "d1", 1))
             assert.are.equal(s, state.move(s, chores, "dshop", 1))
@@ -251,7 +240,7 @@ describe("chore-tracker state", function()
         end)
 
         it("never mutates the state it was given", function()
-            local s = picked({ "d1", "d2" })
+            local s = support.picked(chores, { "d1", "d2" })
             state.move(s, chores, "d2", 1)
             assert.are.same({ "d1", "d2" }, s.selected)
         end)

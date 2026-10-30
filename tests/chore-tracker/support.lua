@@ -27,6 +27,7 @@ M.MINUTES = {
     ["2026-10-26"] = 29882880,
     ["2026-10-27 23:59"] = 29885759,
     ["2026-10-28"] = 29885760,
+    ["2026-11-01"] = 29891520,
     ["2026-12-01"] = 29934720,
     ["2026-12-30"] = 29976480,
     ["2026-12-31"] = 29977920,
@@ -64,6 +65,30 @@ function M.chores()
         chore("wshop", "weekly", true),
         chore("m1", "monthly", false),
     }
+end
+
+-- The chores by id.
+---@param chores table[]
+---@return table<string, table>
+function M.byId(chores)
+    local out = {}
+    for _, c in ipairs(chores) do
+        out[c.id] = c
+    end
+    return out
+end
+
+-- A tracker state with `ids` picked, in order (core/state's select, folded).
+---@param chores table[]
+---@param ids string[]
+---@return table
+function M.picked(chores, ids)
+    local state = require("core/state")
+    local s = state.new()
+    for _, id in ipairs(ids) do
+        s = state.select(s, chores, id)
+    end
+    return s
 end
 
 return M

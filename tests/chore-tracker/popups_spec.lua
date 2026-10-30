@@ -2,7 +2,7 @@
 -- the two settings, and what logout and shutdown do to a popup on screen.
 
 local helpers = require("tests.chore-tracker.helpers")
-local loaded, pick, tick = helpers.loaded, helpers.pick, helpers.tick
+local loaded, togglePicks, toggleTick = helpers.loaded, helpers.togglePicks, helpers.toggleTick
 
 local BERT = { name = "Sand from Bert", id = "bert-sand", flag = "HANDSAND_BUCKETS_CLAIMED_TODAY" }
 local GEOFF =
@@ -12,17 +12,7 @@ local ARCH_INFO_POPUP, LEAGUE2_HARD_TASK_COMPLETE = 48145, 60041
 -- A popup lasts 200 Logic ticks and ends on the next one (20 ms each), and the plugin's login
 -- poll runs every 25.
 local POPUP_MS = 4020
-local POLL_MS = 500
-local SETTLE_MS = 10000
-
--- A loaded harness past the settle window that follows a load, where var ticks start.
----@param opts table?
----@return table
-local function settled(opts)
-    local h = loaded(opts)
-    h:advance(SETTLE_MS)
-    return h
-end
+local POLL_MS, SETTLE_MS, settled = helpers.POLL_MS, helpers.SETTLE_MS, helpers.settled
 
 ---@param h table
 ---@param flag string
@@ -56,15 +46,14 @@ end
 ---@param setting string
 local function toggle(h, setting)
     helpers.openSettings(h)
-    assert(h.ui:click(helpers.group(h, setting), setting))
-    assert(h.ui:click(h.ui:get("SpriteButton", { sprite = "BACK" })))
-    h:advance(20)
+    helpers.click(h, helpers.group(h, setting), setting)
+    helpers.back(h)
 end
 
 describe("chore-tracker popups", function()
     it("celebrates a picked chore it ticked, top-middle, with the chore popup's jingle", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
+        togglePicks(h, { BERT.id, GEOFF.id })
         claim(h, BERT.flag)
         local popups = h.ui:popups()
         assert.are.equal(1, #popups)
@@ -85,33 +74,33 @@ describe("chore-tracker popups", function()
 
     it("never celebrates a hand tick of a single chore", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
-        tick(h, BERT.name)
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
         assert.are.same({}, titles(h))
-        tick(h, BERT.name) -- unticking
+        toggleTick(h, BERT.name) -- unticking
         assert.are.same({}, titles(h))
     end)
 
     it("never celebrates a chore that isn't picked", function()
         local h = settled()
-        pick(h, { BERT.id })
+        togglePicks(h, { BERT.id })
         claim(h, GEOFF.flag)
         assert.are.same({}, titles(h))
     end)
 
     it("never celebrates a chore already done this period", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
-        tick(h, BERT.name)
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
         claim(h, BERT.flag)
         assert.are.same({}, titles(h))
     end)
 
     it("celebrates the last picked chore of a period, by hand or by itself", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
-        tick(h, BERT.name)
-        tick(h, GEOFF.name)
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
+        toggleTick(h, GEOFF.name)
         assert.are.same({ "WEEKLIES COMPLETE" }, titles(h))
         local p = h.ui:popups()[1]
         assert.matches("All 2 of your weekly chores done", p.text)
@@ -120,8 +109,8 @@ describe("chore-tracker popups", function()
         assert.matches("%[CHORES%] celebrate weekly cleared", h:output())
 
         local h2 = settled()
-        pick(h2, { BERT.id, GEOFF.id })
-        tick(h2, BERT.name)
+        togglePicks(h2, { BERT.id, GEOFF.id })
+        toggleTick(h2, BERT.name)
         claim(h2, GEOFF.flag)
         -- The chore popup shows first; the period's follows it.
         assert.are.same({ "CHORE COMPLETE" }, titles(h2))
@@ -131,27 +120,27 @@ describe("chore-tracker popups", function()
 
     it("titles a cleared day as the dailies", function()
         local h = settled()
-        pick(h, { "daily-challenge" })
-        tick(h, "Daily Challenge")
+        togglePicks(h, { "daily-challenge" })
+        toggleTick(h, "Daily Challenge")
         assert.are.same({ "DAILIES COMPLETE" }, titles(h))
         assert.matches("All 1 of your daily chore done", h.ui:popups()[1].text)
     end)
 
     it("celebrates a re-tick of the last chore again", function()
         local h = settled()
-        pick(h, { BERT.id })
-        tick(h, BERT.name)
+        togglePicks(h, { BERT.id })
+        toggleTick(h, BERT.name)
         assert.are.equal(1, #h.ui:popups())
         h:advance(POPUP_MS)
-        tick(h, BERT.name) -- unticks
+        toggleTick(h, BERT.name)
         assert.are.equal(1, #h.ui:popups())
-        tick(h, BERT.name)
+        toggleTick(h, BERT.name)
         assert.are.equal(2, #h.ui:popups())
     end)
 
     it("shows one at a time, first in first out, each ending on its own", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
+        togglePicks(h, { BERT.id, GEOFF.id })
         claim(h, BERT.flag)
         claim(h, GEOFF.flag)
         -- Bert's chore, Geoffrey's chore, then the period they clear.
@@ -170,7 +159,7 @@ describe("chore-tracker popups", function()
 
     it("shows whatever the window is doing", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
+        togglePicks(h, { BERT.id, GEOFF.id })
         local menu = { sprite = "MENU", visible = true }
         assert.is_true(h.ui:click(h.ui:get("SpriteButton", menu))) -- collapse
         claim(h, BERT.flag)
@@ -185,18 +174,18 @@ describe("chore-tracker popups", function()
 
     it("never celebrates picking or unpicking chores", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
-        tick(h, BERT.name)
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
         -- Unpicking the undone chore leaves the period all done; picking brings it back.
-        pick(h, { GEOFF.id })
-        pick(h, { GEOFF.id })
+        togglePicks(h, { GEOFF.id })
+        togglePicks(h, { GEOFF.id })
         assert.are.same({}, titles(h))
     end)
 
     it("never celebrates a load, or stored state that is already all done", function()
         local h = settled()
-        pick(h, { BERT.id })
-        tick(h, BERT.name)
+        togglePicks(h, { BERT.id })
+        toggleTick(h, BERT.name)
         h:advance(POPUP_MS)
         h:reload()
         h:advance(SETTLE_MS)
@@ -210,7 +199,7 @@ describe("chore-tracker popups", function()
 
     it("clears the queue and the popup on screen at logout and a character switch", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
+        togglePicks(h, { BERT.id, GEOFF.id })
         claim(h, BERT.flag)
         claim(h, GEOFF.flag)
         local first = h.ui:popups()[1]
@@ -224,7 +213,7 @@ describe("chore-tracker popups", function()
         h:advance(POLL_MS)
         h:advance(SETTLE_MS)
         local n = #h.ui:popups()
-        pick(h, { "coeden-logs" })
+        togglePicks(h, { "coeden-logs" })
         claim(h, "ATELF_DAILY_LOGS_CLAIMED")
         local second = h.ui:popups()[n + 1]
         assert.is_not_nil(second)
@@ -236,7 +225,7 @@ describe("chore-tracker popups", function()
 
     it("destroys the popup and its Logic subscription at shutdown", function()
         local h = settled()
-        pick(h, { BERT.id, GEOFF.id })
+        togglePicks(h, { BERT.id, GEOFF.id })
         claim(h, BERT.flag)
         claim(h, GEOFF.flag)
         local function popupSubs()
@@ -257,7 +246,7 @@ describe("chore-tracker popups", function()
         local h = settled()
         local COEDEN =
             { name = "Logs from Coeden", id = "coeden-logs", flag = "ATELF_DAILY_LOGS_CLAIMED" }
-        pick(h, { BERT.id, GEOFF.id, COEDEN.id })
+        togglePicks(h, { BERT.id, GEOFF.id, COEDEN.id })
         claim(h, BERT.flag)
         claim(h, GEOFF.flag)
         claim(h, COEDEN.flag)
@@ -268,8 +257,8 @@ describe("chore-tracker popups", function()
         assert.are.equal(0, showing(h))
         -- Nothing is stuck: the next celebration shows.
         h.ui:popupsFail(false)
-        tick(h, COEDEN.name) -- unticks
-        tick(h, COEDEN.name)
+        toggleTick(h, COEDEN.name)
+        toggleTick(h, COEDEN.name)
         assert.are.same({ "CHORE COMPLETE", "WEEKLIES COMPLETE" }, titles(h))
         assert.are.equal(1, showing(h))
     end)
@@ -290,7 +279,7 @@ describe("chore-tracker popups", function()
 
         it("turning popups off destroys the showing popup and the queue, and saves it", function()
             local h = settled()
-            pick(h, { BERT.id, GEOFF.id })
+            togglePicks(h, { BERT.id, GEOFF.id })
             claim(h, BERT.flag)
             claim(h, GEOFF.flag)
             local first = h.ui:popups()[1]
@@ -304,8 +293,8 @@ describe("chore-tracker popups", function()
             -- Nothing shows while off, and it stays off after a reload.
             h:reload()
             h:advance(SETTLE_MS)
-            tick(h, BERT.name)
-            tick(h, GEOFF.name)
+            toggleTick(h, BERT.name)
+            toggleTick(h, GEOFF.name)
             assert.are.same({}, titles(h))
             toggle(h, "popups")
             helpers.openSettings(h)
@@ -314,7 +303,7 @@ describe("chore-tracker popups", function()
 
         it("turning sound off shows popups without a sound, and saves it", function()
             local h = settled()
-            pick(h, { BERT.id, GEOFF.id })
+            togglePicks(h, { BERT.id, GEOFF.id })
             toggle(h, "sound")
             assert.is_false(h.db.celebrations.value.sound)
             assert.is_true(h.db.celebrations.value.popups)
@@ -327,14 +316,14 @@ describe("chore-tracker popups", function()
         it("redraws the open settings view when a switch is clicked", function()
             local h = loaded()
             helpers.openSettings(h)
-            assert(h.ui:click(helpers.group(h, "sound"), "sound"))
+            helpers.click(h, helpers.group(h, "sound"), "sound")
             assert.is_false(helpers.picked(h, "sound"))
             assert.is_true(helpers.picked(h, "popups"))
         end)
 
         it("keeps sound off across a reload", function()
             local h = settled()
-            pick(h, { BERT.id, GEOFF.id })
+            togglePicks(h, { BERT.id, GEOFF.id })
             toggle(h, "sound")
             h:reload()
             h:advance(SETTLE_MS)
@@ -347,10 +336,7 @@ describe("chore-tracker popups", function()
 
         it("falls back to the defaults for a malformed stored value", function()
             local h = loaded({ load = false })
-            h.db.celebrations = {
-                type = require("tests.harness").enums.PersistentDBType.STRUCTURED_DATA,
-                value = { version = 1, popups = "no" },
-            }
+            helpers.seed(h, "celebrations", { version = 1, popups = "no" })
             h:load()
             helpers.openSettings(h)
             assert.is_true(helpers.picked(h, "popups"))

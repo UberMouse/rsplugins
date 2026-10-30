@@ -3,31 +3,14 @@
 -- on a change seen after the 10 s settle that follows the load or a character switch.
 
 local helpers = require("tests.chore-tracker.helpers")
-local loaded, ticked, pick, doneAt = helpers.loaded, helpers.ticked, helpers.pick, helpers.doneAt
+local loaded, ticked, togglePicks, doneAt =
+    helpers.loaded, helpers.ticked, helpers.togglePicks, helpers.doneAt
 
 local BERT = { name = "Sand from Bert", id = "bert-sand" }
 local CHALLENGE = { name = "Daily Challenge", id = "daily-challenge" }
 local ADVANCE = { id = "advance-time" }
 
--- The settle window, 500 Logic ticks, and the login poll (every 25).
-local SETTLE_MS = 10000
-local POLL_MS = 500
-
--- A spec harness past the settle window. `before` (var name -> value) is set before loading.
----@param before table<string, integer>?
----@param opts table?
----@return table
-local function settled(before, opts)
-    opts = opts or {}
-    opts.load = false
-    local h = loaded(opts)
-    for name, value in pairs(before or {}) do
-        h.world:setVar("VarPlayer", name, value)
-    end
-    h:load()
-    h:advance(SETTLE_MS)
-    return h
-end
+local SETTLE_MS, POLL_MS, settled = helpers.SETTLE_MS, helpers.POLL_MS, helpers.settled
 
 ---@param h table
 ---@param name string
@@ -47,7 +30,7 @@ end
 describe("chore-tracker var ticks", function()
     it("ticks a chore when its VarBit turns true, logging the var", function()
         local h = settled()
-        pick(h, { BERT.id })
+        togglePicks(h, { BERT.id })
         assert.is_false(ticked(h, BERT.name))
         local writes = h.dbWrites
         set(h, "HANDSAND_BUCKETS_CLAIMED_TODAY", 1)
@@ -130,9 +113,9 @@ describe("chore-tracker var ticks", function()
 
     it("keeps a chore's earlier tick, logging nothing", function()
         local h = settled()
-        pick(h, { BERT.id })
-        helpers.tick(h, BERT.name)
-        h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", helpers.NOW + 30)
+        togglePicks(h, { BERT.id })
+        helpers.toggleTick(h, BERT.name)
+        helpers.setClock(h, helpers.NOW + 30)
         local writes = h.dbWrites
         set(h, "HANDSAND_BUCKETS_CLAIMED_TODAY", 1)
         assert.are.equal(writes, h.dbWrites)
@@ -152,7 +135,7 @@ describe("chore-tracker var ticks", function()
 
     it("ticks the Daily Challenge when a challenge's reward is claimed", function()
         local h = settled()
-        pick(h, { CHALLENGE.id })
+        togglePicks(h, { CHALLENGE.id })
         set(h, "CHALLENGE_TOTAL_COMPLETED", 1)
         assert.are.equal(helpers.NOW, doneAt(h, CHALLENGE.id))
         assert.matches(
@@ -203,7 +186,7 @@ describe("chore-tracker var ticks", function()
         local h = settled()
         set(h, "CHALLENGE_TOTAL_COMPLETED", 1)
         assert.are.equal(helpers.NOW, doneAt(h, CHALLENGE.id))
-        h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", helpers.NOW + 30)
+        helpers.setClock(h, helpers.NOW + 30)
         local writes = h.dbWrites
         set(h, "CHALLENGE_TOTAL_COMPLETED", 2)
         assert.are.equal(writes, h.dbWrites)

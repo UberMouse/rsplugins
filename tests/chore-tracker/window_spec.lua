@@ -4,7 +4,8 @@
 local helpers = require("tests.chore-tracker.helpers")
 local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
-local loaded, row, pick, ticked = helpers.loaded, helpers.row, helpers.pick, helpers.ticked
+local loaded, row, togglePicks, ticked =
+    helpers.loaded, helpers.row, helpers.togglePicks, helpers.ticked
 
 local ELLIPSIS = require("core/fit").ELLIPSIS
 local fonts = require("tests.harness.api.fonts")
@@ -13,11 +14,7 @@ local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
 -- shell/rows.lua's text colours for a row not done and done.
 local TEXT_COLOUR, DONE_COLOUR = 0xE7D7B0FF, 0x7A7262FF
 
----@param h table
----@return table
-local function window(h)
-    return h.ui:get("Window", { text = "Chores" })
-end
+local window = helpers.window
 
 ---@param name string
 ---@return integer
@@ -29,14 +26,6 @@ end
 ---@return integer
 local function obj(name)
     return assert(catalog.config("Obj", name))
-end
-
--- Buy a feather pack at open shop `inv`.
----@param h table
----@param inv string
-local function buyFeathers(h, inv)
-    h.world:setInventory(inv, { { obj = "FEATHER_PACK", count = 20 } }, 4)
-    h.world:setInventory(inv, { { obj = "FEATHER_PACK", count = 19 } }, 4)
 end
 
 -- How many live tooltips a PrettyUI fake has on components the plugin made itself (its
@@ -66,7 +55,7 @@ end
 describe("chore-tracker window", function()
     it("opens titled Chores, with the hint, and logs a tagged line", function()
         local h = loaded()
-        local win = h.ui:get("Window", { text = "Chores" })
+        local win = window(h)
         assert.is_true(h.ui:layout(win).visible)
         assert.is_true(win.closeButton.hidden)
         h.ui:get("Text", { text = "settings button" })
@@ -76,7 +65,7 @@ describe("chore-tracker window", function()
     it("shows each picked chore as a row with its icon, its name and an empty box", function()
         local h = loaded()
         local before = h.ui:layout(window(h))
-        pick(h, { "daily-challenge", "player-owned-ports" })
+        togglePicks(h, { "daily-challenge", "player-owned-ports" })
         local after = h.ui:layout(window(h))
         assert.are.same(
             { before.x, before.y, before.width, before.height },
@@ -105,7 +94,7 @@ describe("chore-tracker window", function()
 
     it("ticks and unticks a chore on a click anywhere on its row, in place, and saves", function()
         local h = loaded()
-        pick(h, { "daily-challenge", "player-owned-farm" })
+        togglePicks(h, { "daily-challenge", "player-owned-farm" })
         local win, r = window(h), row(h, "Daily Challenge")
         local writes = h.dbWrites
         assert.is_true(h.ui:click(r.label))
@@ -132,7 +121,7 @@ describe("chore-tracker window", function()
 
     it("changes nothing on a click before the game clock reads", function()
         local h = loaded({ clock = 0 })
-        pick(h, { "daily-challenge" })
+        togglePicks(h, { "daily-challenge" })
         h.ui:get("Text", { text = "Waiting for the game clock" })
         local writes = h.dbWrites
         assert.is_true(h.ui:click(row(h, "Daily Challenge").layer))
@@ -143,9 +132,9 @@ describe("chore-tracker window", function()
 
     it("ticks a row in place when the plugin sees its chore done", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
+        togglePicks(h, { FEATHERS.id })
         local win, r = window(h), row(h, FEATHERS.name)
-        buyFeathers(h, "FISHINGSHOP")
+        helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         assert.is_true(ticked(h, FEATHERS.name))
         assert.are.equal(0.5, r.icon.alpha)
         assert.are.equal(DONE_COLOUR, r.label.rgba)
@@ -156,13 +145,13 @@ describe("chore-tracker window", function()
 
     it("changes a row's count and tooltip in place, taking a shown tooltip down", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
+        togglePicks(h, { FEATHERS.id })
         local win, r = window(h), row(h, FEATHERS.name)
         assert.are.equal("Feather Shop Run (0/4)", r.label.content)
         assert.is_true(h.ui:hover(r.layer))
         assert.matches("not yet  Gerrant", h.ui:tooltips()[1])
 
-        buyFeathers(h, "FISHINGSHOP")
+        helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         h:advance(20)
         assert.are.equal("Feather Shop Run (1/4)", r.label.content)
         assert.are.equal(win, window(h))
@@ -176,11 +165,11 @@ describe("chore-tracker window", function()
 
     it("unticks rows in place when their period resets", function()
         local h = loaded()
-        pick(h, { "daily-challenge" })
+        togglePicks(h, { "daily-challenge" })
         local win, r = window(h), row(h, "Daily Challenge")
-        helpers.tick(h, "Daily Challenge")
+        helpers.toggleTick(h, "Daily Challenge")
         assert.is_true(ticked(h, "Daily Challenge"))
-        h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", helpers.NEXT_DAY)
+        helpers.setClock(h, helpers.NEXT_DAY)
         assert.is_false(ticked(h, "Daily Challenge"))
         assert.are.equal(1, r.icon.alpha)
         assert.are.equal(TEXT_COLOUR, r.label.rgba)
@@ -194,7 +183,7 @@ describe("chore-tracker window", function()
         for _, c in ipairs(chores) do
             if c.period == "daily" then daily[#daily + 1] = c.id end
         end
-        pick(h, daily)
+        togglePicks(h, daily)
         local list = helpers.rows(h)
         assert.are.equal(#daily, #list)
         local first, last = list[1], list[#list]
@@ -217,7 +206,7 @@ describe("chore-tracker window", function()
 
     it("leaves no tooltip attachment behind a view switch, a rebuild or a reload", function()
         local h = loaded()
-        pick(h, { FEATHERS.id, "daily-challenge" })
+        togglePicks(h, { FEATHERS.id, "daily-challenge" })
         assert.is_true(h.ui:hover(row(h, "Daily Challenge").layer))
         assert.are.equal(1, #h.ui:tooltips())
 
@@ -228,7 +217,7 @@ describe("chore-tracker window", function()
 
         -- The clock stopping rebuilds the window for "waiting".
         assert.is_true(h.ui:hover(row(h, "Daily Challenge").layer))
-        h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", 0)
+        helpers.setClock(h, 0)
         h.ui:get("Text", { text = "Waiting for the game clock" })
         assert.are.same({}, h.ui:tooltips())
         assert.are.equal(0, liveOrphanTips(h.ui:lib()))
@@ -252,7 +241,7 @@ describe("chore-tracker window", function()
             Sprite = real.Sprite,
             Font = real.Font,
         }
-        pick(h, { "daily-challenge", "player-owned-ports" })
+        togglePicks(h, { "daily-challenge", "player-owned-ports" })
         local ports = row(h, "Player Owned Ports")
         assert.is_nil(ports.icon)
         assert.are.equal(h.ui:layout(row(h, "Daily Challenge").label).x, h.ui:layout(ports.label).x)
@@ -260,7 +249,8 @@ describe("chore-tracker window", function()
         assert.is_true(ticked(h, "Player Owned Ports"))
 
         -- Rebuilt, still one line.
-        pick(h, {})
+        helpers.openSettings(h)
+        helpers.back(h)
         local _, lines = h:output():gsub("%[CHORES%] unknown icon id%.Obj%.POP_LOG", "")
         assert.are.equal(1, lines)
     end)
@@ -289,7 +279,7 @@ describe("chore-tracker window", function()
 
     it("collapses to a hamburger at the same spot, and expands back onto it", function()
         local h = loaded()
-        local win = h.ui:get("Window", { text = "Chores" })
+        local win = window(h)
         h.ui:dragTitle(win, 50, 40)
         local menu = h.ui:get("SpriteButton", { sprite = "MENU" })
         local spot = h.ui:layout(menu)
@@ -331,8 +321,8 @@ describe("chore-tracker window", function()
 
     it("swaps the title-bar slot for a back button in settings, and back again", function()
         local h = loaded()
-        pick(h, { "daily-challenge" })
-        local win = h.ui:get("Window", { text = "Chores" })
+        togglePicks(h, { "daily-challenge" })
+        local win = window(h)
         local before = h.ui:layout(win)
         helpers.openSettings(h)
         -- One back button, in the slot where the hamburger was, and no hamburger.
@@ -349,7 +339,7 @@ describe("chore-tracker window", function()
 
         assert.is_true(h.ui:click(back))
         h:advance(20)
-        local after = h.ui:layout(h.ui:get("Window", { text = "Chores" }))
+        local after = h.ui:layout(window(h))
         assert.are.same(
             { before.x, before.y, before.width, before.height },
             { after.x, after.y, after.width, after.height }
@@ -361,7 +351,7 @@ describe("chore-tracker window", function()
         -- In the list, the slot collapses the window as before.
         assert.is_true(h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU" })))
         h:advance(20)
-        assert.is_false(h.ui:layout(h.ui:get("Window", { text = "Chores" })).visible)
+        assert.is_false(h.ui:layout(window(h)).visible)
         h.ui:get("Panel")
     end)
 end)
@@ -388,7 +378,7 @@ describe("chore-tracker long names", function()
 
     it("cuts a long name with dots, leads its tooltip with the full name, and re-fits", function()
         local h = loaded()
-        pick(h, { "cromperty-pure-essence" })
+        togglePicks(h, { "cromperty-pure-essence" })
         local shown, tip, avail = onlyRow(h)
         assert.is_true(fonts.width(CROMPERTY, false) > avail)
         assert.are.equal("...", shown:sub(-3))
@@ -417,7 +407,7 @@ describe("chore-tracker long names", function()
 
     it("leaves a short name and its tooltip alone", function()
         local h = loaded()
-        pick(h, { "daily-challenge" })
+        togglePicks(h, { "daily-challenge" })
         local shown, tip = onlyRow(h)
         assert.are.equal("Daily Challenge", shown)
         assert.is_nil(tip:find("Daily Challenge", 1, true))
@@ -425,7 +415,7 @@ describe("chore-tracker long names", function()
 
     it("re-fits when a shop count changes the text", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
+        togglePicks(h, { FEATHERS.id })
         -- Make the window just wide enough for "(1/4)" but not "(0/4)": a digit '1' is
         -- narrower than a '0' in the fake font.
         local fits = fonts.width("Feather Shop Run (1/4)", false)
@@ -436,7 +426,7 @@ describe("chore-tracker long names", function()
         assert.are.equal("...", shown:sub(-3))
         assert.are.equal("Feather Shop Run (0/4)<br>", tip:sub(1, 26))
 
-        buyFeathers(h, "FISHINGSHOP")
+        helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         h:advance(20)
         local after, tip2 = onlyRow(h)
         assert.are.equal("Feather Shop Run (1/4)", after)
@@ -445,21 +435,21 @@ describe("chore-tracker long names", function()
 
     it("replaces a row's tooltip once when a refresh changes its text and cut", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
+        togglePicks(h, { FEATHERS.id })
         local fits = fonts.width("Feather Shop Run (1/4)", false)
         local r = helpers.rows(h)[1]
         h.ui:resize(window(h), fits + LABEL_INSET - r.layer.width, 0)
         h:advance(600)
         local lib = h.ui:lib()
         local before = #lib.tooltips
-        buyFeathers(h, "FISHINGSHOP")
+        helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         h:advance(20)
         assert.are.equal(before + 1, #lib.tooltips)
     end)
 
     it("shows just dots when a laid-out row has no room for any text", function()
         local h = loaded()
-        pick(h, { "daily-challenge" })
+        togglePicks(h, { "daily-challenge" })
         local r = helpers.rows(h)[1]
         -- The window's minimum width keeps h.ui:resize from getting here, so size the row.
         r.layer:SetSize(40, 28)
@@ -469,7 +459,7 @@ describe("chore-tracker long names", function()
 
     it("shows full names and logs once when the font can't measure", function()
         local h = loaded()
-        pick(h, { "cromperty-pure-essence", "daily-challenge" })
+        togglePicks(h, { "cromperty-pure-essence", "daily-challenge" })
         h.env.config = {
             Font = setmetatable({}, {
                 __index = function()

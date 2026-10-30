@@ -1,11 +1,11 @@
 -- Shared steps for the Chore Tracker's harness specs: load it in a scripted world, find and
--- click rows, pick chores, drive the window (collapse, expand, back) and read tick and stored
--- state.
+-- click rows, toggle picks and ticks, drive the window (collapse, expand, back), seed and read
+-- stored state, and set the clock and shop stock.
 
 local harness = require("tests.harness")
 local catalog = require("tests.harness.catalog")
 local uiFake = require("tests.harness.api.ui")
-require("tests.chore-tracker.support")
+local support = require("tests.chore-tracker.support")
 local fit = require("core/fit")
 local varCore = require("core/vars")
 local varRules = require("data/vars")
@@ -45,10 +45,81 @@ local function isTicked(sprite)
 end
 
 -- Epoch minutes (checked against Python's datetime, UTC).
-M.NOW = 29881543 -- 2026-10-25 01:43, a Sunday
-M.NEXT_DAY = 29882880 -- 2026-10-26 00:00, a daily reset
-M.WEDNESDAY = 29885760 -- 2026-10-28 00:00, a weekly reset
-M.NEXT_MONTH = 29891520 -- 2026-11-01 00:00, a monthly reset
+M.NOW = support.MINUTES["2026-10-25 01:43"] -- a Sunday
+M.NEXT_DAY = support.MINUTES["2026-10-26"] -- 00:00, a daily reset
+M.WEDNESDAY = support.MINUTES["2026-10-28"] -- 00:00, a weekly reset
+M.NEXT_MONTH = support.MINUTES["2026-11-01"] -- 00:00, a monthly reset
+
+-- Harness milliseconds that cover the plugin's timers. They mirror main.lua's POLL_TICKS (25
+-- Logic ticks, the login and layout poll) and shell/vars.lua's SETTLE_TICKS (500), at 20 ms a
+-- tick; if either changes, change these.
+M.POLL_MS = 500
+M.SETTLE_MS = 10000
+
+-- Set the game clock (epoch minutes).
+---@param h table
+---@param minutes integer
+function M.setClock(h, minutes)
+    h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", minutes)
+end
+
+-- Store `value` at persistent-DB key `key` the way the plugin does; call it before h:load().
+---@param h table
+---@param key string
+---@param value table
+function M.seed(h, key, value)
+    h.db[key] = { type = harness.enums.PersistentDBType.STRUCTURED_DATA, value = value }
+end
+
+-- Set shop `inv` to one line of `count` of `obj` (and the `others` lines after it, if any). A
+-- line whose count drops from the previous call is the player buying.
+---@param h table
+---@param inv string
+---@param obj string
+---@param count integer
+---@param others table[]?
+function M.stock(h, inv, obj, count, others)
+    local lines = { { obj = obj, count = count } }
+    for _, line in ipairs(others or {}) do
+        lines[#lines + 1] = line
+    end
+    h.world:setInventory(inv, lines, 4)
+end
+
+-- Buy from open shop `inv`: its `obj` line drops from `from` to `to`.
+---@param h table
+---@param inv string
+---@param obj string
+---@param from integer
+---@param to integer
+function M.buy(h, inv, obj, from, to)
+    M.stock(h, inv, obj, from)
+    M.stock(h, inv, obj, to)
+end
+
+-- The Chores window.
+---@param h table
+---@return table
+function M.window(h)
+    return h.ui:get("Window", { text = "Chores" })
+end
+
+-- A harness past the settle window, where var ticks start. `before` (var name -> value) is set
+-- before loading; `opts` are M.loaded's (its `load` is overridden).
+---@param before table<string, integer>?
+---@param opts table?
+---@return table
+function M.settled(before, opts)
+    opts = opts or {}
+    opts.load = false
+    local h = M.loaded(opts)
+    for name, value in pairs(before or {}) do
+        h.world:setVar("VarPlayer", name, value)
+    end
+    h:load()
+    h:advance(M.SETTLE_MS)
+    return h
+end
 
 -- A harness with the clock at `opts.clock` (default NOW; 0 for not ready) and logged in as
 -- `opts.login` (default "Zezima"; false for logged out), loaded unless `opts.load` is false.
@@ -79,7 +150,7 @@ end
 ---@param h table
 ---@return table[]
 function M.rows(h)
-    local content = h.ui:get("Window", { text = "Chores" }).content
+    local content = M.window(h).content
     local grip = catalog.config("Sprite", "HAMBURGER_MENU_ICON")
     local out = {}
     for _, child in ipairs(uiFake.stateOf(content).children) do
@@ -151,11 +222,21 @@ function M.ticked(h, name)
     return isTicked(M.row(h, name).box.spriteID)
 end
 
--- Click a chore's row, in either view (on its text, which passes the click to the row).
+-- Toggle a chore by clicking its row, in either view (on its text, which passes the click to
+-- the row): ticks an unticked one, unticks a ticked one.
 ---@param h table
 ---@param name string
-function M.tick(h, name)
+function M.toggleTick(h, name)
     click(h, M.row(h, name).label)
+end
+
+-- The state value stored for a character (default "Zezima"), or nil if none is stored.
+---@param h table
+---@param who string?
+---@return table?
+function M.stored(h, who)
+    local entry = h.db["state:" .. (who or "Zezima")]
+    return entry and entry.value
 end
 
 -- The minute chore `id` is stored as done for a character, or nil.
@@ -164,8 +245,8 @@ end
 ---@param who string?
 ---@return integer?
 function M.doneAt(h, id, who)
-    local entry = h.db["state:" .. (who or "Zezima")]
-    return entry and entry.value.done[id]
+    local value = M.stored(h, who)
+    return value and value.done[id]
 end
 
 -- A chore's row text and tooltip text, read by hovering it.
@@ -251,20 +332,20 @@ function M.back(h)
     h:advance(20)
 end
 
--- Open settings, toggle the chores whose ids are given, and go back to the list.
+-- Open settings, toggle the picked state of the chores whose ids are given (picks an unpicked
+-- one, unpicks a picked one), and go back to the list.
 ---@param h table
 ---@param ids string[]
-function M.pick(h, ids)
+function M.togglePicks(h, ids)
     M.openSettings(h)
-    local win = h.ui:get("Window", { text = "Chores" })
+    local win = M.window(h)
     for _, id in ipairs(ids) do
         -- Settings lists every chore, so a row may be scrolled out of the view; bring it in.
         local picking = M.settingsRow(h, id)
         win:SetScrollPosition(picking.layer.y - 40)
         click(h, picking.label)
     end
-    click(h, h.ui:get("SpriteButton", { sprite = "BACK" }))
-    h:advance(20)
+    M.back(h)
 end
 
 return M

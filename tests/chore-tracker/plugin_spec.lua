@@ -2,27 +2,16 @@
 -- and its resets, being logged out or waiting for the clock, and the saved layout.
 
 local helpers = require("tests.chore-tracker.helpers")
-local loaded, row, ticked, tick, pick =
-    helpers.loaded, helpers.row, helpers.ticked, helpers.tick, helpers.pick
+local loaded, row, ticked, toggleTick, togglePicks =
+    helpers.loaded, helpers.row, helpers.ticked, helpers.toggleTick, helpers.togglePicks
 
 local DAILY = { name = "Daily Challenge", id = "daily-challenge" }
 local WEEKLY = { name = "Soul Reaper", id = "soul-reaper" }
 local MONTHLY = { name = "Giant Oyster", id = "giant-oyster" }
 
--- Half a second: long enough for the plugin's login and layout poll (every 25 Logic ticks).
-local POLL_MS = 500
+local POLL_MS, setClock = helpers.POLL_MS, helpers.setClock
 
----@param h table
----@param minutes integer
-local function setClock(h, minutes)
-    h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", minutes)
-end
-
----@param h table
----@return table
-local function window(h)
-    return h.ui:get("Window", { text = "Chores" })
-end
+local window = helpers.window
 
 ---@param h table
 ---@return integer[]
@@ -34,9 +23,9 @@ end
 describe("chore-tracker saving", function()
     it("keeps a tick across a reload, written when it is made", function()
         local h = loaded()
-        pick(h, { DAILY.id })
+        togglePicks(h, { DAILY.id })
         local writes = h.dbWrites
-        tick(h, DAILY.name)
+        toggleTick(h, DAILY.name)
         assert.are.equal(writes + 1, h.dbWrites)
         h:reload()
         assert.is_true(ticked(h, DAILY.name))
@@ -45,10 +34,10 @@ describe("chore-tracker saving", function()
 
     it("shows and hides rows as chores are picked and unpicked, and keeps the picks", function()
         local h = loaded()
-        pick(h, { DAILY.id, WEEKLY.id })
+        togglePicks(h, { DAILY.id, WEEKLY.id })
         row(h, DAILY.name)
         row(h, WEEKLY.name)
-        pick(h, { DAILY.id })
+        togglePicks(h, { DAILY.id })
         assert.is_nil(helpers.findRow(h, DAILY.name))
         row(h, WEEKLY.name)
         h:reload()
@@ -61,7 +50,7 @@ describe("chore-tracker saving", function()
 
     it("writes nothing while nothing changes, and the layout once when it does", function()
         local h = loaded()
-        pick(h, { DAILY.id })
+        togglePicks(h, { DAILY.id })
         local writes = h.dbWrites
         h:advance(5000)
         setClock(h, helpers.NOW + 1)
@@ -78,9 +67,9 @@ end)
 describe("chore-tracker clock", function()
     it("unticks each period's chores as the clock crosses its reset, in place", function()
         local h = loaded()
-        pick(h, { DAILY.id, WEEKLY.id, MONTHLY.id })
+        togglePicks(h, { DAILY.id, WEEKLY.id, MONTHLY.id })
         for _, chore in ipairs({ DAILY, WEEKLY, MONTHLY }) do
-            tick(h, chore.name)
+            toggleTick(h, chore.name)
         end
         local win, at = window(h), geometry(h)
 
@@ -107,14 +96,14 @@ describe("chore-tracker clock", function()
 
     it("waits for the clock: no ticks, nothing marked, one log line", function()
         local h = loaded()
-        pick(h, { DAILY.id })
-        tick(h, DAILY.name)
+        togglePicks(h, { DAILY.id })
+        toggleTick(h, DAILY.name)
         setClock(h, 0)
         setClock(h, 0)
         h.ui:get("Text", { text = "Waiting for the game clock" })
         assert.is_false(ticked(h, DAILY.name))
         local writes = h.dbWrites
-        tick(h, DAILY.name)
+        toggleTick(h, DAILY.name)
         assert.is_false(ticked(h, DAILY.name))
         assert.are.equal(writes, h.dbWrites)
         local _, waits = h:output():gsub("waiting for the game clock", "")
@@ -149,14 +138,14 @@ describe("chore-tracker login", function()
 
     it("keeps each character's picks and ticks apart, and never logs a name", function()
         local h = loaded()
-        pick(h, { DAILY.id })
-        tick(h, DAILY.name)
+        togglePicks(h, { DAILY.id })
+        toggleTick(h, DAILY.name)
 
         h.world:logout()
         h.world:login("Lynx Titan")
         h:advance(POLL_MS)
         h.ui:get("Text", { text = "No chores picked yet" })
-        pick(h, { WEEKLY.id })
+        togglePicks(h, { WEEKLY.id })
         assert.is_nil(helpers.findRow(h, DAILY.name))
 
         h.world:logout()
@@ -186,7 +175,7 @@ describe("chore-tracker login", function()
 
     it("shows the new character straight from the settings view", function()
         local h = loaded()
-        pick(h, { DAILY.id })
+        togglePicks(h, { DAILY.id })
         helpers.openSettings(h)
         h.world:logout()
         h.world:login("Lynx Titan")

@@ -2,69 +2,37 @@
 -- inventory the client holds only while it is open, and a line whose count drops is the
 -- player buying (docs/api-concepts.md, "Shops in the client").
 
-local harness = require("tests.harness")
 local helpers = require("tests.chore-tracker.helpers")
-local loaded, ticked, pick, rowShown, doneAt =
-    helpers.loaded, helpers.ticked, helpers.pick, helpers.rowShown, helpers.doneAt
+local loaded, ticked, togglePicks, rowShown, doneAt =
+    helpers.loaded, helpers.ticked, helpers.togglePicks, helpers.rowShown, helpers.doneAt
 
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
 local YAK = { name = "Yak Hide", id = "yak-hide" }
 local DAILY = { name = "Daily Challenge", id = "daily-challenge" }
 
--- Half a second: long enough for the plugin's login poll (every 25 Logic ticks).
-local POLL_MS = 500
+local POLL_MS, setClock = helpers.POLL_MS, helpers.setClock
 
----@param h table
----@param minutes integer
-local function setClock(h, minutes)
-    h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", minutes)
-end
+local window = helpers.window
 
----@param h table
----@return table
-local function window(h)
-    return h.ui:get("Window", { text = "Chores" })
-end
-
--- Open shop `inv` with one line of `count` feather packs and a line of bait.
+-- Set open shop `inv` to `count` feather packs and a line of bait (a purchase when the count
+-- drops). Not helpers.buy: the bait line is part of what these specs check around.
 ---@param h table
 ---@param inv string
 ---@param count integer
-local function openShop(h, inv, count)
-    h.world:setInventory(inv, {
-        { obj = "FEATHER_PACK", count = count },
-        { obj = "FISHING_BAIT", count = 100 },
-    }, 4)
-end
-
--- Set the feather pack line of open shop `inv` (a purchase when it drops).
----@param h table
----@param inv string
----@param count integer
-local function setFeathers(h, inv, count)
-    openShop(h, inv, count)
-end
-
--- The stored shop progress of a character's chore.
----@param h table
----@param id string
----@param who string?
----@return table?
-local function stored(h, id, who)
-    local entry = h.db["state:" .. (who or "Zezima")]
-    return entry and entry.value.shops[id]
+local function stockFeathers(h, inv, count)
+    helpers.stock(h, inv, "FEATHER_PACK", count, { { obj = "FISHING_BAIT", count = 100 } })
 end
 
 describe("chore-tracker shop runs", function()
     it("ticks a chore on a purchase at one of its shops and records the shop", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
-        openShop(h, "FISHINGSHOP", 20)
+        togglePicks(h, { FEATHERS.id })
+        stockFeathers(h, "FISHINGSHOP", 20)
         local writes = h.dbWrites
-        setFeathers(h, "FISHINGSHOP", 0)
+        stockFeathers(h, "FISHINGSHOP", 0)
         assert.are.equal(writes + 1, h.dbWrites)
         assert.matches("%[CHORES%] purchase feather%-shop%-run at Gerrant, Port Sarim", h:output())
-        assert.are.same({ FISHINGSHOP = helpers.NOW }, stored(h, FEATHERS.id))
+        assert.are.same({ FISHINGSHOP = helpers.NOW }, helpers.stored(h).shops[FEATHERS.id])
         assert.are.equal(helpers.NOW, h.db["state:Zezima"].value.done[FEATHERS.id])
 
         h:advance(20)
@@ -82,10 +50,10 @@ describe("chore-tracker shop runs", function()
 
     it("ignores a restock, a sale, an unrelated inventory, and a shop opened and closed", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
+        togglePicks(h, { FEATHERS.id })
         local win, writes = window(h), h.dbWrites
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 25) -- restocked
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 25) -- restocked
         h.world:setInventory("FISHINGSHOP", {
             { obj = "FEATHER_PACK", count = 25 },
             { obj = "FISHING_BAIT", count = 100 },
@@ -104,19 +72,19 @@ describe("chore-tracker shop runs", function()
 
     it("counts a second shop of the same chore, keeping the first tick's minute", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 19)
+        togglePicks(h, { FEATHERS.id })
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 19)
         h.world:removeInventory("FISHINGSHOP")
         setClock(h, helpers.NOW + 30)
-        openShop(h, "FISHINGSHOP_LUM", 20)
-        setFeathers(h, "FISHINGSHOP_LUM", 10)
+        stockFeathers(h, "FISHINGSHOP_LUM", 20)
+        stockFeathers(h, "FISHINGSHOP_LUM", 10)
         h:advance(20)
         assert.are.equal("Feather Shop Run (2/4)", (rowShown(h, FEATHERS.name)))
         assert.are.equal(helpers.NOW, h.db["state:Zezima"].value.done[FEATHERS.id])
         assert.are.same(
             { FISHINGSHOP = helpers.NOW, FISHINGSHOP_LUM = helpers.NOW + 30 },
-            stored(h, FEATHERS.id)
+            helpers.stored(h).shops[FEATHERS.id]
         )
         local _, lines = h:output():gsub("%[CHORES%] purchase", "")
         assert.are.equal(2, lines)
@@ -124,7 +92,7 @@ describe("chore-tracker shop runs", function()
 
     it("updates a single-shop chore in place: tick and tooltip, no rebuild", function()
         local h = loaded()
-        pick(h, { YAK.id })
+        togglePicks(h, { YAK.id })
         local win = window(h)
         h.world:setInventory("FRISD_YAK_CONTRABAND", { { obj = "YAK_HIDE", count = 10 } })
         h.world:setInventory("FRISD_YAK_CONTRABAND", { { obj = "YAK_HIDE", count = 0 } })
@@ -138,20 +106,20 @@ describe("chore-tracker shop runs", function()
 
     it("records a purchase for a chore that isn't picked, shown once it is", function()
         local h = loaded()
-        pick(h, { DAILY.id })
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 0)
-        assert.are.same({ FISHINGSHOP = helpers.NOW }, stored(h, FEATHERS.id))
-        pick(h, { FEATHERS.id })
+        togglePicks(h, { DAILY.id })
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 0)
+        assert.are.same({ FISHINGSHOP = helpers.NOW }, helpers.stored(h).shops[FEATHERS.id])
+        togglePicks(h, { FEATHERS.id })
         assert.is_true(ticked(h, FEATHERS.name))
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
     end)
 
     it("clears the tick and the shop count at the weekly reset", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 0)
+        togglePicks(h, { FEATHERS.id })
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 0)
         h:advance(20)
         local win = window(h)
         setClock(h, helpers.WEDNESDAY - 1)
@@ -168,46 +136,49 @@ describe("chore-tracker shop runs", function()
 
     it("sees the next purchase after a reload with the shop open", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
-        openShop(h, "FISHINGSHOP", 20)
+        togglePicks(h, { FEATHERS.id })
+        stockFeathers(h, "FISHINGSHOP", 20)
         h:reload()
-        setFeathers(h, "FISHINGSHOP", 15)
+        stockFeathers(h, "FISHINGSHOP", 15)
         h:advance(20)
         assert.is_true(ticked(h, FEATHERS.name))
-        assert.are.same({ FISHINGSHOP = helpers.NOW }, stored(h, FEATHERS.id))
+        assert.are.same({ FISHINGSHOP = helpers.NOW }, helpers.stored(h).shops[FEATHERS.id])
     end)
 
     it("keeps each character's shop progress apart", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 0)
+        togglePicks(h, { FEATHERS.id })
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 0)
         h.world:removeInventory("FISHINGSHOP")
 
         h.world:logout()
         h.world:login("Lynx Titan")
         h:advance(POLL_MS)
-        pick(h, { FEATHERS.id })
+        togglePicks(h, { FEATHERS.id })
         assert.is_false(ticked(h, FEATHERS.name))
         assert.are.equal("Feather Shop Run (0/4)", (rowShown(h, FEATHERS.name)))
-        openShop(h, "FISHINGSHOP2", 20)
-        setFeathers(h, "FISHINGSHOP2", 0)
-        assert.are.same({ FISHINGSHOP2 = helpers.NOW }, stored(h, FEATHERS.id, "Lynx Titan"))
-        assert.are.same({ FISHINGSHOP = helpers.NOW }, stored(h, FEATHERS.id))
+        stockFeathers(h, "FISHINGSHOP2", 20)
+        stockFeathers(h, "FISHINGSHOP2", 0)
+        assert.are.same(
+            { FISHINGSHOP2 = helpers.NOW },
+            helpers.stored(h, "Lynx Titan").shops[FEATHERS.id]
+        )
+        assert.are.same({ FISHINGSHOP = helpers.NOW }, helpers.stored(h).shops[FEATHERS.id])
     end)
 
     it("ignores a purchase while the clock isn't ready or nobody is logged in", function()
         local h = loaded({ clock = 0 })
         local writes = h.dbWrites
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 0)
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 0)
         assert.are.equal(writes, h.dbWrites)
 
         setClock(h, helpers.NOW)
         h.world:logout()
         h:advance(POLL_MS)
-        setFeathers(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 0)
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 0)
         assert.are.equal(writes, h.dbWrites)
         assert.is_nil(h:output():find("purchase", 1, true))
         assert.is_nil(h.db["state:Zezima"])
@@ -215,13 +186,13 @@ describe("chore-tracker shop runs", function()
 
     it("writes and logs nothing for another purchase at a shop bought from this period", function()
         local h = loaded()
-        pick(h, { FEATHERS.id })
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 19)
+        togglePicks(h, { FEATHERS.id })
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 19)
         h:advance(20)
         local win, writes = window(h), h.dbWrites
-        setFeathers(h, "FISHINGSHOP", 18)
-        setFeathers(h, "FISHINGSHOP", 10)
+        stockFeathers(h, "FISHINGSHOP", 18)
+        stockFeathers(h, "FISHINGSHOP", 10)
         h:advance(20)
         assert.are.equal(writes, h.dbWrites)
         assert.are.equal(win, window(h))
@@ -234,7 +205,7 @@ describe("chore-tracker shop runs", function()
         "changes a count in place, keeping the window and its scroll; a view switch doesn't",
         function()
             local h = loaded()
-            pick(h, { DAILY.id, FEATHERS.id, YAK.id })
+            togglePicks(h, { DAILY.id, FEATHERS.id, YAK.id })
             -- Short enough that the list overflows and can scroll.
             h.ui:resize(window(h), 0, -260)
             -- Scrolled, but not so far that the settings button (content y 12-32) leaves the
@@ -242,8 +213,8 @@ describe("chore-tracker shop runs", function()
             window(h):SetScrollPosition(20)
             local win = window(h)
             assert.are.equal(20, win._scroll.scrollY)
-            openShop(h, "FISHINGSHOP", 20)
-            setFeathers(h, "FISHINGSHOP", 0)
+            stockFeathers(h, "FISHINGSHOP", 20)
+            stockFeathers(h, "FISHINGSHOP", 0)
             h:advance(20)
             assert.are.equal(win, window(h))
             assert.are.equal("Feather Shop Run (1/4)", helpers.row(h, FEATHERS.name).text)
@@ -256,7 +227,7 @@ describe("chore-tracker shop runs", function()
 
     it("counts a shop with two inventories as one, whichever is bought from", function()
         local h = loaded()
-        pick(h, { "rune-shop-run" })
+        togglePicks(h, { "rune-shop-run" })
         h.world:setInventory("LUNAR_RUNESHOP_COMPL", { { obj = "AIRRUNE", count = 7000 } })
         h.world:setInventory("LUNAR_RUNESHOP_COMPL", { { obj = "AIRRUNE", count = 6000 } })
         h.world:removeInventory("LUNAR_RUNESHOP_COMPL")
@@ -271,7 +242,7 @@ describe("chore-tracker shop runs", function()
 
     it("ticks on a purchase at an unproven shop as at a proven one", function()
         local h = loaded()
-        pick(h, { "meat-packs", "rune-shop-run" })
+        togglePicks(h, { "meat-packs", "rune-shop-run" })
         h.world:setInventory("AFR_MEATSHOP", { { obj = "LOGS", count = 5 } })
         h.world:setInventory("AFR_MEATSHOP", { { obj = "LOGS", count = 4 } })
         h.world:setInventory("PEST_RUNE_STORE", { { obj = "AIRRUNE", count = 7000 } })
@@ -287,19 +258,16 @@ describe("chore-tracker shop runs", function()
     it("loads a version 1 state with its picks and ticks", function()
         local h = loaded()
         h:unload()
-        h.db["state:Zezima"] = {
-            type = harness.enums.PersistentDBType.STRUCTURED_DATA,
-            value = {
-                version = 1,
-                selected = { FEATHERS.id },
-                done = { [FEATHERS.id] = helpers.NOW },
-            },
-        }
+        helpers.seed(h, "state:Zezima", {
+            version = 1,
+            selected = { FEATHERS.id },
+            done = { [FEATHERS.id] = helpers.NOW },
+        })
         h:load()
         assert.is_true(ticked(h, FEATHERS.name))
         assert.are.equal("Feather Shop Run (0/4)", (rowShown(h, FEATHERS.name)))
-        openShop(h, "FISHINGSHOP", 20)
-        setFeathers(h, "FISHINGSHOP", 0)
+        stockFeathers(h, "FISHINGSHOP", 20)
+        stockFeathers(h, "FISHINGSHOP", 0)
         h:advance(20)
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
         assert.are.equal(2, h.db["state:Zezima"].value.version)
@@ -340,7 +308,7 @@ local function collectorAt(id, notes, x, z, level, opts)
         { obj = "COINS", count = 500 },
     }, 28)
     h:load()
-    pick(h, { id })
+    togglePicks(h, { id })
     if opts and opts.clock then setClock(h, opts.clock) end
     if opts and opts.login == false then
         h.world:logout()

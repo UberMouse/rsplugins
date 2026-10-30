@@ -2,7 +2,6 @@
 -- their press targets, the drag with its live shift and auto-scroll, the drop and its save,
 -- and what other events do to a drag in progress.
 
-local harness = require("tests.harness")
 local uiFake = require("tests.harness.api.ui")
 local helpers = require("tests.chore-tracker.helpers")
 local loaded, row, rows = helpers.loaded, helpers.row, helpers.rows
@@ -40,10 +39,7 @@ local function seed(h, who, ...)
             selected[#selected + 1] = id
         end
     end
-    h.db["state:" .. who] = {
-        type = harness.enums.PersistentDBType.STRUCTURED_DATA,
-        value = { version = 2, selected = selected, done = {}, shops = {} },
-    }
+    helpers.seed(h, "state:" .. who, { version = 2, selected = selected, done = {}, shops = {} })
 end
 
 -- A loaded tracker for Zezima with DAILY, WEEKLY and MONTHLY picked.
@@ -56,11 +52,7 @@ local function ready(opts)
     return h
 end
 
----@param h table
----@return table
-local function window(h)
-    return h.ui:get("Window", { text = "Chores" })
-end
+local window = helpers.window
 
 -- The press targets the plugin has on the plugin layer (live ones, shown or not): layers
 -- with the grip's PUSH cursor.
@@ -134,7 +126,7 @@ end
 ---@param who string?
 ---@return string[]
 local function stored(h, who)
-    return h.db["state:" .. (who or "Zezima")].value.selected
+    return assert(helpers.stored(h, who), "no stored state").selected
 end
 
 -- A chore row's content y.
@@ -521,7 +513,7 @@ describe("chore-tracker grip clicks", function()
         assert.is_false(helpers.ticked(h, "Daily Challenge"))
         assert.are.equal(writes, h.dbWrites)
         assert.are.same(DAILY, { table.unpack(order(h), 1, 5) })
-        helpers.tick(h, "Daily Challenge")
+        helpers.toggleTick(h, "Daily Challenge")
         assert.is_true(helpers.ticked(h, "Daily Challenge"))
     end)
 
@@ -765,7 +757,7 @@ describe("chore-tracker drag", function()
         -- The fake still holds the button the client stopped reporting; end its press here.
         h.ui.pressing = nil
         -- The next click lands on its row again, and ticks it without moving anything.
-        helpers.tick(h, "Invention Machine")
+        helpers.toggleTick(h, "Invention Machine")
         assert.is_true(helpers.ticked(h, "Invention Machine"))
         assert.are.equal("invention-machine", stored(h)[5])
     end)
@@ -791,7 +783,7 @@ describe("chore-tracker saved order", function()
 
     it("puts a newly picked chore last in its period", function()
         local h = ready()
-        helpers.pick(h, { "divine-locations" })
+        helpers.togglePicks(h, { "divine-locations" })
         local list = order(h)
         assert.are.equal("Divine Locations", list[6])
         assert.are.equal("soul-reaper", list[7])
@@ -869,11 +861,10 @@ describe("chore-tracker drag and other events", function()
         local firstY = rowY(h, "daily-challenge")
         local x, y = grab(h, "daily-challenge")
         assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
-        h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", helpers.NOW + 1)
+        helpers.setClock(h, helpers.NOW + 1)
         h:advance(20)
         -- A purchase at the feather shop ticks Feather Shop Run and celebrates it.
-        h.world:setInventory("FISHINGSHOP", { { obj = "FEATHER_PACK", count = 20 } }, 4)
-        h.world:setInventory("FISHINGSHOP", { { obj = "FEATHER_PACK", count = 19 } }, 4)
+        helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         h:advance(20)
         assert.is_true(helpers.ticked(h, "Feather Shop Run"))
         assert.is_true(#h.ui:popups() > 0)

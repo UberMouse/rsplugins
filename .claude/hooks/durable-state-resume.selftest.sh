@@ -17,11 +17,12 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 failures=0
-# row <name> <cwd> <session_id> <source> <expect: "silent" | regex that must match> [regex that must NOT match]
+# row <name> <cwd> <session_id> <source> <expect: "silent" | regex that must match> [regex that must NOT match] [extra payload fields as a JSON object]
 row() {
-  local name=$1 cwd=$2 sid=$3 src=$4 want=$5 deny=${6:-}
+  local name=$1 cwd=$2 sid=$3 src=$4 want=$5 deny=${6:-} extra=${7:-"{}"}
   local out
-  out=$(jq -n --arg cwd "$cwd" --arg sid "$sid" --arg src "$src" '{cwd: $cwd, session_id: $sid, source: $src}' | bash "$HOOK")
+  out=$(jq -n --arg cwd "$cwd" --arg sid "$sid" --arg src "$src" --argjson extra "$extra" \
+    '{cwd: $cwd, session_id: $sid, source: $src} + $extra' | bash "$HOOK")
   local ok=1
   if [[ "$want" == "silent" ]]; then
     [[ -z "$out" ]] || ok=0
@@ -63,6 +64,8 @@ row "state -> standing instructions verbatim" "$SDD" sess-a resume '> do not tou
 row "state -> invariants" "$SDD" sess-a compact '- every Agent call passes model explicitly'
 row "state -> base and models" "$SDD" sess-a compact 'base: abc123'
 row "state -> unknown keys are named, not dropped" "$SDD" sess-a compact 'other keys .*prNumber'
+# The main session's SessionStart carries agent_type=claude and no agent_id: it must get the pointer.
+row "main session (agent_type=claude) -> pointer" "$SDD" sess-a compact 'Read \.claude/skills/sdd-loop/SKILL\.md §Resuming' '' '{"agent_type":"claude"}'
 row "another session on compact -> one-line note" "$SDD" sess-b compact 'another session owns the sdd-loop run.*not yours' 'next task'
 row "another session on resume -> handoff note" "$SDD" sess-b resume 'resume it only if it is your own run' 'next task'
 row "garbage state -> says so, no crash" "$BAD" sess-a compact 'did not parse'
@@ -84,14 +87,7 @@ subagent_row() {
 }
 subagent_row "subagent compact (agent_id) -> silent" agent_id agent-xyz
 subagent_row "subagent compact (agent_type) -> silent" agent_type implementer
-# The main session's SessionStart carries agent_type=claude and no agent_id: it must get the pointer.
-out=$(jq -n --arg cwd "$SDD" '{cwd: $cwd, session_id: "sess-a", source: "compact", agent_type: "claude"}' | bash "$HOOK")
-if grep -qE 'Read \.claude/skills/sdd-loop/SKILL\.md §Resuming' <<<"$out"; then
-  echo "ok   main session (agent_type=claude) -> pointer"
-else
-  failures=$((failures + 1))
-  printf 'FAIL main session (agent_type=claude) -> pointer\n---- output ----\n%s\n----------------\n' "$out"
-fi
+row "agent_type=claude with an agent_id (subagent) -> silent" "$SDD" sess-a compact silent '' '{"agent_type":"claude","agent_id":"agent-xyz"}'
 grep -q '^\[DSHOOK\] .*agent_type=implementer' "$SDD/.durable-state/hook-payloads.log" &&
   echo "ok   payload fields are logged for the guard" ||
   { failures=$((failures + 1)); echo "FAIL payload fields are logged for the guard"; }

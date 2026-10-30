@@ -22,7 +22,7 @@ end
 ---@param chores Chore[] the list to keep stored ids from
 ---@return ChoreState
 function M.loadState(name, chores)
-    return state.deserialise(PersistentDB:Get(stateKey(name)), chores)
+    return state.fromStored(PersistentDB:Get(stateKey(name)), chores)
 end
 
 ---@param name string

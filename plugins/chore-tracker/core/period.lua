@@ -1,7 +1,8 @@
 -- When each reset period began, in epoch minutes (minutes since 1970-01-01 00:00 UTC), the
 -- unit of the client's clock var. Pure integer arithmetic, because the client has no `os`.
 -- The resets are dailyscape's (checkReset in dailyscape.js): daily at 00:00 UTC, weekly on
--- Wednesday 00:00 UTC, monthly at 00:00 UTC on the 1st.
+-- Wednesday 00:00 UTC, monthly at 00:00 UTC on the 1st. It also turns an epoch minute into the
+-- game's RuneDay number.
 
 local M = {}
 
@@ -11,6 +12,16 @@ local M = {}
 M.PERIODS = { "daily", "weekly", "monthly" } ---@type ChorePeriod[]
 
 local MINUTES_PER_DAY = 1440
+-- RuneDay 0 is 2002-02-27, day 11745 counted from 1970-01-01. Checked against the game:
+-- PENG_SPY_PL_DAY read 9002 on Wednesday 2026-10-21.
+local RUNEDAY_EPOCH = 11745
+
+-- The RuneDay (the game's day number) of an epoch minute.
+---@param minutes integer
+---@return integer
+function M.runeDay(minutes)
+    return minutes // MINUTES_PER_DAY - RUNEDAY_EPOCH
+end
 
 -- The day of the month (1-31) of a day counted from 1970-01-01. This is the days-to-civil
 -- algorithm from Howard Hinnant's "chrono-Compatible Low-Level Date Algorithms", which

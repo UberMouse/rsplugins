@@ -1,6 +1,5 @@
 -- core/vars (whether a var rule holds) and the hand-written rule list, data/vars.lua.
 
-local support = require("tests.chore-tracker.support")
 local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
 local varCore = require("core/vars")
@@ -28,14 +27,6 @@ local function zeros(rule)
 end
 
 describe("chore-tracker vars core", function()
-    it("counts RuneDays from 2002-02-27", function()
-        -- PENG_SPY_PL_DAY read 9002 on Wednesday 2026-10-21.
-        assert.are.equal(9002, varCore.runeDay(support.MINUTES["2026-10-21"]))
-        assert.are.equal(9002, varCore.runeDay(support.MINUTES["2026-10-21"] + 1439))
-        assert.are.equal(9006, varCore.runeDay(support.MINUTES["2026-10-25 01:43"]))
-        assert.are.equal(0, varCore.runeDay(11745 * 1440))
-    end)
-
     it("names each var a rule reads once, in order", function()
         local rule = {
             chore = "x",

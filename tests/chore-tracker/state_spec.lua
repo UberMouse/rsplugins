@@ -160,17 +160,13 @@ describe("chore-tracker state", function()
             assert.is_false(state.shopBought(s, byId.wshop, "SHOP_A", M["2026-10-28"]))
         end)
 
-        it(
-            "counts a shop as bought from any of its inventories, and none without a clock",
-            function()
-                local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_B", now)
-                assert.is_true(state.shopBoughtAny(s, byId.wshop, { "SHOP_A", "SHOP_B" }, now))
-                assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_A", "SHOP_C" }, now))
-                assert.is_false(state.shopBoughtAny(s, byId.wshop, {}, now))
-                assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_B" }, nil))
-                assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_B" }, M["2026-10-28"]))
-            end
-        )
+        it("counts a shop as bought from any of its inventories", function()
+            local s = state.recordPurchase(state.new(), byId.wshop, "SHOP_B", now)
+            assert.is_true(state.shopBoughtAny(s, byId.wshop, { "SHOP_A", "SHOP_B" }, now))
+            assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_A", "SHOP_C" }, now))
+            assert.is_false(state.shopBoughtAny(s, byId.wshop, {}, now))
+            assert.is_false(state.shopBoughtAny(s, byId.wshop, { "SHOP_B" }, M["2026-10-28"]))
+        end)
 
         it("is not undone by unticking or unpicking, and never changes its input", function()
             local s = state.select(state.new(), chores, "wshop")
@@ -281,30 +277,30 @@ describe("chore-tracker state", function()
             assert.is_nil(out.shops.dshop.SHOP_B)
         end)
 
-        it("round-trips through deserialise", function()
+        it("round-trips through fromStored", function()
             local s = state.select(state.select(state.new(), chores, "m1"), chores, "dshop")
             s = state.mark(s, "m1", M["2026-10-25 01:43"])
             s = state.recordPurchase(s, byId.dshop, "SHOP_A", M["2026-10-25 01:43"])
-            assert.are.same(s, state.deserialise(state.serialise(s), chores))
+            assert.are.same(s, state.fromStored(state.serialise(s), chores))
         end)
     end)
 
-    describe("deserialise", function()
+    describe("fromStored", function()
         local empty = { selected = {}, done = {}, shops = {} }
 
         it("gives an empty state for nil or a non-table", function()
-            assert.are.same(empty, state.deserialise(nil, chores))
-            assert.are.same(empty, state.deserialise("x", chores))
-            assert.are.same(empty, state.deserialise(7, chores))
+            assert.are.same(empty, state.fromStored(nil, chores))
+            assert.are.same(empty, state.fromStored("x", chores))
+            assert.are.same(empty, state.fromStored(7, chores))
         end)
 
         it("gives an empty state for a missing or unknown version", function()
             local stored = { selected = { "d1" }, done = { d1 = 5 } }
-            assert.are.same(empty, state.deserialise(stored, chores))
+            assert.are.same(empty, state.fromStored(stored, chores))
             stored.version = 3
-            assert.are.same(empty, state.deserialise(stored, chores))
+            assert.are.same(empty, state.fromStored(stored, chores))
             stored.version = "1"
-            assert.are.same(empty, state.deserialise(stored, chores))
+            assert.are.same(empty, state.fromStored(stored, chores))
         end)
 
         it("keeps only well-formed selected ids that are in the chore list", function()
@@ -313,12 +309,12 @@ describe("chore-tracker state", function()
                 selected = { "w1", 3, "gone", "d1", true, {}, "w1" },
                 done = {},
             }
-            assert.are.same({ "w1", "d1" }, state.deserialise(stored, chores).selected)
+            assert.are.same({ "w1", "d1" }, state.fromStored(stored, chores).selected)
         end)
 
         it("round-trips the player's order", function()
             local s = state.select(state.select(state.new(), chores, "m1"), chores, "d1")
-            assert.are.same({ "m1", "d1" }, state.deserialise(state.serialise(s), chores).selected)
+            assert.are.same({ "m1", "d1" }, state.fromStored(state.serialise(s), chores).selected)
         end)
 
         it("keeps only integer done minutes for ids in the chore list", function()
@@ -327,15 +323,15 @@ describe("chore-tracker state", function()
                 selected = {},
                 done = { d1 = 10, d2 = "10", w1 = 2.5, m1 = 7.0, gone = 3, [4] = 4 },
             }
-            local got = state.deserialise(stored, chores).done
+            local got = state.fromStored(stored, chores).done
             assert.are.same({ d1 = 10, m1 = 7 }, got)
             assert.are.equal("integer", math.type(got.m1))
         end)
 
         it("tolerates selected or done of the wrong type", function()
-            local s = state.deserialise({ version = 1, selected = "d1", done = 5 }, chores)
+            local s = state.fromStored({ version = 1, selected = "d1", done = 5 }, chores)
             assert.are.same(empty, s)
-            s = state.deserialise({ version = 1, done = { d1 = 1 } }, chores)
+            s = state.fromStored({ version = 1, done = { d1 = 1 } }, chores)
             assert.are.same({ selected = {}, done = { d1 = 1 }, shops = {} }, s)
         end)
 
@@ -348,7 +344,7 @@ describe("chore-tracker state", function()
             }
             assert.are.same(
                 { selected = { "dshop", "d1" }, done = { dshop = 9 }, shops = {} },
-                state.deserialise(stored, chores)
+                state.fromStored(stored, chores)
             )
         end)
 
@@ -364,11 +360,11 @@ describe("chore-tracker state", function()
                     m1 = { SHOP_A = "nope" },
                 },
             }
-            local got = state.deserialise(stored, chores)
+            local got = state.fromStored(stored, chores)
             assert.are.same({ dshop = { SHOP_A = 10, SHOP_D = 7 } }, got.shops)
             assert.are.same({ "d1" }, got.selected)
             assert.are.same({ d1 = 1 }, got.done)
-            assert.are.same({}, state.deserialise({ version = 2, shops = 5 }, chores).shops)
+            assert.are.same({}, state.fromStored({ version = 2, shops = 5 }, chores).shops)
         end)
     end)
 end)

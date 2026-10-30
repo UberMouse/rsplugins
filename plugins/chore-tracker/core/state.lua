@@ -15,9 +15,9 @@ local period = require("core/period")
 
 local M = {}
 
--- The persisted shape's version. Version 1 had no shop progress; deserialise reads both and
+-- The persisted shape's version. Version 1 had no shop progress; fromStored reads both and
 -- ignores any other.
-M.VERSION = 2
+local VERSION = 2
 
 ---@class Chore
 ---@field id string dailyscape's key
@@ -126,13 +126,13 @@ end
 ---@return string[] ids
 ---@return integer[] slots
 function M.selectedIn(state, chores, which)
-    local inPeriod = {}
+    local wanted = {}
     for _, chore in ipairs(chores) do
-        if chore.period == which then inPeriod[chore.id] = true end
+        if chore.period == which then wanted[chore.id] = true end
     end
     local ids, slots = {}, {}
     for i, id in ipairs(state.selected) do
-        if inPeriod[id] then
+        if wanted[id] then
             ids[#ids + 1] = id
             slots[#slots + 1] = i
         end
@@ -205,14 +205,22 @@ function M.unmark(state, id)
     return out
 end
 
+-- Whether `minute` (nil: never) falls in `chore`'s current period at `now`.
+---@param minute integer?
+---@param chore Chore
+---@param now integer
+---@return boolean
+local function inPeriod(minute, chore, now)
+    return minute ~= nil and minute >= period.periodStart(chore.period, now)
+end
+
 -- Whether `chore` is done at `now`: marked at or after the start of its current period.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param now integer
 ---@return boolean
 function M.isDone(state, chore, now)
-    local minute = state.done[chore.id]
-    return minute ~= nil and minute >= period.periodStart(chore.period, now)
+    return inPeriod(state.done[chore.id], chore, now)
 end
 
 -- `state` with `chore` marked done at `now` unless it already is this period, for a chore
@@ -251,19 +259,18 @@ end
 ---@param now integer
 ---@return boolean
 function M.shopBought(state, chore, inv, now)
-    local minute = state.shops[chore.id] and state.shops[chore.id][inv]
-    return minute ~= nil and minute >= period.periodStart(chore.period, now)
+    local minutes = state.shops[chore.id]
+    return inPeriod(minutes and minutes[inv], chore, now)
 end
 
 -- Whether any of `invs` (one shop's inventories, as data/shops.lua lists them) was bought
--- from for `chore` in its current period at `now`. False without a clock (`now` nil).
+-- from for `chore` in its current period at `now`.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param invs string[]
----@param now integer?
+---@param now integer
 ---@return boolean
 function M.shopBoughtAny(state, chore, invs, now)
-    if now == nil then return false end
     for _, inv in ipairs(invs) do
         if M.shopBought(state, chore, inv, now) then return true end
     end
@@ -277,7 +284,7 @@ end
 ---@return table
 function M.serialise(state)
     return {
-        version = M.VERSION,
+        version = VERSION,
         selected = copySelected(state.selected),
         done = copyMinutes(state.done, math.tointeger),
         shops = copyShops(state.shops, math.tointeger),
@@ -299,9 +306,9 @@ end
 ---@param value any
 ---@param chores Chore[]
 ---@return ChoreState
-function M.deserialise(value, chores)
+function M.fromStored(value, chores)
     local state = M.new()
-    if type(value) ~= "table" or (value.version ~= 1 and value.version ~= M.VERSION) then
+    if type(value) ~= "table" or (value.version ~= 1 and value.version ~= VERSION) then
         return state
     end
 
@@ -324,7 +331,7 @@ function M.deserialise(value, chores)
         end
     end
 
-    if value.version == M.VERSION and type(value.shops) == "table" then
+    if value.version == VERSION and type(value.shops) == "table" then
         for id, minutes in pairs(value.shops) do
             if type(minutes) == "table" and M.find(chores, id) then
                 local kept = {}

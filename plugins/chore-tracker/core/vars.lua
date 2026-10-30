@@ -24,18 +24,6 @@ local M = {}
 ---@field rises string? a var whose rise in a change ticks the chore
 ---@field proven boolean
 
-local MINUTES_PER_DAY = 1440
--- RuneDay 0 is 2002-02-27, day 11745 counted from 1970-01-01. Checked against the game:
--- PENG_SPY_PL_DAY read 9002 on Wednesday 2026-10-21.
-local RUNEDAY_EPOCH = 11745
-
--- The RuneDay of an epoch minute (minutes since 1970-01-01 00:00 UTC, the clock var's unit).
----@param minutes integer
----@return integer
-function M.runeDay(minutes)
-    return minutes // MINUTES_PER_DAY - RUNEDAY_EPOCH
-end
-
 -- The var names a rule reads, each once, in the order its conditions name them, then its
 -- `rises` var.
 ---@param rule ChoreVarRule

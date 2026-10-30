@@ -68,27 +68,30 @@ describe("chore-tracker layout", function()
             buttonX = 4000,
             buttonY = -3,
         }
-        local c = layout.clamp(l, 1000, 800, 240, 160, 20)
+        local c = layout.keepInside(l, 1000, 800)
         assert.are.same({
             x = 100,
             y = 0,
             width = 900,
             height = 800,
             collapsed = true,
-            buttonX = 980,
+            buttonX = 1000 - layout.BUTTON_SIZE,
             buttonY = 0,
         }, c)
         -- A button past the bottom edge stops at the last y that keeps it whole.
         local low = layout.default()
         low.buttonY = 900
-        assert.are.equal(780, layout.clamp(low, 1000, 800, 240, 160, 20).buttonY)
+        assert.are.equal(800 - layout.BUTTON_SIZE, layout.keepInside(low, 1000, 800).buttonY)
         local fits = layout.default()
-        assert.are.same(fits, layout.clamp(fits, 3836, 2121, 240, 160, 20))
+        assert.are.same(fits, layout.keepInside(fits, 3836, 2121))
     end)
 
     it("keeps the minimum size even in a parent smaller than it", function()
-        local c = layout.clamp(layout.default(), 100, 100, 240, 160, 20)
-        assert.are.same({ 0, 0, 240, 160 }, { c.x, c.y, c.width, c.height })
+        local c = layout.keepInside(layout.default(), 100, 100)
+        assert.are.same(
+            { 0, 0, layout.MIN_WIDTH, layout.MIN_HEIGHT },
+            { c.x, c.y, c.width, c.height }
+        )
     end)
 
     describe("windowForButton", function()

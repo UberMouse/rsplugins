@@ -17,9 +17,6 @@ local M = {}
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
 
--- The smallest the window can be resized to.
-local MIN_WIDTH, MIN_HEIGHT = 240, 160
-
 -- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapseAt).
 local COLLAPSE_TOOLTIP = { text = "Collapse" }
 -- The same slot's tooltip while the settings view is open.
@@ -160,8 +157,8 @@ local function build(at)
         width = at.width,
         height = at.height,
         resizable = true,
-        minWidth = MIN_WIDTH,
-        minHeight = MIN_HEIGHT,
+        minWidth = layout.MIN_WIDTH,
+        minHeight = layout.MIN_HEIGHT,
     })
     win = w
     internals.setResizeCursors(w)
@@ -208,8 +205,7 @@ function M.open()
     assert(opts, "window.init runs before any window function")
     local parent = opts.parent
     savedLayout = store.loadLayout()
-    local start =
-        layout.clamp(savedLayout, parent.width, parent.height, MIN_WIDTH, MIN_HEIGHT, BUTTON_SIZE)
+    local start = layout.keepInside(savedLayout, parent.width, parent.height)
     build(start)
     if start.collapsed then collapseAt(start.buttonX, start.buttonY) end
 end

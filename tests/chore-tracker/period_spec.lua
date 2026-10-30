@@ -88,4 +88,12 @@ describe("chore-tracker periodStart", function()
             assert.are.equal("integer", math.type(period.periodStart(p, M["2026-10-25 01:43"])))
         end
     end)
+
+    it("counts RuneDays from 2002-02-27", function()
+        -- PENG_SPY_PL_DAY read 9002 on Wednesday 2026-10-21.
+        assert.are.equal(9002, period.runeDay(support.MINUTES["2026-10-21"]))
+        assert.are.equal(9002, period.runeDay(support.MINUTES["2026-10-21"] + 1439))
+        assert.are.equal(9006, period.runeDay(support.MINUTES["2026-10-25 01:43"]))
+        assert.are.equal(0, period.runeDay(11745 * 1440))
+    end)
 end)

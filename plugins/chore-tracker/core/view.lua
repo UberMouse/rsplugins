@@ -60,7 +60,7 @@ function M.byPeriod(chores)
 end
 
 -- A chore's listed shops and whether each was bought from this period, in any of its
--- inventories (none without a clock), and how many were.
+-- inventories (none without a clock, `now` nil), and how many were.
 ---@param s ChoreState
 ---@param chore Chore
 ---@param listed ChoreShop[]
@@ -70,7 +70,7 @@ end
 local function shopLines(s, chore, listed, now)
     local lines, bought = {}, 0
     for i, shop in ipairs(listed) do
-        local yes = state.shopBoughtAny(s, chore, shop.invs, now)
+        local yes = now ~= nil and state.shopBoughtAny(s, chore, shop.invs, now)
         lines[i] = { name = shop.name, bought = yes }
         if yes then bought = bought + 1 end
     end
@@ -87,31 +87,28 @@ end
 ---@param shops table<string, ChoreShop[]>? chore id -> its listed shops
 ---@return ChoreSection[]
 function M.view(s, chores, now, shops)
+    local byId = {}
+    for _, chore in ipairs(chores) do
+        byId[chore.id] = chore
+    end
     local sections = {}
-    for _, group in ipairs(M.byPeriod(chores)) do
-        local section =
-            { period = group.period, title = group.title, rows = {}, done = 0, total = 0 }
-        local byId = {}
-        for _, chore in ipairs(group.chores) do
-            byId[chore.id] = chore
-        end
-        for _, id in ipairs((state.selectedIn(s, chores, group.period))) do
+    for _, p in ipairs(period.PERIODS) do
+        local section = { period = p, title = M.TITLES[p], rows = {}, done = 0, total = 0 }
+        for _, id in ipairs((state.selectedIn(s, chores, p))) do
             local chore = byId[id]
-            if chore then
-                local done = now ~= nil and state.isDone(s, chore, now)
-                local lines, bought = shopLines(s, chore, shops and shops[chore.id] or {}, now)
-                section.rows[#section.rows + 1] = {
-                    id = chore.id,
-                    name = chore.name,
-                    desc = chore.desc,
-                    url = chore.url,
-                    links = chore.links,
-                    done = done,
-                    shops = lines,
-                    bought = bought,
-                }
-                if done then section.done = section.done + 1 end
-            end
+            local done = now ~= nil and state.isDone(s, chore, now)
+            local lines, bought = shopLines(s, chore, shops and shops[id] or {}, now)
+            section.rows[#section.rows + 1] = {
+                id = id,
+                name = chore.name,
+                desc = chore.desc,
+                url = chore.url,
+                links = chore.links,
+                done = done,
+                shops = lines,
+                bought = bought,
+            }
+            if done then section.done = section.done + 1 end
         end
         section.total = #section.rows
         if section.total > 0 then sections[#sections + 1] = section end

@@ -5,7 +5,7 @@
 local M = {}
 
 -- The persisted shape's version. fromStored ignores any other.
-M.VERSION = 1
+local VERSION = 1
 
 ---@class ChoreLayout
 ---@field x integer the window's position in the plugin layer
@@ -22,6 +22,9 @@ M.BUTTON_SIZE = 20
 M.SLOT_X, M.SLOT_Y = -28, 7
 
 local DEFAULT_X, DEFAULT_Y, DEFAULT_WIDTH, DEFAULT_HEIGHT = 600, 300, 320, 420
+
+-- The smallest the window can be resized to.
+M.MIN_WIDTH, M.MIN_HEIGHT = 240, 160
 
 -- Where the window first opens: open, with its button in its slot.
 ---@return ChoreLayout
@@ -45,7 +48,7 @@ local FIELDS = { "x", "y", "width", "height", "buttonX", "buttonY" }
 ---@param value any
 ---@return ChoreLayout
 function M.fromStored(value)
-    if type(value) ~= "table" or value.version ~= M.VERSION then return M.default() end
+    if type(value) ~= "table" or value.version ~= VERSION then return M.default() end
     if type(value.collapsed) ~= "boolean" then return M.default() end
     local out = { collapsed = value.collapsed }
     for _, field in ipairs(FIELDS) do
@@ -61,7 +64,7 @@ end
 ---@param layout ChoreLayout
 ---@return table
 function M.serialise(layout)
-    local out = { version = M.VERSION, collapsed = layout.collapsed }
+    local out = { version = VERSION, collapsed = layout.collapsed }
     for _, field in ipairs(FIELDS) do
         out[field] = layout[field]
     end
@@ -87,27 +90,33 @@ local function clamp(v, lo, hi)
     return math.max(lo, math.min(hi, v))
 end
 
--- `layout` moved and shrunk to fit a parent of `parentWidth` x `parentHeight`, e.g. one
--- saved at a bigger window size. The window stays at least `minWidth` x `minHeight` and
--- the button `buttonSize` square.
----@param layout ChoreLayout
+-- `pos` moved to keep a `size` span inside 0..`parentSize`; a span bigger than the parent
+-- sits at 0.
+---@param pos integer
+---@param size integer
+---@param parentSize integer
+---@return integer
+local function within(pos, size, parentSize)
+    return clamp(pos, 0, math.max(0, parentSize - size))
+end
+
+-- `l` moved and shrunk to fit a parent of `parentWidth` x `parentHeight`, e.g. one saved at a
+-- bigger window size. The window stays at least MIN_WIDTH x MIN_HEIGHT; the button stays whole.
+---@param l ChoreLayout
 ---@param parentWidth integer
 ---@param parentHeight integer
----@param minWidth integer
----@param minHeight integer
----@param buttonSize integer
 ---@return ChoreLayout
-function M.clamp(layout, parentWidth, parentHeight, minWidth, minHeight, buttonSize)
-    local width = clamp(layout.width, minWidth, math.max(minWidth, parentWidth))
-    local height = clamp(layout.height, minHeight, math.max(minHeight, parentHeight))
+function M.keepInside(l, parentWidth, parentHeight)
+    local width = clamp(l.width, M.MIN_WIDTH, math.max(M.MIN_WIDTH, parentWidth))
+    local height = clamp(l.height, M.MIN_HEIGHT, math.max(M.MIN_HEIGHT, parentHeight))
     return {
-        x = clamp(layout.x, 0, math.max(0, parentWidth - width)),
-        y = clamp(layout.y, 0, math.max(0, parentHeight - height)),
+        x = within(l.x, width, parentWidth),
+        y = within(l.y, height, parentHeight),
         width = width,
         height = height,
-        collapsed = layout.collapsed,
-        buttonX = clamp(layout.buttonX, 0, math.max(0, parentWidth - buttonSize)),
-        buttonY = clamp(layout.buttonY, 0, math.max(0, parentHeight - buttonSize)),
+        collapsed = l.collapsed,
+        buttonX = within(l.buttonX, M.BUTTON_SIZE, parentWidth),
+        buttonY = within(l.buttonY, M.BUTTON_SIZE, parentHeight),
     }
 end
 
@@ -123,9 +132,8 @@ end
 ---@return integer x
 ---@return integer y
 function M.windowForButton(buttonX, buttonY, width, height, parentWidth, parentHeight)
-    local x = clamp(buttonX - (width + M.SLOT_X), 0, math.max(0, parentWidth - width))
-    local y = clamp(buttonY - M.SLOT_Y, 0, math.max(0, parentHeight - height))
-    return x, y
+    return within(buttonX - (width + M.SLOT_X), width, parentWidth),
+        within(buttonY - M.SLOT_Y, height, parentHeight)
 end
 
 return M

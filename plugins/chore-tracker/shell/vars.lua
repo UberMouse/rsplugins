@@ -5,6 +5,7 @@
 -- every VarTransmit and calls tick each Logic tick; this module keeps only the last values
 -- read, no chore state.
 
+local period = require("core/period")
 local state = require("core/state")
 local varCore = require("core/vars")
 
@@ -126,7 +127,7 @@ local function onChanged(before, after, changed)
     assert(options, "init runs before any var event")
     local say, chores = options.say, options.chores
     options.apply(function(tracker, now)
-        local day = varCore.runeDay(now)
+        local day = period.runeDay(now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)
             if cause and varCore.ticks(entry.rule, before, after, day) then

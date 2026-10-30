@@ -226,10 +226,10 @@ permissions") is true only after that check passes.
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/prettyui_internals.lua` | Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI versions |
 | `shell/store.lua` | Saving and loading in PersistentDB |
-| `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
+| `core/period.lua` | When each reset period began, and the RuneDay (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
 | `core/shops.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
-| `core/vars.lua` | Whether a chore's var rule holds on a set of var values, and the RuneDay |
+| `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
 | `core/view.lua` | What the list shows, as plain data |
 | `core/fit.lua` | Cutting a row's name short with "..." so it fits before the tick box |
 | `core/layout.lua` | The saved window layout, read back and kept on screen |

@@ -171,7 +171,7 @@ describe("chore-tracker login", function()
 
     it("drops a view switch clicked just before a logout", function()
         local h = loaded()
-        h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS" }))
+        helpers.click(h, h.ui:get("SpriteButton", { sprite = "SETTINGS" }))
         -- The logout is seen (here through the clock's VarTransmit) before the next Logic
         -- tick applies the switch.
         h.world:logout()
@@ -213,19 +213,23 @@ describe("chore-tracker layout", function()
 
     it("restores a collapsed button where it was Alt-dragged", function()
         local h = loaded()
-        h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU" }))
-        h:advance(20)
+        helpers.collapse(h)
+        local collapsed = h.ui:layout(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
         h.ui:holdAlt(true)
-        h.ui:altDrag(h.ui:get("Panel"), 300, 200)
+        assert.is_true(h.ui:altDrag(h.ui:get("Panel"), 300, 200))
         h.ui:holdAlt(false)
         local spot = h.ui:layout(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+        -- A drag clamped back to the collapse spot would make the reload check below vacuous.
+        assert.are_not.same(
+            { collapsed.globalX, collapsed.globalY },
+            { spot.globalX, spot.globalY }
+        )
         h:reload()
         assert.is_false(h.ui:layout(window(h)).visible)
         local now = h.ui:layout(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
         assert.are.same({ spot.globalX, spot.globalY }, { now.globalX, now.globalY })
 
-        h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
-        h:advance(20)
+        helpers.expand(h)
         local open = h.ui:layout(h.ui:get("SpriteButton", { sprite = "MENU" }))
         assert.are.same({ spot.globalX, spot.globalY }, { open.globalX, open.globalY })
     end)

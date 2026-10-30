@@ -16,6 +16,8 @@ globals:
     args: [{ type: any }, { required: false, type: any }]
   assert.is_false:
     args: [{ type: any }, { required: false, type: any }]
+  assert.is_not_true:
+    args: [{ type: any }, { required: false, type: any }]
   assert.is_nil:
     args: [{ type: any }, { required: false, type: any }]
   assert.is_not_nil:

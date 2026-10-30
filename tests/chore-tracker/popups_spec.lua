@@ -72,7 +72,7 @@ describe("chore-tracker popups", function()
         assert.are.equal("CHORE COMPLETE", p.title)
         assert.are.equal("Sand from Bert", p.text)
         assert.are.equal(ARCH_INFO_POPUP, p.played)
-        assert.is_true(p.sound ~= false)
+        assert.is_true(p.sound)
         assert.are.equal(ARCH_INFO_POPUP, p.soundID)
         -- In the plugin layer, centred across it, its centre a third of the way down.
         local layer =
@@ -116,7 +116,7 @@ describe("chore-tracker popups", function()
         local p = h.ui:popups()[1]
         assert.matches("All 2 of your weekly chores done", p.text)
         assert.are.equal(LEAGUE2_HARD_TASK_COMPLETE, p.played)
-        assert.is_true(p.width > 300 and p.height > 92)
+        assert.are.same({ 400, 120 }, { p.width, p.height })
         assert.matches("%[CHORES%] celebrate weekly cleared", h:output())
 
         local h2 = settled()

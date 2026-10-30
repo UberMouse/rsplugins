@@ -21,6 +21,27 @@ local function click(h, target, value)
     local ok, why = h.ui:click(target, value)
     assert(ok, why)
 end
+M.click = click
+
+-- The checkbox sprites by state: shell/rows.lua draws a hovered row with _1 (empty) or _3 (ticked).
+local TICKED_SPRITES = {
+    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")] = true,
+    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_3")] = true,
+}
+local EMPTY_SPRITES = {
+    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_0")] = true,
+    [catalog.config("Sprite", "RS3_BTN_CHECKBOX_1")] = true,
+}
+
+-- Whether a checkbox sprite is a ticked one, plain or hovered. A missing or unknown sprite
+-- errors, so a box that never drew can't read as unticked.
+---@param sprite any
+---@return boolean
+local function isTicked(sprite)
+    if TICKED_SPRITES[sprite] then return true end
+    if EMPTY_SPRITES[sprite] then return false end
+    error("not a checkbox sprite: " .. tostring(sprite))
+end
 
 -- Epoch minutes (checked against Python's datetime, UTC).
 M.NOW = 29881543 -- 2026-10-25 01:43, a Sunday
@@ -126,7 +147,7 @@ end
 ---@param name string
 ---@return boolean
 function M.ticked(h, name)
-    return M.row(h, name).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")
+    return isTicked(M.row(h, name).box.spriteID)
 end
 
 -- Click a chore's row, in either view (on its text, which passes the click to the row).
@@ -192,13 +213,34 @@ function M.picked(h, id)
             if choice.value == id then return choice.selected end
         end
     end
-    return M.settingsRow(h, id).box.spriteID == catalog.config("Sprite", "RS3_BTN_CHECKBOX_2")
+    return isTicked(M.settingsRow(h, id).box.spriteID)
 end
 
 -- Open the settings view.
 ---@param h table
 function M.openSettings(h)
     click(h, h.ui:get("SpriteButton", { sprite = "SETTINGS" }))
+    h:advance(20)
+end
+
+-- Click the visible hamburger to collapse the window to it, and let the rebuild run.
+---@param h table
+function M.collapse(h)
+    click(h, h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+    h:advance(20)
+end
+
+-- Click the collapsed hamburger to expand the window again.
+---@param h table
+function M.expand(h)
+    click(h, h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
+    h:advance(20)
+end
+
+-- Click the settings view's back button, returning to the list.
+---@param h table
+function M.back(h)
+    click(h, h.ui:get("SpriteButton", { sprite = "BACK" }))
     h:advance(20)
 end
 

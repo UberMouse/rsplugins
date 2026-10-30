@@ -19,7 +19,8 @@ cwd=$(jq -r '.cwd // ""' <<<"$hook_input" 2>/dev/null) || exit 0
 # conductor's: an implementer that got it was told to resume the run as conductor. The main
 # session's SessionStart carries `agent_type=claude` (logged since 2026-10-29), so only a non-empty
 # `agent_id` or an `agent_type` other than `claude` (a subagent, or a `claude --agent` session,
-# which doesn't conduct runs here) means "not the conductor".
+# which doesn't conduct runs here) means "not the conductor". `agent_id` marks a subagent on other
+# events; that it does on SessionStart is assumed, not yet logged (see [DSHOOK] below).
 agent_id=$(jq -r '.agent_id // ""' <<<"$hook_input" 2>/dev/null)
 agent_type=$(jq -r '.agent_type // ""' <<<"$hook_input" 2>/dev/null)
 

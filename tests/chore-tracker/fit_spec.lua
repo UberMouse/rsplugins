@@ -10,7 +10,7 @@ local function measure(text)
     return #text * 10
 end
 
-describe("fit", function()
+describe("chore-tracker fit", function()
     it("leaves text that fits as it is", function()
         assert.are.same({ "Daily", false }, { fit.fit("Daily", 50, measure) })
         assert.are.same({ "Daily", false }, { fit.fit("Daily", 500, measure) })

@@ -3,7 +3,7 @@
 -- on a change seen after the 10 s settle that follows the load or a character switch.
 
 local helpers = require("tests.chore-tracker.helpers")
-local loaded, ticked, pick = helpers.loaded, helpers.ticked, helpers.pick
+local loaded, ticked, pick, doneAt = helpers.loaded, helpers.ticked, helpers.pick, helpers.doneAt
 
 local BERT = { name = "Sand from Bert", id = "bert-sand" }
 local CHALLENGE = { name = "Daily Challenge", id = "daily-challenge" }
@@ -34,16 +34,6 @@ end
 ---@param value integer
 local function set(h, name, value)
     h.world:setVar("VarPlayer", name, value)
-end
-
--- The minute chore `id` is stored as done for a character, or nil.
----@param h table
----@param id string
----@param who string?
----@return integer?
-local function doneAt(h, id, who)
-    local entry = h.db["state:" .. (who or "Zezima")]
-    return entry and entry.value.done[id]
 end
 
 -- How many `seen` lines the plugin has logged.
@@ -276,25 +266,6 @@ describe("chore-tracker var ticks", function()
         assert.are.equal(helpers.NOW, doneAt(h, "crystal-tree-blossom"))
         assert.matches(
             "%[CHORES%] seen crystal%-tree%-blossom done %(ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE%)",
-            h:output()
-        )
-    end)
-end)
-
-describe("chore-tracker Arhein", function()
-    it("ticks Seaweed and Pineapples on a purchase at his shop", function()
-        local h = loaded()
-        local function stock(seaweed)
-            h.world:setInventory("ARHEINSTORE", {
-                { obj = "SEAWEED", count = seaweed },
-                { obj = "PINEAPPLE", count = 50 },
-            }, 10)
-        end
-        stock(50)
-        stock(0)
-        assert.are.equal(helpers.NOW, doneAt(h, "seaweed-and-pineapples"))
-        assert.matches(
-            "%[CHORES%] purchase seaweed%-and%-pineapples at Arhein, Catherby",
             h:output()
         )
     end)

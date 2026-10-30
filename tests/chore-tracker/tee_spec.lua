@@ -5,7 +5,7 @@
 local dkjson = require("dkjson")
 local helpers = require("tests.chore-tracker.helpers")
 
-describe("chore tracker with the dev log tee", function()
+describe("chore-tracker dev log tee", function()
     it("forwards its console lines once httpAccess is granted", function()
         local h = helpers.loaded({ grant = { "httpAccess" } })
         h:step()

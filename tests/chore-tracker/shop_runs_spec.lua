@@ -4,8 +4,8 @@
 
 local harness = require("tests.harness")
 local helpers = require("tests.chore-tracker.helpers")
-local loaded, ticked, pick, rowShown =
-    helpers.loaded, helpers.ticked, helpers.pick, helpers.rowShown
+local loaded, ticked, pick, rowShown, doneAt =
+    helpers.loaded, helpers.ticked, helpers.pick, helpers.rowShown, helpers.doneAt
 
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
 local YAK = { name = "Yak Hide", id = "yak-hide" }
@@ -304,6 +304,23 @@ describe("chore-tracker shop runs", function()
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
         assert.are.equal(2, h.db["state:Zezima"].value.version)
     end)
+
+    it("ticks Seaweed and Pineapples on a purchase at his shop", function()
+        local h = loaded()
+        local function stock(seaweed)
+            h.world:setInventory("ARHEINSTORE", {
+                { obj = "SEAWEED", count = seaweed },
+                { obj = "PINEAPPLE", count = 50 },
+            }, 10)
+        end
+        stock(50)
+        stock(0)
+        assert.are.equal(helpers.NOW, doneAt(h, "seaweed-and-pineapples"))
+        assert.matches(
+            "%[CHORES%] purchase seaweed%-and%-pineapples at Arhein, Catherby",
+            h:output()
+        )
+    end)
 end)
 
 -- Logged in at the tile given (the clock at `opts.clock`, logged out with `opts.login`
@@ -375,6 +392,46 @@ describe("chore-tracker collections", function()
             )
         end)
 
+        it(
+            "writes and logs nothing for " .. c.chore .. "'s second rise in the same period",
+            function()
+                local h = collectorAt(c.chore, c.notes, c.x, c.z)
+                gain(h, c.notes)
+                local writes = h.dbWrites
+                h.world:setInventory("INV", { { obj = c.notes, count = 99 } }, 28)
+                assert.are.equal(writes, h.dbWrites)
+                local _, lines = h:output():gsub("collected", "")
+                assert.are.equal(1, lines)
+            end
+        )
+
+        it("ticks " .. c.chore .. " when another note arrives alongside its notes", function()
+            local h = collectorAt(c.chore, c.notes, c.x, c.z)
+            local writes = h.dbWrites
+            h.world:setInventory("INV", {
+                { obj = c.notes, count = 40 },
+                { obj = "COINS", count = 500 },
+                { obj = "CERT_COOKING_APPLE", count = 30 },
+            }, 28)
+            assert.is_true(ticked(h, c.name))
+            assert.are.equal(writes + 1, h.dbWrites)
+        end)
+
+        it(
+            "ignores " .. c.chore .. " when notes leave the backpack or other items arrive",
+            function()
+                local h = collectorAt(c.chore, c.notes, c.x, c.z)
+                local writes = h.dbWrites
+                h.world:setInventory("INV", { { obj = c.notes, count = 1 } }, 28)
+                h.world:setInventory("INV", {
+                    { obj = c.notes, count = 1 },
+                    { obj = "LOGS", count = 1 },
+                }, 28)
+                assert.is_false(ticked(h, c.name))
+                assert.are.equal(writes, h.dbWrites)
+            end
+        )
+
         it("ignores " .. c.chore .. "'s notes further away or on another plane", function()
             for _, at in ipairs({ { c.x + 11, c.z, 0 }, { c.x, c.z - 11, 0 }, { c.x, c.z, 1 } }) do
                 local h = collectorAt(c.chore, c.notes, at[1], at[2], at[3])
@@ -396,76 +453,4 @@ describe("chore-tracker collections", function()
             end
         end)
     end
-end)
-
-describe("chore-tracker Dell Monti", function()
-    local DELL = { name = "Pineapples and Apples from Dell Monti", id = "dellmonti-pineapples" }
-    -- Dell Monti's tile, per runescape.wiki/w/Dell_Monti.
-    local X, Z = 2763, 3186
-
-    -- Logged in at the tile given, with some of Dell Monti's notes in the backpack and his
-    -- chore picked.
-    ---@param x integer
-    ---@param z integer
-    ---@param level integer?
-    ---@return table
-    local function standingAt(x, z, level)
-        local h = helpers.loaded({ load = false })
-        h.world:setPosition(x, z, level)
-        h.world:setInventory("INV", {
-            { obj = "CERT_PINEAPPLE", count = 10 },
-            { obj = "COINS", count = 500 },
-        }, 28)
-        h:load()
-        pick(h, { DELL.id })
-        return h
-    end
-
-    -- Dell Monti hands over notes: the backpack's apple and pineapple notes go up.
-    ---@param h table
-    local function collect(h)
-        h.world:setInventory("INV", {
-            { obj = "CERT_PINEAPPLE", count = 40 },
-            { obj = "COINS", count = 500 },
-            { obj = "CERT_COOKING_APPLE", count = 30 },
-        }, 28)
-    end
-
-    it("ticks when his notes arrive near him, once a period", function()
-        local h = standingAt(X + 10, Z - 10)
-        local writes = h.dbWrites
-        collect(h)
-        assert.is_true(ticked(h, DELL.name))
-        assert.are.equal(writes + 1, h.dbWrites)
-        assert.matches("%[CHORES%] collected dellmonti%-pineapples near Dell Monti", h:output())
-        -- More notes the same week change nothing stored.
-        h.world:setInventory("INV", { { obj = "CERT_PINEAPPLE", count = 99 } }, 28)
-        assert.are.equal(writes + 1, h.dbWrites)
-        -- Nor are they logged: only a tick is.
-        local _, lines = h:output():gsub("collected", "")
-        assert.are.equal(1, lines)
-    end)
-
-    it("ignores his notes arriving further away or on another plane", function()
-        for _, at in ipairs({ { X + 11, Z, 0 }, { X, Z - 11, 0 }, { X, Z, 1 } }) do
-            local h = standingAt(at[1], at[2], at[3])
-            local writes = h.dbWrites
-            collect(h)
-            assert.is_false(ticked(h, DELL.name))
-            assert.are.equal(writes, h.dbWrites)
-            assert.is_nil(h:output():find("collected", 1, true))
-        end
-    end)
-
-    it("ignores notes leaving the backpack, and other items arriving", function()
-        local h = standingAt(X, Z)
-        local writes = h.dbWrites
-        h.world:setInventory("INV", { { obj = "CERT_PINEAPPLE", count = 1 } }, 28)
-        h.world:setInventory("INV", {
-            { obj = "CERT_PINEAPPLE", count = 1 },
-            { obj = "LOGS", count = 1 },
-        }, 28)
-        assert.is_false(ticked(h, DELL.name))
-        assert.are.equal(writes, h.dbWrites)
-    end)
 end)

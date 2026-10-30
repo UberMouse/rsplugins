@@ -157,6 +157,16 @@ function M.tick(h, name)
     click(h, M.row(h, name).label)
 end
 
+-- The minute chore `id` is stored as done for a character, or nil.
+---@param h table
+---@param id string
+---@param who string?
+---@return integer?
+function M.doneAt(h, id, who)
+    local entry = h.db["state:" .. (who or "Zezima")]
+    return entry and entry.value.done[id]
+end
+
 -- A chore's row text and tooltip text, read by hovering it.
 ---@param h table
 ---@param name string

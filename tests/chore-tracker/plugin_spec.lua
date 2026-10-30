@@ -195,7 +195,7 @@ describe("chore-tracker login", function()
     end)
 end)
 
-describe("chore-tracker layout", function()
+describe("chore-tracker saved layout", function()
     it("opens at a fixed spot on the first run, open", function()
         local h = loaded()
         assert.are.same({ 600, 300, 320, 420 }, geometry(h))

@@ -13,8 +13,8 @@ client (`prl <plugin>`).
   fails on a failing test.
 - `tests/warm.lua` (the `.busted` helper) runs once before busted insulates each spec file, so the
   var catalog, the config tables and the stub index are parsed once per run, not once per file.
-  `catalog.var`, `catalog.config` and `stubs.index()` hand out those cached tables themselves:
-  a spec must not write into one, or the write leaks into every later file.
+  `catalog.var` (a var record), `stubs.index()` and `stubs.fields()` hand out the cached tables
+  themselves: a spec must not write into one, or the write leaks into every later file.
 - Nothing under `tests/` ships in a plugin.
 
 ## Layout

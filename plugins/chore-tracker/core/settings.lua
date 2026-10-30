@@ -4,7 +4,7 @@
 local M = {}
 
 -- The persisted shape's version. fromStored ignores any other.
-M.VERSION = 1
+local VERSION = 1
 
 ---@class ChoreSettings
 ---@field popups boolean show a popup for a chore ticked and a period cleared
@@ -21,7 +21,7 @@ end
 ---@return ChoreSettings
 function M.fromStored(value)
     local out = M.default()
-    if type(value) ~= "table" or value.version ~= M.VERSION then return out end
+    if type(value) ~= "table" or value.version ~= VERSION then return out end
     if type(value.popups) == "boolean" then out.popups = value.popups end
     if type(value.sound) == "boolean" then out.sound = value.sound end
     return out
@@ -31,7 +31,7 @@ end
 ---@param settings ChoreSettings
 ---@return table
 function M.serialise(settings)
-    return { version = M.VERSION, popups = settings.popups, sound = settings.sound }
+    return { version = VERSION, popups = settings.popups, sound = settings.sound }
 end
 
 return M

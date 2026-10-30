@@ -258,4 +258,17 @@ internal.clampIntoParent = clampIntoParent
 internal.gone = gone
 internal.track = track
 
+-- Load-time guard: reading a helper before the file that defines it was required fails loudly,
+-- instead of leaving a nil alias that only faults when a test first calls it.
+setmetatable(internal, {
+    __index = function(_, k)
+        error(
+            "prettyui internal."
+                .. tostring(k)
+                .. " read before the file that defines it was required",
+            2
+        )
+    end,
+})
+
 return internal

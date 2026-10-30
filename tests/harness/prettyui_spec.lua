@@ -161,7 +161,13 @@ other = ui.Layer.new(parent)
 ]])
         local win = h.env.win
         local title = assert(win.titleDrag, "a titled window has a title-bar drag layer")
-        -- On the window's parent, after the root; a layer made later is drawn over both.
+        -- The drag layer sits directly on the plugin layer, after the root; a layer made later
+        -- is drawn over both.
+        local onPluginLayer = false
+        for _, proxy in ipairs(h.ui:drawOrder()) do
+            if proxy == title then onPluginLayer = true end
+        end
+        assert(onPluginLayer, "the title drag layer is a child of the plugin layer")
         assertTop(h, { h.env.other })
         for _, press in ipairs({ "dragTitle", "clickTitle" }) do
             h.env.other:MoveToFront()

@@ -563,7 +563,10 @@ describe("chore-tracker drag", function()
         -- The target now covers the plugin layer and is in front.
         local t = assert(h.ui:pressed()).component
         local stack = h.ui:drawOrder()
-        assert.are.same({ 0, 0, 3836, 2121 }, { t.x, t.y, t.width, t.height })
+        assert.are.same(
+            { 0, 0, uiFake.ROOT_WIDTH, uiFake.ROOT_HEIGHT },
+            { t.x, t.y, t.width, t.height }
+        )
         assert.are.equal(t, stack[#stack])
 
         -- Down two rows and a bit: the row follows, the two below it close up, a gap at 3.
@@ -729,7 +732,7 @@ describe("chore-tracker drag", function()
             assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
         end
         assert.are.equal(writes, h.dbWrites)
-        assert.are.equal(3836, assert(h.ui:pressed()).component.width)
+        assert.are.equal(uiFake.ROOT_WIDTH, assert(h.ui:pressed()).component.width)
         assert.is_true(h.ui:release())
         assert.are.equal("daily-challenge", stored(h)[3])
     end)
@@ -745,7 +748,7 @@ describe("chore-tracker drag", function()
         local target = assert(h.ui:pressed()).component
         -- A few ticks without a hold are still a drag.
         h:advance(100)
-        assert.are.equal(3836, target.width)
+        assert.are.equal(uiFake.ROOT_WIDTH, target.width)
         assert.are.equal(writes, h.dbWrites)
         -- Then it drops at the slot shown, saves, and docks the target back over its grip.
         h:advance(300)

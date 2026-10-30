@@ -376,6 +376,27 @@ local function localPoint(hit, x, y)
     return math.floor(x - hx), math.floor(y - hy)
 end
 
+-- Deliver a click to the component `cs`: the component that takes it (see `reach`) gets the
+-- hooks in `hooks` order, each with the press point in its own coordinates. Returns true, or
+-- false and the `reach` reason.
+---@param self table the driver
+---@param cs table
+---@param label string names the call in a runtime-limit fault
+---@param hooks integer[] the ui.Hook values to fire, in order
+---@return boolean
+---@return string?
+local function deliverClick(self, cs, label, hooks)
+    local hit, why = self:reach(cs)
+    if not hit then return false, why end
+    local x, y = localPoint(hit, centre(cs))
+    runtime.call(self.h.budgetMs, label, function()
+        for _, hook in ipairs(hooks) do
+            ui.fire(hit, hook, x, y)
+        end
+    end)
+    return true
+end
+
 -- Click a component the plugin made (or a window's content): the component that takes it
 -- (see `reach`) gets ONCLICK and then ONRELEASE, both with the press point in its own
 -- coordinates. A plugin acts on ONCLICK: a quick click can arrive release first in the client,
@@ -384,14 +405,7 @@ end
 ---@return boolean
 ---@return string?
 function Driver:clickComponent(cs)
-    local hit, why = self:reach(cs)
-    if not hit then return false, why end
-    local x, y = localPoint(hit, centre(cs))
-    runtime.call(self.h.budgetMs, "component click", function()
-        ui.fire(hit, ui.Hook.ONCLICK, x, y)
-        ui.fire(hit, ui.Hook.ONRELEASE, x, y)
-    end)
-    return true
+    return deliverClick(self, cs, "component click", { ui.Hook.ONCLICK, ui.Hook.ONRELEASE })
 end
 
 -- Press the mouse button on a component the plugin made (or a window's content) at (x, y) in
@@ -399,7 +413,8 @@ end
 -- (see `reach`) gets ONCLICK with the point in its own coordinates, and is the pressed layer
 -- until the press ends. In the client the first ONHOLD comes on the same tick as ONCLICK
 -- (docs/api-concepts.md, "Pointer hooks on a plain `ui.Layer`"); here it comes with the first
--- `moveTo`, so a spec can look at the plugin's UI between the two. Returns true, or false and why it didn't land (the reasons `click` gives).
+-- `moveTo`, so a spec can look at the plugin's UI between the two. Returns true, or false and
+-- why it didn't land (the `reach` reasons).
 ---@param target any
 ---@param x number?
 ---@param y number?
@@ -820,7 +835,8 @@ end
 -- A one-tick click as the client delivers it: ONRELEASE first, then ONCLICK, with no hold
 -- between (docs/api-concepts.md, "Pointer hooks on a plain `ui.Layer`"). The component that
 -- takes the click at `component`'s centre gets both, with the point in its own coordinates.
--- Returns true, or false and why it didn't land (the reasons `click` gives).
+-- Returns true, or false and why it didn't land (the `reach` reasons: hidden, clipped,
+-- clickthrough, covered).
 ---@param component any a component the plugin made, or a window's content
 ---@return boolean
 ---@return string?
@@ -828,14 +844,7 @@ function Driver:quickClick(component)
     local cs = ui.stateOf(component)
     assert(isRaw(cs), "h.ui:quickClick needs a component the plugin made, or a window's content")
     assert(cs, "unreachable")
-    local hit, why = self:reach(cs)
-    if not hit then return false, why end
-    local x, y = localPoint(hit, centre(cs))
-    runtime.call(self.h.budgetMs, "component quick click", function()
-        ui.fire(hit, ui.Hook.ONRELEASE, x, y)
-        ui.fire(hit, ui.Hook.ONCLICK, x, y)
-    end)
-    return true
+    return deliverClick(self, cs, "component quick click", { ui.Hook.ONRELEASE, ui.Hook.ONCLICK })
 end
 
 -- The children of a component, as the proxies the plugin holds, in draw order (the last is on

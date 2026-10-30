@@ -325,6 +325,14 @@ function Harness:consoleCount(text)
     return n
 end
 
+-- The names the plugin has subscribed to `event`, in dispatch order.
+---@param event string
+---@return string[]
+function Harness:subscriptions(event)
+    local instance = assert(self.instance, "plugin not loaded")
+    return events.names(instance, event)
+end
+
 -- The started HTTP requests to exactly `url`, in order.
 ---@param url string
 ---@return table[]

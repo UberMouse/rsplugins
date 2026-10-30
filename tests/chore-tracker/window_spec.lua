@@ -11,6 +11,7 @@ local loaded, row, togglePicks, ticked =
 
 local ELLIPSIS = require("core/fit").ELLIPSIS
 local fonts = require("tests.harness.api.fonts")
+local uiFake = require("tests.harness.api.ui")
 
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
 local TEXT_COLOUR, DONE_COLOUR = helpers.TEXT_COLOUR, helpers.DONE_COLOUR
@@ -622,7 +623,8 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
     ---@return integer
     local function liveChildren(h, pred)
         local n = 0
-        for _, child in ipairs(h.instance.uiRoot.children) do
+        for _, proxy in ipairs(h.ui:drawOrder()) do
+            local child = assert(uiFake.stateOf(proxy))
             if not child.destroyed and (not pred or pred(child)) then n = n + 1 end
         end
         return n

@@ -61,7 +61,8 @@ local window = helpers.window
 local function targets(h)
     local push = h.env.id.Cursor.CURSOR_PUSH
     local out = {}
-    for _, child in ipairs(h.instance.uiRoot.children) do
+    for _, proxy in ipairs(h.ui:drawOrder()) do
+        local child = assert(uiFake.stateOf(proxy))
         if
             child.class == "ui.Layer"
             and not child.destroyed
@@ -522,7 +523,8 @@ describe("chore-tracker grip clicks", function()
         local writes = h.dbWrites
         grab(h, "player-owned-ports")
         h:advance(20)
-        assert.is_true(h.ui:moveTo(h.ui.pressing.x, h.ui.pressing.y))
+        local held = assert(h.ui:pressed())
+        assert.is_true(h.ui:moveTo(held.x, held.y))
         assert.is_true(h.ui:release())
         assert.are.equal(writes, h.dbWrites)
         assert.are.same(DAILY, { table.unpack(order(h), 1, 5) })
@@ -535,8 +537,7 @@ describe("chore-tracker grip clicks", function()
         local t = assert(targetOf(h, "daily-challenge"))
         local s = assert(uiFake.stateOf(t))
         -- A one-tick click arrives backwards in the client: release, then click, no hold.
-        uiFake.fire(s, h.env.ui.Hook.ONRELEASE, 8, 8)
-        uiFake.fire(s, h.env.ui.Hook.ONCLICK, 8, 8)
+        assert.is_true(h.ui:quickClick(t))
         h:advance(100)
         -- A stray hold now starts nothing: the target stays docked.
         uiFake.fire(s, h.env.ui.Hook.ONHOLD, 8, 60)
@@ -560,13 +561,10 @@ describe("chore-tracker drag", function()
         local writes = h.dbWrites
         local x, y = grab(h, "daily-challenge")
         -- The target now covers the plugin layer and is in front.
-        local t = assert(uiFake.stateOf(h.ui.pressing.s.proxy))
-        local parent = h.instance.uiRoot
-        assert.are.same(
-            { 0, 0, uiFake.width(parent), uiFake.height(parent) },
-            { t.proxy.x, t.proxy.y, t.proxy.width, t.proxy.height }
-        )
-        assert.are.equal(t, parent.children[#parent.children])
+        local t = assert(h.ui:pressed()).component
+        local stack = h.ui:drawOrder()
+        assert.are.same({ 0, 0, 3836, 2121 }, { t.x, t.y, t.width, t.height })
+        assert.are.equal(t, stack[#stack])
 
         -- Down two rows and a bit: the row follows, the two below it close up, a gap at 3.
         assert.is_true(h.ui:moveTo(x + 30, y + 2 * ROW + 5))
@@ -576,11 +574,8 @@ describe("chore-tracker drag", function()
         assert.are.equal(firstY + 3 * ROW, rowY(h, "crystal-tree-blossom"))
         assert.are.equal(firstY + 4 * ROW, rowY(h, "invention-machine"))
         -- Drawn over its neighbours.
-        local content = assert(uiFake.stateOf(window(h).content))
-        assert.are.equal(
-            uiFake.stateOf(row(h, "Daily Challenge").layer),
-            content.children[#content.children]
-        )
+        local listed = h.ui:children(window(h).content)
+        assert.are.equal(row(h, "Daily Challenge").layer, listed[#listed])
         -- Other periods and the headings stay put.
         assert.are.same(
             { weeklyY, oysterY, headingY },
@@ -713,7 +708,12 @@ describe("chore-tracker drag", function()
         local x, y = grab(h, "daily-challenge")
         assert.is_true(h.ui:moveTo(x, y + ROW))
         local before = rowY(h, "daily-challenge")
-        uiFake.fire(h.ui.pressing.s, h.env.ui.Hook.ONHOLD, x, nil)
+        uiFake.fire(
+            assert(uiFake.stateOf(assert(h.ui:pressed()).component)),
+            h.env.ui.Hook.ONHOLD,
+            x,
+            nil
+        )
         assert.are.equal(before, rowY(h, "daily-challenge"))
         assert.is_true(h.ui:release())
         assert.are.equal("daily-challenge", stored(h)[2])
@@ -729,7 +729,7 @@ describe("chore-tracker drag", function()
             assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
         end
         assert.are.equal(writes, h.dbWrites)
-        assert.are.equal(uiFake.width(h.instance.uiRoot), h.ui.pressing.s.proxy.width)
+        assert.are.equal(3836, assert(h.ui:pressed()).component.width)
         assert.is_true(h.ui:release())
         assert.are.equal("daily-challenge", stored(h)[3])
     end)
@@ -742,10 +742,10 @@ describe("chore-tracker drag", function()
         assert.is_true(h.ui:moveTo(x, y + ROW))
         h:advance(20)
         assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
-        local target = h.ui.pressing.s.proxy
+        local target = assert(h.ui:pressed()).component
         -- A few ticks without a hold are still a drag.
         h:advance(100)
-        assert.are.equal(uiFake.width(h.instance.uiRoot), target.width)
+        assert.are.equal(3836, target.width)
         assert.are.equal(writes, h.dbWrites)
         -- Then it drops at the slot shown, saves, and docks the target back over its grip.
         h:advance(300)
@@ -755,7 +755,7 @@ describe("chore-tracker drag", function()
         assert.are.equal(target, targetOf(h, "daily-challenge"))
         assert.matches("%[CHORES%] moved daily%-challenge to 3 in daily", h:output())
         -- The fake still holds the button the client stopped reporting; end its press here.
-        h.ui.pressing = nil
+        h.ui:lostPress()
         -- The next click lands on its row again, and ticks it without moving anything.
         helpers.toggleTick(h, "Invention Machine")
         assert.is_true(helpers.ticked(h, "Invention Machine"))
@@ -796,7 +796,7 @@ describe("chore-tracker drag and other events", function()
         local writes = h.dbWrites
         local x, y = grab(h, "daily-challenge")
         assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
-        local pressed = h.ui.pressing.s
+        local pressed = assert(uiFake.stateOf(assert(h.ui:pressed()).component))
         h.world:logout()
         -- The button stays down, so a hold comes every tick until the rebuild ends the press.
         for _ = 1, 25 do
@@ -810,7 +810,7 @@ describe("chore-tracker drag and other events", function()
         assert.are.equal(writes, h.dbWrites)
         assert.are.same(DAILY, { table.unpack(stored(h), 1, 5) })
         -- The client can send a destroyed layer nothing more; end the press here.
-        h.ui.pressing = nil
+        h.ui:lostPress()
         h.world:login("Zezima")
         h:advance(helpers.POLL_MS)
         assert.are.same(DAILY, { table.unpack(order(h), 1, 5) })
@@ -822,13 +822,13 @@ describe("chore-tracker drag and other events", function()
         local writes = h.dbWrites
         local x, y = grab(h, "daily-challenge")
         assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
-        local pressed = h.ui.pressing.s
+        local pressed = assert(uiFake.stateOf(assert(h.ui:pressed()).component))
         assert.is_true(h.ui:click(h.ui:get("SpriteButton", { sprite = "SETTINGS" })))
         h:advance(20)
         assert.is_true(pressed.destroyed)
         assert.are.equal(0, #targets(h))
         assert.are.equal(writes, h.dbWrites)
-        h.ui.pressing = nil
+        h.ui:lostPress()
     end)
 
     it("drops the drag as a release would when the window collapses", function()
@@ -837,7 +837,7 @@ describe("chore-tracker drag and other events", function()
         local writes = h.dbWrites
         local x, y = grab(h, "daily-challenge")
         assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
-        local target = h.ui.pressing.s.proxy
+        local target = assert(h.ui:pressed()).component
         -- In the client the stretched target covers the hamburger; the fake doesn't model that,
         -- so this is the one way a spec closes the window mid-drag.
         assert.is_true(h.ui:click(h.ui:get("SpriteButton", { sprite = "MENU", visible = true })))
@@ -850,7 +850,7 @@ describe("chore-tracker drag and other events", function()
         assert.matches("%[CHORES%] moved daily%-challenge to 3 in daily", h:output())
         -- The fake faults on a held press whose layer was hidden (unprobed in the client); end
         -- it here.
-        h.ui.pressing = nil
+        h.ui:lostPress()
         helpers.expand(h)
         assert.are.equal(target, targetOf(h, "daily-challenge"))
         assert.are.equal("daily-challenge", stored(h)[3])
@@ -883,9 +883,8 @@ describe("chore-tracker drag and other events", function()
         assert.is_true(h.ui:moveTo(x, y + ROW))
         local writes = h.dbWrites
         h:unload()
-        for _, child in ipairs(h.instance.uiRoot.children) do
-            assert.is_true(child.destroyed)
-        end
+        -- A destroyed component leaves its parent's children, so none left means all destroyed.
+        assert.are.equal(0, #h.ui:drawOrder())
         -- Nothing is saved on the way out: not an order, and an unmoved layout is not rewritten.
         assert.are.same(DAILY, { table.unpack(stored(h), 1, 5) })
         assert.are.equal(writes, h.dbWrites)

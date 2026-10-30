@@ -106,6 +106,7 @@ n end` gives `utils.CalcTextWidth` its font metrics (without it, the call faults
 | `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "" }` (a status of 400 or more arrives failed), `{ timedOut = true }` or `{ error = "info", errorCode = n }`; any other field faults. Delivered on the next step. A request left unanswered for 10 s (500 steps) times out by itself |
 | `h:useRecording(source, opts?)` | Drive the world from a recording (a `.jsonl` path, repo-relative or absolute, or a list of entries); call before `h:load()`. A recording with `dropped` entries is refused unless `opts.allowDropped`. See [Replaying a recording](#replaying-a-recording) |
 | `h:playRecording()` | Step the clock to the recording's last tick |
+| `h:subscriptions(event)` | The names the plugin has subscribed to `event`, in dispatch order; one unsubscribed during a running dispatch is already left out |
 | `h:consoleCount(text)` | How many console lines contain `text` (plain match) |
 | `h:requestsTo(url)` | The started HTTP requests to exactly `url`, in order |
 | `h:answerAll(url, response?)` | `h:respond` to every unanswered request to `url`; `{ status = 200 }` by default |
@@ -172,6 +173,11 @@ event subscribers.
 | `scrollInternals(mode)` | `"noScroll"`: every Window made from then on reads the internal `_scroll` as nil; `"noViewport"`: `viewport` reads nil; `"noWheel"`: the internal `_onScrollWheel` reads nil; `"all"` (the default) restores them. Set it before `h:load()` for a window made at load |
 | `holdAlt(held)` / `altDrag(panel, dx, dy)` | Hold Alt (with the console closed), then Alt-drag a Panel, clamped inside its parent. `altDrag` returns false and leaves the panel alone unless Alt is held |
 | `hover(target, value?)` / `leave()` | Move the pointer onto a target (a CheckboxButton's choice by `value`), which shows its tooltip after the previous target's mouse-leave; or off it. Hovering a hidden target returns false. A target hidden since it was hovered gets no mouse-leave, so its tooltip stays. Over a component the plugin made (or a Window's `content`) the component that takes the pointer gets `ONMOUSEOVER(component, x, y)` and reads `isMouseOver` true, then `ONMOUSELEAVE(component)` and false when the pointer moves off it; moving between a component and its clickthrough children fires nothing. It returns false and why on the same reasons as `click` |
+| `children(component)` | The component's children as the proxies the plugin holds, in draw order (the last is on top). A destroyed child is no longer listed |
+| `drawOrder()` | The plugin layer's children, bottom to top, as `children` gives them |
+| `pressed()` | The held press as `{ component, x, y }` (the pressed layer and the pointer's last point, plugin-layer coordinates), or nil |
+| `lostPress()` | The client stops reporting the button: the held press ends with no `ONRELEASE` (unlike `release`). Faults when no press is held |
+| `quickClick(component)` | A one-tick click as the client delivers it: the component that takes the click gets `ONRELEASE` and then `ONCLICK` at the target's centre, with no hold and no press left held. Returns true, or false and why (the reasons `click` gives) |
 | `tooltips()` | The text of every tooltip on screen |
 | `choices(checkbox)` | A CheckboxButton's choices as `{ text, value, selected, disabled, tooltip }` in order, and its `colour` option as a second result |
 | `layout(target)` | `{ x, y, width, height, hidden, globalX, globalY, visible }` of a component or an object's root; `globalX`, `globalY` are where it is drawn, a window's scroll included (its `xyGlobal` leaves the scroll out, as in the client). Specs can also read `x`, `y`, `width`, `height`, `hidden` and `xyGlobal` off the components directly |

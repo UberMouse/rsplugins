@@ -148,7 +148,7 @@ end
 
 -- The open view's rows (list or settings), top to bottom: each hand-built row layer in the
 -- window's content, as { layer, grip, icon, label, box, text } (grip nil in settings rows, icon
--- nil when the row has none). Found through the harness's component states, since the plugin
+-- nil when the row has none). Found through the driver's children, since the plugin
 -- keeps its rows in locals.
 ---@param h table
 ---@return table[]
@@ -156,20 +156,21 @@ function M.rows(h)
     local content = M.window(h).content
     local grip = catalog.config("Sprite", "HAMBURGER_MENU_ICON")
     local out = {}
-    for _, child in ipairs(uiFake.stateOf(content).children) do
-        if child.class == "ui.Layer" then
-            local row = { layer = child.proxy }
-            for _, part in ipairs(child.children) do
+    for _, layer in ipairs(h.ui:children(content)) do
+        if assert(uiFake.stateOf(layer)).class == "ui.Layer" then
+            local row = { layer = layer }
+            for _, proxy in ipairs(h.ui:children(layer)) do
+                local part = assert(uiFake.stateOf(proxy))
                 if part.class == "ui.Text" then
-                    row.label, row.text = part.proxy, part.content
+                    row.label, row.text = proxy, part.content
                 elseif part.class == "ui.Sprite" and part.spriteID == grip then
-                    row.grip = part.proxy
+                    row.grip = proxy
                 elseif part.class == "ui.Sprite" then
                     -- The icon is left of the box, which sits at the row's right edge.
                     if row.box then
-                        row.icon, row.box = row.box, part.proxy
+                        row.icon, row.box = row.box, proxy
                     else
-                        row.box = part.proxy
+                        row.box = proxy
                     end
                 end
             end

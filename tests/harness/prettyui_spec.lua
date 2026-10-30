@@ -26,6 +26,16 @@ local function load(main, manifest)
     )
 end
 
+-- The plugin layer's draw order ends with `expected` (bottom to top), compared by identity.
+---@param h table
+---@param expected table[]
+local function assertTop(h, expected)
+    local order = h.ui:drawOrder()
+    for i, proxy in ipairs(expected) do
+        assert.are.equal(proxy, order[#order - #expected + i], "draw order tail, position " .. i)
+    end
+end
+
 -- The probe's window: 600,300, 300x200, titled and resizable, with a MENU button in the X's
 -- slot as a child of its root.
 local WINDOW = [[
@@ -149,14 +159,10 @@ describe("prettyui Window", function()
         local h = load(WINDOW .. [[
 other = ui.Layer.new(parent)
 ]])
-        local root = h.instance.uiRoot
         local win = h.env.win
         local title = assert(win.titleDrag, "a titled window has a title-bar drag layer")
-        local rootState = ui.stateOf(win.root)
-        local titleState = assert(ui.stateOf(title), "a fake component")
         -- On the window's parent, after the root; a layer made later is drawn over both.
-        assert.are.equal(root, titleState.parent)
-        assert.are.equal(ui.stateOf(h.env.other), root.children[#root.children])
+        assertTop(h, { h.env.other })
         for _, press in ipairs({ "dragTitle", "clickTitle" }) do
             h.env.other:MoveToFront()
             if press == "dragTitle" then
@@ -165,10 +171,7 @@ other = ui.Layer.new(parent)
                 h.ui:clickTitle(win)
             end
             -- 1.2.0's ONCLICK there: the root to the front, then the drag layer over it.
-            assert.are.same(
-                { rootState, titleState },
-                { table.unpack(root.children, #root.children - 1) }
-            )
+            assertTop(h, { win.root, title })
         end
     end)
 
@@ -186,23 +189,16 @@ win:_RegisterOverlay(overlay, function() return visible end, function() syncs = 
         "syncs its overlays when a title-bar press ends: after a drag's raise, before a click's",
         function()
             local h = load(OVERLAY)
-            local root = h.instance.uiRoot
-            local win, overlay = h.env.win, ui.stateOf(h.env.overlay)
-            local rootState, titleState = ui.stateOf(win.root), ui.stateOf(win.titleDrag)
+            local win, overlay = h.env.win, h.env.overlay
+            local rootProxy, titleProxy = win.root, win.titleDrag
             h.ui:dragTitle(win, 10, 10)
             assert.are.equal(1, h.env.syncs)
             -- Raised by the press, then the release's sync raises the shown overlay over them.
-            assert.are.same(
-                { rootState, titleState, overlay },
-                { table.unpack(root.children, #root.children - 2) }
-            )
+            assertTop(h, { rootProxy, titleProxy, overlay })
             -- A quick click arrives release-first: the sync, then the press's raise over it.
             h.ui:clickTitle(win)
             assert.are.equal(2, h.env.syncs)
-            assert.are.same(
-                { overlay, rootState, titleState },
-                { table.unpack(root.children, #root.children - 2) }
-            )
+            assertTop(h, { overlay, rootProxy, titleProxy })
         end
     )
 
@@ -248,11 +244,7 @@ win:_RegisterOverlay(overlay, function() return visible end, function() syncs = 
                     h.ui:resize(win, 10, 10)
                 end)
             )
-            local root = h.instance.uiRoot
-            assert.are.same(
-                { ui.stateOf(win.root), ui.stateOf(win.titleDrag), ui.stateOf(overlay) },
-                { table.unpack(root.children, #root.children - 2) }
-            )
+            assertTop(h, { win.root, win.titleDrag, overlay })
             -- The wheel scrolls through SetScrollPosition, so it syncs too, while the content
             -- overflows.
             win:SetContentHeight(1000)
@@ -358,17 +350,13 @@ win:_RegisterOverlay(overlay, function() return visible end, function() syncs = 
         local h = load(WINDOW .. [[
 other = ui.Layer.new(parent)
 ]])
-        local root = h.instance.uiRoot
         local win = h.env.win
         local title = win.titleDrag
         win:Close()
         assert.is_true(title.hidden)
         win:Show()
         assert.is_false(title.hidden)
-        assert.are.same(
-            { ui.stateOf(win.root), ui.stateOf(title) },
-            { table.unpack(root.children, #root.children - 1) }
-        )
+        assertTop(h, { win.root, title })
         win:Destroy()
         assert.is_true(ui.stateOf(title).destroyed)
         assert.is_nil(win.titleDrag)
@@ -813,14 +801,14 @@ describe("prettyui AchievementPopup", function()
         assert.is_true(p.destroyed)
         assert.are.equal(1, h.env.completed)
         assert.are.equal(h.env.popup, h.env.done)
-        assert.are.equal(0, #h.instance.subs.Logic)
+        assert.are.same({}, h:subscriptions("Logic"))
     end)
 
     it("subscribes its own Logic callback, and Destroy removes it without onComplete", function()
         local h = load(MAIN)
-        assert.are.equal("prettyui_achievement_popup_1", h.instance.subs.Logic[1].name)
+        assert.are.same({ "prettyui_achievement_popup_1" }, h:subscriptions("Logic"))
         h.env.popup:Destroy()
-        assert.are.equal(0, #h.instance.subs.Logic)
+        assert.are.same({}, h:subscriptions("Logic"))
         h:advance(400 * 20)
         assert.are.equal(0, h.env.completed)
         assert.is_true(h.ui:popups()[1].destroyed)
@@ -1278,6 +1266,45 @@ capture:Subscribe(ui.Hook.ONRELEASE, function(_, x, y)
 end)
 ]]
 
+describe("prettyui driver stacking reads", function()
+    it("lists a component's children in draw order, and drops a destroyed one", function()
+        local h = load([[
+            box = ui.Layer.new(parent)
+            first = ui.Text.new(box)
+            second = ui.Sprite.new(box)
+        ]])
+        local env = h.env
+        assert.are.equal(0, #h.ui:children(env.first))
+        local kids = h.ui:children(env.box)
+        assert.are.equal(2, #kids)
+        assert.are.equal(env.first, kids[1])
+        assert.are.equal(env.second, kids[2])
+        env.first:MoveToFront()
+        kids = h.ui:children(env.box)
+        assert.are.equal(env.second, kids[1])
+        assert.are.equal(env.first, kids[2])
+        env.second:Destroy()
+        kids = h.ui:children(env.box)
+        assert.are.equal(1, #kids)
+        assert.are.equal(env.first, kids[1])
+    end)
+
+    it("gives the plugin layer's children bottom to top, a raise moving one last", function()
+        local h = load([[
+            a = ui.Layer.new(parent)
+            b = ui.Layer.new(parent)
+            c = ui.Layer.new(parent)
+        ]])
+        local env = h.env
+        local order = h.ui:drawOrder()
+        assert.are.same({ env.a, env.b, env.c }, { order[1], order[2], order[3] })
+        env.a:MoveToFront()
+        order = h.ui:drawOrder()
+        assert.are.equal(3, #order)
+        assert.are.same({ env.b, env.c, env.a }, { order[1], order[2], order[3] })
+    end)
+end)
+
 describe("prettyui driver press, hold and release", function()
     it("gives ONCLICK on press, and ONHOLD per move relative to where the layer is now", function()
         local h = load(BAR)
@@ -1434,6 +1461,42 @@ describe("prettyui driver press, hold and release", function()
         assert.are.same({ false, "no press held" }, { h.ui:moveTo(200, 514) })
         assert.are.same({ false, "no press held" }, { h.ui:release() })
         assert.are.same({}, h.env.log)
+    end)
+
+    it("reports the held press with pressed, and nothing once it has ended", function()
+        local h = load(BAR)
+        assert.is_nil(h.ui:pressed())
+        h.ui:press(h.env.bar)
+        local held = assert(h.ui:pressed())
+        assert.are.equal(h.env.bar, held.component)
+        assert.are.same({ 200, 514 }, { held.x, held.y })
+        h.ui:moveTo(210, 520)
+        held = assert(h.ui:pressed())
+        assert.are.same({ 210, 520 }, { held.x, held.y })
+        h.ui:release()
+        assert.is_nil(h.ui:pressed())
+    end)
+
+    it("drops a press with lostPress and no ONRELEASE", function()
+        local h = load(BAR)
+        h.ui:press(h.env.bar)
+        h.ui:lostPress()
+        assert.is_nil(h.ui:pressed())
+        assert.are.same({ false, "no press held" }, { h.ui:release() })
+        assert.are.same({ { "click", 100, 14 } }, h.env.log)
+        assert.matches("no press is held", harness.errorOf(h.ui.lostPress, h.ui))
+        -- The next press starts clean.
+        assert.is_true(h.ui:press(h.env.bar))
+    end)
+
+    it("delivers a quickClick release first, with no hold, and leaves no press held", function()
+        local h = load(BAR)
+        assert.is_true(h.ui:quickClick(h.env.bar))
+        assert.are.same({ { "release", 100, 14 }, { "click", 100, 14 } }, h.env.log)
+        assert.is_nil(h.ui:pressed())
+        h.env.bar.hidden = true
+        assert.are.same({ false, "hidden" }, { h.ui:quickClick(h.env.bar) })
+        assert.are.equal(2, #h.env.log)
     end)
 
     it("faults on a second press, and on a pressed layer hidden mid-press", function()

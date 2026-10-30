@@ -2150,6 +2150,64 @@ function Driver:altDrag(panel, dx, dy)
     return true
 end
 
+-- The held press as { component, x, y } (the pressed layer's proxy, and the pointer's last
+-- point in plugin-layer coordinates), or nil when none is held.
+---@return table?
+function Driver:pressed()
+    local p = self.pressing
+    if not p then return nil end
+    return { component = p.s.proxy, x = p.x, y = p.y }
+end
+
+-- The client stops reporting the button: the press ends with no ONRELEASE, unlike `release`
+-- and a `moveTo` out of the layer. For a spec whose plugin has already dropped the pressed
+-- layer, where the fake would otherwise keep a press the client no longer has.
+function Driver:lostPress()
+    assert(self.pressing, "h.ui:lostPress: no press is held")
+    self.pressing = nil
+end
+
+-- A one-tick click as the client delivers it: ONRELEASE first, then ONCLICK, with no hold
+-- between (docs/api-concepts.md, "Pointer hooks on a plain `ui.Layer`"). The component that
+-- takes the click at `component`'s centre gets both, with the point in its own coordinates.
+-- Returns true, or false and why it didn't land (the reasons `click` gives).
+---@param component any a component the plugin made, or a window's content
+---@return boolean
+---@return string?
+function Driver:quickClick(component)
+    local cs = ui.stateOf(component)
+    assert(isRaw(cs), "h.ui:quickClick needs a component the plugin made, or a window's content")
+    assert(cs, "unreachable")
+    local hit, why = self:reach(cs)
+    if not hit then return false, why end
+    local x, y = localPoint(hit, centre(cs))
+    runtime.call(self.h.budgetMs, "component quick click", function()
+        ui.fire(hit, ui.Hook.ONRELEASE, x, y)
+        ui.fire(hit, ui.Hook.ONCLICK, x, y)
+    end)
+    return true
+end
+
+-- The children of a component, as the proxies the plugin holds, in draw order (the last is on
+-- top). A destroyed child is no longer listed.
+---@param component any
+---@return table[]
+function Driver:children(component)
+    local cs = assert(ui.stateOf(component), "h.ui:children needs a component")
+    local out = {}
+    for i, child in ipairs(cs.children) do
+        out[i] = child.proxy
+    end
+    return out
+end
+
+-- The plugin layer's children, bottom to top.
+---@return table[]
+function Driver:drawOrder()
+    local instance = assert(self.h.instance, "plugin not loaded")
+    return self:children(instance.uiRoot.proxy)
+end
+
 -- A component's (or a PrettyUI object's root's) layout as plain data:
 -- { x, y, width, height, hidden, globalX, globalY, visible }. globalX, globalY are where it is
 -- drawn, a window's scroll included, which its xyGlobal leaves out (as in the client).

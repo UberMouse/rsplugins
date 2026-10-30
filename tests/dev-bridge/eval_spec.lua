@@ -4,15 +4,6 @@
 
 local support = require("tests.dev-bridge.support")
 
--- The real subscription names on `event`, in order.
-local function subNames(h, event)
-    local names = {}
-    for i, entry in ipairs(h.instance.subs[event]) do
-        names[i] = entry.name
-    end
-    return names
-end
-
 -- What spyEvent records for PluginShutdown's load-time part: one Unsubscribe per event of
 -- protocol.LOAD_EVENTS, in order, after any lazy ones (`lazy`, event names in order).
 ---@param lazy string[]?
@@ -157,7 +148,7 @@ describe("dev-bridge eval", function()
         assert.are.same({ 1, 2, 3 }, { counts[1], counts[2], counts[3] })
         -- A probe can't take over the bridge's own subscription by naming it.
         support.eval(h, counter("devBridgeLogic"))
-        assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
+        assert.are.same({ "devBridgeLogic" }, h:subscriptions("Logic"))
         assert.are.same({}, calls)
         assert.is_true(#support.syncs(h) >= 3) -- the bridge's Logic work carries on
     end)
@@ -205,7 +196,7 @@ describe("dev-bridge eval", function()
         support.eval(h, "Event.Logic.Unsubscribe('p') Event.Logic.Unsubscribe('nope')")
         assert.are.same({}, support.payloads(support.cycle(h), "Emit"))
         assert.are.same({}, calls)
-        assert.are.same({ "devBridgeLogic" }, subNames(h, "Logic"))
+        assert.are.same({ "devBridgeLogic" }, h:subscriptions("Logic"))
     end)
 
     it("skips a probe removed during the fan-out for the rest of that pass", function()
@@ -370,7 +361,7 @@ end)]]
             })
             assert.are.same({ "prl dev-bridge" }, support.ran(h))
             assert.are.same(shutdownUnsubscribes(h, { "ServerLogic" }), calls)
-            assert.are.same({}, subNames(h, "Logic"))
+            assert.are.same({}, h:subscriptions("Logic"))
             support.ticks(h, 30)
             assert.are.equal(0, #support.open(h)) -- stopped: no result, no further sync
         end
@@ -467,11 +458,11 @@ describe("dev-bridge lazy probe subscriptions", function()
         })
         local addedAt = h.tick
         assert.are.same({}, calls) -- no client call from the snippet itself
-        assert.are.same({}, subNames(h, "ServerLogic"))
+        assert.are.same({}, h:subscriptions("ServerLogic"))
         h:step()
         assert.are.same({ "Subscribe ServerLogic " .. SERVER }, calls)
         assert.are.same({ addedAt + 1 }, ticks)
-        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+        assert.are.same({ SERVER }, h:subscriptions("ServerLogic"))
         support.ticks(h, 30) -- to the next sync
         support.eval(h, "Event.ServerLogic.Subscribe('b', function() end)")
         assert.are.equal(1, #calls) -- a second probe needs no client call
@@ -512,7 +503,7 @@ Event.ServerLogic.Unsubscribe('a')]]
         )
         support.ticks(h, 30)
         assert.are.same({}, calls)
-        assert.are.same({}, subNames(h, "ServerLogic"))
+        assert.are.same({}, h:subscriptions("ServerLogic"))
     end)
 
     it("never makes a client call for probes on the load-time events", function()
@@ -540,11 +531,11 @@ Event.Logic.Unsubscribe('l')]]
         })
         local removedAt = h.tick
         assert.are.same({}, calls) -- nothing on the tick the probe went
-        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+        assert.are.same({ SERVER }, h:subscriptions("ServerLogic"))
         h:step()
         assert.are.same({ "Unsubscribe ServerLogic " .. SERVER }, calls)
         assert.are.same({ removedAt + 1 }, ticks)
-        assert.are.same({}, subNames(h, "ServerLogic"))
+        assert.are.same({}, h:subscriptions("ServerLogic"))
         support.ticks(h, 30)
         assert.are.equal(1, #calls) -- and only once
     end)
@@ -572,7 +563,7 @@ Event.ServerLogic.Subscribe('b', function() emit('b', 1) end)]]
         support.answer(h)
         support.ticks(h, 30)
         assert.are.same({}, calls)
-        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+        assert.are.same({ SERVER }, h:subscriptions("ServerLogic"))
         assert.is_true(#support.payloads(support.last(h), "Emit") >= 1)
     end)
 
@@ -586,7 +577,7 @@ Event.ServerLogic.Subscribe('b', function() emit('b', 1) end)]]
             { "Unsubscribe ServerLogic " .. SERVER, "Subscribe ServerLogic " .. SERVER },
             calls
         )
-        assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
+        assert.are.same({ SERVER }, h:subscriptions("ServerLogic"))
     end)
 
     it("queues every lazy subscription on reset, removing them on the next tick", function()
@@ -625,8 +616,8 @@ Event.Logic.Subscribe('l', function() end)]]
         -- Each is a direct call: the harness faults one passed straight to pcall.
         h:unload()
         assert.are.same(shutdownUnsubscribes(h, { "ServerLogic", "KeyTyped" }), calls)
-        assert.are.same({}, subNames(h, "ServerLogic"))
-        assert.are.same({}, subNames(h, "KeyTyped"))
+        assert.are.same({}, h:subscriptions("ServerLogic"))
+        assert.are.same({}, h:subscriptions("KeyTyped"))
     end)
 
     it("unsubscribes nothing on shutdown for a probe event not subscribed yet", function()

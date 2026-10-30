@@ -84,7 +84,9 @@ describe("ui root fake", function()
 end)
 
 describe("fake ui components", function()
-    -- The PrettyUI fake builds these; a plugin can't create ui.* components itself.
+    -- Unit tests of the component model that the PrettyUI fake and a plugin's own
+    -- ui.Layer/Sprite/Text are built on, made with ui.create. Stacking is checked through a
+    -- loaded plugin and the driver's draw order.
     it("place a child from its parent's size, and follow the parent", function()
         local _, rootState = ui.create("Component", nil)
         local parent = ui.create("Layer", rootState)
@@ -113,12 +115,14 @@ describe("fake ui components", function()
     end)
 
     it("move to the front of their siblings, and fault once destroyed", function()
-        local _, rootState = ui.create("Component", nil)
-        local a = ui.create("Layer", rootState)
-        local b = ui.create("Layer", rootState)
+        local h = load(support.pluginLayer("root") .. [[
+a = ui.Layer.new(root)
+b = ui.Layer.new(root)
+child = ui.Text.new(a)
+]])
+        local a, b, child = h.env.a, h.env.b, h.env.child
         a:MoveToFront()
-        assert.are.equal(ui.stateOf(a), rootState.children[2])
-        local child = ui.create("Text", ui.stateOf(a))
+        assert.are.equal(a, h.ui:drawOrder()[2])
         a:Destroy()
         assert.matches(
             "ui.Text used after Destroy",
@@ -126,20 +130,22 @@ describe("fake ui components", function()
                 return child.x
             end)
         )
-        assert.are.equal(1, #rootState.children)
-        assert.are.equal(ui.stateOf(b), rootState.children[1])
+        assert.are.equal(1, #h.ui:drawOrder())
+        assert.are.equal(b, h.ui:drawOrder()[1])
     end)
 
     it("stay where they are on MoveToFront while hidden, and count the calls", function()
-        local _, rootState = ui.create("Component", nil)
-        local a = ui.create("Layer", rootState)
-        ui.create("Layer", rootState)
+        local h = load(support.pluginLayer("root") .. [[
+a = ui.Layer.new(root)
+ui.Layer.new(root)
+]])
+        local a = h.env.a
         a.hidden = true
         a:MoveToFront()
-        assert.are.equal(ui.stateOf(a), rootState.children[1])
+        assert.are.equal(a, h.ui:drawOrder()[1])
         a.hidden = false
         a:MoveToFront()
-        assert.are.equal(ui.stateOf(a), rootState.children[2])
+        assert.are.equal(a, h.ui:drawOrder()[2])
         assert.are.equal(2, ui.stateOf(a).frontCalls)
     end)
 

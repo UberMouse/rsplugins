@@ -145,6 +145,20 @@ function M.payload(event, values)
     return class.new(state)
 end
 
+-- The names subscribed to `event`, in dispatch order. One that is unsubscribed mid-dispatch is
+-- already gone here, though its entry stays in the list until the dispatch ends.
+---@param instance table
+---@param event string
+---@return string[]
+function M.names(instance, event)
+    local list = assert(instance.subs[event], "no such event: " .. tostring(event))
+    local out = {}
+    for _, entry in ipairs(list) do
+        if not entry.removed then out[#out + 1] = entry.name end
+    end
+    return out
+end
+
 -- Call every current subscriber of `event` with `payload`, under the runtime's limits.
 ---@param h table the harness
 ---@param event string

@@ -1,6 +1,7 @@
 -- plugins/dev-bridge against the harness: self-granting, the sync loop's pacing, running the
 -- daemon's commands, forwarding events, the buffer cap, the daemon being down, and shutdown.
 
+local stubs = require("tests.harness.stubs")
 local support = require("tests.dev-bridge.support")
 
 -- The forwarded events, in the order main.lua subscribes them (protocol.LOAD_EVENTS order).
@@ -31,11 +32,10 @@ describe("dev-bridge", function()
         local loaded = {}
         for _, event in ipairs(protocol.LOAD_EVENTS) do
             loaded[event] = true
-            local subs = h.instance.subs[event]
-            assert.are.same({ "devBridge" .. event }, { subs[1].name, subs[2] }, event)
+            assert.are.same({ "devBridge" .. event }, h:subscriptions(event), event)
         end
-        for event, subs in pairs(h.instance.subs) do
-            if not loaded[event] then assert.are.same({}, subs, event) end
+        for event in pairs(stubs.fields("Event")) do
+            if not loaded[event] then assert.are.same({}, h:subscriptions(event), event) end
         end
     end)
 
@@ -187,7 +187,7 @@ describe("dev-bridge", function()
         support.ticks(h, 30)
         assert.are.equal(1, #support.syncs(h))
         assert.are.equal(requests, #h.requests)
-        assert.are.same({}, h.instance.subs.Logic)
+        assert.are.same({}, h:subscriptions("Logic"))
     end)
 
     it("skips malformed reply lines, logging them once per sync", function()
@@ -440,7 +440,7 @@ describe("dev-bridge", function()
         assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         -- Stopped from inside Logic, so made a no-op, not unsubscribed (stopping makes no
         -- client call; PluginShutdown unsubscribes): still subscribed, and doing nothing.
-        assert.are.same("devBridgeLogic", h.instance.subs.Logic[1].name)
+        assert.are.same({ "devBridgeLogic" }, h:subscriptions("Logic"))
         local requests = #h.requests
         h.world:chat("ignored")
         support.ticks(h, 300)

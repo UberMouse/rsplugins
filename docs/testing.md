@@ -511,9 +511,10 @@ h.world:setVar("VarPlayer", "QP", 12) -- then script as usual
 A fixture is a recorded session, sanitised and trimmed, committed under `tests/fixtures/` for a
 spec to replay. `tests/fixtures/recorder-demo-shop.jsonl` (replayed by
 `tests/recorder/fixture_spec.lua`) was made this way, as was
-`tests/fixtures/chore-tracker-feather-buy.jsonl` (a recorder-demo recording of a shop buy,
+`tests/fixtures/chore-tracker-feather-buy.jsonl` (a recorder-demo recording of a shop buy) and
+`tests/fixtures/chore-tracker-bert-sand.jsonl` (a reset and claim of Sand from Bert's var), both
 replayed by `tests/chore-tracker/replay_spec.lua` with the Chore Tracker's own reads supplied by
-the spec).
+the spec.
 
 1. Record the session (above), and find the ticks worth keeping, e.g.
    `jq -c 'select(.k == "event") | [.t, .name, .payload.inv.config]' <session>.jsonl`.

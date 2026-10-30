@@ -1,0 +1,53 @@
+{"k": "session", "schema": 1, "plugin": "recorder-demo", "session": "7e06f091e8", "started": 1793397437.4453752, "window": [2680, 3440]}
+{"t": 0, "k": "read", "v": true, "path": "Player.IsAvailable()"}
+{"t": 0, "k": "read", "v": "sol.jag::EntityProxy<jag::PlayerEntity>", "path": "Player.GetEntity()"}
+{"t": 0, "k": "read", "v": "Fixture Player", "path": "Player.GetEntity().displayName"}
+{"t": 0, "k": "read", "v": 468, "path": "var.VarPlayer.QP.value"}
+{"t": 0, "k": "read", "v": 1, "path": "var.VarPlayer.OPTION_RUN.value"}
+{"t": 0, "k": "read", "v": "sol.jag::InventoryProxy", "path": "Inventory.Find(config.Inv.INV)"}
+{"t": 0, "k": "read", "v": true, "path": "Inventory.Find(config.Inv.INV).isValid"}
+{"t": 0, "k": "read", "v": 28, "path": "Inventory.Find(config.Inv.INV).usedSlotCount"}
+{"t": 0, "k": "read", "v": "CHAT_V3_UPDATE_INTERFACE", "path": "var.VarPlayer.CHAT_V3_UPDATE_INTERFACE.configName"}
+{"t": 0, "k": "read", "v": "PAGEPOS", "path": "var.VarPlayer.PAGEPOS.configName"}
+{"t": 0, "k": "read", "v": "CLOCK_TIME_DATE_MINUTES", "path": "var.VarPlayer.CLOCK_TIME_DATE_MINUTES.configName"}
+{"t": 0, "k": "read", "v": 29889958, "path": "var.VarPlayer.CLOCK_TIME_DATE_MINUTES.value"}
+{"t": 0, "k": "db", "op": "GetInt", "key": "enables", "v": 14}
+{"t": 8, "k": "event", "name": "ServerLogic"}
+{"t": 39, "k": "event", "name": "ServerLogic"}
+{"t": 69, "k": "event", "name": "ServerLogic"}
+{"t": 99, "k": "event", "name": "ServerLogic"}
+{"t": 99, "k": "event", "op": {"domain": "VarPlayer", "id": 89, "op": "setVar", "value": 0, "name": "DOUBLEXP_PERM1"}, "payload": {"var": {"type": "VarPlayer", "id": 89, "config": "DOUBLEXP_PERM1"}, "newValue": 0, "oldValue": 0}, "name": "VarTransmit"}
+{"t": 99, "k": "read", "v": "DOUBLEXP_PERM1", "path": "var.VarPlayer.DOUBLEXP_PERM1.configName"}
+{"t": 99, "k": "event", "op": {"domain": "VarPlayer", "id": -20737, "op": "setVar", "value": 122, "name": "DNDTRACKER_MINS_TO_DAY_END"}, "payload": {"var": {"type": "VarPlayer", "id": -20737, "config": "DNDTRACKER_MINS_TO_DAY_END"}, "newValue": 122, "oldValue": 123}, "name": "VarTransmit"}
+{"t": 99, "k": "read", "v": "DNDTRACKER_MINS_TO_DAY_END", "path": "var.VarPlayer.DNDTRACKER_MINS_TO_DAY_END.configName"}
+{"t": 99, "k": "event", "op": {"domain": "VarPlayer", "id": -20748, "op": "setVar", "value": 28, "name": "DNDTRACKER_SINKHOLES_START"}, "payload": {"var": {"type": "VarPlayer", "id": -20748, "config": "DNDTRACKER_SINKHOLES_START"}, "newValue": 28, "oldValue": 27}, "name": "VarTransmit"}
+{"t": 99, "k": "read", "v": "DNDTRACKER_SINKHOLES_START", "path": "var.VarPlayer.DNDTRACKER_SINKHOLES_START.configName"}
+{"t": 99, "k": "event", "op": {"domain": "VarPlayer", "id": -20750, "op": "setVar", "value": 2, "name": "DNDTRACKER_FAMILIARIZATION_TIME"}, "payload": {"var": {"type": "VarPlayer", "id": -20750, "config": "DNDTRACKER_FAMILIARIZATION_TIME"}, "newValue": 2, "oldValue": 3}, "name": "VarTransmit"}
+{"t": 99, "k": "read", "v": "DNDTRACKER_FAMILIARIZATION_TIME", "path": "var.VarPlayer.DNDTRACKER_FAMILIARIZATION_TIME.configName"}
+{"t": 129, "k": "event", "name": "ServerLogic"}
+{"t": 159, "k": "event", "name": "ServerLogic"}
+{"t": 189, "k": "event", "name": "ServerLogic"}
+{"t": 219, "k": "event", "name": "ServerLogic"}
+{"t": 250, "k": "event", "name": "ServerLogic"}
+{"t": 279, "k": "event", "name": "ServerLogic"}
+{"t": 310, "k": "event", "name": "ServerLogic"}
+{"t": 338, "k": "event", "name": "ServerLogic"}
+{"t": 370, "k": "event", "name": "ServerLogic"}
+{"t": 399, "k": "event", "name": "ServerLogic"}
+{"t": 429, "k": "event", "name": "ServerLogic"}
+{"t": 458, "k": "event", "name": "ServerLogic"}
+{"t": 488, "k": "event", "name": "ServerLogic"}
+{"t": 518, "k": "event", "name": "ServerLogic"}
+{"t": 550, "k": "event", "name": "ServerLogic"}
+{"t": 550, "k": "event", "op": {"domain": "VarPlayer", "id": 2801, "op": "setVar", "value": 1, "name": "HANDSAND_BUCKETS"}, "payload": {"var": {"type": "VarPlayer", "id": 2801, "config": "HANDSAND_BUCKETS"}, "newValue": 1, "oldValue": 3}, "name": "VarTransmit"}
+{"t": 550, "k": "read", "v": "HANDSAND_BUCKETS", "path": "var.VarPlayer.HANDSAND_BUCKETS.configName"}
+{"t": 579, "k": "event", "name": "ServerLogic"}
+{"t": 608, "k": "event", "name": "ServerLogic"}
+{"t": 640, "k": "event", "name": "ServerLogic"}
+{"t": 669, "k": "event", "name": "ServerLogic"}
+{"t": 699, "k": "event", "name": "ServerLogic"}
+{"t": 729, "k": "event", "name": "ServerLogic"}
+{"t": 758, "k": "event", "name": "ServerLogic"}
+{"t": 758, "k": "event", "op": {"domain": "VarPlayer", "id": 2801, "op": "setVar", "value": 3, "name": "HANDSAND_BUCKETS"}, "payload": {"var": {"type": "VarPlayer", "id": 2801, "config": "HANDSAND_BUCKETS"}, "newValue": 3, "oldValue": 1}, "name": "VarTransmit"}
+{"t": 758, "k": "event", "op": {"domain": "VarPlayer", "id": 8180, "op": "setVar", "value": 2, "name": "CHAT_V3_UPDATE_INTERFACE"}, "payload": {"var": {"type": "VarPlayer", "id": 8180, "config": "CHAT_V3_UPDATE_INTERFACE"}, "newValue": 2, "oldValue": 1}, "name": "VarTransmit"}
+{"t": 758, "k": "event", "op": {"domain": "VarPlayer", "id": 101, "op": "setVar", "value": 0, "name": "PAGEPOS"}, "payload": {"var": {"type": "VarPlayer", "id": 101, "config": "PAGEPOS"}, "newValue": 0, "oldValue": 1}, "name": "VarTransmit"}

@@ -169,7 +169,7 @@
               echo "  lua / luac                    Lua $(lua -v 2>&1 | cut -d' ' -f2) (client runs 5.4.8)"
               echo "  lua-language-server           LSP for editors; docs/api/ holds the API stubs"
               echo "  stylua / selene               Lua formatter / linter"
-              echo "  scripts/check.sh          the gate; its header lists the steps"
+              echo "  scripts/check.sh              the gate; its header lists the steps"
               echo "  scripts/test-lua.sh           run the plugin tests (busted, tests/**/*_spec.lua)"
               echo "  scripts/link-dev-plugins.sh   symlink the beta client's dev_plugins to plugins/"
               echo "  plugins/debug-plugin, plugins/dev-kit  third-party dev plugins (flake inputs, gitignored copies)"

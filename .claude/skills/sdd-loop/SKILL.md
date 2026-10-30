@@ -351,7 +351,7 @@ the durable state.
 The conductor runs these itself (they are read-only checks):
 
 ```bash
-scripts/check.sh                                   # always; must exit 0 (its header lists the steps)
+scripts/check.sh                                       # always; must exit 0 (its header lists the steps)
 git diff --name-only "$BASE" HEAD                      # what the run touched, to pick the rest:
 python3 -m py_compile scripts/<changed>.py             # if a Python script changed
 ```

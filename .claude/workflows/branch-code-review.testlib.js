@@ -1,7 +1,7 @@
 // Shared helpers for the branch-code-review.*.test.js files (CommonJS, so `node <file>` runs them).
 //
-// The tests evaluate spans of the shipped script rather than copies of it, so grab() is the one
-// way they reach its code: a moved or renamed marker must fail loudly, not test nothing.
+// The tests evaluate the shipped script rather than copies of it: spans via grab(), whose marker
+// mismatch must fail loudly, and the whole source via src.
 
 const fs = require("fs")
 const path = require("path")

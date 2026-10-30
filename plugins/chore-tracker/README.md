@@ -215,7 +215,8 @@ permissions") is true only after that check passes.
 
 ## Files
 
-Code requires a module under its file name (`local state = require("core/state")`), with a
+Code requires a module under its file name, camelCased when it has several words
+(`local state = require("core/state")`, `prettyuiInternals` for `prettyui_internals.lua`), with a
 `Core` suffix on a `core/` module when a same-named `data/` or `shell/` module is required in
 the same file (`detectCore` beside `detect`). `data/vars.lua` is `varRules`, as `core/vars.lua`
 and `shell/vars.lua` share its name.

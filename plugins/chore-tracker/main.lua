@@ -48,7 +48,7 @@ local view = require("core/view")
 local detect = require("shell/detect")
 local grips = require("shell/grips")
 local popups = require("shell/popups")
-local prettyui_internals = require("shell/prettyui_internals")
+local prettyuiInternals = require("shell/prettyui_internals")
 local rows = require("shell/rows")
 local store = require("shell/store")
 local vars = require("shell/vars")
@@ -216,7 +216,7 @@ local function buildList(w, openSettings)
         lists[i] = sectionIds(section.period, section.rows)
     end
     local spots = listlayout.place(lists, top)
-    local wheel = prettyui_internals.wheelHandler(w)
+    local wheel = prettyuiInternals.wheelHandler(w)
     for _, section in ipairs(sections) do
         headings[section.period] =
             w:AddTitle({ text = view.headingText(section), y = spots.headings[section.period] })
@@ -229,7 +229,7 @@ local function buildList(w, openSettings)
     w:SetContentHeight(spots.height)
     refreshList()
     -- The grips' press targets sit over the window, placed from its viewport (see grips.lua).
-    local viewport = prettyui_internals.viewport(w)
+    local viewport = prettyuiInternals.viewport(w)
     if viewport ~= nil then
         grips.build({
             -- The plugin layer takes children (docs/api-concepts.md, "UI"); GetComponent's
@@ -239,13 +239,13 @@ local function buildList(w, openSettings)
             rows = rowViews,
             sections = lists,
             scrollY = function()
-                return prettyui_internals.scrollPosition(w)
+                return prettyuiInternals.scrollPosition(w)
             end,
             scrollTo = function(y)
                 w:SetScrollPosition(y)
             end,
             wheel = wheel,
-            watchSync = prettyui_internals.overlaySync(w, parent --[[@as ui.ComponentCollection]]),
+            watchSync = prettyuiInternals.overlaySync(w, parent --[[@as ui.ComponentCollection]]),
             onDrop = onDrop,
         })
     end
@@ -296,7 +296,7 @@ local function buildSettings(w)
         sections[i] = sectionIds(group.period, group.chores)
     end
     local spots = listlayout.place(sections, switches.root.y + switches.root.height)
-    local wheel = prettyui_internals.wheelHandler(w)
+    local wheel = prettyuiInternals.wheelHandler(w)
     for _, group in ipairs(groups) do
         w:AddTitle({ text = group.title, y = spots.headings[group.period] })
         for _, chore in ipairs(group.chores) do

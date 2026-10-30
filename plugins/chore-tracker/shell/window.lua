@@ -9,7 +9,7 @@
 -- console closed), click it to open the window again, grown left and down from the button.
 
 local grips = require("shell/grips")
-local prettyui_internals = require("shell/prettyui_internals")
+local prettyuiInternals = require("shell/prettyui_internals")
 local layout = require("core/layout")
 local store = require("shell/store")
 
@@ -161,7 +161,7 @@ local function build(at)
         minHeight = layout.MIN_HEIGHT,
     })
     win = w
-    prettyui_internals.setResizeCursors(w)
+    prettyuiInternals.setResizeCursors(w)
     w.closeButton.hidden = true
     -- The title-bar slot is the one spot of the title bar the drag layer leaves clickable.
     -- It collapses the window, except in the settings view, where it goes back to the list
@@ -192,7 +192,7 @@ end
 function M.rebuild(keepScroll)
     assert(win, "the window exists from load to shutdown")
     local r = win.root
-    local scrollY = keepScroll and prettyui_internals.scrollPosition(win) or nil
+    local scrollY = keepScroll and prettyuiInternals.scrollPosition(win) or nil
     build({ x = r.x, y = r.y, width = r.width, height = r.height })
     if scrollY then win:SetScrollPosition(scrollY) end
     if collapsed then win:Close() end
@@ -249,7 +249,7 @@ end
 -- window moving or scrolling, and a stuck resize comes back.
 function M.tick()
     M.followGrips()
-    prettyui_internals.reviveResize(win, collapsed ~= nil)
+    prettyuiInternals.reviveResize(win, collapsed ~= nil)
 end
 
 -- The window's part of PluginShutdown: the grips' targets, then the layout saved and the

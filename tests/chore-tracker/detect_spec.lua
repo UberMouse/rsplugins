@@ -176,7 +176,7 @@ end)
 -- shell/vars with a var name the client's config lacks, by the same stand-in approach: the
 -- harness faults on unknown var names by design.
 describe("chore-tracker var detect", function()
-    local varDetect = require("shell/vars")
+    local vars = require("shell/vars")
     local saved, said, applied
 
     ---@param name string
@@ -208,7 +208,7 @@ describe("chore-tracker var detect", function()
         said, applied = {}, 0
         _G.var = { VarPlayer = varPlayer }
         flag.value = 0
-        varDetect.init({
+        vars.init({
             chores = support.chores(),
             rules = {
                 { chore = "d1", done = { { "FLAG", "==", 1 } }, proven = true },
@@ -227,9 +227,9 @@ describe("chore-tracker var detect", function()
                 change(require("core/state").new(), 29881543)
             end,
         })
-        varDetect.scan()
+        vars.scan()
         for _ = 1, 500 do
-            varDetect.tick()
+            vars.tick()
         end
     end
 
@@ -244,7 +244,7 @@ describe("chore-tracker var detect", function()
     it("leaves a var the config lacks unwatched, dropping its rules, saying so once", function()
         assert.are.same({ "unknown var GONE; not watched" }, said)
         flag.value = 1
-        varDetect.onVarTransmit({ var = base })
+        vars.onVarTransmit({ var = base })
         -- Only d1's rule is left to tick.
         assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
         assert.are.equal(1, applied)
@@ -252,7 +252,7 @@ describe("chore-tracker var detect", function()
 
     it("fails at init naming a rule chore that chores.lua lacks", function()
         assert.has_error(function()
-            varDetect.init({
+            vars.init({
                 chores = support.chores(),
                 rules = { { chore = "nochore", done = { { "FLAG", "==", 1 } }, proven = true } },
                 say = function() end,
@@ -269,38 +269,38 @@ describe("chore-tracker var detect", function()
         }))
         assert.are.same({ "unknown var GONE; not watched" }, said)
         flag.value = 1
-        varDetect.onVarTransmit({ var = base })
+        vars.onVarTransmit({ var = base })
         assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
         assert.are.equal(1, applied)
     end)
 
     it("takes a var with no value at load as unread until it has one", function()
         flag.value = nil
-        varDetect.scan()
+        vars.scan()
         for _ = 1, 500 do
-            varDetect.tick()
+            vars.tick()
         end
         -- Its first value, already true, is the baseline: no tick.
         flag.value = 1
-        varDetect.onVarTransmit({ var = flag })
+        vars.onVarTransmit({ var = flag })
         assert.are.same({ "unknown var GONE; not watched" }, said)
         -- A later change from that first value ticks as usual.
         flag.value = 0
-        varDetect.onVarTransmit({ var = flag })
+        vars.onVarTransmit({ var = flag })
         flag.value = 1
-        varDetect.onVarTransmit({ var = flag })
+        vars.onVarTransmit({ var = flag })
         assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
     end)
 
     it("matches a base by id and domain, not by object", function()
         flag.value = 1
-        varDetect.onVarTransmit({ var = varType("BASE", 10, 1) })
+        vars.onVarTransmit({ var = varType("BASE", 10, 1) })
         assert.are.equal(1, applied)
         flag.value = 0
         local client = varType("OTHER", 10, 0)
         client.typeName = "VarClient"
-        varDetect.onVarTransmit({ var = client })
-        varDetect.onVarTransmit({ var = varType("UNRELATED", 99, 5) })
+        vars.onVarTransmit({ var = client })
+        vars.onVarTransmit({ var = varType("UNRELATED", 99, 5) })
         assert.are.equal(1, applied)
     end)
 end)

@@ -27,28 +27,61 @@ local BACKPACK = "INV"
 ---clock.
 ---@field apply fun(change: ChoreChange)
 
+---@class ChoreShopHit
+---@field chore Chore
+---@field shop ChoreShop
+
+---@class ChoreCollectionHit
+---@field chore Chore
+---@field collection ChoreCollection
+
 local options = nil ---@type ChoreDetectOptions?
 -- Shop inventory name -> the chores and shops it serves, and its config.
-local shopIndex = {} ---@type table<string, ChoreShopEntry[]>
+local shopIndex = {} ---@type table<string, ChoreShopHit[]>
 local invTypes = {} ---@type table<string, InvType>
 -- Every collection's note names, once each, and their configs.
 local noteNames = {} ---@type string[]
+-- Every collection with its chore, in data order.
+local collectionHits = {} ---@type ChoreCollectionHit[]
 local objTypes = {} ---@type table<string, ObjType>
 -- The slot counts of each listed shop inventory the client holds now (one is held only
 -- while its shop is open), and the backpack's count of each note, nil without a backpack.
 local shopCounts = {} ---@type table<string, integer[]>
 local noteCounts = nil ---@type table<string, integer>?
 
+-- The chore with id `id`. The data files name only chores in data/chores.lua, so a miss fails
+-- at load, naming the id.
+---@param chores Chore[]
+---@param id string
+---@return Chore
+local function resolve(chores, id)
+    local found = state.find(chores, id)
+    assert(found, "data names a chore that data/chores.lua lacks: " .. id)
+    return found
+end
+
 ---@param o ChoreDetectOptions
 function M.init(o)
     options = o
+    -- Chore ids resolve here, for every shop and collection, watched or not.
+    local hits = {} ---@type table<string, ChoreShopHit[]>
+    for name, entries in pairs(shopCore.index(o.shops)) do
+        hits[name] = {}
+        for i, entry in ipairs(entries) do
+            hits[name][i] = { chore = resolve(o.chores, entry.chore), shop = entry.shop }
+        end
+    end
+    collectionHits = {}
+    for i, collection in ipairs(o.collections) do
+        collectionHits[i] = { chore = resolve(o.chores, collection.chore), collection = collection }
+    end
     -- A listed name the client's config lacks (a game update renamed it, say) is said once
     -- and left unwatched, so a nil config never reaches Inventory.Find or GetTotal. The
     -- casts drop config.Inv's and config.Obj's FromID member from the type. The lookups run
     -- in pcall because whether the client returns nil or raises for an unknown name is
     -- unconfirmed.
     shopIndex, invTypes = {}, {}
-    for name, entries in pairs(shopCore.index(o.shops)) do
+    for name, entries in pairs(hits) do
         local ok, invType = pcall(function()
             return config.Inv[name] --[[@as InvType?]]
         end)
@@ -146,15 +179,6 @@ end
 -- What counts as done
 ---------------------------------------------------------------------------
 
----@param id string
----@return Chore
-local function chore(id)
-    assert(options, "init runs before any inventory event")
-    local found = state.find(options.chores, id)
-    assert(found, "data/shops.lua and data/collections.lua name only chores in data/chores.lua")
-    return found
-end
-
 -- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
 -- not, so picking one later shows the period's truth), and tick the chore if it isn't done
 -- this period. Each chore it changes is logged: a repeat purchase at a shop already bought
@@ -165,8 +189,8 @@ local function onPurchase(name)
     local say = options.say
     options.apply(function(tracker, now)
         for _, entry in ipairs(shopIndex[name]) do
-            local recorded = state.recordPurchase(tracker, chore(entry.chore), name, now)
-            if recorded ~= tracker then say("purchase", entry.chore, "at", entry.shop.name) end
+            local recorded = state.recordPurchase(tracker, entry.chore, name, now)
+            if recorded ~= tracker then say("purchase", entry.chore.id, "at", entry.shop.name) end
             tracker = recorded
         end
         return tracker
@@ -181,16 +205,15 @@ local function onNotesRose(before, after)
     assert(options, "init runs before any inventory event")
     local say, at = options.say, playerTile()
     if not at then return end
-    for _, collection in ipairs(options.collections) do
+    for _, hit in ipairs(collectionHits) do
+        local collection = hit.collection
         if
             shopCore.rose(before, after, collection.notes)
             and shopCore.near(at, collection.tile, collection.range)
         then
             options.apply(function(tracker, now)
-                local ticked = state.autoMark(tracker, chore(collection.chore), now)
-                if ticked ~= tracker then
-                    say("collected", collection.chore, "near", collection.npc)
-                end
+                local ticked = state.autoMark(tracker, hit.chore, now)
+                if ticked ~= tracker then say("collected", hit.chore.id, "near", collection.npc) end
                 return ticked
             end)
         end

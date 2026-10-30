@@ -79,6 +79,38 @@ describe("chore-tracker detect", function()
 
     it("leaves an inventory or note the config lacks unwatched, saying so once", initAndCheck)
 
+    it("fails at init naming a shop or collection chore that chores.lua lacks", function()
+        local function say() end
+        local function apply() end
+        assert.has_error(function()
+            detect.init({
+                chores = support.chores(),
+                shops = { nochore = { { name = "S", invs = { "KNOWN_SHOP" }, proven = true } } },
+                collections = {},
+                say = say,
+                apply = apply,
+            })
+        end, "data names a chore that data/chores.lua lacks: nochore")
+        assert.has_error(function()
+            detect.init({
+                chores = support.chores(),
+                shops = {},
+                collections = {
+                    {
+                        chore = "nochore",
+                        npc = "x",
+                        notes = {},
+                        tile = { x = 0, z = 0, level = 0 },
+                        range = 1,
+                        proven = true,
+                    },
+                },
+                say = say,
+                apply = apply,
+            })
+        end, "data names a chore that data/chores.lua lacks: nochore")
+    end)
+
     -- removeInventory fires only InventoryRemoved; the harness sends InventoryAdded when the
     -- backpack is set again, which re-baselines. So this drives detect directly: a lone update
     -- after a removal must not read as a rise against the old counts.
@@ -216,6 +248,17 @@ describe("chore-tracker var detect", function()
         -- Only d1's rule is left to tick.
         assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
         assert.are.equal(1, applied)
+    end)
+
+    it("fails at init naming a rule chore that chores.lua lacks", function()
+        assert.has_error(function()
+            varDetect.init({
+                chores = support.chores(),
+                rules = { { chore = "nochore", done = { { "FLAG", "==", 1 } }, proven = true } },
+                say = function() end,
+                apply = function() end,
+            })
+        end, "data/vars.lua names a chore that data/chores.lua lacks: nochore")
     end)
 
     it("treats a var lookup that raises like a name the config lacks", function()

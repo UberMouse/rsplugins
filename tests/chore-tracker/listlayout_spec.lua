@@ -7,11 +7,7 @@ local listlayout = require("core/listlayout")
 ---@param ids string[]
 ---@return table section
 local function section(period, ids)
-    local rows = {}
-    for i, id in ipairs(ids) do
-        rows[i] = { id = id }
-    end
-    return { period = period, rows = rows }
+    return { period = period, ids = ids }
 end
 
 describe("chore-tracker list layout", function()

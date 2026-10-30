@@ -22,8 +22,9 @@ local SETTLE_TICKS = 500
 ---@field apply fun(change: ChoreChange) as ChoreDetectOptions.apply
 
 local options = nil ---@type ChoreVarOptions?
--- The rules whose vars the client's config has all of, each with the names it reads.
-local watched = {} ---@type { rule: ChoreVarRule, names: string[] }[]
+-- The rules whose vars the client's config has all of, each with the names it reads and its
+-- chore.
+local watched = {} ---@type { rule: ChoreVarRule, names: string[], chore: Chore }[]
 local varTypes = {} ---@type table<string, VarType>
 -- Base var id -> the watched names packed in it (or the base itself, if watched).
 local byBase = {} ---@type table<integer, string[]>
@@ -48,6 +49,9 @@ function M.init(o)
     -- var.VarPlayer's FromID member from the type.
     local missing = {}
     for _, rule in ipairs(o.rules) do
+        -- Resolved for every rule, watched or not, so a bad chore id fails at load.
+        local chore = state.find(o.chores, rule.chore)
+        assert(chore, "data/vars.lua names a chore that data/chores.lua lacks: " .. rule.chore)
         local names, complete = varCore.names(rule), true
         for _, name in ipairs(names) do
             if not varTypes[name] and not missing[name] then
@@ -64,7 +68,7 @@ function M.init(o)
             end
             if missing[name] then complete = false end
         end
-        if complete then watched[#watched + 1] = { rule = rule, names = names } end
+        if complete then watched[#watched + 1] = { rule = rule, names = names, chore = chore } end
     end
     -- Bases are matched by id, resolved once here: whether the client hands out the same
     -- VarType object for a base each time is unconfirmed.
@@ -125,15 +129,13 @@ end
 ---@param changed table<string, true>
 local function onChanged(before, after, changed)
     assert(options, "init runs before any var event")
-    local say, chores = options.say, options.chores
+    local say = options.say
     options.apply(function(tracker, now)
         local day = period.runeDay(now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)
             if cause and varCore.ticks(entry.rule, before, after, day) then
-                local chore = state.find(chores, entry.rule.chore)
-                assert(chore, "data/vars.lua names only chores in data/chores.lua")
-                local ticked = state.autoMark(tracker, chore, now)
+                local ticked = state.autoMark(tracker, entry.chore, now)
                 if ticked ~= tracker then
                     say("seen", entry.rule.chore, "done", "(" .. cause .. ")")
                 end

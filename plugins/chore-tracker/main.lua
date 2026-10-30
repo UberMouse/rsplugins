@@ -198,20 +198,25 @@ local function buildList(w, openSettings)
         w:AddText("No chores picked yet: use the settings button above to choose some.")
         return
     end
-    local spots = listlayout.place(sections, top)
+    -- Each section's row ids, built once for both the layout and the grips.
+    local lists = {} ---@type ChoreSectionIds[]
+    for i, section in ipairs(sections) do
+        local ids = {}
+        for j, row in ipairs(section.rows) do
+            ids[j] = row.id
+        end
+        lists[i] = { period = section.period, ids = ids }
+    end
+    local spots = listlayout.place(lists, top)
     local wheel = internals.wheelHandler(w)
-    local order = {} ---@type { period: string, ids: string[] }[]
     for _, section in ipairs(sections) do
         headings[section.period] =
             w:AddTitle({ text = view.headingText(section), y = spots.headings[section.period] })
-        local ids = {}
         for _, row in ipairs(section.rows) do
             rowViews[row.id] = rows.new(w.content, spots.rows[row.id], icons[row.id], function()
                 onTick(row.id)
             end, { wheel = wheel, grip = true })
-            ids[#ids + 1] = row.id
         end
-        order[#order + 1] = { period = section.period, ids = ids }
     end
     w:SetContentHeight(spots.height)
     refreshList()
@@ -224,7 +229,7 @@ local function buildList(w, openSettings)
             parent = parent --[[@as ui.ComponentCollection]],
             viewport = viewport,
             rows = rowViews,
-            sections = order,
+            sections = lists,
             scrollY = function()
                 return internals.scrollPosition(w)
             end,
@@ -269,8 +274,7 @@ local function onCelebrationSetting(_, _values, setting, on)
 end
 
 -- The settings view: the Celebrations switches in PrettyUI's flow, then a heading per period
--- and a hand-built row per chore below them (listlayout.place wants sections of rows with ids,
--- which a group's chores are).
+-- and a hand-built row per chore below them.
 ---@param w prettyui.Window
 local function buildSettings(w)
     w:AddTitle("Celebrations")
@@ -279,9 +283,13 @@ local function buildSettings(w)
         { text = "Popup sound", value = "sound", selected = celebrations.sound },
     }, { onChange = onCelebrationSetting })
     local groups = view.byPeriod(chores)
-    local sections = {}
+    local sections = {} ---@type ChoreSectionIds[]
     for i, group in ipairs(groups) do
-        sections[i] = { period = group.period, rows = group.chores }
+        local ids = {}
+        for j, chore in ipairs(group.chores) do
+            ids[j] = chore.id
+        end
+        sections[i] = { period = group.period, ids = ids }
     end
     local spots = listlayout.place(sections, switches.root.y + switches.root.height)
     local wheel = internals.wheelHandler(w)

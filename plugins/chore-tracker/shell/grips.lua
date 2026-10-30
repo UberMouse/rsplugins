@@ -51,7 +51,7 @@ local DRAG_LOST_TICKS = 10
 ---@field parent ui.ComponentCollection the plugin layer
 ---@field viewport ui.Layer the layer the window's content scrolls in
 ---@field rows table<string, ChoreRowView> the list's rows by chore id
----@field sections { period: string, ids: string[] }[] each period's row ids, top to bottom
+---@field sections ChoreSectionIds[] each period's row ids, top to bottom
 ---@field scrollY fun(): number? how far the content is scrolled, or nil if unreadable
 ---@field scrollTo fun(y: number) scroll the content (the window clamps it)
 ---@field wheel ChoreWheelHandler? the window's wheel handler, so the wheel over a grip scrolls
@@ -73,7 +73,7 @@ local DRAG_LOST_TICKS = 10
 local ctx = nil ---@type ChoreGripsOpts?
 local grips = {} ---@type ChoreGrip[]
 -- Each period's row ids, top to bottom: a copy of the built sections, kept in step with drops.
-local sections = {} ---@type { period: string, ids: string[] }[]
+local sections = {} ---@type ChoreSectionIds[]
 local drag = nil ---@type ChoreGripDrag?
 -- A grip pressed whose drag hasn't started, and how many Logic ticks ago. A quick click can
 -- arrive release-first (docs/api-concepts.md), leaving a press with no ONHOLD or release to
@@ -186,7 +186,7 @@ end
 
 -- The period's section, by period.
 ---@param period string
----@return { period: string, ids: string[] }
+---@return ChoreSectionIds
 local function sectionOf(period)
     assert(ctx, "sections exist once built")
     for _, section in ipairs(sections) do

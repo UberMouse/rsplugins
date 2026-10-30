@@ -17,7 +17,7 @@ M.SCROLL_STEP = 8
 -- Every row's y with nothing being dragged: `ids` stacked from `firstY`, `rowHeight` apart.
 ---@param ids string[]
 ---@param firstY integer
----@param rowHeight integer? defaults to the list's row height
+---@param rowHeight integer? defaults to the list's row height; only the specs pass another
 ---@return table<string, integer>
 function M.settle(ids, firstY, rowHeight)
     local h = rowHeight or listlayout.ROW_HEIGHT
@@ -36,7 +36,7 @@ end
 ---@param firstY integer
 ---@param from integer
 ---@param desiredY number
----@param rowHeight integer? defaults to the list's row height
+---@param rowHeight integer? defaults to the list's row height; only the specs pass another
 ---@return ChoreDrag
 function M.drag(ids, firstY, from, desiredY, rowHeight)
     local h = rowHeight or listlayout.ROW_HEIGHT

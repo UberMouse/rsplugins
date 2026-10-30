@@ -21,9 +21,13 @@ M.FLOW_PADDING = 14
 ---@field rows table<string, integer> each row's y, by chore id
 ---@field height integer the content height that holds them all, padding included
 
+---@class ChoreSectionIds
+---@field period ChorePeriod
+---@field ids string[] the chore ids of its rows, top to bottom
+
 -- The y of each heading and row of `sections`, top to bottom from `top` (the bottom of what is
 -- above the list), and the content height that holds them.
----@param sections ChoreSection[]
+---@param sections ChoreSectionIds[]
 ---@param top integer
 ---@return ChoreListLayout
 function M.place(sections, top)
@@ -33,8 +37,8 @@ function M.place(sections, top)
         y = y + M.HEADING_GAP
         out.headings[section.period] = y
         y = y + M.HEADING_HEIGHT + M.AFTER_HEADING
-        for _, row in ipairs(section.rows) do
-            out.rows[row.id] = y
+        for _, rowId in ipairs(section.ids) do
+            out.rows[rowId] = y
             y = y + M.ROW_HEIGHT
         end
     end

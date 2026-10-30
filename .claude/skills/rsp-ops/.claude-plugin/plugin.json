@@ -1,0 +1,15 @@
+{
+  "name": "rsp-ops",
+  "version": "0.1.0",
+  "description": "rsplugins session operations: idle autocompact for the sdd-loop conductor (ported from rs-sdk's rs-ops).",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "autocompact": {
+      "type": "string",
+      "title": "Autocompact",
+      "description": "Idle auto-compaction in rsplugins sessions (user settings): on = an idle conductor over 25% plus a cancellable failsafe for any idle session at 75%; conductor-only = the conductor rule alone; off = never. /rsp-autocompact on|off overrides it for one session.",
+      "default": "on",
+      "options": ["on", "conductor-only", "off"]
+    }
+  }
+}

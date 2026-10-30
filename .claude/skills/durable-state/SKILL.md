@@ -46,7 +46,7 @@ resume so you know to read them.
 | Field | Meaning |
 |---|---|
 | `skill` | owner skill name (a directory under `.claude/skills/`) |
-| `sessionId` | the session that owns the run, `$CLAUDE_CODE_SESSION_ID`: written on the first write, and rewritten with your own id on every resume or handoff (the owner is whoever resumed) |
+| `sessionId` | the session that owns the run, `$CLAUDE_CODE_SESSION_ID`: written on the first write, and rewritten with your own id on every resume or handoff (the owner is whoever resumed). The `rsp-ops` mod's autocompact treats only this session as the conductor (*Autocompact*, below) |
 | `phase` | owner-defined string. **`done` is reserved**: the run is finished |
 | `goal` | one line: what the run is for. Mostly for standalone use; an owner skill's name usually says it |
 | `standingInstructions` | the user's instructions that outlive one turn, **verbatim**, never paraphrased |
@@ -78,7 +78,8 @@ say what they mean.
    after work has landed silently changes what "the run" covers.
 5. **`inFlight` is a claim.** Add an entry when you dispatch, remove it when its notification
    arrives. `[]` asserts "nothing is running". Omit the field if you aren't tracking background
-   work.
+   work. Autocompact reads it to decide whether an idle conductor is waiting on background work
+   (*Autocompact*, below).
 6. **`pending` means runnable.** A task blocked on the user is `blocked-needs-human`, and so is
    every task that depends on it, transitively.
 7. **Write `phase: "done"` when the run finishes.** A finished run left at another phase makes the
@@ -117,6 +118,17 @@ Registered in `.claude/settings.json` (SessionStart, `compact|resume`). Silent w
 state file. When `sessionId` names another session, one line saying so instead of the summary;
 when it is absent, the summary adds that no owner is recorded. Its table test is
 `.claude/hooks/durable-state-resume.selftest.sh`.
+
+## Autocompact
+
+The `rsp-ops` mod (`.claude/skills/rsp-ops/README.md`) compacts an idle main session before its
+context fills. Its rule 1 compacts an `sdd-loop` run, not `done`, whose `sessionId` is this
+session, when the main loop is idle over 25% context and `inFlight` holds any entry. The
+compaction is told to keep those entries and the `standingInstructions` verbatim. Its summary
+opens with "Compacted by rsp-ops autocompact (rule N, X%)", and the SessionStart hook then
+re-surfaces the file as after any compaction: resume as above. So keep `inFlight` current. A
+stale entry gets an idle conductor compacted early, and a missing one keeps it from compacting
+until the 75% failsafe.
 
 ## Mixing it into a skill
 

@@ -45,6 +45,9 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
   page.
 - Review criteria for plugin code live in `.claude/review-lenses/`. `/sdd-loop` runs a small change
   through implement → parallel spec/quality review → fix, then the `branch-code-review` workflow.
+- The `rsp-ops` mod (`.claude/skills/rsp-ops/README.md`) compacts an idle sdd-loop conductor over
+  25% context while its state.json `inFlight` lists background work, and any idle session at 75%
+  after a cancellable toast; `/rsp-autocompact` shows or switches it.
 
 ## Communication Style
 

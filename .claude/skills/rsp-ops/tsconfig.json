@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "types": [],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment"
+  },
+  // .claude-plugin/types/ holds this build's claude-code.d.ts (gitignored, copied in by hand: the
+  // engine lays no types for a skills-dir mod). It declares 'claude-code' and 'claude-code/testing'
+  // as ambient modules, so including it is all the resolution they need.
+  "include": ["hooks/**/*", "types/**/*", ".claude-plugin/types/**/*"]
+}

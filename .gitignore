@@ -15,3 +15,5 @@ plugins/dev-kit
 # Lock, temp and swapped-aside folders of that sync (plugins/.<name>.lock, .XXXXXX, .old.<pid>)
 plugins/.debug-plugin.*
 plugins/.dev-kit.*
+# Engine type declarations copied into a mod by hand (.claude/skills/rsp-ops/README.md)
+.claude/skills/*/.claude-plugin/types/

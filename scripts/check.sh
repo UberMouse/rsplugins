@@ -18,6 +18,8 @@
 #   7. python tests   every scripts/test_*.py, found by unittest discovery (always)
 #   8. js tests       each .claude/workflows/*.test.js under node (always)
 #   9. hook selftests each .claude/hooks/*.selftest.sh (always)
+#  10. mod checks     claude plugin validate + test on each Claude Code mod under .claude/skills/
+#                     (always; tsc needs hand-copied engine types, see .claude/skills/rsp-ops/README.md)
 #
 # Usage: scripts/check.sh [path ...]
 #   Paths default to plugins/, lib/ and tests/ (those that exist) and only narrow steps 1-5. Any
@@ -150,6 +152,14 @@ done
 
 for t in .claude/hooks/*.selftest.sh; do
     run_step "hook selftest $t" "$t"
+done
+
+# A mod is a skills folder with a plugin manifest; the others are plain skills.
+for mod in .claude/skills/*/.claude-plugin/plugin.json; do
+    [[ -f $mod ]] || continue
+    dir=${mod%/.claude-plugin/plugin.json}
+    run_step "mod validate $dir" claude plugin validate "$dir"
+    run_step "mod test $dir" claude plugin test "$dir"
 done
 
 if [[ ${#failed[@]} -gt 0 ]]; then

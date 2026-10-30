@@ -1,0 +1,9 @@
+# Python tooling config; the gate is scripts/check.sh. Every tracked .py file lives in scripts/.
+# Line length matches stylua.toml.
+line-length = 100
+target-version = "py313"
+include = ["scripts/**/*.py"]
+
+[lint]
+# F pyflakes, B bugbear, E9 syntax/IO errors, I import order.
+select = ["F", "B", "E9", "I"]

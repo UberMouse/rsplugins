@@ -71,6 +71,8 @@
               # The Python scripts (stdlib only) and check.sh, which uses it to validate plugin.json
               # and to filter LuaLS's report.
               pkgs.python3
+              # Lints and formats scripts/ (ruff.toml); check.sh gates on it.
+              pkgs.ruff
               pkgs.git
               # node runs the .claude/workflows/ tests; jq is needed by check.sh, check-submission.sh
               # and the durable-state hook.

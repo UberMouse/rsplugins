@@ -61,11 +61,6 @@ end
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
 
--- Tooltips wrap at this width; wiki URLs are long.
-local TOOLTIP_WIDTH = 360
-
----@alias ChoreTooltip { text: string, maxWidth: integer }
-
 -- How often, in Logic ticks (50 a second), to look for a login change and a moved or
 -- resized window.
 local POLL_TICKS = 25
@@ -119,34 +114,6 @@ local function currentName()
 end
 
 ---------------------------------------------------------------------------
--- Helpers
----------------------------------------------------------------------------
-
--- A chore's tooltip: its description, then `extra` lines (a list row's shops), then its wiki
--- page and any other links, as text.
----@param chore { desc: string, url: string, links: string[] }
----@param extra string[]?
----@return ChoreTooltip
-local function tooltipFor(chore, extra)
-    local lines = {}
-    if chore.desc ~= "" then lines[#lines + 1] = chore.desc end
-    for _, line in ipairs(extra or {}) do
-        lines[#lines + 1] = line
-    end
-    lines[#lines + 1] = chore.url
-    for _, link in ipairs(chore.links) do
-        lines[#lines + 1] = link
-    end
-    return { text = table.concat(lines, "<br>"), maxWidth = TOOLTIP_WIDTH }
-end
-
----@param section ChoreSection
----@return string
-local function headingText(section)
-    return string.format("%s  %d/%d", section.title, section.done, section.total)
-end
-
----------------------------------------------------------------------------
 -- List view
 ---------------------------------------------------------------------------
 
@@ -155,19 +122,14 @@ end
 local function refreshList()
     local win = window.current()
     assert(win, "the list is only refreshed while its window exists")
-    local content = win.content
     for _, section in ipairs(view.view(tracker, chores, clockNow(), shops)) do
         local heading = headings[section.period]
-        if heading then heading.content = headingText(section) end
+        if heading then heading.content = view.headingText(section) end
         for _, row in ipairs(section.rows) do
             local rowView = rowViews[row.id]
             if rowView then
                 rows.show(rowView, view.rowText(row), row.done)
-                rows.setTooltip(
-                    rowView,
-                    content,
-                    tooltipFor(row, view.shopTooltip(row, section.period))
-                )
+                rows.setTooltip(rowView, view.tooltip(row, view.shopTooltip(row, section.period)))
             end
         end
     end
@@ -241,7 +203,7 @@ local function buildList(w, openSettings)
     local order = {} ---@type { period: string, ids: string[] }[]
     for _, section in ipairs(sections) do
         headings[section.period] =
-            w:AddTitle({ text = headingText(section), y = spots.headings[section.period] })
+            w:AddTitle({ text = view.headingText(section), y = spots.headings[section.period] })
         local ids = {}
         for _, row in ipairs(section.rows) do
             rowViews[row.id] = rows.new(w.content, spots.rows[row.id], icons[row.id], function()
@@ -280,13 +242,6 @@ end
 -- Settings view
 ---------------------------------------------------------------------------
 
--- A settings row's text: the chore's name, marked when it is a shop run.
----@param chore Chore
----@return string
-local function pickText(chore)
-    return chore.shop and chore.name .. " (shop)" or chore.name
-end
-
 -- A settings row was clicked: pick or unpick its chore, save it straight away and tick or
 -- empty the row's box. No celebration: picking is not completing.
 ---@param chore Chore
@@ -299,7 +254,7 @@ local function onPick(chore)
         tracker = state.deselect(tracker, chore.id)
     end
     store.saveState(character, tracker)
-    rows.showPick(rowViews[chore.id], pickText(chore), picked)
+    rows.showPick(rowViews[chore.id], view.pickText(chore), picked)
 end
 
 -- A celebration setting was ticked or unticked: apply it and save it for all characters.
@@ -337,8 +292,8 @@ local function buildSettings(w)
                 onPick(chore)
             end, { wheel = wheel })
             rowViews[chore.id] = row
-            rows.showPick(row, pickText(chore), state.isSelected(tracker, chore.id))
-            rows.setTooltip(row, w.content, tooltipFor(chore))
+            rows.showPick(row, view.pickText(chore), state.isSelected(tracker, chore.id))
+            rows.setTooltip(row, view.tooltip(chore))
         end
     end
     w:SetContentHeight(spots.height)

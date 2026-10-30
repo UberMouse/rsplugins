@@ -8,8 +8,13 @@ local M = {}
 -- Each period's heading.
 M.TITLES = { daily = "Daily", weekly = "Weekly", monthly = "Monthly" }
 
+-- Tooltips wrap at this width; wiki URLs are long.
+M.TOOLTIP_WIDTH = 360
+
 -- Each period as a word for "this <word>".
 M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
+
+---@alias ChoreTooltip { text: string, maxWidth: integer }
 
 ---@class ChoreShopLine
 ---@field name string
@@ -21,7 +26,6 @@ M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 ---@field desc string
 ---@field url string
 ---@field links string[]
----@field shop boolean
 ---@field done boolean
 ---@field shops ChoreShopLine[] the chore's listed shops, in list order; empty if it has none
 ---@field bought integer how many of `shops` were bought from this period
@@ -101,7 +105,6 @@ function M.view(s, chores, now, shops)
                     desc = chore.desc,
                     url = chore.url,
                     links = chore.links,
-                    shop = chore.shop,
                     done = done,
                     shops = lines,
                     bought = bought,
@@ -138,6 +141,38 @@ function M.shopTooltip(row, p)
         lines[#lines + 1] = (shop.bought and "bought  " or "not yet  ") .. shop.name
     end
     return lines
+end
+
+-- A chore's tooltip: its description, then `extra` lines (a list row's shops), then its wiki
+-- page and any other links, as text. Takes a Chore or a ChoreRow, which share these fields.
+---@param chore { desc: string, url: string, links: string[] }
+---@param extra string[]?
+---@return ChoreTooltip
+function M.tooltip(chore, extra)
+    local lines = {}
+    if chore.desc ~= "" then lines[#lines + 1] = chore.desc end
+    for _, line in ipairs(extra or {}) do
+        lines[#lines + 1] = line
+    end
+    lines[#lines + 1] = chore.url
+    for _, link in ipairs(chore.links) do
+        lines[#lines + 1] = link
+    end
+    return { text = table.concat(lines, "<br>"), maxWidth = M.TOOLTIP_WIDTH }
+end
+
+-- A section's heading: its period's title and how many of its rows are done.
+---@param section ChoreSection
+---@return string
+function M.headingText(section)
+    return string.format("%s  %d/%d", section.title, section.done, section.total)
+end
+
+-- A settings row's text: the chore's name, marked when it is a shop run.
+---@param chore Chore
+---@return string
+function M.pickText(chore)
+    return chore.shop and chore.name .. " (shop)" or chore.name
 end
 
 return M

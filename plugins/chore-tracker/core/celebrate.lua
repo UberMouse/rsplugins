@@ -8,10 +8,10 @@ local view = require("core/view")
 
 local M = {}
 
-M.CHORE_TITLE = "CHORE COMPLETE"
+local CHORE_TITLE = "CHORE COMPLETE"
 
 -- The title of the popup for a cleared period.
-M.PERIOD_TITLES = {
+local PERIOD_TITLES = {
     daily = "DAILIES COMPLETE",
     weekly = "WEEKLIES COMPLETE",
     monthly = "MONTHLIES COMPLETE",
@@ -61,7 +61,7 @@ function M.decide(old, new, chores, now, manual)
             then
                 out[#out + 1] = {
                     kind = "chore",
-                    title = M.CHORE_TITLE,
+                    title = CHORE_TITLE,
                     text = chore.name,
                     label = chore.id,
                 }
@@ -74,7 +74,7 @@ function M.decide(old, new, chores, now, manual)
         if isAll and not wasAll then
             out[#out + 1] = {
                 kind = "period",
-                title = M.PERIOD_TITLES[p],
+                title = PERIOD_TITLES[p],
                 text = string.format(
                     "All %d of your %s chore%s done",
                     picked,

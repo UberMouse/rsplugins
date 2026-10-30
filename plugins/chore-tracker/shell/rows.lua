@@ -71,8 +71,8 @@ local reported = {} ---@type table<string, boolean>
 ---@field text string? the row's full text
 ---@field availWidth integer? the label width `text` was last fitted to
 ---@field shortened boolean whether the label shows less than `text`
----@field content ui.Layer? the layer that owns the tooltip, once it has one
----@field baseTooltip { text: string, maxWidth: integer }? the tooltip as given to setTooltip
+---@field content ui.Layer the layer that owns the tooltip: the row layer's parent
+---@field baseTooltip ChoreTooltip? the tooltip as given to setTooltip
 ---@field ticked boolean? whether the box is ticked
 ---@field dimmed boolean? whether the icon and text are dimmed
 ---@field hovered boolean whether the mouse is over the row
@@ -184,7 +184,7 @@ function M.new(content, y, icon, onClick, opts)
     local label = ui.Text.new(layer)
     label:SetPos(textX, 0)
     label:SetSize(-(textX + BOX_SIZE + LABEL_GAP), ROW_HEIGHT, 1.0, 0)
-    label.font = id.Font.MUSEO_SANS_15PT_REGULAR
+    label.font = id.Font[FONT_NAME]
     label:AlignTo(ui.AlignMode.TOPLEFT, ui.AlignMode.CENTRE)
     label.clickthrough = true
 
@@ -196,6 +196,7 @@ function M.new(content, y, icon, onClick, opts)
     local row = ---@type ChoreRowView
         {
             layer = layer,
+            content = content,
             icon = sprite,
             label = label,
             box = box,
@@ -231,7 +232,7 @@ end
 
 -- The tooltip the row should hold: the given one, led by the full text when the label is cut.
 ---@param row ChoreRowView
----@return { text: string, maxWidth: integer }
+---@return ChoreTooltip
 local function tooltipOf(row)
     assert(row.baseTooltip, "tooltipOf is only asked once a tooltip was given")
     if not row.shortened then return row.baseTooltip end
@@ -246,7 +247,7 @@ end
 -- up with old text.
 ---@param row ChoreRowView
 local function applyTooltip(row)
-    if not (row.content and row.baseTooltip) then return end
+    if not row.baseTooltip then return end
     local tooltip = tooltipOf(row)
     if row.tooltipText == tooltip.text then return end
     if row.tooltip then row.tooltip:Destroy() end
@@ -331,13 +332,13 @@ function M.showPick(row, text, picked)
     apply(row, text, picked, false)
 end
 
--- Give the row `tooltip`, drawn by the window that owns `content` (so destroying the window
--- destroys it). While the label is cut short the tooltip leads with the full text.
+-- Give the row `tooltip`, drawn by the window that owns the row's `content` layer (so
+-- destroying the window destroys it). While the label is cut short the tooltip leads with the
+-- full text.
 ---@param row ChoreRowView
----@param content ui.Layer
----@param tooltip { text: string, maxWidth: integer }
-function M.setTooltip(row, content, tooltip)
-    row.content, row.baseTooltip = content, tooltip
+---@param tooltip ChoreTooltip
+function M.setTooltip(row, tooltip)
+    row.baseTooltip = tooltip
     applyTooltip(row)
 end
 

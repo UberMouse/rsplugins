@@ -67,7 +67,6 @@ describe("chore-tracker view", function()
         local sections = view.view(support.stateWith(chores, { "dshop", "wshop", "w1" }), chores, 0)
         assert.are.equal("daily", sections[1].period)
         assert.are.equal("dshop", sections[1].rows[1].id)
-        assert.is_true(sections[1].rows[1].shop)
         assert.are.equal("weekly", sections[2].period)
         assert.are.same({ "wshop", "w1" }, { sections[2].rows[1].id, sections[2].rows[2].id })
     end)
@@ -82,7 +81,6 @@ describe("chore-tracker view", function()
             desc = "about d1",
             url = "https://example.test/d1",
             links = {},
-            shop = false,
             done = true,
             shops = {},
             bought = 0,
@@ -194,5 +192,38 @@ describe("chore-tracker view", function()
         assert.are.equal(2, #sections)
         assert.are.equal(0, sections[1].done)
         assert.is_false(sections[1].rows[1].done)
+    end)
+
+    describe("tooltip", function()
+        it("gives the description, then the wiki page", function()
+            local t = view.tooltip({ desc = "Do it.", url = "U", links = {} })
+            assert.are.same({ text = "Do it.<br>U", maxWidth = 360 }, t)
+        end)
+
+        it("puts extra lines between the description and the links", function()
+            local t = view.tooltip(
+                { desc = "Do it.", url = "U", links = { "L1", "L2" } },
+                { "X", "Y" }
+            )
+            assert.are.equal("Do it.<br>X<br>Y<br>U<br>L1<br>L2", t.text)
+        end)
+
+        it("has no blank first line for a chore without a description", function()
+            local t = view.tooltip({ desc = "", url = "U", links = { "L1" } })
+            assert.are.equal("U<br>L1", t.text)
+        end)
+    end)
+
+    it("words a heading with its done count", function()
+        local section = { period = "daily", title = "Daily", rows = {}, done = 1, total = 3 }
+        assert.are.equal("Daily  1/3", view.headingText(section))
+    end)
+
+    it("marks a shop run in a settings row's text, and a plain chore not", function()
+        assert.are.equal(
+            "Feather Shop Run (shop)",
+            view.pickText({ name = "Feather Shop Run", shop = true })
+        )
+        assert.are.equal("D1", view.pickText({ name = "D1", shop = false }))
     end)
 end)

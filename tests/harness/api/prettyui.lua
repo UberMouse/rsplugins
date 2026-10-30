@@ -1453,9 +1453,7 @@ end
 
 ---@return table lib
 function Driver:lib()
-    local instance = self.h.instance
-    assert(instance and instance.alive, "plugin not loaded")
-    return assert(instance.prettyui, "the plugin has no prettyui dependency")
+    return assert(self:optionalLib(), "the plugin has no prettyui dependency")
 end
 
 -- The fake library if the plugin depends on PrettyUI, else nil. The raw pointer driver (click,

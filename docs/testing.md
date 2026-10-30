@@ -145,7 +145,9 @@ timeline can drive the same world.
 
 ### The PrettyUI driver `h.ui`
 
-The PrettyUI methods are for a plugin that lists PrettyUI as a dependency; the raw pointer methods (`click`, `press`, `hover`, `wheel` on a plugin's own `ui.Layer`, `ui.Sprite` or `ui.Text`) work without it. A target is an object the plugin got from
+The PrettyUI methods are for a plugin that lists PrettyUI as a dependency; the raw pointer
+methods (`click`, `press`, `hover`, `wheel` on a plugin's own `ui.Layer`, `ui.Sprite` or
+`ui.Text`) work without it. A target is an object the plugin got from
 the fake (a Window, Panel, SpriteButton, CheckboxButton, a Text from `AddText`) or a component
 such as `win.closeButton`. Plugin callbacks it triggers run under the client's limits, like
 event subscribers.

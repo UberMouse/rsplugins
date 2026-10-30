@@ -41,6 +41,14 @@ function M.fault(message, catchable)
     error(message, level)
 end
 
+-- Fault from a handler that must not return (a __pairs/__len that has no answer to give).
+---@param message string
+---@return any never returns; typed any so `return refuse(...)` satisfies a handler's declared return
+local function refuse(message)
+    M.fault(message)
+    error("unreachable: fault raises")
+end
+
 -- debug.getinfo's `what` ("Lua", "main" or "C") for the first frame below the harness's own
 -- Lua frames: the code that called into the mocked API. "C" means the API function was handed
 -- straight to a C function such as pcall. "tail" means a Lua function tail-called it
@@ -192,14 +200,13 @@ function M.class(name, def)
             if def.tostring then return def.tostring(states[proxy]) end
             return name
         end,
-        -- A client object is sol userdata; neither pairs nor # over one has been probed (only
-        -- getmetatable lists its members, docs/api-concepts.md "Usertype members"). Without
-        -- these, pairs would silently walk nothing and # would read the empty proxy table.
+        -- pairs and # over sol userdata are unprobed (only getmetatable listing members is
+        -- recorded, docs/api-concepts.md "Usertype members"); the empty proxy would walk nothing.
         __pairs = function()
-            M.fault("pairs over a client userdata: unprobed (" .. name .. ")")
+            return refuse("pairs over a client userdata: unprobed (" .. name .. ")")
         end,
         __len = function()
-            M.fault("# over a client userdata: unprobed (" .. name .. ")")
+            return refuse("# over a client userdata: unprobed (" .. name .. ")")
         end,
     }
     if def.eq then
@@ -225,14 +232,14 @@ end
 --   iterable = true     serves the values (probed: PluginPermissions lists its members)
 --   refusal  = "text"   faults with `text`, a probed refusal (PersistentDBType is "not
 --                       recognized as a container", docs/api-concepts.md)
---   neither             faults as unprobed: the client's answer isn't recorded, and the old
---                       plain-Lua iteration here was a guess
+--   neither             faults as unprobed: the client's answer isn't recorded
 ---@param name string
 ---@param values table name -> value
 ---@param opts { iterable: boolean?, refusal: string? }?
 ---@return table
 function M.enum(name, values, opts)
     opts = opts or {}
+    assert(not (opts.iterable and opts.refusal), "enum opts: iterable and refusal are exclusive")
     M.declare("_G", name, "enum")
     local copy = {}
     for k, v in pairs(values) do
@@ -249,8 +256,7 @@ function M.enum(name, values, opts)
         end,
         __pairs = function()
             if opts.iterable then return next, copy, nil end
-            M.fault("pairs over " .. name .. ": " .. (opts.refusal or "unprobed"))
-            error("unreachable: fault raises")
+            return refuse("pairs over " .. name .. ": " .. (opts.refusal or "unprobed"))
         end,
     })
 end
@@ -269,8 +275,7 @@ function M.lookup(lookup, extra, opts)
     return setmetatable({}, {
         __pairs = function()
             if iterable then return next, extra, nil end
-            M.fault("pairs over a lookup table: unprobed")
-            error("unreachable: fault raises")
+            return refuse("pairs over a lookup table: unprobed")
         end,
         __index = function(_, key)
             if extra[key] ~= nil then return extra[key] end

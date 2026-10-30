@@ -172,6 +172,8 @@ local function scanLister(domain, found)
     return function()
         varId = varId + 1
         if varId > SCAN_MAX then return false end
+        -- A closure, not pcall(fromID, varId): the repo passes Lua closures to pcall, since a
+        -- bare Unsubscribe aborted the client (docs/api-concepts.md, "Runtime limits we've hit").
         local ok, v = pcall(function()
             return fromID(varId)
         end)

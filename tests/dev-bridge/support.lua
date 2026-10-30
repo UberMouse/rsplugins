@@ -53,9 +53,10 @@ end
 -- follow the plugin's pacing instead of repeating its numbers.
 ---@param h table
 ---@return table
-local function limits(h)
+function M.limits(h)
     return h.env.require("protocol").limits
 end
+local limits = M.limits
 
 -- Run `n` Logic ticks (20 ms each).
 ---@param h table
@@ -72,8 +73,7 @@ end
 
 -- Answer the one open sync with `response` (a 200 with an empty body by default) and run
 -- until the next sync has started, which is when the bridge reports what that answer led to.
--- Returns the next sync's body, decoded. A finished sync waits syncEveryTicks for the next, a
--- failed one retryTicks, so it gives up after the longer.
+-- Returns that sync's body, decoded; gives up after retryTicks, the longer of the two waits.
 ---@param h table
 ---@param response table?
 ---@return table body

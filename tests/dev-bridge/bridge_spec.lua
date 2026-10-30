@@ -50,7 +50,7 @@ describe("dev-bridge", function()
 
     it("starts no request until httpAccess is granted, and says so once", function()
         local h = support.load({})
-        h:advance(2000) -- 100 ticks
+        support.ticks(h, 100)
         assert.are.equal(0, #h.requests)
         assert.are.equal(1, h:consoleCount("[BRIDGE] waiting for httpAccess"))
         h.world:grant("httpAccess")
@@ -64,19 +64,19 @@ describe("dev-bridge", function()
             local h = support.load()
             h:step()
             assert.are.equal(1, #support.syncs(h))
-            h:advance(1000) -- unanswered: nothing more starts
+            support.ticks(h, 50) -- unanswered: nothing more starts
             assert.are.equal(1, #support.syncs(h))
 
             support.answer(h)
             local finished = h.tick
-            h:advance(20 * 9)
+            support.ticks(h, support.limits(h).syncEveryTicks - 1)
             assert.are.equal(1, #support.syncs(h))
             h:step()
             assert.are.equal(finished + 10, support.syncs(h)[2].startTick)
 
             support.answer(h, { status = 500 })
             local failed = h.tick
-            h:advance(20 * 249)
+            support.ticks(h, support.limits(h).retryTicks - 1)
             assert.are.equal(2, #support.syncs(h))
             h:step()
             assert.are.equal(failed + 250, support.syncs(h)[3].startTick)
@@ -129,7 +129,7 @@ describe("dev-bridge", function()
             h:step()
             assert.are.same({ "plist", "pon debug-plugin", tricky }, support.ran(h))
 
-            h:advance(20 * 8)
+            support.ticks(h, 8)
             assert.are.same({
                 { id = "c1", ok = true },
                 { id = "c2", ok = true },
@@ -184,7 +184,7 @@ describe("dev-bridge", function()
             { status = 200, body = body .. support.line("r1", "exec", "prl dev-bridge") }
         )
         local requests = #h.requests
-        h:advance(20 * 30)
+        support.ticks(h, 30)
         assert.are.equal(1, #support.syncs(h))
         assert.are.equal(requests, #h.requests)
         assert.are.same({}, h.instance.subs.Logic)
@@ -443,7 +443,7 @@ describe("dev-bridge", function()
         assert.are.same("devBridgeLogic", h.instance.subs.Logic[1].name)
         local requests = #h.requests
         h.world:chat("ignored")
-        h:advance(20 * 300)
+        support.ticks(h, 300)
         assert.are.equal(requests, #h.requests)
         assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         h:unload()

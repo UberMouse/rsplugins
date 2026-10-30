@@ -165,7 +165,7 @@ describe("dev-bridge eval", function()
     it("streams a probe's print as a Log event, source eval, and writes the console", function()
         local h = support.loadEval()
         support.eval(h, "Event.Logic.Subscribe('p', function() print('probe', 1) end)")
-        h:advance(20 * 30)
+        support.ticks(h, 30)
         local logs = evalLogs(support.cycle(h))
         assert.is_true(#logs >= 1)
         assert.are.same(
@@ -264,7 +264,7 @@ end)]]
         })
         assert.matches('Event.Logic "bad" removed after an error: eval:1: kaput', errors[1].text)
         assert.is_true(#support.payloads(body, "Emit") > 0) -- good kept running
-        h:advance(20 * 100)
+        support.ticks(h, 100)
         assert.are.equal(1, h:consoleCount('[BRIDGE] probe Event.Logic "bad"'))
         -- Its slot is free again.
         assert.is_true(support.eval(h, "Event.Logic.Subscribe('next', function() end)").ok)
@@ -371,7 +371,7 @@ end)]]
             assert.are.same({ "prl dev-bridge" }, support.ran(h))
             assert.are.same(shutdownUnsubscribes(h, { "ServerLogic" }), calls)
             assert.are.same({}, subNames(h, "Logic"))
-            h:advance(20 * 30)
+            support.ticks(h, 30)
             assert.are.equal(0, #support.open(h)) -- stopped: no result, no further sync
         end
     )
@@ -391,7 +391,7 @@ end)]]
         support.answer(h, { status = 200, body = support.line("c", "exec", "plist") })
         assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         local before = hits
-        h:advance(20 * 10)
+        support.ticks(h, 10)
         assert.are.equal(before, hits)
         assert.are.same({}, calls)
         h:unload()
@@ -413,7 +413,7 @@ end)]]
                 "Event.Logic.Subscribe('q', function() error('x') end)"
             ),
         })
-        support.ticks(h, 3)
+        support.ticks(h, 3) -- under syncEveryTicks (10), so the stop is the fan-out's, not a sync's
         assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         support.ticks(h, 30)
         assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
@@ -472,11 +472,11 @@ describe("dev-bridge lazy probe subscriptions", function()
         assert.are.same({ "Subscribe ServerLogic " .. SERVER }, calls)
         assert.are.same({ addedAt + 1 }, ticks)
         assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
-        h:advance(20 * 30) -- to the next sync
+        support.ticks(h, 30) -- to the next sync
         support.eval(h, "Event.ServerLogic.Subscribe('b', function() end)")
         assert.are.equal(1, #calls) -- a second probe needs no client call
         support.answer(h)
-        h:advance(20 * 30)
+        support.ticks(h, 30)
         local emits = 0
         for _, record in ipairs(support.syncs(h)) do
             emits = emits + #support.payloads(support.body(record), "Emit")
@@ -510,7 +510,7 @@ end)]]
             [[Event.ServerLogic.Subscribe('a', function() end)
 Event.ServerLogic.Unsubscribe('a')]]
         )
-        h:advance(20 * 30)
+        support.ticks(h, 30)
         assert.are.same({}, calls)
         assert.are.same({}, subNames(h, "ServerLogic"))
     end)
@@ -545,7 +545,7 @@ Event.Logic.Unsubscribe('l')]]
         assert.are.same({ "Unsubscribe ServerLogic " .. SERVER }, calls)
         assert.are.same({ removedAt + 1 }, ticks)
         assert.are.same({}, subNames(h, "ServerLogic"))
-        h:advance(20 * 30)
+        support.ticks(h, 30)
         assert.are.equal(1, #calls) -- and only once
     end)
 
@@ -570,7 +570,7 @@ Event.Logic.Unsubscribe('l')]]
 Event.ServerLogic.Subscribe('b', function() emit('b', 1) end)]]
         )
         support.answer(h)
-        h:advance(20 * 30)
+        support.ticks(h, 30)
         assert.are.same({}, calls)
         assert.are.same({ SERVER }, subNames(h, "ServerLogic"))
         assert.is_true(#support.payloads(support.last(h), "Emit") >= 1)
@@ -681,7 +681,7 @@ Event.Logic.Subscribe('l', function() end)]]
         end
         support.answer(h, { status = 200, body = support.line("c", "exec", "plist") })
         assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
-        h:advance(20 * 30)
+        support.ticks(h, 30)
         assert.are.same({}, calls) -- stopping makes no client call
         h:unload()
         assert.are.same(shutdownUnsubscribes(h, { "ServerLogic" }), calls)

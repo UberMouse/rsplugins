@@ -84,21 +84,8 @@
 -- switches use it). Ticks, colours, counts and tooltips change in place; the window
 -- is rebuilt only for a view switch, a login change or the clock starting or stopping.
 --
--- PrettyUI 1.2.0 state and internals used, each guarded so a version without it loses only
--- that:
--- - `_scroll.scrollY`: keeps the scroll through a rebuild (scrollPosition) and places the
---   grips' press targets over scrolled rows.
--- - `_onScrollWheel`: lets the wheel over a row scroll the window (wheelHandler).
--- - `viewport`: where the grips' targets are placed from; without it, or the scroll, the
---   grips don't drag.
--- - `_RegisterOverlay` / `_UnregisterOverlay`: to hear when the window lays out its overlays,
---   so the grips' targets can be raised back over it (overlaySync); without them the targets
---   stay under the window after a title-bar press or a resize.
--- - `resize.handles`: resize cursors on the window's edges and corners; without them the
---   window shows none.
--- - `resize.enabled` / `resize:SetEnabled` and `titleDrag` (with the client's `isClicked`):
---   turn the window's resize back on after a quick title-bar click (reviveResize); without
---   them the resize handles stay hidden after such a click until the title bar is dragged.
+-- The PrettyUI 1.2.0 internals the window leans on (scroll, wheel, grips, resize) are all in
+-- shell/prettyui_internals.lua.
 --
 -- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
@@ -125,6 +112,7 @@ local view = require("core/view")
 local detect = require("shell/detect")
 local grips = require("shell/grips")
 local popups = require("shell/popups")
+local internals = require("shell/prettyui_internals")
 local rows = require("shell/rows")
 local store = require("shell/store")
 local varDetect = require("shell/vars")
@@ -303,18 +291,6 @@ local function onTick(id)
     popups.enqueue(celebrate.decide(before, tracker, chores, now, true))
 end
 
--- How far the window's content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
--- can set it (SetScrollPosition) but has no getter, so this reads its internal
--- `_scroll.scrollY`; a version without that field gives nil.
----@return number?
-local function scrollPosition()
-    assert(win, "the window exists from load to shutdown")
-    local scroll = win._scroll
-    local y = scroll and scroll.scrollY
-    if type(y) == "number" then return y end
-    return nil
-end
-
 -- A row was dragged by its grip to `slot` among its period's rows: keep that order, saved for
 -- the character. Without a character there is no order to save, so nothing changes.
 ---@param id string
@@ -327,50 +303,6 @@ local function onDrop(id, slot)
     tracker = moved
     store.saveState(character, tracker)
     say(string.format("moved %s to %d in %s", id, slot, chore.period))
-end
-
--- A row swallows the mouse wheel unless it hands it to the window. The handler is PrettyUI
--- 1.2.0-internal, so without it the rows are still made, just without that.
----@param w prettyui.Window
----@return ChoreWheelHandler?
-local function wheelHandler(w)
-    if type(w._onScrollWheel) == "function" then return w._onScrollWheel end
-    return nil
-end
-
--- A way to hear when `w` lays out its overlays, for grips.lua: called with a callback, it
--- registers a sentinel layer as one of `w`'s overlays (PrettyUI 1.2.0-internal) whose layout
--- is that callback, and returns the function that unregisters and destroys it. That must run
--- before `w` is destroyed: 1.2.0 checks only that an overlay's interface exists, which the
--- plugin layer's always does, so it would set `hidden` on a destroyed sentinel. The sentinel
--- is never shown (PrettyUI hides it on each sync) and lets clicks through. Returns nil for a
--- version without those internals; the function it returns gives nil if registering fails,
--- as on one whose internals take other arguments.
----@param w prettyui.Window
----@return (fun(onSync: fun()): fun()?)?
-local function overlaySync(w)
-    if type(w._RegisterOverlay) ~= "function" or type(w._UnregisterOverlay) ~= "function" then
-        return nil
-    end
-    return function(onSync)
-        -- On the plugin layer, as PrettyUI's own overlays are (see buildList for the cast).
-        local sentinel = ui.Layer.new(parent --[[@as ui.ComponentCollection]])
-        sentinel:SetSize(1, 1)
-        sentinel.clickthrough = true
-        sentinel.hidden = true
-        local ok = pcall(w._RegisterOverlay, w, sentinel, function()
-            return false
-        end, onSync)
-        if not ok then
-            sentinel:Destroy()
-            return nil
-        end
-        return function()
-            -- If it is still registered, PrettyUI would set `hidden` on it after a Destroy;
-            -- left alive it stays hidden, 1x1 and click-through.
-            if pcall(w._UnregisterOverlay, w, sentinel) then sentinel:Destroy() end
-        end
-    end
 end
 
 -- The list: the settings button and any notice in PrettyUI's flow, then a heading per period
@@ -393,7 +325,7 @@ local function buildList(w, openSettings)
         return
     end
     local spots = listlayout.place(sections, top)
-    local wheel = wheelHandler(w)
+    local wheel = internals.wheelHandler(w)
     local order = {} ---@type { period: string, ids: string[] }[]
     for _, section in ipairs(sections) do
         headings[section.period] =
@@ -418,12 +350,14 @@ local function buildList(w, openSettings)
             viewport = w.viewport,
             rows = rowViews,
             sections = order,
-            scrollY = scrollPosition,
+            scrollY = function()
+                return internals.scrollPosition(w)
+            end,
             scrollTo = function(y)
                 w:SetScrollPosition(y)
             end,
             wheel = wheel,
-            watchSync = overlaySync(w),
+            watchSync = internals.overlaySync(w, parent --[[@as ui.ComponentCollection]]),
             onDrop = onDrop,
         })
     end
@@ -482,7 +416,7 @@ local function buildSettings(w)
         sections[i] = { period = group.period, rows = group.chores }
     end
     local spots = listlayout.place(sections, switches.root.y + switches.root.height)
-    local wheel = wheelHandler(w)
+    local wheel = internals.wheelHandler(w)
     for _, group in ipairs(groups) do
         w:AddTitle({ text = group.title, y = spots.headings[group.period] })
         for _, chore in ipairs(group.chores) do
@@ -514,53 +448,6 @@ local function followGrips()
     grips.follow(collapsed == nil)
 end
 
--- The cursor over each of the window's resize handles (PrettyUI 1.2.0 sets none): diagonal
--- arrows on the corners and the four-way arrow on the edges. In the client the vertical and
--- horizontal scale cursors show nothing on these handles (docs/api-concepts.md), so the edges
--- use the move cursor, which the title bar shows too.
-local RESIZE_CURSORS = {
-    nw = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_1,
-    se = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_1,
-    ne = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_2,
-    sw = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_2,
-    n = id.Cursor.TOPLEVEL_V2_MOVE,
-    s = id.Cursor.TOPLEVEL_V2_MOVE,
-    e = id.Cursor.TOPLEVEL_V2_MOVE,
-    w = id.Cursor.TOPLEVEL_V2_MOVE,
-}
-
--- Workaround for PrettyUI 1.2.0: a quick title-bar click reaches it release-first
--- (docs/api-concepts.md), so the release turns resize on and the press then turns it off for
--- good. Resize off with the title bar not held is that stuck state; turn it back on. Reads are
--- guarded so a PrettyUI without these internals is left alone.
-local function reviveResize()
-    local w = win ---@type table?
-    if collapsed ~= nil or not w then return end
-    local resize, titleDrag = w.resize, w.titleDrag
-    if type(resize) ~= "table" then return end
-    -- Client components are userdata; the harness's fakes are tables.
-    if type(titleDrag) ~= "userdata" and type(titleDrag) ~= "table" then return end
-    if resize.enabled ~= false or titleDrag.isClicked == true then return end
-    if type(resize.SetEnabled) ~= "function" then return end
-    resize:SetEnabled(true)
-end
-
--- Set the resize cursors on `w`'s eight resize handles with rows.setCursor. PrettyUI only
--- moves, sizes and hides the handles afterwards, so once per window is enough. A PrettyUI
--- without `resize.handles` (or a handle) is skipped.
----@param w table the PrettyUI window
-local function setResizeCursors(w)
-    local resize = w.resize
-    local handles = type(resize) == "table" and resize.handles
-    if type(handles) ~= "table" then return end
-    for key, cursor in pairs(RESIZE_CURSORS) do
-        local handle = handles[key]
-        -- pcall: a handle that isn't a layer, as in another PrettyUI version, costs only its
-        -- own cursor, not the rest of the window's build.
-        if handle then pcall(rows.setCursor, handle, cursor) end
-    end
-end
-
 -- (Re)build the window at `at` for the current phase and mode. There's no PrettyUI call to
 -- clear a window's content, so a view switch, a login change or the clock starting
 -- rebuilds the window where it was.
@@ -582,7 +469,7 @@ local function buildWindow(at)
         minHeight = MIN_HEIGHT,
     })
     win = w
-    setResizeCursors(w)
+    internals.setResizeCursors(w)
     w.closeButton.hidden = true
     -- The title-bar slot is the one spot of the title bar the drag layer leaves clickable.
     -- It collapses the window, except in the settings view, where it goes back to the list
@@ -621,7 +508,7 @@ end
 local function rebuild(keepScroll)
     assert(win, "the window exists from load to shutdown")
     local r = win.root
-    local scrollY = keepScroll and scrollPosition() or nil
+    local scrollY = keepScroll and internals.scrollPosition(win) or nil
     buildWindow({ x = r.x, y = r.y, width = r.width, height = r.height })
     if scrollY then win:SetScrollPosition(scrollY) end
     if collapsed then win:Close() end
@@ -645,6 +532,7 @@ local function collapseAt(x, y)
         rows.unhover(rowView)
     end
     win:Close()
+    -- Not followGrips: that reads `collapsed`, which is only assigned below.
     grips.follow(false)
     collapsed = prettyui.Panel.new(parent, {
         x = x,
@@ -816,7 +704,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.
     followGrips()
-    reviveResize()
+    internals.reviveResize(win, collapsed ~= nil)
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)

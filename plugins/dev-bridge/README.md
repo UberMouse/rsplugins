@@ -12,8 +12,9 @@ It lets Claude, from a terminal, drive the client and watch what happens while y
 - `scripts/rsdev.py exec "prl chore-tracker"` queues a console command; the bridge runs it and
   reports whether `ExecuteConsoleCommand` raised (ok means it ran without a Lua error, not that
   the command did what you hoped).
-  Don't send `ppe var-dump httpAccess` this way: it crashed the client
-  (with recorder-demo running with httpAccess; "Crash 9" in [api-concepts.md](../../docs/api-concepts.md#seen-with-dev-bridge-2026-10-26)).
+  Don't send `ppe var-dump httpAccess` this way: it crashed the client when recorder-demo was
+  running with httpAccess (see "Crash 9" in
+  [api-concepts.md](../../docs/api-concepts.md#seen-with-dev-bridge-2026-10-26)).
 - `scripts/rsdev.py eval "Player.GetEntity().displayName"` runs a Lua snippet in the client and
   prints what it returned and printed (see "Eval" below).
 - `scripts/rsdev.py events --follow` prints the events the bridge forwards: `ChatMessage` (your

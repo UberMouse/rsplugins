@@ -4,14 +4,13 @@
 -- https://developer.runescape.com/rs/core/events.html#overview: subscribers run in the order
 -- they subscribed; a payload edited by one subscriber is what the next one sees.
 --
--- From the live client (docs/testing.md fidelity ledger, dev-bridge probes 2026-10-26):
+-- From the live client (docs/testing.md fidelity ledger, dev-bridge probes 2026-10-26 and
+-- 2026-10-30):
 -- - Subscribe with a name the event already has does nothing: the first callback stays, where
 --   it was, though the page says the name is replaced. After an Unsubscribe the name goes last.
--- - Within a dispatch of an event (probe 2026-10-30, ledger rows): a subscriber added is first
---   called on the next dispatch; an Unsubscribe of that same event is deferred to the end of the
---   dispatch (the subscriber isn't called again, but a Subscribe of its name meanwhile does
---   nothing, so Unsubscribe + Subscribe of one name loses it); a plugin reloaded by a
---   subscriber has its later subscribers skipped.
+-- - Mid-dispatch of an event: a subscriber added first runs on the next dispatch; Unsubscribe is
+--   deferred to the dispatch's end, so Subscribe of the same name meanwhile does nothing and
+--   the name is lost; a subscriber that reloads the plugin ends the old instance's dispatch.
 -- - Unsubscribe returns true if it removed the name, false otherwise.
 -- - Event.<X>.Unsubscribe passed straight to pcall or xpcall, so that a C function calls it,
 --   aborts the client (rs2client SIGABRT, which pcall can't catch): all seven aborts used that
@@ -171,8 +170,6 @@ end
 ---@return table
 function M.namespace(instance)
     local proxies = {}
-    -- Event -> how many dispatches of it are running.
-    instance.dispatching = {}
     for event in pairs(EVENT_NAMES) do
         instance.subs[event] = {}
         proxies[event] = Subscription.new({

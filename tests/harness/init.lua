@@ -149,7 +149,8 @@ end
 -- Enable the plugin: a fresh environment, then main.lua.
 function Harness:load()
     assert(not (self.instance and self.instance.alive), "plugin already loaded; use reload()")
-    local instance = { alive = true, subs = {} }
+    -- dispatching: event -> how many dispatches of it are running.
+    local instance = { alive = true, subs = {}, dispatching = {} }
     self.instance = instance
     instance.env = sandbox.build(self, instance)
     self.env = instance.env

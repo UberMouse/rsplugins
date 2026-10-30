@@ -492,18 +492,19 @@ From `plugins/dev-bridge` in the beta client.
   `lib/dev` module made (`tee.shutdown()`, `recorder.shutdown()`). The harness's `h:unload`
   faults on any subscription `PluginShutdown` leaves behind (`docs/testing.md`).
 - **Crash 9 (SIGSEGV x3, 2026-10-30 21:43:56, 21:59:55 and 22:03:31)**: `ppe var-dump httpAccess`
-  sent through the dev bridge (`rsdev.py exec`) while `recorder-demo` was running with
-  `httpAccess`. The core dumps show the same shallow main-thread stack each time, with no Lua
-  frames: rs2client+0x3c76a4, +0xe3f8b, +0x1c110c, +0x16648f5, +0x1402ec8. It crashed only with
-  all three conditions so far. The one-run controls were the same `ppe` typed in the console
-  (no crash) and the bridge `ppe` without `recorder-demo` (no crash, 21:59:13). Probe runs did
-  not reproduce it for the bridge `ppe` dispatch alone (`probe-perm`, whose handler only
-  printed), nor for subscribing `Logic`, `ServerLogic` and `VarTransmit` inside that dispatch
-  with `recorder-demo` granted and posting (`probe-perm-sub`); both probes are deleted.
-  Remaining suspects: the synchronous part of var-dump's `start()` (snapshot init,
-  `beginDomain`'s `pcall(nameLister)` starting `pairs(id.VarPlayer)`). The cause is
-  unconfirmed. The rule we follow: grant var-dump's `httpAccess` by typing `ppe` in the
-  console, never through the bridge.
+  sent through the dev bridge (`rsdev.py exec`) while `recorder-demo` was running with `httpAccess`.
+  It crashed only with all three so far: (1) that `ppe` sent through the bridge, (2) var-dump's
+  `start()` running in response to the grant, (3) `recorder-demo` running with `httpAccess`. The
+  core dumps show the same shallow main-thread stack each time, with no Lua frames:
+  rs2client+0x3c76a4, +0xe3f8b, +0x1c110c, +0x16648f5, +0x1402ec8. The one-run controls were the
+  same `ppe` typed in the console (no crash) and the bridge `ppe` without `recorder-demo` (no crash,
+  21:59:13). Probe runs did not reproduce it for the bridge `ppe` dispatch alone (`probe-perm`,
+  whose handler only printed), nor for subscribing `Logic`, `ServerLogic` and `VarTransmit` inside
+  that dispatch with `recorder-demo` granted and posting (`probe-perm-sub`); both probes are
+  deleted. Remaining suspects: the synchronous part of var-dump's `start()` (snapshot init,
+  `beginDomain`'s `pcall(nameLister)` starting `pairs(id.VarPlayer)`). The cause is unconfirmed. The
+  rule we follow: grant var-dump's `httpAccess` by typing `ppe` in the console, never through the
+  bridge.
 - **Closing the client segfaults** (2026-10-26, beta client 951-1): closing it gave a SIGSEGV
   three times out of three, at 15:09:17 (pid 2637620), 15:12:49 (pid 2649914) and 15:15:07 (pid
   2656263). `coredumpctl` shows the same stack each time, frame #4 jumping into a heap address.

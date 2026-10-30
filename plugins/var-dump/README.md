@@ -14,7 +14,8 @@ client are visible, so "every" means "every one the client knows about".
 2. In the client console: `prf`, `pon var-dump`, `ppr var-dump`, then
    `ppe var-dump httpAccess`. The plugin starts dumping as soon as the permission is granted.
    Type the `ppe` in the console yourself: sending it through the dev bridge crashed the client
-   (with recorder-demo running with httpAccess; see "Crash 9" in [api-concepts.md](../../docs/api-concepts.md#seen-with-dev-bridge-2026-10-26)).
+   when recorder-demo was running with httpAccess (see "Crash 9" in
+   [api-concepts.md](../../docs/api-concepts.md#seen-with-dev-bridge-2026-10-26)).
    Be logged in first, or the snapshot is empty. (`httpAccess` is optional rather than required
    because `requiredPermissions` is currently broken in the client.)
 3. Each enable/reload writes a new `snapshot-<time>.jsonl`. While the plugin is on, updates are

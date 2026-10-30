@@ -6,6 +6,8 @@
 --   * While enabled it records every VarTransmit event and POSTs them to
 --     <sink>/changes, at most one request in flight; bodies built while one is pending queue
 --     up (MAX_QUEUED_CHANGES, oldest dropped first) and the next goes out from a later tick.
+--     A body the receiver answers with a non-200 is dropped; one that got no reply is retried
+--     after RETRY_TICKS server ticks.
 --   * A sink outage logs one warning when it starts and one line when uploads recover.
 --
 -- Run `prl var-dump` to take a fresh snapshot. NOT for submission: dumping all
@@ -29,12 +31,10 @@ local inFlight = {}
 -- Assigned further down, once the drop counters exist; PluginShutdown calls it if set.
 local reportDrops = nil ---@type fun()?
 
--- Defined before anything below can fail, so a failing load still unsubscribes. That is also why
--- Cancel is inlined here instead of using dev/post's cancel: the `httpPost` local is declared
--- after the requires, so it is not in scope this early. Unsubscribing a name that was never
--- subscribed returns false (live-probed, docs/testing.md fidelity ledger), so the
--- not-yet-granted case is fine. Event calls are direct and Cancel runs in a closure, never an
--- API function handed to pcall (docs/api-concepts.md).
+-- Defined before anything below can fail, so a failing load still unsubscribes; that is why Cancel
+-- is inlined (the httpPost local is declared after the requires). Unsubscribing a never-subscribed
+-- name returns false (live-probed, docs/testing.md), so the not-yet-granted case is fine. Cancel
+-- runs in a closure, never handed to pcall (docs/api-concepts.md).
 function PluginShutdown()
     for event, name in pairs(SUBS) do
         Event[event].Unsubscribe(name)
@@ -205,12 +205,18 @@ local sinkDown = false
 -- Dropped /changes bodies not yet reported; the count is logged once uploads next succeed.
 local droppedBodies, droppedChanges = 0, 0
 
+-- Count one /changes body ({ body, count }) as dropped, to be reported by reportDrops.
+local function noteDropped(entry)
+    droppedBodies = droppedBodies + 1
+    droppedChanges = droppedChanges + entry.count
+end
+
 -- Log the dropped-bodies line if any are unreported, then reset the counts.
-function reportDrops()
+reportDrops = function()
     if droppedBodies == 0 then return end
     say(
         formatStr(
-            "dropped {} queued /changes uploads ({} changes) while the receiver was unreachable",
+            "dropped {} /changes uploads ({} changes) the receiver never took",
             droppedBodies,
             droppedChanges
         )
@@ -240,7 +246,10 @@ local function noteResult(success, path, why)
     reportDrops()
 end
 
--- POST a JSON body to a path on the sink, then call onDone(success).
+-- POST a JSON body to a path on the sink, then call onDone(success, replied): `replied` is true
+-- when the receiver answered with an HTTP status (any), false for a timeout, a transport error or
+-- a request that could not start. A reply has responseCode > 0; a timeout reads 0 (docs/testing.md,
+-- HTTP rows).
 -- onDone runs inside the HTTP callback, so it must not start another request:
 -- doing that froze and then crashed the client. Record the result instead,
 -- and let the next tick act on it. A request the client refuses to start calls
@@ -252,11 +261,11 @@ local function post(path, body, onDone)
         inFlight[pending] = nil
         local success = finished.successful and finished.responseCode == 200
         noteResult(success, path, batch.failureText(finished))
-        if onDone then onDone(success) end
+        if onDone then onDone(success, (finished.responseCode or 0) > 0) end
     end)
     if not pending then
         noteResult(false, path, "could not start: " .. batch.text(err))
-        if onDone then onDone(false) end
+        if onDone then onDone(false, false) end
         return
     end
     inFlight[pending] = true
@@ -479,6 +488,11 @@ local MAX_QUEUED_CHANGES = 100
 local changeQueue = {}
 local changesInFlight = false
 
+-- After a failed send, wait this many ServerLogic ticks (about 5 s at 0.6 s each,
+-- docs/api-concepts.md) before the next, so a down receiver isn't hit every tick.
+local RETRY_TICKS = 8
+local nextSendTick = 0
+
 -- Record one var update from the server. It fires even if the value didn't change.
 local function onVarTransmit(ev)
     local v = ev.var
@@ -505,22 +519,23 @@ local function onServerLogic()
         }
         pendingChanges = {}
         while #changeQueue > MAX_QUEUED_CHANGES do
-            local dropped = table.remove(changeQueue, 1)
-            droppedBodies = droppedBodies + 1
-            droppedChanges = droppedChanges + dropped.count
+            noteDropped(table.remove(changeQueue, 1))
         end
     end
-    if changesInFlight or #changeQueue == 0 then return end
+    if changesInFlight or #changeQueue == 0 or tick < nextSendTick then return end
     local entry = table.remove(changeQueue, 1)
     changesInFlight = true
-    post("/changes", entry.body, function(success)
+    post("/changes", entry.body, function(success, replied)
         changesInFlight = false
-        -- Keep the body for the next tick's retry (it is the oldest), within the bound.
-        if not success and #changeQueue < MAX_QUEUED_CHANGES then
+        if success then return end
+        -- Only the tick gate starts the retry, never this callback.
+        nextSendTick = tick + RETRY_TICKS
+        if replied or #changeQueue >= MAX_QUEUED_CHANGES then
+            -- A body the receiver rejected would be rejected again, and a full queue has no room
+            -- for the oldest body to come back.
+            noteDropped(entry)
+        else
             table.insert(changeQueue, 1, entry)
-        elseif not success then
-            droppedBodies = droppedBodies + 1
-            droppedChanges = droppedChanges + entry.count
         end
     end)
 end

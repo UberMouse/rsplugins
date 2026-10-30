@@ -1,21 +1,17 @@
--- Smoke and upload-policy specs for plugins/var-dump.
---
--- The harness models formatStr but not id.VarPlayer / id.VarClient iteration (the id namespace
--- in tests/harness/api/ui.lua has no such tables), and it faults on the plugin's read of them
--- even under the plugin's own pcall. So the granted-path specs wrap sandbox.build to give the
--- plugin plain-table stand-ins for those two (`loadGranted`). They test the upload policy
--- after the listing; how the real client lists vars, and the snapshot contents, are not tested.
---
--- The stand-in's shape (the integer ID in the value slot) is NOT what the client gives:
--- docs/api-concepts.md records that pairs(id.VarPlayer) does not put the ID in the value slot.
--- So these specs take the nameLister path the client can't, and exist only to get start()
--- running for the transport specs.
+-- Smoke and upload-policy specs for plugins/var-dump. The harness has no id.VarPlayer /
+-- id.VarClient iteration and faults on the plugin's read even under pcall, so the granted-path
+-- specs (loadGranted) wrap sandbox.build to supply plain-table stand-ins. They only get start()
+-- running for the transport specs: the stand-ins put the ID in the value slot, which the real
+-- client does not (docs/api-concepts.md), so listing and snapshot contents are untested. The
+-- harness does model formatStr.
 
 local harness = require("tests.harness")
 local sandbox = require("tests.harness.sandbox")
 
 local SINK = "http://127.0.0.1:8765" -- var-dump's plugin.json "sink" url
 local SERVER_TICK_MS = 600
+local RETRY_TICKS = 8 -- var-dump's RETRY_TICKS
+local NO_REPLY = { timedOut = true } -- a failure with no HTTP status
 
 -- Load var-dump with httpAccess granted and `id.VarPlayer` / `id.VarClient` replaced by small
 -- plain tables. The wrap is undone before returning, even if the load raises.
@@ -51,6 +47,11 @@ end
 local function change(h, value)
     h.world:setVar("VarPlayer", "ABSYSTEM", value)
     h:advance(SERVER_TICK_MS)
+end
+
+-- Let `n` server ticks pass.
+local function ticks(h, n)
+    h:advance(n * SERVER_TICK_MS)
 end
 
 local function consoleLines(h, needle)
@@ -98,9 +99,9 @@ describe("plugins/var-dump /changes uploads", function()
     it("warns once per outage, then once on recovery, and keeps the failed changes", function()
         local h = loadSettled()
         change(h, 1)
-        for _ = 1, 4 do
-            h:answerAll(SINK .. "/changes", { status = 500 })
-            h:advance(SERVER_TICK_MS)
+        for _ = 1, 3 do
+            h:answerAll(SINK .. "/changes", NO_REPLY)
+            ticks(h, RETRY_TICKS)
         end
         assert.are.equal(1, consoleLines(h, "failed:"))
         assert.are.equal(0, consoleLines(h, "recovered"))
@@ -113,6 +114,48 @@ describe("plugins/var-dump /changes uploads", function()
         assert.are.equal(sent[1].body, sent[#sent].body)
     end)
 
+    it("drops a body the receiver answered with a non-200 and sends the next", function()
+        local h = loadSettled()
+        change(h, 1)
+        change(h, 2)
+        local sent = h:requestsTo(SINK .. "/changes")
+        assert.are.equal(1, #sent)
+        h:answerAll(SINK .. "/changes", { status = 400 })
+        ticks(h, RETRY_TICKS)
+        local after = h:requestsTo(SINK .. "/changes")
+        assert.are.equal(2, #after)
+        assert.are_not.equal(sent[1].body, after[2].body)
+        -- Counted as dropped, reported once uploads succeed.
+        h:answerAll(SINK .. "/changes")
+        h:advance(SERVER_TICK_MS)
+        assert.are.equal(
+            1,
+            consoleLines(h, "dropped 1 /changes uploads (1 changes) the receiver never took")
+        )
+    end)
+
+    it("resends a body that got no reply, ahead of newer ones", function()
+        local h = loadSettled()
+        change(h, 1)
+        change(h, 2)
+        h:answerAll(SINK .. "/changes", NO_REPLY)
+        ticks(h, RETRY_TICKS)
+        local sent = h:requestsTo(SINK .. "/changes")
+        assert.are.equal(2, #sent)
+        assert.are.equal(sent[1].body, sent[2].body)
+        assert.are.equal(0, consoleLines(h, "dropped"))
+    end)
+
+    it("starts no /changes request for RETRY_TICKS ticks after a failure", function()
+        local h = loadSettled()
+        change(h, 1)
+        h:answerAll(SINK .. "/changes", NO_REPLY)
+        ticks(h, RETRY_TICKS - 1)
+        assert.are.equal(1, #h:requestsTo(SINK .. "/changes"))
+        ticks(h, 1)
+        assert.are.equal(2, #h:requestsTo(SINK .. "/changes"))
+    end)
+
     it("drops the oldest queued bodies past the bound and says how many", function()
         -- 105 changes: the first is in flight, 104 queue, and 4 are past the bound of 100.
         local h = loadSettled()
@@ -121,7 +164,10 @@ describe("plugins/var-dump /changes uploads", function()
         end
         h:answerAll(SINK .. "/changes")
         h:advance(SERVER_TICK_MS)
-        assert.are.equal(1, consoleLines(h, "dropped 4 queued /changes uploads (4 changes)"))
+        assert.are.equal(
+            1,
+            consoleLines(h, "dropped 4 /changes uploads (4 changes) the receiver never took")
+        )
     end)
 
     it("cancels the request in flight on shutdown", function()
@@ -142,7 +188,10 @@ describe("plugins/var-dump /changes uploads", function()
         end
         assert.are.equal(0, consoleLines(h, "dropped"))
         h:unload()
-        assert.are.equal(1, consoleLines(h, "dropped 4 queued /changes uploads (4 changes)"))
+        assert.are.equal(
+            1,
+            consoleLines(h, "dropped 4 /changes uploads (4 changes) the receiver never took")
+        )
     end)
 
     it("never queues past the bound when a failed body is requeued", function()
@@ -151,11 +200,14 @@ describe("plugins/var-dump /changes uploads", function()
         for i = 1, 101 do
             change(h, i)
         end
-        h:answerAll(SINK .. "/changes", { status = 500 })
-        h:advance(SERVER_TICK_MS)
+        h:answerAll(SINK .. "/changes", NO_REPLY)
+        ticks(h, RETRY_TICKS)
         h:answerAll(SINK .. "/changes")
         h:advance(SERVER_TICK_MS)
-        assert.are.equal(1, consoleLines(h, "dropped 1 queued /changes uploads (1 changes)"))
+        assert.are.equal(
+            1,
+            consoleLines(h, "dropped 1 /changes uploads (1 changes) the receiver never took")
+        )
     end)
 
     it("reports a drop once, not again on later successes", function()
@@ -173,12 +225,12 @@ describe("plugins/var-dump /changes uploads", function()
     it("warns again for a second outage after a recovery", function()
         local h = loadSettled()
         change(h, 1)
-        for _ = 1, 2 do
-            h:answerAll(SINK .. "/changes", { status = 500 })
-            h:advance(SERVER_TICK_MS)
+        for round = 1, 2 do
+            h:answerAll(SINK .. "/changes", NO_REPLY)
+            ticks(h, RETRY_TICKS)
             h:answerAll(SINK .. "/changes")
             h:advance(SERVER_TICK_MS)
-            change(h, 100 + _)
+            change(h, 100 + round)
         end
         assert.are.equal(2, consoleLines(h, "failed:"))
         assert.are.equal(2, consoleLines(h, "recovered"))

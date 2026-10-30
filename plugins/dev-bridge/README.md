@@ -14,7 +14,7 @@ It lets Claude, from a terminal, drive the client and watch what happens while y
   the command did what you hoped).
   Don't send `ppe var-dump httpAccess` this way: it crashed the client when recorder-demo was
   running with httpAccess (see "Crash 9" in
-  [api-concepts.md](../../docs/api-concepts.md#seen-with-dev-bridge-2026-10-26)).
+  [api-concepts.md](../../docs/api-concepts.md#runtime-limits-weve-hit)).
 - `scripts/rsdev.py eval "Player.GetEntity().displayName"` runs a Lua snippet in the client and
   prints what it returned and printed (see "Eval" below).
 - `scripts/rsdev.py events --follow` prints the events the bridge forwards: `ChatMessage` (your

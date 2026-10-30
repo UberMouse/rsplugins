@@ -7,7 +7,7 @@
 -- raise. From docs/api-concepts.md ("Runtime limits we've hit"): starting a request inside a
 -- completion callback crashed the client, so it fails the test here. The failure fields,
 -- Cancel and the 10 s timeout follow what the client (libcurl underneath) did against the
--- rsdev daemon (api-concepts.md, "Seen with dev-bridge").
+-- rsdev daemon (api-concepts.md, "HTTP").
 
 local runtime = require("tests.harness.runtime")
 local strict = require("tests.harness.strict")

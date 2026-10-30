@@ -534,7 +534,7 @@ end
 -- permissions, short and long forms. plugins_setenabled is refused whatever its true/false
 -- argument, since telling a re-enable from a disable is error-prone. Reloading (prl,
 -- plugins_reload) is allowed: a plugin can reload itself from its own Logic callback, which is
--- how the daemon side restarts the bridge (docs/api-concepts.md, "Seen with dev-bridge").
+-- how the daemon side restarts the bridge (docs/api-concepts.md, "Console commands from Lua").
 local DISABLING = {
     poff = true,
     plugins_disable = true,

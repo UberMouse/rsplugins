@@ -4,6 +4,23 @@ A conceptual guide to the API. The full per-type reference is the LuaLS stubs in
 [README.md](README.md#the-api-reference-api)). Treat names here as orientation, and check
 signatures against the stubs.
 
+Evidence tags below name where a fact was seen. Several sections used to be dated probe logs, and
+the tag keeps that provenance next to the fact:
+
+- *first recording, 2026-10-25*: `plugins/recorder-demo` in the beta client, its probe line and the
+  dev recorder's recording `20261025-144642-8f7250b863` (bank, picking things up, pickpocketing,
+  talking to NPCs, buying out a shop line). See [testing.md](testing.md#recordings) for recordings.
+- *dev-bridge, 2026-10-26*: `plugins/dev-bridge` in the beta client (951-1).
+- *dev-bridge eval, 2026-10-26*: read-only snippets sent with `rsdev.py eval` (bridge sessions
+  2cadd0be39 and 5082c0e41d, beta client 951-1), to check the test harness's guesses
+  ([testing.md](testing.md#fidelity-ledger)). The probe sources aren't kept; each finding says what
+  was called.
+- *rsdev shot, 2026-10-26*: probing the client's window on X11 (i3, one 3840x2160 VMware monitor).
+- *chore probe, 2026-10-30*: the user did chores on their main account on the plugin dev server
+  while the bridge forwarded `VarTransmit`, `InventoryUpdated`, system chat and menu picks (bridge
+  session 1b4060db2c), and `rsdev.py eval` read vars and inventories. The chore-by-chore results
+  are in [plans/chore-tracker.md](plans/chore-tracker.md#probed-2026-10-30-signals-found-not-built-yet).
+
 ## Reading the type notation
 
 The official reference annotates Lua with pseudo-types:
@@ -58,6 +75,79 @@ The official reference annotates Lua with pseudo-types:
 - Find names with `pan VarPlayer` / `pan VarClient`. The `VarTransmit` event fires whenever the
   server sends a var update (`ev.var`, `ev.oldValue`, `ev.newValue`). The value may not have
   actually changed.
+- `pairs(id.VarPlayer)` works, but the integer ID isn't in the value slot (passing the values to
+  `FromID` fails with "expected number, received string"). Scanning IDs -70000..20000 found
+  ~62k VarPlayer vars (VarBits included) and ~7.8k VarClient vars.
+- Reading `.value` on a var whose ValueType isn't in the documented list (seen: 49, 61, 71, 126)
+  logs `Failed to convert a config value to a plugin value: invalid ValueType (n)` but doesn't
+  raise an error.
+- **VarTransmit values are integers** for BOOLEAN vars (0/1) and for config-typed ones
+  (`COORDGRID`, `INV`, `OBJ`, `ACHIEVEMENT`, `COMPONENT`...), whatever `.value` gives for them. (first recording, 2026-10-25)
+- **`VarTransmit` fires with `oldValue == newValue`** (`FARMING_CURRENT_PATCH` 161 -> 161,
+  `DOUBLEXP_PERM1` 0 -> 0). (dev-bridge, 2026-10-26)
+- **A VarTransmit names either the base var or the one VarBit that changed.** In the var-dump
+  change log (2026-10-25, `dumps/var-dump/changes.jsonl`) claiming Bert's sand sent the base `HANDSAND_BUCKETS` (2801; 0 -> 1 -> 3,
+  and its VarBit `HANDSAND_BUCKETS_CLAIMED_TODAY` then read 1), while chopping sent the VarBit
+  `LEAGUE_TASK_PROGRESS_CHOP_ANY` (a VarBit of `LEAGUE_TASK_PROGRESS_BASE_3`) by name with its own field values (0 -> 1 -> 2 -> 3 -> 4), and
+  `DNDTRACKER_MINS_TO_DAY_END` came the same way. The same base var can arrive under either:
+  `TOPLEVEL_V2_PARENT_VARP_1` came under its own name and two of its VarBits' names in one
+  session. So a plugin watching a VarBit maps `ev.var` to its base
+  (`ev.var.isVarBit and ev.var.baseVar or ev.var`) and re-reads the VarBits it watches of that
+  base (find them in `docs/vars/vars.csv` by `base_var`).
+- **Chore claim flags move on the claim and come back at login** (var-dump change log and
+  relog snapshot, 2026-10-25). Each went 0 -> 1 as the user claimed, and still read 1 in the
+  snapshot taken after a relog, so the server sends them in the login burst:
+  `HANDSAND_BUCKETS_CLAIMED_TODAY` (bit 1 of `HANDSAND_BUCKETS`, Bert's sand),
+  `ATSEER_REWARD_FLAX_GIVEN_TODAY` (bit 30 of `ATSEER_TASK4`, Geoffrey's flax), `ATAR_ESS_USED`
+  (bit 22 of `ATAR_TASKS_4`, Cromperty's essence) and `ATELF_DAILY_LOGS_CLAIMED` (bit 14 of
+  `ATELF_MAIN4`, Coeden's logs). Whether a flag clears at the daily reset or only on the next
+  claim is unconfirmed. Chore Tracker's `data/vars.lua` is built on these.
+- **A daily challenge counts as claimed, not finished, in `CHALLENGE_TOTAL_COMPLETED`**
+  (var-dump change logs, 2026-10-25). Finishing a challenge raises
+  `INTERN_NOTES_DAILY_CHALLENGES_COMPLETE` (bits 0-2 of `INTERN_NOTES_TEMP_1`), which counts
+  finished but unclaimed challenges. Claiming all three at once in the challenge window (ticks
+  2221-2222):
+  - the unclaimed count fell 3 -> 1 -> 0;
+  - `CHALLENGE_TOTAL_COMPLETED` (bits 0-13 of `CHALLENGE_BI_1`) went 0 -> 2 -> 3;
+  - `CHEEVO_DAILY_CHALLENGE_COUNTER` (bits 19-22 of `CHEEVO_MISC_DATA_PERM15`) went 0 -> 1 (the
+    user reads it as the streak);
+  - `CHEEVO_DAILY_CHALLENGE_LAST_RUNEDAY` (bits 16-31 of `CHEEVO_MISC_DATA_PERM17`) became
+    today's RuneDay, 9006;
+  - all three `CHALLENGE_CURRENT_n` slots cleared and were refilled at once with a new set
+    (`CHALLENGE_SHUFFLE_DONE` 0 -> 2 -> 3).
+
+  Whether `CHALLENGE_TOTAL_COMPLETED` resets daily or is a lifetime total is unknown. A
+  challenge's reward can be claimed as soon as that one challenge is finished (the user,
+  2026-10-25). Chore Tracker ticks the Daily Challenge on any rise of
+  `CHALLENGE_TOTAL_COMPLETED`.
+- **`SHOP_MULTIPURPOSE` wasn't sent during a purchase at Arhein's shop** (2026-10-25, with
+  `SHOP` = 47, `ARHEINSTORE`), so its `SHOP_SEAWEED_BOUGHT` / `SHOP_PINEAPPLES_BOUGHT` counters
+  can't be seen to move on a purchase; the shop's inventory can.
+- **BOOLEAN vars read mostly `true` (unconfirmed).** 133 of 148 were `true`, including
+  implausible ones like `HOUSE_CURRENTLY_PEEKING`, so unset may come back as `true`. Check
+  against a BOOLEAN you can toggle before trusting one.
+- **Some vars are only brought up to date when you visit.** Arriving at Miscellania changed
+  `MISC_APPROVAL` 41 -> 32 and `MISC_COFFERS` 1275000 -> 825000. Both had been sent at login
+  but were out of date. The Player Owned Farm's paddock slot codes (`POF_ANIMAL_PADDOCK_*_SLOT_*`)
+  arrived only when the user reached the farm. A rule on such a var is right only as of the last visit. (chore probe, 2026-10-30)
+- **Some vars hold an epoch-minute time**, the clock var's unit: `MISC_LAST_COLLECTION` read
+  29806927 (2026-09-03 06:07 UTC, the user's "8 weeks ago") and became the minute of the
+  collect. `POF_LAST_TIME` is one too, though it isn't the last visit. (chore probe, 2026-10-30)
+- **Some timers are sent once and not kept current.** `SNIPER_BLOODTREE_TIME_<n>` (minutes,
+  capped at 360) arrived at login and stayed put for 70 minutes until the tree was felled. (chore probe, 2026-10-30)
+- **Changing the graphics setting reloads the game** (`GameStateChanged` 30 -> 35 -> 30) and
+  resends every var with `oldValue` 0: hundreds of `0 -> X` transmits. Chore-tracker compares
+  its own last read, not `oldValue`, so the burst ticks nothing unless a var also *reads* 0
+  partway through the reload. Unchecked; its 10 s settle covers only a load or a character
+  switch. (chore probe, 2026-10-30)
+- **Game interfaces can't be read.** The API has nothing for another interface's components.
+  An open window shows only through the vars it sets: the farm's Check and pen windows fill in
+  `POF_ANIMAL_CHECK_SLOT/_PADDOCK/_OBJECT/_TRAIT_1..3`, and the Invention machine window fills in
+  `INVENT_MACHINE_ID`, `_AMOUNT_STORED` and `_BATCHES_STORED`, all for the selected
+  item only. (chore probe, 2026-10-30)
+- **Farming patch-stage VarBits look region-relative**, as in OSRS: `FARMING_HERB_VARBIT_3`
+  and `FARMING_CURRENT_PATCH` change meaning as the player moves. `FARMING_SEEDS_PLANTED_HERB_PATCH_<n>`
+  (on `DESERT_FARM_PERM_*`) are per patch: clearing a patch set it 7 -> 0, planting 0 -> 7. (chore probe, 2026-10-30)
 
 ## Coordinates
 
@@ -69,6 +159,10 @@ The official reference annotates Lua with pseudo-types:
 - Instances have their own coordinates and map back to source tiles
   (`World.GetRegionSourceForCoordGrid`, `!getcoord` shows both).
 - `ScreenConvert` converts between world coordinates and screen positions, for overlays.
+- **A `CoordGrid` is a snapshot, and `tostring` of one is its value**,
+  `level,mapSquareX,mapSquareZ,localX,localZ` (`0,50,50,25,23`). One read before the player walked
+  still held the old tile afterwards, and wasn't `==` a fresh one. CoordGrids also support `<`. Two
+  reads of one tile are `==` but not `rawequal` (see "API objects"). (dev-bridge eval, 2026-10-26)
 
 ## Events
 
@@ -91,6 +185,57 @@ The official reference annotates Lua with pseudo-types:
   nearby when the plugin enabled, so scan the list once at startup too.
 - Check optional payload fields for `nil` before indexing into them. An unchecked nil index
   crashes the plugin's callback.
+- **Tick rates.** `Logic` runs at 50 Hz (about 3000 ticks per clock minute). `ServerLogic` came
+  30 Logic ticks apart two times in three, anywhere from 16 to 82, and twice two arrived in one
+  tick. (first recording, 2026-10-25)
+- **A wall clock without permissions:** `var.VarPlayer.CLOCK_TIME_DATE_MINUTES.value` is minutes
+  since the Unix epoch (29881543 = 2026-10-25 01:43 UTC), and a VarTransmit fires as it ticks
+  over. `ChatMessage.timestamp` is unix seconds. (first recording, 2026-10-25)
+- **Subscribing a name twice keeps the first** (real `ServerLogic` subscriptions made from
+  `Logic`, session 7bcb60d109, with the user's approval). `rA` and `rB` ran in the order made (`A B`).
+  `Subscribe("rA", newFn)` again raised nothing and changed nothing: the old callback kept
+  running in its place, and the new one never ran. That contradicts core/events.html#overview,
+  which says the name is replaced. To replace a callback, `Unsubscribe` it first; the new one
+  then runs last (`Unsubscribe("rA")` then `Subscribe("rA", A3)` gave `B A3`). `Unsubscribe` returns true when it removed the name and false when there was
+  none. A subscriber that unsubscribes a later one of the same event during a dispatch (`rC`
+  removing `rD`, so no `D3`) stops it being called in that same pass, and the client stayed up.
+  Probed 2026-10-30: a subscriber added during a dispatch first runs on the next; an
+  `Unsubscribe` and `Subscribe` of one name inside a dispatch of the same event loses the
+  subscription (see "Dispatch edge cases" below). (First part: dev-bridge eval, 2026-10-26.)
+- **`Event.<X>.Subscribe` from inside a `Logic` callback works** (`Event.VarTransmit.Subscribe`
+  from an eval snippet: the probe was called 6 times over about 70 s and the client stayed up;
+  an `Event.Logic.Subscribe` probe made the same way counted 544 ticks, emitting every 50). And
+  it can be removed: a direct `Event.VarTransmit.Unsubscribe` of one, called from inside
+  `Logic`, left the client up (session ff92400823). (dev-bridge, 2026-10-26)
+- **A lazy `ServerLogic` probe subscribed from the bridge's own `Logic` tick works**
+  (2026-10-26, commit a0df251): it went live (6 calls in 3 s, about one per 0.6 s server tick)
+  and emitted. Removing it, by a direct `Unsubscribe` of the runtime subscription from inside
+  `Logic` on the next tick, stopped it and the client stayed up. `eval --reset` with a lazy probe
+  live kept the session and cleared the scratch environment (`x` and `sl2` read nil afterwards).
+  `exec "prl dev-bridge"` with a lazy probe live reloaded cleanly onto a new session
+  (cbb88037d4): the self-reload that aborted the client seven times with the `pcall` form (see "Runtime limits we've hit").
+- **A `MiniMenuEntry` payload** serialises (`tostring`) as `sol.jag::MiniMenuEntry`; read its
+  fields by name. (dev-bridge, 2026-10-26)
+- **Dispatch edge cases** (dev-bridge eval, 2026-10-30, beta 951-1, session 38ac205778; real
+  `ServerLogic` subscriptions). Within a dispatch of an event, a subscriber added is first called
+  on the next dispatch, and an `Unsubscribe` of that same event is deferred to the end of the
+  dispatch, so a `Subscribe` of the same name meanwhile does nothing and the name is gone
+  afterwards (the new callback never runs and a later `Unsubscribe` returns false). The same pair
+  made from another event's dispatch keeps the subscription, placed last. Calls seen:
+  `A1 B1 A2 N2 A3 N3 ...` (`N`, subscribed by `A` in pass 1, first ran in pass 2); `A`
+  unsubscribing and resubscribing `d2B` in pass 2 meant the new `B'` never ran in passes 2-17 and
+  the cleanup's `Unsubscribe('d2B')` returned false. The deferral is the likely mechanism, not
+  confirmed.
+- **A subscriber that reloads its own plugin mid-dispatch** (`ExecuteConsoleCommand("prl <self>")`;
+  dev-bridge eval, 2026-10-30, beta 951-1, session 38ac205778): the old instance's
+  `PluginShutdown` and the new instance's load both run synchronously inside that call, the
+  subscriber's code after the call still runs, and the old instance's later subscribers of that
+  dispatch are not called. `ServerLogic` subscriber `A` called `prl` on its own plugin; it saw
+  `shutdown` true afterwards and the old instance's later `B` was not called.
+- **A `ui.Layer` listener removed during a fire of its hook is not called later in that fire; one
+  added during it first runs on the next fire** (dev-bridge eval, 2026-10-30, beta 951-1, session
+  38ac205778). In one `ONCLICK` fire `L1` unsubscribed `L2` (later in order) and subscribed `L3`;
+  fire 1 ran only `L1`, fire 2 ran `L1` then `L3` (`L1.1 L1.2 L3.2`).
 
 ## UI
 
@@ -299,6 +444,194 @@ The official reference annotates Lua with pseudo-types:
 `ExecuteConsoleCommand("!tele 0,50,50,9,56")` runs any console or cheat command. Cheats only
 work in the dev environment, so use this for dev tooling only. A shipped plugin can't rely on it.
 
+- **Self-granting works.** `ExecuteConsoleCommand("ppr <plugin>")` then `"ppe <plugin> httpAccess"`
+  from `main.lua`'s top level granted the permission: the bridge connected with no manual grant. (dev-bridge, 2026-10-26)
+- **A plugin can reload itself.** `ExecuteConsoleCommand("prl <itself>")` from its own `Logic`
+  callback (twice, capped via PersistentDB) reloaded cleanly: `PluginShutdown` ran in between, the
+  plugin re-enabled with no errors or hitch, and PersistentDB persisted across it. Its
+  `PluginShutdown` must call `Unsubscribe` directly: each self-reload whose shutdown passed it
+  to `pcall` aborted the client (see "Runtime limits we've hit"). (dev-bridge, 2026-10-26)
+- **Console output isn't a ChatMessage.** `ExecuteConsoleCommand("plist")`'s output did not arrive
+  as a `ChatMessage` (chatAccess granted; the player's own public chat did), so `ChatMessage` is
+  not a way to capture console output. The same holds for a plugin's own `log` and `print`: across
+  three bridge sessions no console chat type (96, 98 or 99) arrived while `[BRIDGE]` log lines
+  were printing. A plugin that wants its console output elsewhere has to forward it itself, which
+  is what `lib/dev/tee.lua` does. (dev-bridge, 2026-10-26)
+- **`prl <other plugin>` from `ExecuteConsoleCommand` runs the target's `main.lua` synchronously**
+  inside that call (the caller's frames show in the target's load traceback). A load error is caught
+  and printed by the client, and the caller's call returns normally. (dev-bridge, 2026-10-26)
+- **A reload command run from a plugin's own event callback is synchronous** (2026-10-30, beta
+  951-1): it unloads and loads inside `ExecuteConsoleCommand`; the dispatch rules that follow
+  are under "Dispatch edge cases" in Events (probe `probe-reload`, deleted).
+- **A daemon older than the eval kinds** ignored the request's `kind` and queued `rsdev.py eval`
+  snippets as `exec` console commands, so the bridge ran the Lua as console input. `rsdev.py
+  eval` now checks the daemon's `/cli/status` `kinds` first. (dev-bridge, 2026-10-26)
+
+## Plugin environment and globals
+
+- **No `os` or `io`.** Both globals are absent, so `os.time()`, `os.date()` and `os.clock()`
+  aren't available. `_VERSION` is `Lua 5.4`. (first recording, 2026-10-25)
+- **Modules and symlinks.** A `require`d module shares `main.lua`'s globals, `Event` included,
+  and the client follows a directory symlink inside the plugin folder (the recorder's `dev/`). (first recording, 2026-10-25)
+- **Plugin environment.** `type()` gives `function` for `load`, `require` and
+  `ExecuteConsoleCommand`, `table` for `coroutine`, and nil for `debug`, `io`, `os` and
+  `loadstring`. (dev-bridge, 2026-10-26)
+- **`utf8` is nil in the client** (2026-10-26, beta client 951-1): `type(utf8)` is `nil`, while
+  `string.pack`, `math.tointeger`, `table.move` and `string.format` are functions. The tee's
+  `utf8.len` raised on every line, so the tee caps a line by bytes and leaves decoding to the
+  daemon (`errors="replace"`, `scripts/rsdev.py`).
+- **`load(chunk, "=eval", "t", env)` honours the mode and env arguments.** In an eval, `x = 1`
+  landed in the scratch env (`rawget(_G, 'x')` was 1, `_G == _ENV` true), not the bridge's own
+  (`rawget(getmetatable(_G).__index, 'x')` was nil). `getmetatable` is exposed to plugins.
+  `eval "Player.GetEntity().displayName"` returned the name; `print('hi', nil, 3) return 7, nil`
+  gave output `["hi nil 3"]`, values `[7, null]`, nvalues 2. (dev-bridge, 2026-10-26)
+- **A plugin's globals and `_G` are different tables.** The bridge's env held 6 keys: `Plugin`,
+  `require`, its own `PluginShutdown`, `__THIS_PLUGIN` (a `sol.jag::scripting::LuaPlugin*`),
+  `__PACKAGES_LOADED` (the `require`d modules by name: `dev/json`, `eval`, `protocol`...) and
+  `__PACKAGES_LOADING` (`"main"`). Its metatable's `__index` is a 291-key table with no
+  metatable that holds the stdlib and the whole API, and that is what `_G` (and `base`) names:
+  `_G._G == _G`, `_G ~= _ENV`. A key put in that table survived `prl dev-bridge` (same table,
+  new env), so it outlives a plugin's reload and is very likely shared by every plugin
+  (unproven). So `rawget(_G, "x")` never finds a plugin's own `x` (use `_ENV`), `_G.Plugin` and
+  `_G.require` are nil, and a write to `_G` may reach every plugin: never write to it. (dev-bridge eval, 2026-10-26)
+- **Stdlib in the client**: the base functions plus `collectgarbage` and `warn`; `string` (with
+  `dump`, which works: `#string.dump(function() return 1 end)` was 74), `table`, `math`,
+  `coroutine` and `load`. Absent: `os`, `io`, `debug`, `utf8`, `package`, `dofile`,
+  `loadfile`, `loadstring`. `getmetatable("").__index` is the `string` table. (dev-bridge eval, 2026-10-26)
+- **Globals beyond the stdlib**: the API namespaces and enums; a `<Name>Event` table per event
+  payload type (`ChatMessageEvent`, `MainLogicEvent`...); `clamp`, `lerp`, `slerp`, `random`
+  and `formatStr` (documented); `utils` (only `CalcTextWidth`), `game` (only `options`, the 43
+  `ClientOptions`), `base` (the table itself) and `__internal` (sol proxy tables), all
+  undocumented; and some 190 `sol.*` userdata, sol's own registry entries. `random(1, 10)`
+  returns a float (4.27); `lerp(0, 10, 0.25)` is the float 2.5; `random()` with no arguments raises. `clamp(5, 0, 3)` is the float 3. (dev-bridge eval, 2026-10-26)
+- **`formatStr` is fmtlib, fed doubles, and returns nil on a format error.** `{}` of `1` and of
+  `1.0` both give `1`, `2^53 + 1` gives `9007199254740992` (an integer goes through a double),
+  `math.huge` `inf`, NaN `nan`; `true`, `nil`, `{}` and `print` give `true`, `nil`, `table` and
+  `function`. `{0} {1} {0}`, `{{}}`, `{:.2f}`, `{:5}`, `{:<5}`, `{:^5}` and `{:08.3f}` work as
+  in fmtlib. `{:d}`, `{:x}` and `{:+d}` of a number, `{:q}`, and `"{} {}"` with one argument
+  return nil without an error, so check the result; extra arguments are ignored. A non-string
+  format raises `stack index 1, expected string, received number`. (dev-bridge eval, 2026-10-26)
+
+### Usertype members
+
+`getmetatable(<userdata>)` is a plain table naming every
+member, properties included, as functions, plus sol's `__eq`, `__index` and so on. For
+example, `InventoryProxy` has `GetCategoryTotal`, `GetSlot`, `GetSlots`, `GetTotal`, `config`,
+`freeSlotCount`, `id`, `isValid`, `slotCount` and `usedSlotCount`. The global class tables
+(`CoordGrid`, `__internal.*`) refuse `pairs` ("not recognized as a container"), and so does
+`PersistentDBType` (its values, read by name: `BOOL` 0 to `STRUCTURED_DATA` 4). (dev-bridge eval, 2026-10-26)
+
+## Plugin, permissions and PersistentDB
+
+- **`Plugin.urls` values are opaque userdata, not strings** (eval in the bridge, beta client
+  951-1). `type(Plugin.urls)` is `table` and `pairs` iterates it, but each value is a
+  `sol.jag::scripting::LuaPluginMetadata::URL` userdata with a metatable: `'x' .. Plugin.urls.rsdev`
+  raises `attempt to concatenate a ... URL value`, and `tostring` gives a pointer string
+  (`...::URL: 0x649971a92608`), not the URL text. `HTTPRequest.new(url, path)` takes it. Never
+  concatenate, format or compare one; only pass it to `HTTPRequest.new`.
+- **`PluginPermissions` values are userdata, not strings.** `PluginPermissions.httpAccess` is a
+  `sol.jag::scripting::PluginPermission` (`tostring` a pointer, the same object on every read,
+  `pairs(PluginPermissions)` lists the three by name), and isn't `==` `"httpAccess"`.
+  `Plugin.HasPermission("httpAccess")` raises `stack index 1, expected userdata, received
+  string: value is not a valid userdata (bad argument into 'bool(const
+  jag::scripting::PluginPermission&)')`; pass `PluginPermissions.httpAccess` (`type(PluginPermissions.httpAccess)` is userdata). The stubs give the
+  enum string values, so LuaLS can't catch a string. The stub types
+  `OptionalPermissionChanged.permissionName` as a String, and it is one, the key
+  (`"chatAccess"`), so it can't be passed on either: look it up with
+  `PluginPermissions[ev.permissionName]`, which is `rawequal` to `PluginPermissions.chatAccess`. While the user ran
+  `ppd dev-bridge chatAccess` then `ppe dev-bridge chatAccess`, the bridge's probe saw two
+  deliveries, both `enabled` true and none false; why is unknown.
+  The dev recorder used to record a permission by `tostring`, which gave the pointer text; it
+  now records the name. (dev-bridge eval, 2026-10-26)
+- **`Plugin` holds more than the page lists**: `HasPermission`, `urls`, `resources` (an empty
+  table for a plugin without resources), and the undocumented `Name` and `Version` (the
+  manifest's `name` and `version`) and `RemoteID` (-7 for dev-bridge loaded from `dev_plugins`).
+  The stubs lack the last three, so LuaLS flags them; don't build on them. `Plugin.urls.<name>`
+  for a name the manifest lacks (`Plugin.urls.nope`) reads nil, without an error, as do `var.VarPlayer.FromID` of an
+  unknown ID, `Event.<unknown name>` and `require` of a missing module. (dev-bridge eval, 2026-10-26)
+- **A `PersistentDB:Set('gen', n)` made at load read back as absent** (2026-10-30, observation,
+  cause unknown): across three successive loads of `probe-reload`, `PersistentDB:GetInt('gen')`
+  returned nil each time, while a `PersistentDB:Set('fired', true)` made in a `ServerLogic`
+  callback was read by `GetBool('fired')` in the next instance. Whether load-time writes don't
+  persist, or `Set` of an integer or `GetInt` differs from the bool pair, is untested; don't
+  rely on a load-time `Set` surviving a reload until it is.
+
+## API objects
+
+- **API objects are fresh userdata per call, and only some compare equal.** `Player.GetEntity()`
+  and `Inventory.Find()` return a new userdata every call, and `tostring()` includes its address
+  (`sol.jag::InventoryProxy: 0x591cbdbce258`); don't key a table by one. Two
+  `Player.GetEntity()` results, two reads of `.coordGrid` and two
+  `ui.Interfaces:GetComponent(<plugin layer>)` results are `==` but not `rawequal`. Two
+  `Inventory.Find(config.Inv.INV)` results are not even `==` (`GetEntity() == GetEntity()` true, `Find(INV) == Find(INV)` false,
+  `rawequal` false for both), although `InventoryProxy`'s
+  metatable has an `__eq`. So never use one as a table key, and don't compare Invs; compare
+  `inv.id` instead. (first recording, 2026-10-25, a new object per call; dev-bridge eval,
+  2026-10-26, the `==` and `rawequal` results)
+
+## HTTP
+
+- **HTTP to 127.0.0.1 carries no `Origin` header**, so a local daemon can't use one to vet the caller. (dev-bridge, 2026-10-26)
+- **HTTP failures, from requests to the rsdev daemon.** The client's HTTP is libcurl.
+  - A 404 (GET `/probe-404`) and a 400 (POST `/tee` "not json") finish with `failed` true and `successful` false,
+    `responseCode` set, `errorCode` 0, `errorInfo` "", `data` "" and `progress` nil. `header`
+    still holds the raw status line and headers.
+  - A 200 with a 422-byte body (GET `/cli/status`): `successful`, `progress` 1, `downloadedBytes` and
+    `downloadTotalBytes` 422. Its progress callback was never called.
+  - The completion callback ran 1-2 Logic ticks after `Get`/`Post`, never inside the call, and
+    its argument is `==` the request. Until then the request reads `finished` false,
+    `successful` false, `data` "" and `responseCode` 0.
+  - **The client times out after 10 s.** A 100 s long-poll finished 500 Logic ticks after `Get`
+    with `timedOut` and `failed` true, `errorCode` 28 (`CURLE_OPERATION_TIMEDOUT`), `errorInfo`
+    `ErrorOperation timed out after 10001 milliseconds with 0 bytes received` and
+    `responseCode` 0. A plugin can't wait longer on one request.
+  - **`Cancel` never calls the completion callback.** Right after `Cancel` (one tick after
+    `Get`) the request read `cancelled` true and `finished`, `failed` false. Read again 20 s
+    later, `finished` and `failed` were true too.
+  - **Cancelling an in-flight POST from `PluginShutdown` still delivers it** (2026-10-30,
+    var-dump `prl` mid-upload, 3 times): the receiver got the request with a 0-byte body, and
+    the plugin logged no failure line for it. So a receiver may see empty POSTs from a plugin
+    that was reloaded mid-upload.
+  - `Get` or `AddHeader` on a request that hasn't finished raises
+    `This request is already being executed`. (dev-bridge eval, 2026-10-26)
+
+## Chat
+
+- **`chatType` values seen**: `GENERAL` (0) for game messages such as "Your pickpocket target
+  becomes aware of your presence.", `PUBLIC` (2) for public chat, the only kind with a sender,
+  and `SPAM` (109, the filterable game messages) for "You pick the target's pocket." and the
+  money pouch lines. Game messages have an empty sender. (first recording, 2026-10-25)
+- **Examines arrive as `GENERAL` (0)**, not `OBJ_EXAMINE`/`NPC_EXAMINE`/`LOC_EXAMINE`, with empty
+  sender fields. (dev-bridge, 2026-10-26)
+- **`chatType` 138 (`BROADCAST_WORLD`) is world News** ("News: <player> has accomplished ...")
+  and names other players while its sender fields are empty. An empty sender doesn't mean the
+  text is free of other players' names, which is why dev-bridge filters chat by type allowlist
+  (plus own-name match for speech), not by sender. (dev-bridge, 2026-10-26)
+- **The player's own public line**: `chatType` 2, `senderNameSimple` `UberMouse894`,
+  `senderNameUnfiltered` `<img=11>UberMouse894`, `senderNameFiltered`
+  `<img=11> <col=6d6d75>Ironman</col> UberMouse894`. (dev-bridge, 2026-10-26)
+
+## Inventories
+
+- **Inventories.** `Inv:GetSlots()` is dense: every slot up to `slotCount`, with an empty one as
+  obj -1 (configName `UNKNOWN`) and count 0, so `ipairs` walks them all. A bought-out shop line
+  stays in the shop inventory with count 0 (`GENERALSHOP1` slot 7 was obj 590 x0;
+  `GENERALSHOP1_FREEBIES` slot 4 too). Updates were seen for `INV` (93), `BANK` (95, 1920
+  slots), `LOOT` (773), `DROPLOG` (787), `MONEY_POUCH` (623, coins in slot 1),
+  `GENERALSHOP1` (3) and `GENERALSHOP1_FREEBIES` (553). (first recording, 2026-10-25)
+- **`Inv:GetSlot` never returns nil for an index.** An empty backpack slot, slot 0 and slot 9999
+  all gave an `InventorySlot` of obj -1, count 0, with no error. `inv.valid` (the stub's name for
+  `isValid`) reads nil without an error: `Inv.isValid` is the field (true on the backpack; chore probe,
+  2026-10-30). (dev-bridge eval, 2026-10-26)
+- **Machine inventories are kept current anywhere.** `INVENT_MACHINE_GUILD_<1..6>_INPUT/_OUTPUT`
+  (Invention Guild machines) sent `InventoryUpdated` as the machines worked while the user was
+  at the farm, and `Inventory.Find` + `GetSlots` read the current contents there. (chore probe, 2026-10-30)
+- **Player Owned Farm paddock inventories update once a minute on their own** (growth, births:
+  `POF_PADDOCK_3`, `_6`, `_BREEDING`), so a paddock `InventoryUpdated` isn't the player's doing. (chore probe, 2026-10-30)
+- **`InvSlot` has only `obj` and `count`** (its metatable: `count`, `obj`, `class_cast`,
+  `class_check`, `new`), and `obj` is the static `ObjType` (name, `params`, cost...). An item's
+  per-instance VarObj values, such as a farm animal's state, can't be read. (chore probe, 2026-10-30)
+
 ## Runtime limits we've hit
 
 Found in the beta client (2026-10-20), not in the official docs:
@@ -317,8 +650,8 @@ Found in the beta client (2026-10-20), not in the official docs:
   confirmed. Until it is: start requests only from event callbacks (e.g. `Logic`), keep each
   body string referenced until its request finishes, and avoid coroutines around API calls.
 - **Never pass `Event.<X>.Unsubscribe` straight to `pcall` (or `xpcall`): call it directly.**
-  All seven client aborts of 2026-10-26 (rs2client SIGABRT, systemd coredumps; listed under
-  "Seen with dev-bridge") called `pcall(Event[event].Unsubscribe, name)` or
+  All seven client aborts of 2026-10-26 (rs2client SIGABRT, systemd coredumps; listed
+  below) called `pcall(Event[event].Unsubscribe, name)` or
   `pcall(real.Event.Logic.Unsubscribe, ...)`, the API function handed to `pcall` itself.
   `pcall` doesn't catch it: it is a native abort, not a Lua error. Direct calls survived: stage
   1's bridge (commit 684eedc) calls `Event.Logic.Unsubscribe(name)` and
@@ -341,145 +674,9 @@ Found in the beta client (2026-10-20), not in the official docs:
   dev-bridge passes none straight to `pcall` except `ExecuteConsoleCommand`
   (`pcall(ExecuteConsoleCommand, cmd)` has run many times, live, without trouble);
   `HTTPRequest:Cancel` runs from a Lua closure under `pcall` instead.
-- `pairs(id.VarPlayer)` works, but the integer ID isn't in the value slot (passing the values to
-  `FromID` fails with "expected number, received string"). Scanning IDs -70000..20000 found
-  ~62k VarPlayer vars (VarBits included) and ~7.8k VarClient vars.
-- Reading `.value` on a var whose ValueType isn't in the documented list (seen: 49, 61, 71, 126)
-  logs `Failed to convert a config value to a plugin value: invalid ValueType (n)` but doesn't
-  raise an error.
-- **A VarTransmit names either the base var or the one VarBit that changed.** In the var-dump
-  change log (2026-10-25) claiming Bert's sand sent the base `HANDSAND_BUCKETS` (0 -> 1 -> 3,
-  and its VarBit `HANDSAND_BUCKETS_CLAIMED_TODAY` then read 1), while chopping sent the VarBit
-  `LEAGUE_TASK_PROGRESS_CHOP_ANY` by name with its own field values (0 -> 1 -> 2 -> 3 -> 4), and
-  `DNDTRACKER_MINS_TO_DAY_END` came the same way. The same base var can arrive under either:
-  `TOPLEVEL_V2_PARENT_VARP_1` came under its own name and two of its VarBits' names in one
-  session. So a plugin watching a VarBit maps `ev.var` to its base
-  (`ev.var.isVarBit and ev.var.baseVar or ev.var`) and re-reads the VarBits it watches of that
-  base (find them in `docs/vars/vars.csv` by `base_var`).
-- **Chore claim flags move on the claim and come back at login** (var-dump change log and
-  relog snapshot, 2026-10-25). Each went 0 -> 1 as the user claimed, and still read 1 in the
-  snapshot taken after a relog, so the server sends them in the login burst:
-  `HANDSAND_BUCKETS_CLAIMED_TODAY` (bit 1 of `HANDSAND_BUCKETS`, Bert's sand),
-  `ATSEER_REWARD_FLAX_GIVEN_TODAY` (bit 30 of `ATSEER_TASK4`, Geoffrey's flax), `ATAR_ESS_USED`
-  (bit 22 of `ATAR_TASKS_4`, Cromperty's essence) and `ATELF_DAILY_LOGS_CLAIMED` (bit 14 of
-  `ATELF_MAIN4`, Coeden's logs). Whether a flag clears at the daily reset or only on the next
-  claim is unconfirmed. Chore Tracker's `data/vars.lua` is built on these.
-- **A daily challenge counts as claimed, not finished, in `CHALLENGE_TOTAL_COMPLETED`**
-  (var-dump change logs, 2026-10-25). Finishing a challenge raises
-  `INTERN_NOTES_DAILY_CHALLENGES_COMPLETE` (bits 0-2 of `INTERN_NOTES_TEMP_1`), which counts
-  finished but unclaimed challenges. Claiming all three at once in the challenge window (ticks
-  2221-2222):
-  - the unclaimed count fell 3 -> 1 -> 0;
-  - `CHALLENGE_TOTAL_COMPLETED` (bits 0-13 of `CHALLENGE_BI_1`) went 0 -> 2 -> 3;
-  - `CHEEVO_DAILY_CHALLENGE_COUNTER` (bits 19-22 of `CHEEVO_MISC_DATA_PERM15`) went 0 -> 1 (the
-    user reads it as the streak);
-  - `CHEEVO_DAILY_CHALLENGE_LAST_RUNEDAY` (bits 16-31 of `CHEEVO_MISC_DATA_PERM17`) became
-    today's RuneDay, 9006;
-  - all three `CHALLENGE_CURRENT_n` slots cleared and were refilled at once with a new set
-    (`CHALLENGE_SHUFFLE_DONE` 0 -> 2 -> 3).
 
-  Whether `CHALLENGE_TOTAL_COMPLETED` resets daily or is a lifetime total is unknown. A
-  challenge's reward can be claimed as soon as that one challenge is finished (the user,
-  2026-10-25). Chore Tracker ticks the Daily Challenge on any rise of
-  `CHALLENGE_TOTAL_COMPLETED`.
-- **`SHOP_MULTIPURPOSE` wasn't sent during a purchase at Arhein's shop** (2026-10-25, with
-  `SHOP` = 47, `ARHEINSTORE`), so its `SHOP_SEAWEED_BOUGHT` / `SHOP_PINEAPPLES_BOUGHT` counters
-  can't be seen to move on a purchase; the shop's inventory can.
 - **In the beta client, logging out disables plugins** (the user, 2026-10-25), so what a plugin
   sees across a logout and the next login can't be observed there.
-- **BOOLEAN vars read mostly `true` (unconfirmed).** 133 of 148 were `true`, including
-  implausible ones like `HOUSE_CURRENTLY_PEEKING`, so unset may come back as `true`. Check
-  against a BOOLEAN you can toggle before trusting one.
-
-## Seen in the first recording (2026-10-25)
-
-From `plugins/recorder-demo` in the beta client: its probe line, and the dev recorder's
-recording `20261025-144642-8f7250b863` (bank, picking things up, pickpocketing, talking to NPCs,
-buying out a shop line). See [testing.md](testing.md#recordings) for recordings.
-
-- **No `os` or `io`.** Both globals are absent, so `os.time()`, `os.date()` and `os.clock()`
-  aren't available. `_VERSION` is `Lua 5.4`.
-- **A wall clock without permissions:** `var.VarPlayer.CLOCK_TIME_DATE_MINUTES.value` is minutes
-  since the Unix epoch (29881543 = 2026-10-25 01:43 UTC), and a VarTransmit fires as it ticks
-  over. `ChatMessage.timestamp` is unix seconds.
-- **Tick rates.** `Logic` runs at 50 Hz (about 3000 ticks per clock minute). `ServerLogic` came
-  30 Logic ticks apart two times in three, anywhere from 16 to 82, and twice two arrived in one
-  tick.
-- **`chatType` values seen**: `GENERAL` (0) for game messages such as "Your pickpocket target
-  becomes aware of your presence.", `PUBLIC` (2) for public chat, the only kind with a sender,
-  and `SPAM` (109, the filterable game messages) for "You pick the target's pocket." and the
-  money pouch lines. Game messages have an empty sender.
-- **A fresh object per call.** `Player.GetEntity()` and `Inventory.Find()` return a new
-  userdata every call, and `tostring()` includes its address
-  (`sol.jag::InventoryProxy: 0x591cbdbce258`). Don't key a table by one. Whether two of them
-  compare equal with `==` is unconfirmed.
-- **Inventories.** `Inv:GetSlots()` is dense: every slot up to `slotCount`, with an empty one as
-  obj -1 (configName `UNKNOWN`) and count 0, so `ipairs` walks them all. A bought-out shop line
-  stays in the shop inventory with count 0 (`GENERALSHOP1` slot 7 was obj 590 x0;
-  `GENERALSHOP1_FREEBIES` slot 4 too). Updates were seen for `INV` (93), `BANK` (95, 1920
-  slots), `LOOT` (773), `DROPLOG` (787), `MONEY_POUCH` (623, coins in slot 1),
-  `GENERALSHOP1` (3) and `GENERALSHOP1_FREEBIES` (553).
-- **VarTransmit values are integers** for BOOLEAN vars (0/1) and for config-typed ones
-  (`COORDGRID`, `INV`, `OBJ`, `ACHIEVEMENT`, `COMPONENT`...), whatever `.value` gives for them.
-- **Modules and symlinks.** A `require`d module shares `main.lua`'s globals, `Event` included,
-  and the client follows a directory symlink inside the plugin folder (the recorder's `dev/`).
-
-## Seen with dev-bridge (2026-10-26)
-
-From `plugins/dev-bridge` in the beta client.
-
-- **Plugin environment.** `type()` gives `function` for `load`, `require` and
-  `ExecuteConsoleCommand`, `table` for `coroutine`, and nil for `debug`, `io`, `os` and
-  `loadstring`.
-- **Self-granting works.** `ExecuteConsoleCommand("ppr <plugin>")` then `"ppe <plugin> httpAccess"`
-  from `main.lua`'s top level granted the permission: the bridge connected with no manual grant.
-- **HTTP to 127.0.0.1 carries no `Origin` header**, so a local daemon can't use one to vet the caller.
-- **A plugin can reload itself.** `ExecuteConsoleCommand("prl <itself>")` from its own `Logic`
-  callback (twice, capped via PersistentDB) reloaded cleanly: `PluginShutdown` ran in between, the
-  plugin re-enabled with no errors or hitch, and PersistentDB persisted across it. Its
-  `PluginShutdown` must call `Unsubscribe` directly: each self-reload whose shutdown passed it
-  to `pcall` aborted the client (below).
-- **Console output isn't a ChatMessage.** `ExecuteConsoleCommand("plist")`'s output did not arrive
-  as a `ChatMessage` (chatAccess granted; the player's own public chat did), so `ChatMessage` is
-  not a way to capture console output. The same holds for a plugin's own `log` and `print`: across
-  three bridge sessions no console chat type (96, 98 or 99) arrived while `[BRIDGE]` log lines
-  were printing. A plugin that wants its console output elsewhere has to forward it itself, which
-  is what `lib/dev/tee.lua` does.
-- **`Plugin.urls` values are opaque userdata, not strings** (eval in the bridge, beta client
-  951-1). `type(Plugin.urls)` is `table` and `pairs` iterates it, but each value is a
-  `sol.jag::scripting::LuaPluginMetadata::URL` userdata with a metatable: `'x' .. Plugin.urls.rsdev`
-  raises `attempt to concatenate a ... URL value`, and `tostring` gives a pointer string
-  (`...::URL: 0x649971a92608`), not the URL text. `HTTPRequest.new(url, path)` takes it. Never
-  concatenate, format or compare one; only pass it to `HTTPRequest.new`.
-- **`prl <other plugin>` from `ExecuteConsoleCommand` runs the target's `main.lua` synchronously**
-  inside that call (the caller's frames show in the target's load traceback). A load error is caught
-  and printed by the client, and the caller's call returns normally.
-- **`VarTransmit` fires with `oldValue == newValue`** (`FARMING_CURRENT_PATCH` 161 -> 161,
-  `DOUBLEXP_PERM1` 0 -> 0).
-- **A `MiniMenuEntry` payload** serialises (`tostring`) as `sol.jag::MiniMenuEntry`; read its
-  fields by name.
-- **Examines arrive as `GENERAL` (0)**, not `OBJ_EXAMINE`/`NPC_EXAMINE`/`LOC_EXAMINE`, with empty
-  sender fields.
-- **`chatType` 138 (`BROADCAST_WORLD`) is world News** ("News: <player> has accomplished ...")
-  and names other players while its sender fields are empty. An empty sender doesn't mean the
-  text is free of other players' names, which is why dev-bridge filters chat by type allowlist
-  (plus own-name match for speech), not by sender.
-- **`Event.<X>.Subscribe` from inside a `Logic` callback works** (`Event.VarTransmit.Subscribe`
-  from an eval snippet: the probe was called 6 times over about 70 s and the client stayed up;
-  an `Event.Logic.Subscribe` probe made the same way counted 544 ticks, emitting every 50). And
-  it can be removed: a direct `Event.VarTransmit.Unsubscribe` of one, called from inside
-  `Logic`, left the client up (session ff92400823).
-- **A lazy `ServerLogic` probe subscribed from the bridge's own `Logic` tick works**
-  (2026-10-26, commit a0df251): it went live (6 calls in 3 s, about one per 0.6 s server tick)
-  and emitted. Removing it, by a direct `Unsubscribe` of the runtime subscription from inside
-  `Logic` on the next tick, stopped it and the client stayed up. `eval --reset` with a lazy probe
-  live kept the session and cleared the scratch environment (`x` and `sl2` read nil afterwards).
-  `exec "prl dev-bridge"` with a lazy probe live reloaded cleanly onto a new session
-  (cbb88037d4): the self-reload that aborted the client seven times with the `pcall` form (below).
-- **`utf8` is nil in the client** (2026-10-26, beta client 951-1): `type(utf8)` is `nil`, while
-  `string.pack`, `math.tointeger`, `table.move` and `string.format` are functions. The tee's
-  `utf8.len` raised on every line, so the tee caps a line by bytes and leaves decoding to the
-  daemon (`errors="replace"`, `scripts/rsdev.py`).
 - **Crash 8 (SIGSEGV, coredump 2600170, 2026-10-26 14:48)**: `prl chore-tracker`, sent from
   the dev-bridge, unloaded a chore-tracker with the log tee on. The fault was in a shallow
   main-loop stack with no Lua frames running, and no POST was in flight. Every reload that
@@ -514,7 +711,7 @@ From `plugins/dev-bridge` in the beta client.
   it is the client. Residue from plugins loaded earlier in the session can't be ruled out.
 - **Seven client aborts (rs2client SIGABRT, systemd coredumps), 2026-10-26**, the conductor
   driving the beta client through the bridge. Every one passed `Event.<X>.Unsubscribe`
-  straight to `pcall` (the rule is under "Runtime limits we've hit"):
+  straight to `pcall` (the rule is above, under "Runtime limits we've hit"):
   1. A probe's error: eval.lua's `forget` ran `pcall(Event[event].Unsubscribe, ...)` inside the
      probe's own `Logic` callback (a subscription made at runtime inside `Logic`).
   2. `eval --reset`: `stop` ran `pcall(Event[event].Unsubscribe, ...)` from `Logic`, for a
@@ -535,7 +732,7 @@ From `plugins/dev-bridge` in the beta client.
 
   Survived: stage 1's bridge (684eedc), whose `PluginShutdown` unsubscribes directly,
   reloading itself with `prl dev-bridge` from `Logic` twice (new sessions in the daemon log);
-  the direct `Unsubscribe` from inside `Logic` above; a probe disarmed on error (made a no-op);
+  the direct `Unsubscribe` from inside `Logic` (under Events); a probe disarmed on error (made a no-op);
   on 0866186, refusing a `poff dev-bridge` (exit 1). Seen working on 493f192 and f423f49, with
   probes as entries in the bridge's own table: loading with 39 load-time subscriptions
   (493f192); a `Logic` probe run through the bridge's handler (554 ticks, emitting); a
@@ -544,143 +741,18 @@ From `plugins/dev-bridge` in the beta client.
   stopping a probe; `eval --reset` keeping the session and clearing the scratch env (`x`, `lc`
   nil afterwards) and the probes (their emits stopped), with no reload. The bridge now calls
   `Unsubscribe` directly.
-- **`load(chunk, "=eval", "t", env)` honours the mode and env arguments.** In an eval, `x = 1`
-  landed in the scratch env (`rawget(_G, 'x')` was 1, `_G == _ENV` true), not the bridge's own
-  (`rawget(getmetatable(_G).__index, 'x')` was nil). `getmetatable` is exposed to plugins.
-  `eval "Player.GetEntity().displayName"` returned the name; `print('hi', nil, 3) return 7, nil`
-  gave output `["hi nil 3"]`, values `[7, null]`, nvalues 2.
-- **A daemon older than the eval kinds** ignored the request's `kind` and queued `rsdev.py eval`
-  snippets as `exec` console commands, so the bridge ran the Lua as console input. `rsdev.py
-  eval` now checks the daemon's `/cli/status` `kinds` first.
-- **The player's own public line**: `chatType` 2, `senderNameSimple` `UberMouse894`,
-  `senderNameUnfiltered` `<img=11>UberMouse894`, `senderNameFiltered`
-  `<img=11> <col=6d6d75>Ironman</col> UberMouse894`.
 
-## Probed with dev-bridge eval (2026-10-26)
-
-Read-only snippets sent with `rsdev.py eval` (bridge sessions 2cadd0be39 and 5082c0e41d, beta
-client 951-1), to check the test harness's guesses ([testing.md](testing.md#fidelity-ledger)).
-The probe sources aren't kept; each finding says what was called.
-
-- **A plugin's globals and `_G` are different tables.** The bridge's env held 6 keys: `Plugin`,
-  `require`, its own `PluginShutdown`, `__THIS_PLUGIN` (a `sol.jag::scripting::LuaPlugin*`),
-  `__PACKAGES_LOADED` (the `require`d modules by name: `dev/json`, `eval`, `protocol`...) and
-  `__PACKAGES_LOADING` (`"main"`). Its metatable's `__index` is a 291-key table with no
-  metatable that holds the stdlib and the whole API, and that is what `_G` (and `base`) names:
-  `_G._G == _G`, `_G ~= _ENV`. A key put in that table survived `prl dev-bridge` (same table,
-  new env), so it outlives a plugin's reload and is very likely shared by every plugin
-  (unproven). So `rawget(_G, "x")` never finds a plugin's own `x` (use `_ENV`), `_G.Plugin` and
-  `_G.require` are nil, and a write to `_G` may reach every plugin: never write to it.
-- **Stdlib in the client**: the base functions plus `collectgarbage` and `warn`; `string` (with
-  `dump`, which works: `#string.dump(function() return 1 end)` was 74), `table`, `math`,
-  `coroutine` and `load`. Absent: `os`, `io`, `debug`, `utf8`, `package`, `dofile`,
-  `loadfile`, `loadstring`. `getmetatable("").__index` is the `string` table.
-- **Globals beyond the stdlib**: the API namespaces and enums; a `<Name>Event` table per event
-  payload type (`ChatMessageEvent`, `MainLogicEvent`...); `clamp`, `lerp`, `slerp`, `random`
-  and `formatStr` (documented); `utils` (only `CalcTextWidth`), `game` (only `options`, the 43
-  `ClientOptions`), `base` (the table itself) and `__internal` (sol proxy tables), all
-  undocumented; and some 190 `sol.*` userdata, sol's own registry entries. `random(1, 10)`
-  returns a float (4.27); `random()` with no arguments raises. `clamp(5, 0, 3)` is the float 3.
-- **`formatStr` is fmtlib, fed doubles, and returns nil on a format error.** `{}` of `1` and of
-  `1.0` both give `1`, `2^53 + 1` gives `9007199254740992` (an integer goes through a double),
-  `math.huge` `inf`, NaN `nan`; `true`, `nil`, `{}` and `print` give `true`, `nil`, `table` and
-  `function`. `{0} {1} {0}`, `{{}}`, `{:.2f}`, `{:5}`, `{:<5}`, `{:^5}` and `{:08.3f}` work as
-  in fmtlib. `{:d}`, `{:x}` and `{:+d}` of a number, `{:q}`, and `"{} {}"` with one argument
-  return nil without an error, so check the result; extra arguments are ignored. A non-string
-  format raises `stack index 1, expected string, received number`.
-- **Usertype members can be listed.** `getmetatable(<userdata>)` is a plain table naming every
-  member, properties included, as functions, plus sol's `__eq`, `__index` and so on. For
-  example, `InventoryProxy` has `GetCategoryTotal`, `GetSlot`, `GetSlots`, `GetTotal`, `config`,
-  `freeSlotCount`, `id`, `isValid`, `slotCount` and `usedSlotCount`. The global class tables
-  (`CoordGrid`, `__internal.*`) refuse `pairs` ("not recognized as a container"), and so does
-  `PersistentDBType` (its values, read by name: `BOOL` 0 to `STRUCTURED_DATA` 4).
-- **Subscribing a name twice keeps the first** (real `ServerLogic` subscriptions made from
-  `Logic`, session 7bcb60d109, with the user's approval). `rA` and `rB` ran in the order made.
-  `Subscribe("rA", newFn)` again raised nothing and changed nothing: the old callback kept
-  running in its place, and the new one never ran. That contradicts core/events.html#overview,
-  which says the name is replaced. To replace a callback, `Unsubscribe` it first; the new one
-  then runs last. `Unsubscribe` returns true when it removed the name and false when there was
-  none. A subscriber that unsubscribes a later one of the same event during a dispatch (`rC`
-  removing `rD`) stops it being called in that same pass, and the client stayed up.
-  Probed 2026-10-30: a subscriber added during a dispatch first runs on the next; an
-  `Unsubscribe` and `Subscribe` of one name inside a dispatch of the same event loses the
-  subscription (see the testing.md fidelity ledger).
-- **A reload command run from a plugin's own event callback is synchronous** (2026-10-30, beta
-  951-1): it unloads and loads inside `ExecuteConsoleCommand`; the dispatch rules that follow
-  are in the [testing.md ledger](testing.md#fidelity-ledger) (probe `probe-reload`, deleted).
-- **A `PersistentDB:Set('gen', n)` made at load read back as absent** (2026-10-30, observation,
-  cause unknown): across three successive loads of `probe-reload`, `PersistentDB:GetInt('gen')`
-  returned nil each time, while a `PersistentDB:Set('fired', true)` made in a `ServerLogic`
-  callback was read by `GetBool('fired')` in the next instance. Whether load-time writes don't
-  persist, or `Set` of an integer or `GetInt` differs from the bool pair, is untested; don't
-  rely on a load-time `Set` surviving a reload until it is.
-- **HTTP failures, from requests to the rsdev daemon.** The client's HTTP is libcurl.
-  - A 404 (GET) and a 400 (POST) finish with `failed` true and `successful` false,
-    `responseCode` set, `errorCode` 0, `errorInfo` "", `data` "" and `progress` nil. `header`
-    still holds the raw status line and headers.
-  - A 200 with a 422-byte body: `successful`, `progress` 1, `downloadedBytes` and
-    `downloadTotalBytes` 422. Its progress callback was never called.
-  - The completion callback ran 1-2 Logic ticks after `Get`/`Post`, never inside the call, and
-    its argument is `==` the request. Until then the request reads `finished` false,
-    `successful` false, `data` "" and `responseCode` 0.
-  - **The client times out after 10 s.** A 100 s long-poll finished 500 Logic ticks after `Get`
-    with `timedOut` and `failed` true, `errorCode` 28 (`CURLE_OPERATION_TIMEDOUT`), `errorInfo`
-    `ErrorOperation timed out after 10001 milliseconds with 0 bytes received` and
-    `responseCode` 0. A plugin can't wait longer on one request.
-  - **`Cancel` never calls the completion callback.** Right after `Cancel` (one tick after
-    `Get`) the request read `cancelled` true and `finished`, `failed` false. Read again 20 s
-    later, `finished` and `failed` were true too.
-  - **Cancelling an in-flight POST from `PluginShutdown` still delivers it** (2026-10-30,
-    var-dump `prl` mid-upload, 3 times): the receiver got the request with a 0-byte body, and
-    the plugin logged no failure line for it. So a receiver may see empty POSTs from a plugin
-    that was reloaded mid-upload.
-  - `Get` or `AddHeader` on a request that hasn't finished raises
-    `This request is already being executed`.
-- **API objects are fresh userdata per call, and only some compare equal.** Two
-  `Player.GetEntity()` results, two reads of `.coordGrid` and two
-  `ui.Interfaces:GetComponent(<plugin layer>)` results are `==` but not `rawequal`. Two
-  `Inventory.Find(config.Inv.INV)` results are not even `==`, although `InventoryProxy`'s
-  metatable has an `__eq`. So never use one as a table key, and don't compare Invs; compare
-  `inv.id` instead. `tostring` of a CoordGrid is its value, `level,mapSquareX,mapSquareZ,localX,localZ`
-  (`0,50,50,25,23`). A CoordGrid is a snapshot: one read before the player walked still held
-  the old tile afterwards, and wasn't `==` a fresh one. CoordGrids also support `<`.
-- **`Inv:GetSlot` never returns nil for an index.** An empty backpack slot, slot 0 and slot 9999
-  all gave an `InventorySlot` of obj -1, count 0, with no error. `inv.valid` (the stub's name for
-  `isValid`) reads nil without an error.
-- **`PluginPermissions` values are userdata, not strings.** `PluginPermissions.httpAccess` is a
-  `sol.jag::scripting::PluginPermission` (`tostring` a pointer, the same object on every read,
-  `pairs(PluginPermissions)` lists the three by name), and isn't `==` `"httpAccess"`.
-  `Plugin.HasPermission("httpAccess")` raises `stack index 1, expected userdata, received
-  string: value is not a valid userdata (bad argument into 'bool(const
-  jag::scripting::PluginPermission&)')`; pass `PluginPermissions.httpAccess`. The stubs give the
-  enum string values, so LuaLS can't catch a string. The stub types
-  `OptionalPermissionChanged.permissionName` as a String, and it is one, the key
-  (`"chatAccess"`), so it can't be passed on either: look it up with
-  `PluginPermissions[ev.permissionName]`, which gives the same object. While the user ran
-  `ppd dev-bridge chatAccess` then `ppe dev-bridge chatAccess`, the bridge's probe saw two
-  deliveries, both `enabled` true and none false; why is unknown.
-  The dev recorder used to record a permission by `tostring`, which gave the pointer text; it
-  now records the name.
-- **`Plugin` holds more than the page lists**: `HasPermission`, `urls`, `resources` (an empty
-  table for a plugin without resources), and the undocumented `Name` and `Version` (the
-  manifest's `name` and `version`) and `RemoteID` (-7 for dev-bridge loaded from `dev_plugins`).
-  The stubs lack the last three, so LuaLS flags them; don't build on them. `Plugin.urls.<name>`
-  for a name the manifest lacks reads nil, without an error, as do `var.VarPlayer.FromID` of an
-  unknown ID, `Event.<unknown name>` and `require` of a missing module.
-
-## Seen with rsdev shot (2026-10-26)
-
-From probing the client's window on X11 (i3, one 3840x2160 VMware monitor).
+## The client window on X11
 
 - **The game window** has `WM_CLASS` `"rs2client", "RuneScape"` and `_NET_WM_NAME` "RuneScape". It
-  belongs to a child `rs2client` process; the `rs3linux` launcher only has 10x10 leader windows.
+  belongs to a child `rs2client` process; the `rs3linux` launcher only has 10x10 leader windows. (rsdev shot, 2026-10-26)
 - **`maim -u -i <window>` captures real GL pixels** under VMware (about 1.2 s, 3836x2121, a 4-6 MB
-  PNG). `-g` together with `-i` is window-local.
+  PNG). `-g` together with `-i` is window-local. (rsdev shot, 2026-10-26)
 - **A window on a hidden i3 workspace** reports `Map State: IsUnviewable` (`WM_STATE` Withdrawn),
   and maim then exits 0 having captured whatever is on screen in that rectangle: a silent wrong
-  shot, so `shot` checks the map state first.
-- **Windows above the client appear in the capture** (a floating scratchpad terminal did).
-- **`_NET_DESKTOP_NAMES`** holds names like "1: web" and "3: dev"; `_NET_WM_DESKTOP` is the index.
+  shot, so `shot` checks the map state first. (rsdev shot, 2026-10-26)
+- **Windows above the client appear in the capture** (a floating scratchpad terminal did). (rsdev shot, 2026-10-26)
+- **`_NET_DESKTOP_NAMES`** holds names like "1: web" and "3: dev"; `_NET_WM_DESKTOP` is the index. (rsdev shot, 2026-10-26)
 
 ## Shops in the client
 
@@ -739,7 +811,7 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   was 3836x2121 at global 0,0.
 - **Reading a window's geometry.** `window.root`'s `x`, `y`, `width` and `height` read back the
   window's position and size after the user drags or resizes it, so a plugin can persist them.
-  A titled window drags by its title bar and stays clamped inside its parent.
+  A titled window drags by its title bar and stays clamped inside its parent (clamped at 1004,1013 and other spots, 2026-10-25).
 - **The close X** sits at (width - 28, 7). A component made a child of `window.root` at
   `x = -28, y = 7, xAnchor = 1.0` lands in the X's slot (global 872,307 for a 300-wide window at
   600,300) and moves with the window in the same frame. Hide the X with
@@ -754,6 +826,8 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   PrettyUI never sees Alt while it is open.
 - **Panel drawing.** A Panel draws its frame even at `backgroundAlpha = 0`, and scrolls content
   that overflows it.
+- **Panel layout.** A Panel's first child sat at +18,+16 inside it (throwaway probe, beta
+  client, 2026-10-25).
 - **A frameless collapsed button** (Chore Tracker, user-checked 2026-10-25): a 20x20 Panel
   (`backgroundAlpha = 0`, `scrollable = false`) with a 20 px SpriteButton made on
   `panel.root` at 0,0, not in its content, covers the frame and looks like the same button on a
@@ -784,7 +858,8 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   layer, `xAnchor = 0.5`, `yAnchor = 1/3` and offsets of minus half its size showed centred a
   third of the way down. Back-to-back popups queued through `onComplete` each showed in turn.
   Its sound (`soundID`, played through `audio.Play`) is unheard: the client ran in a VM with
-  no audio.
+  no audio. The sound ids `ARCH_INFO_POPUP` (48145) and `LEAGUE2_HARD_TASK_COMPLETE` (60041) exist
+  in the live client (dev-bridge, 2026-10-29).
 - **Hand-built rows in a window** (Row Probe, user-checked 2026-10-29). A `ui.Layer` made on
   the window's `content` (a field outside our typed subset) at an explicit `y`, with
   `window:SetContentHeight(h)` covering the rows, scrolls with the window.
@@ -823,43 +898,3 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
 
 The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
 types are in `types/prettyui.lua`.
-
-## Chore signals probed with dev-bridge (2026-10-30)
-
-The user did chores on their main account on the plugin dev server while the bridge forwarded
-`VarTransmit`, `InventoryUpdated`, system chat and menu picks (bridge session 1b4060db2c),
-and `rsdev.py eval` read vars and inventories. The chore-by-chore results are in
-[plans/chore-tracker.md](plans/chore-tracker.md#probed-2026-10-30-signals-found-not-built-yet);
-these are the findings that hold beyond one chore.
-
-- **Some vars are only brought up to date when you visit.** Arriving at Miscellania changed
-  `MISC_APPROVAL` 41 -> 32 and `MISC_COFFERS` 1275000 -> 825000. Both had been sent at login
-  but were out of date. The Player Owned Farm's paddock slot codes (`POF_ANIMAL_PADDOCK_*_SLOT_*`)
-  arrived only when the user reached the farm. A rule on such a var is right only as of the last visit.
-- **Some vars hold an epoch-minute time**, the clock var's unit: `MISC_LAST_COLLECTION` read
-  29806927 (2026-09-03 06:07 UTC, the user's "8 weeks ago") and became the minute of the
-  collect. `POF_LAST_TIME` is one too, though it isn't the last visit.
-- **Some timers are sent once and not kept current.** `SNIPER_BLOODTREE_TIME_<n>` (minutes,
-  capped at 360) arrived at login and stayed put for 70 minutes until the tree was felled.
-- **Changing the graphics setting reloads the game** (`GameStateChanged` 30 -> 35 -> 30) and
-  resends every var with `oldValue` 0: hundreds of `0 -> X` transmits. Chore-tracker compares
-  its own last read, not `oldValue`, so the burst ticks nothing unless a var also *reads* 0
-  partway through the reload. Unchecked; its 10 s settle covers only a load or a character
-  switch.
-- **Machine inventories are kept current anywhere.** `INVENT_MACHINE_GUILD_<1..6>_INPUT/_OUTPUT`
-  (Invention Guild machines) sent `InventoryUpdated` as the machines worked while the user was
-  at the farm, and `Inventory.Find` + `GetSlots` read the current contents there.
-- **Player Owned Farm paddock inventories update once a minute on their own** (growth, births:
-  `POF_PADDOCK_3`, `_6`, `_BREEDING`), so a paddock `InventoryUpdated` isn't the player's doing.
-- **`InvSlot` has only `obj` and `count`** (its metatable: `count`, `obj`, `class_cast`,
-  `class_check`, `new`), and `obj` is the static `ObjType` (name, `params`, cost...). An item's
-  per-instance VarObj values, such as a farm animal's state, can't be read.
-- **`Inv.isValid` is the field** (true on the backpack); the stub's `valid` reads nil.
-- **Game interfaces can't be read.** The API has nothing for another interface's components.
-  An open window shows only through the vars it sets: the farm's Check and pen windows fill in
-  `POF_ANIMAL_CHECK_SLOT/_PADDOCK/_OBJECT/_TRAIT_1..3`, and the Invention machine window fills in
-  `INVENT_MACHINE_ID`, `_AMOUNT_STORED` and `_BATCHES_STORED`, all for the selected
-  item only.
-- **Farming patch-stage VarBits look region-relative**, as in OSRS: `FARMING_HERB_VARBIT_3`
-  and `FARMING_CURRENT_PATCH` change meaning as the player moves. `FARMING_SEEDS_PLANTED_HERB_PATCH_<n>`
-  (on `DESERT_FARM_PERM_*`) are per patch: clearing a patch set it 7 -> 0, planting 0 -> 7.

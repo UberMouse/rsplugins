@@ -38,8 +38,8 @@ local protocol = require("protocol")
 local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is missing")
 local batch = assert(require("dev/batch"), "dev/ (a link to lib/dev) is missing")
 
--- The client has load, and honours its mode and env arguments (docs/api-concepts.md, "Seen
--- with dev-bridge"). Without it eval reports an error.
+-- The client has load, and honours its mode and env arguments (docs/api-concepts.md, "Plugin
+-- environment and globals"). Without it eval reports an error.
 local compile = load
 
 local eval = {}

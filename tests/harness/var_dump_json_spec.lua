@@ -25,7 +25,8 @@ describe("var-dump json.encode", function()
 
     it("escapes control characters as JSON, \\u-escaped when they have no short form", function()
         assert.are.equal('"a\\u0001b\\n"', json.encode("a\1b\n"))
-        -- A raw NUL would make the line invalid JSON; DEL is escaped too, so the output stays plain ASCII.
+        -- A raw NUL would make the line invalid JSON. DEL is valid raw JSON, but %c matches it, so it is
+        -- escaped too.
         local s = "x\0y\127z"
         assert.are.equal('"x\\u0000y\\u007fz"', json.encode(s))
         assert.are.equal(s, dkjson.decode(json.encode(s)))

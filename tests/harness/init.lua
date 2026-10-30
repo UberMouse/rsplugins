@@ -185,7 +185,8 @@ function Harness:unload()
         local left = {}
         for event, list in pairs(instance.subs) do
             for _, entry in ipairs(list) do
-                left[#left + 1] = event .. " '" .. entry.name .. "'"
+                -- A removal deferred to the end of a running dispatch is already gone.
+                if not entry.removed then left[#left + 1] = event .. " '" .. entry.name .. "'" end
             end
         end
         table.sort(left)

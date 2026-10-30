@@ -7,6 +7,11 @@
 -- From the live client (docs/testing.md fidelity ledger, dev-bridge probes 2026-10-26):
 -- - Subscribe with a name the event already has does nothing: the first callback stays, where
 --   it was, though the page says the name is replaced. After an Unsubscribe the name goes last.
+-- - Within a dispatch of an event (probe 2026-10-30, ledger rows): a subscriber added is first
+--   called on the next dispatch; an Unsubscribe of that same event is deferred to the end of the
+--   dispatch (the subscriber isn't called again, but a Subscribe of its name meanwhile does
+--   nothing, so Unsubscribe + Subscribe of one name loses it); a plugin reloaded by a
+--   subscriber has its later subscribers skipped.
 -- - Unsubscribe returns true if it removed the name, false otherwise.
 -- - Event.<X>.Unsubscribe passed straight to pcall or xpcall, so that a C function calls it,
 --   aborts the client (rs2client SIGABRT, which pcall can't catch): all seven aborts used that
@@ -28,6 +33,7 @@ local Subscription = strict.class("EventSubscription", {
             end
             local list = s.subs[s.event]
             for _, entry in ipairs(list) do
+                -- A removal deferred to the end of a dispatch still counts as present.
                 if entry.name == name then return end
             end
             list[#list + 1] = { name = name, fn = callback }
@@ -43,9 +49,11 @@ local Subscription = strict.class("EventSubscription", {
             end
             local list = s.subs[s.event]
             for i, entry in ipairs(list) do
-                if entry.name == name then
-                    table.remove(list, i)
+                if entry.name == name and not entry.removed then
                     entry.removed = true
+                    -- Mid-dispatch of this event the entry stays until the dispatch ends
+                    -- (M.dispatch drops it), as in the client (probe 2026-10-30).
+                    if not s.dispatching[s.event] then table.remove(list, i) end
                     return true
                 end
             end
@@ -124,12 +132,30 @@ end
 function M.dispatch(h, event, payload)
     local instance = h.instance
     if not (instance and instance.alive) then return end
-    -- Copy first: a subscriber may unsubscribe itself or others while we iterate.
+    -- Copy first: a subscriber added during the dispatch first runs on the next one.
     local list = { table.unpack(instance.subs[event]) }
+    -- Counted, since a subscriber may dispatch the same event again (nested).
+    local dispatching = instance.dispatching
+    dispatching[event] = (dispatching[event] or 0) + 1
     for _, entry in ipairs(list) do
+        -- Alive is checked per subscriber: a subscriber that reloads the plugin ends the old
+        -- instance's dispatch (probe 2026-10-30).
+        if not instance.alive then break end
         if not entry.removed then
             local label = string.format("Event.%s subscriber '%s'", event, entry.name)
             runtime.call(h.budgetMs, label, entry.fn, payload)
+        end
+    end
+    dispatching[event] = dispatching[event] - 1
+    if dispatching[event] == 0 then
+        dispatching[event] = nil
+        -- Apply the removals deferred during the dispatch.
+        local subs, kept = instance.subs[event], {}
+        for _, entry in ipairs(subs) do
+            if not entry.removed then kept[#kept + 1] = entry end
+        end
+        for i = #subs, 1, -1 do
+            subs[i] = kept[i]
         end
     end
 end
@@ -139,9 +165,15 @@ end
 ---@return table
 function M.namespace(instance)
     local proxies = {}
+    -- Event -> how many dispatches of it are running.
+    instance.dispatching = {}
     for event in pairs(EVENT_NAMES) do
         instance.subs[event] = {}
-        proxies[event] = Subscription.new({ event = event, subs = instance.subs })
+        proxies[event] = Subscription.new({
+            event = event,
+            subs = instance.subs,
+            dispatching = instance.dispatching,
+        })
     end
     return EventNamespace.new({ proxies = proxies })
 end

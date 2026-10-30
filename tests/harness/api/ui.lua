@@ -193,6 +193,7 @@ function M.removeListener(s, hook, id)
     for i, listener in ipairs(list) do
         if listener.id == (id or DEFAULT_ID) then
             table.remove(list, i)
+            listener.removed = true
             return true
         end
     end
@@ -202,7 +203,8 @@ end
 -- Run `s`'s listeners for `hook` in subscription order, each as fn(component, ...), while
 -- each returns true. The stub says a listener returning nothing lets the next run; in the
 -- client it stops them (docs/api-concepts.md, hook listener returns). A component destroyed
--- by an earlier listener gets no more. Callers run this under runtime.call.
+-- by an earlier listener gets no more, nor does a listener removed by an earlier one; one added
+-- during the fire first runs on the next (probe 2026-10-30). Callers run this under runtime.call.
 ---@param s table component state
 ---@param hook integer
 ---@param ... any
@@ -215,8 +217,10 @@ function M.fire(s, hook, ...)
     local ran = 0
     for _, listener in ipairs(snapshot) do
         if s.destroyed then break end
-        ran = ran + 1
-        if listener.fn(s.proxy, ...) ~= true then break end
+        if not listener.removed then
+            ran = ran + 1
+            if listener.fn(s.proxy, ...) ~= true then break end
+        end
     end
     return ran
 end

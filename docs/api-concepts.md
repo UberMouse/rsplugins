@@ -587,6 +587,9 @@ The probe sources aren't kept; each finding says what was called.
   then runs last. `Unsubscribe` returns true when it removed the name and false when there was
   none. A subscriber that unsubscribes a later one of the same event during a dispatch (`rC`
   removing `rD`) stops it being called in that same pass, and the client stayed up.
+  Probed 2026-10-30: a subscriber added during a dispatch first runs on the next; an
+  `Unsubscribe` and `Subscribe` of one name inside a dispatch of the same event loses the
+  subscription (see the testing.md fidelity ledger).
 - **HTTP failures, from requests to the rsdev daemon.** The client's HTTP is libcurl.
   - A 404 (GET) and a 400 (POST) finish with `failed` true and `successful` false,
     `responseCode` set, `errorCode` 0, `errorInfo` "", `data` "" and `progress` nil. `header`

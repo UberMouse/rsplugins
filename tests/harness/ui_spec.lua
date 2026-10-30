@@ -479,6 +479,34 @@ describe("a plugin's own components", function()
         assert.matches("read%-only", harness.errorOf(loadRows, "ui.Hook.ONCLICK = 1"))
     end)
 
+    it(
+        "skips a listener removed during the fire and runs an added one on the next (live)",
+        function()
+            local h = loadRows([[
+            log = {}
+            row:SetSize(100, 28)
+            row.clickthrough = false
+            local n = 0
+            row:Subscribe(ui.Hook.ONCLICK, "L1", function()
+                n = n + 1
+                log[#log + 1] = "L1." .. n
+                if n == 1 then
+                    row:Unsubscribe(ui.Hook.ONCLICK, "L2")
+                    row:Subscribe(ui.Hook.ONCLICK, "L3", function()
+                        log[#log + 1] = "L3." .. n
+                        return true
+                    end)
+                end
+                return true
+            end)
+            row:Subscribe(ui.Hook.ONCLICK, "L2", function() log[#log + 1] = "L2." .. n end)
+        ]])
+            h.ui:click(h.env.row)
+            h.ui:click(h.env.row)
+            assert.are.same({ "L1.1", "L1.2", "L3.2" }, h.env.log)
+        end
+    )
+
     it("subscribe with and without an id, and unsubscribe the same way", function()
         local h = loadRows([[
             log = {}

@@ -155,6 +155,90 @@ describe("Event subscriptions", function()
         assert.are.same({ "prl me" }, h.consoleCommands)
     end)
 
+    it("first calls a subscriber added during a dispatch on the next one (live)", function()
+        local h = harness.load(plugin([[
+            local added = false
+            Event.ServerLogic.Subscribe("A", function()
+                print("A")
+                if not added then
+                    added = true
+                    Event.ServerLogic.Subscribe("N", function() print("N") end)
+                end
+            end)
+        ]]))
+        h:fire("ServerLogic")
+        assert.are.equal("A", h:output())
+        h:fire("ServerLogic")
+        assert.are.equal("A\nA\nN", h:output())
+    end)
+
+    it(
+        "loses a name unsubscribed and resubscribed within a dispatch of its event (live)",
+        function()
+            local h = harness.load(plugin([[
+            local done = false
+            Event.ServerLogic.Subscribe("A", function()
+                if done then return end
+                done = true
+                print("unsub " .. tostring(Event.ServerLogic.Unsubscribe("B")))
+                Event.ServerLogic.Subscribe("B", function() print("B'") end)
+                print("again " .. tostring(Event.ServerLogic.Unsubscribe("B")))
+            end)
+            Event.ServerLogic.Subscribe("B", function() print("B") end)
+        ]]))
+            h:fire("ServerLogic")
+            h:fire("ServerLogic")
+            -- B was removed before its turn, B' never subscribed, and the name is gone afterwards
+            assert.are.equal("unsub true\nagain false", h:output())
+            assert.are.same({ "A" }, { h.instance.subs.ServerLogic[1].name })
+            assert.are.equal(1, #h.instance.subs.ServerLogic)
+            assert.is_false(h.env.Event.ServerLogic.Unsubscribe("B"))
+        end
+    )
+
+    it(
+        "keeps an unsubscribe/resubscribe made from another event's dispatch, placed last",
+        function()
+            local h = harness.load(plugin([[
+            Event.ServerLogic.Subscribe("A", function() print("A") end)
+            Event.ServerLogic.Subscribe("B", function() print("B") end)
+            Event.Logic.Subscribe("L", function()
+                Event.ServerLogic.Unsubscribe("A")
+                Event.ServerLogic.Subscribe("A", function() print("A'") end)
+            end)
+        ]]))
+            h:fire("Logic", { logicTick = 1 })
+            h:fire("ServerLogic")
+            assert.are.equal("B\nA'", h:output())
+        end
+    )
+
+    it(
+        "skips the old instance's later subscribers when a subscriber reloads the plugin (live)",
+        function()
+            local h = harness.load(plugin([[
+            print("load")
+            Event.WindowFocusChanged.Subscribe("A", function()
+                print("A before")
+                ExecuteConsoleCommand("prl me")
+                print("A after")
+            end)
+            Event.WindowFocusChanged.Subscribe("B", function() print("B") end)
+            function PluginShutdown()
+                print("shutdown")
+            end
+        ]]))
+            -- B stays subscribed in the dead instance, so only the alive check can skip it
+            h.allowLeftSubscriptions = true
+            h.onConsoleCommand = function()
+                h:reload()
+            end
+            h:fire("WindowFocusChanged", { hasFocus = true })
+            -- shutdown and the new load run inside the call; A carries on; B is never called
+            assert.are.equal("load\nA before\nshutdown\nload\nA after", h:output())
+        end
+    )
+
     it("allows a direct Unsubscribe inside an HTTP completion callback", function()
         local h = harness.load({
             ["main.lua"] = [[

@@ -1,5 +1,6 @@
 -- Shared steps for the Chore Tracker's harness specs: load it in a scripted world, find and
--- click a list row, and pick chores in the settings view.
+-- click rows, pick chores, drive the window (collapse, expand, back) and read tick and stored
+-- state.
 
 local harness = require("tests.harness")
 local catalog = require("tests.harness.catalog")
@@ -233,19 +234,15 @@ function M.openSettings(h)
     h:advance(20)
 end
 
--- Click the visible hamburger to collapse the window to it, and let the rebuild run.
+-- Click the visible hamburger, which collapses an open window and expands a collapsed one.
 ---@param h table
 function M.collapse(h)
     click(h, h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
     h:advance(20)
 end
 
--- Click the collapsed hamburger to expand the window again.
----@param h table
-function M.expand(h)
-    click(h, h.ui:get("SpriteButton", { sprite = "MENU", visible = true }))
-    h:advance(20)
-end
+-- Same MENU click; the second name states the spec's intent.
+M.expand = M.collapse
 
 -- Click the settings view's back button, returning to the list.
 ---@param h table

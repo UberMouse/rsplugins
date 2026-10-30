@@ -144,20 +144,52 @@ Staged order, with a check-in in the beta client after each:
 ## Chores still ticked by hand (33)
 
 Each is grouped by the most promising route. "Candidates" are var names from `docs/vars/vars.csv`
-or API signals. None has been seen moving. "Probe" is what a probe in the beta client must show
-before building. Notes are from 2026-10-25 research.
+or API signals. "Probe" is what a probe in the beta client must show before building. Notes are
+from 2026-10-25 research, updated by the 2026-10-30 probe below. The user's call for that probe:
+cover every chore that can be covered, not only the ones they do.
+
+### Probed 2026-10-30: signals found, not built yet
+
+The user did each chore on their main account (plugin dev server) while the dev bridge
+forwarded every var change, inventory update, system chat line and menu pick (session
+1b4060db2c; the cross-chore findings are in
+[api-concepts.md](../api-concepts.md#chore-signals-probed-with-dev-bridge-2026-10-30)). Each signal
+below was seen moving when the chore was done. "Rule" is the proposed detector; none is built.
+
+| Chore | Signal seen | Rule | Build needs |
+|---|---|---|---|
+| Archaeology Research | `ARCH_RESEARCH_CONTRACT_1_STATE` (VarBit [0-1] of `_CONTRACT_1_1`): 0 idle, 1 team out, 2 back to claim. Send 0 -> 1; return 1 -> 2 (also chat "Your team has finished researching: <name>."); claim 2 -> 0. Only contract 1 exists | `done = { STATE == 1 }`: only a send moves it into 1 | a `data/vars.lua` row |
+| Invention Machine (daily, weekly) | Per machine `config.Inv` `INVENT_MACHINE_GUILD_<1..6>_INPUT/_OUTPUT`. Collect: OUTPUT falls (7500 eternal planks -> empty; a disassembler's output is one `INVENT_MACHINE_DISASSEMBLER_DUMMY_OBJ`, its amounts in `INVENT_AUTO_DISS_HOTSPOT<n>_*` vars). Fill: INPUT rises. Kept current away from the guild. Charge: `INVENT_MACHINE_CHARGE_STORED` is one shared generator pool | tick on any machine OUTPUT falling (only a collect does that). Whether a fill is also needed is the user's call | an inventory-fall detector like the shop one (`shell/detect.lua`) |
+| Miscellania (daily, weekly) | `MISC_LAST_COLLECTION` (6987) is the epoch minute of the last resource collect: 29806927 -> 29888984 on collecting. No chat line. The user: collecting is "the only thing that matters" | `rises = "MISC_LAST_COLLECTION"`; or "within this period", which also holds at login but needs a period-start operand in `core/vars.lua` | a `data/vars.lua` row |
+| Bak Bolts | Eight Bloodwood trees: `SNIPER_BLOODTREE_<1..8>` (2 bits: 1 standing, 2 felled) and `_TIME_<n>` (minutes, 360 = the 6 h). Felling tree 8: 1 -> 2, time 357 -> 0. Single logs, shafts and tipping bolts move nothing; `CHEEVO_BAKRIMINEL_BOLTS` isn't a bolts counter | any `SNIPER_BLOODTREE_<n>` becomes 2 | a rule per tree, or a rule that takes a list of vars |
+| Player Owned Farm | Collector farmhand: `POF_COLLECTOR_ANIMALS_STORED_SLOT_<1..3>` (stored, cap 10) and `_STORED_ANIMAL_ID_SLOT_<n>`; collecting took slot 1 10 -> 5. Troughs: `POF_FEEDING_TROUGH_<1..6, BREEDING>_GENERAL_AMOUNT` (of 1000) and `_CATEGORY` (food type); feeding 3 took trough 1 0 -> 3. Every main-farm trough read 0 before. Trough food wasn't seen falling in 45 min away | done: a collector slot falls, or a trough rises. Maybe a "needs feeding" state from an empty trough, right as of the last visit | a `falls` rule field (mirror of `rises`); a "due" state is a new chore class |
+| Advance Time (already a rule, unproven) | A cast took `MAGIC_ADVANCE_TIME_CHARGES_REMAINING` 3 -> 2, chat "You have 2 casts of Advance Time remaining this week." | the existing `== 0` | two more casts to prove it |
+
+What the farm doesn't give: per-animal health or produce. Animals are items in the
+`POF_PADDOCK_*` inventories and a slot exposes only the item type and count, the game's pen
+window can't be read, and the paddock inventories change once a minute on their own. The
+paddock slot codes (`POF_ANIMAL_PADDOCK_<p>_SLOT_<s>`, 8 bits) look like a breed and stage code
+(spirit yak 193, Fremennik yak 192; red sheep: newborn 86, ewes 90 and 94, ram 96), sent on
+arriving at the farm. A stage table would take watching an animal grow. Beehives have
+`POF_BEEHIVE_<n>_HONEYSTORED`, `_HEALTH`, `_HAPPINESS`; not probed. Produce gathered by hand
+shows only as the chat line "You have gained N Farming XP and any harvested materials have been
+added to your inventory."
+
+Likely but not seen moving (read at login and on the day, no chore done):
+
+| Chore | Likely vars (value read 2026-10-30) | Guess | Probe |
+|---|---|---|---|
+| Menaphos Obelisk/Scarabs | `MENAPHOS_SOUL_OBELISK_DRAINED_AMOUNT` (21 bits, 0), `MENAPHOS_SCARABS_SQUISHED_TODAY` (6 bits, 0), `MENAPHOS_TOTAL_REPUTATION` (3440319) | daily counters; done at a cap, else `rises` | drain until refused |
+| Arc Contracts | `PGC_TALLY` (4 bits, 0), `PGC_PER_DAY_INCREASE` (3 bits, 4), `PGC_GIVER_ID`, `PGC_CONTACTS` (7 bits) | the Arc's contact contracts; TALLY counts done (to 7) or available (+4 a day) | hand in one contract |
+| Herb Run | `FARMING_SEEDS_PLANTED_HERB_PATCH_<1..5, 9, DRUID, MYARM, WILDY, ECOSYSTEM_1/2>` (1/1/7/1/7/0/0/1/0/0/0): per patch, seeds in it; clear 7 -> 0, plant 0 -> 7. Not `FARMING_HERB_VARBIT_*`, which is region-relative | like a multi-shop run: the user picks patches, it ticks when each is replanted this period, "Herb Run (3/5)" | a harvest and replant; which number is which patch |
+| Goebie Bands | `RAID1_GOEBIE_COURIER_LOOTED_TODAY`, `_LOOT_HANDED_IN_TODAY` (4 bits each), `_PARTICIPATED` (1 bit), all 0 | daily; done on PARTICIPATED -> 1 or hand-ins at the cap | one Supply Run |
+| Rapid Growth | the cast moved only the patch's stage (`FARMING_HERB_VARBIT_3` 96 -> 97); `POF_RAPID_GROWTH*` are the farm's patches | no cast count seen; maybe a refusal line at the cap (chat) | casts 2 and 3 |
+| Book of Char | no var found | activity only, unless using it moves a cooldown var | use it once |
 
 ### Var candidates: probe first, then the cheapest batch to build
 
 | Chore | Period | Candidates | Probe must show |
 |---|---|---|---|
-| Archaeology Research | daily | `ARCH_RESEARCH_CONTRACT_1_STATE`, `_RESEARCH_ID`; `ARCH_RESEARCH_TOTAL_TIME` | STATE going sent -> returned; only CONTRACT_1 exists, so one team? |
-| Goebie Bands | daily | `RAID1_GOEBIE_COURIER_LOOTED_TODAY`, `_LOOT_HANDED_IN_TODAY`, `_PARTICIPATED` | which counter reaches the daily cap on a Supply Run, and the cap |
-| Menaphos Obelisk/Scarabs | daily | `MENAPHOS_SOUL_OBELISK_DRAINED_AMOUNT`, `MENAPHOS_SCARABS_SQUISHED_TODAY` | whether either resets daily, and its cap |
-| Arc Contracts | daily | `PGC_TALLY`, `PGC_PER_DAY_INCREASE`, `PGC_GIVER_ID` | TALLY +1 per contract; the daily cap |
-| Herb Run | daily | `FARMING_HERB_VARBIT_*`, `FARMING_HERB_PLANTED_n`; farming vars do transmit near a patch | the patch-state encoding; "done" = every unlocked patch replanted since reset |
-| Miscellania (daily and weekly) | both | `MISC_APPROVAL`, `MISC_COFFERS`, `MISC_COFFER_CHANGE_AMOUNT`; Inv `MISC_RESOURCES_COLLECTED` | what "done" means (approval at max, coffers topped up, resources collected), then its var |
-| Invention Machine (daily and weekly) | both | `INVENT_MACHINE_CHARGE`, `_AMOUNT_STORED`, `_BATCHES_STORED` (`!inventmachinerun` advances machines) | which var shows "collected and refilled" |
 | Capping Clan Citadel | weekly | `CLAN_CITADEL_PLAYER_RESOURCE_*` vs `CLAN_CITADEL_RESOURCE_CAP`; `CLAN_CLAIMED_XP_REWARD` | a resource reaching the cap, or a flag setting |
 | Rush of Blood | weekly | `ELFCITY_SLAYER_WEEKLY_RESET`, `_WEEKLY_CHALLENGE_LEVEL`, `_WAVES_COMPLETED` | which marks the weekly run complete |
 | Water Filtration | weekly | `DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME`, `_PREVIOUS_LOOT_TIME` | LOOT_TIME after a clean-out, and its unit |
@@ -170,24 +202,32 @@ before building. Notes are from 2026-10-25 research.
 | God Statues | monthly | `GODSS_MONTHS_SINCE_USED`, `GODSS_LAST_RESET_MONTH`; **never `GODSS_PLAYER`** | MONTHS_SINCE_USED -> 0 after building |
 | Player Owned Ports | daily | Black Marketeer `POP_MARKET_QUANTITY`; **never `POP_MARKET_RESOURCE_ROLLS`** | whether buying the offer zeroes QUANTITY. Borderline: ask the user before building. "Manage port" stays manual |
 
+Read at login on 2026-10-30 (main account, away from each activity), so each is sent without
+being there: `QUEST_EGW_FINALE_REWARD_STATION_XP_<skill>` 75000 for all six stations,
+`GODSS_MONTHS_SINCE_USED` 3 (`_LAST_RESET_MONTH` 9, `_YEAR` 2026), `TUTISLAND_REWARD_STATE` 1,
+`GWD2_REP_TASKS_AVAILABLE` 0 (`_TASK_LAST_DAY_GIVEN` 233), `ELFCITY_SLAYER_WEEKLY_RESET` 0,
+`DNDTRACKER_TROLL_INVASION_LIMIT` 0, `POP_MARKET_QUANTITY` 133, `POP_MEG_CONFIDENCE` 22; every
+`CLAN_CITADEL_*` and `DUEL_ARENA_REMOVAL_WATER_FILTRATION_*` var 0 (maybe unsent away from them).
+Candidates the catalog adds: `ELFCITY_SLAYER_DUNGEON_REWARD_CHEST_OPENED` (Rush of Blood),
+`DINO_TOTEM_RITUAL_COMPLETED`/`_PROGRESS` (totems), `FMC_CIRCUS_*` (Big Top Bonanza),
+`CHEEVO_MINIGAME_CLUES_SKELETAL_HORROR` (Skeletal Horror).
+
 ### Game chat (needs the optional `chatAccess`)
 
 | Chore | Period | Notes |
 |---|---|---|
 | Penguin Hide and Seek | weekly | chat is the route that avoids the penguin vars; the spotting lines are unrecorded |
 | Meg | weekly | login line "You receive word that Meg has returned from her latest adventure." (wiki, not recorded) marks the reset, not the answers; `POP_MEG_CONFIDENCE` is a var candidate |
-| Rapid Growth | daily | `POF_RAPID_GROWTH` holds per-patch bits but no cast count; check for a cast message |
 | Familiarisation | weekly | the `DNDTRACKER_FAMILIARIZATION_*` vars are only a schedule timer |
 
-No chore's chat line has been recorded yet. A recorder session with `chatAccess` granted, doing
-each chore, comes first.
+The 2026-10-30 probe recorded system lines for Archaeology Research, Advance Time and the
+farm's produce (above), through the dev bridge's own `chatAccess`. None of this table's chores
+has a recorded line yet.
 
 ### Activity signals
 
 | Chore | Period | Signal |
 |---|---|---|
-| Book of Char | daily | `SkillTransmit` Firemaking plus `MiniMenuEntrySelected` on the book |
-| Bak Bolts | daily | bakriminel bolts rising in `INV` (dailyscape says every 6 h, which doesn't fit a daily reset; maybe manual) |
 | Skeletal Horror | weekly | `NPCEntityRemoved` of the boss nearby (NPC tracking is the extra-review tier); its clue alone has other sources |
 | Big Top Bonanza | weekly | no var found; a change log plus chat during a show |
 
@@ -202,7 +242,6 @@ it with location or a var. There is no interface-opened event.
 ### Probably manual only
 
 - **Nemi Forest**: the map comes from outside the game.
-- **Player Owned Farm**: no single completion.
 - **Charge Anachronia Totems**: `DINO_TOTEM_HOTSPOT_*` only. A change log while recharging
   might find more.
 - **Fort Forinthry Bonus XP**: nothing specific. A change log while claiming might find a var,
@@ -245,6 +284,11 @@ it with location or a var. There is no interface-opened event.
 
 ## Known gaps
 
+- The dev bridge's `MiniMenuEntrySelected` scrub (`plugins/dev-bridge/protocol.lua`,
+  `entryView`) blanks names only on entries that target a player. A "Walk here" entry (action
+  23) names a player standing on the tile, and that name went through to `dumps/rsdev/`.
+- A dev-bridge eval's string value is cut to about 2 KB, ending `<+N bytes>`, though the bridge
+  README lists only `Log` text, `Emit` tags and errors as cut. Return several values instead.
 - No spec covers the VarTransmit domain filter: the harness would need a var with the same id in
   another domain.
 - `scripts/chores-from-dailyscape.py` raises a raw `OSError` on an unreadable input or unwritable

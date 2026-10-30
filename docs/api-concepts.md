@@ -792,3 +792,43 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
 
 The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
 types are in `types/prettyui.lua`.
+
+## Chore signals probed with dev-bridge (2026-10-30)
+
+The user did chores on their main account on the plugin dev server while the bridge forwarded
+`VarTransmit`, `InventoryUpdated`, system chat and menu picks (bridge session 1b4060db2c),
+and `rsdev.py eval` read vars and inventories. The chore-by-chore results are in
+[plans/chore-tracker.md](plans/chore-tracker.md#probed-2026-10-30-signals-found-not-built-yet);
+these are the findings that hold beyond one chore.
+
+- **Some vars are only brought up to date when you visit.** Arriving at Miscellania changed
+  `MISC_APPROVAL` 41 -> 32 and `MISC_COFFERS` 1275000 -> 825000. Both had been sent at login
+  but were out of date. The Player Owned Farm's paddock slot codes (`POF_ANIMAL_PADDOCK_*_SLOT_*`)
+  arrived only when the user reached the farm. A rule on such a var is right only as of the last visit.
+- **Some vars hold an epoch-minute time**, the clock var's unit: `MISC_LAST_COLLECTION` read
+  29806927 (2026-09-03 06:07 UTC, the user's "8 weeks ago") and became the minute of the
+  collect. `POF_LAST_TIME` is one too, though it isn't the last visit.
+- **Some timers are sent once and not kept current.** `SNIPER_BLOODTREE_TIME_<n>` (minutes,
+  capped at 360) arrived at login and stayed put for 70 minutes until the tree was felled.
+- **Changing the graphics setting reloads the game** (`GameStateChanged` 30 -> 35 -> 30) and
+  resends every var with `oldValue` 0: hundreds of `0 -> X` transmits. Chore-tracker compares
+  its own last read, not `oldValue`, so the burst ticks nothing unless a var also *reads* 0
+  partway through the reload. Unchecked; its 10 s settle covers only a load or a character
+  switch.
+- **Machine inventories are kept current anywhere.** `INVENT_MACHINE_GUILD_<1..6>_INPUT/_OUTPUT`
+  (Invention Guild machines) sent `InventoryUpdated` as the machines worked while the user was
+  at the farm, and `Inventory.Find` + `GetSlots` read the current contents there.
+- **Player Owned Farm paddock inventories update once a minute on their own** (growth, births:
+  `POF_PADDOCK_3`, `_6`, `_BREEDING`), so a paddock `InventoryUpdated` isn't the player's doing.
+- **`InvSlot` has only `obj` and `count`** (its metatable: `count`, `obj`, `class_cast`,
+  `class_check`, `new`), and `obj` is the static `ObjType` (name, `params`, cost...). An item's
+  per-instance VarObj values, such as a farm animal's state, can't be read.
+- **`Inv.isValid` is the field** (true on the backpack); the stub's `valid` reads nil.
+- **Game interfaces can't be read.** The API has nothing for another interface's components.
+  An open window shows only through the vars it sets: the farm's Check and pen windows fill in
+  `POF_ANIMAL_CHECK_SLOT/_PADDOCK/_OBJECT/_TRAIT_1..3`, and the Invention machine window fills in
+  `INVENT_MACHINE_ID`, `_AMOUNT_STORED` and `_BATCHES_STORED`, all for the selected
+  item only.
+- **Farming patch-stage VarBits look region-relative**, as in OSRS: `FARMING_HERB_VARBIT_3`
+  and `FARMING_CURRENT_PATCH` change meaning as the player moves. `FARMING_SEEDS_PLANTED_HERB_PATCH_<n>`
+  (on `DESERT_FARM_PERM_*`) are per patch: clearing a patch set it 7 -> 0, planting 0 -> 7.

@@ -679,6 +679,7 @@ class StatusStartTests(CliCase):
             redirect_stdout(out),
         ):
             self.assertEqual(rsdev.cmd_start(args), 0)
+        self.addCleanup(popen.call_args.kwargs["stdout"].close)  # cmd_start leaves daemon.log open
         self.assertEqual((args.out / "rsdev" / "daemon.pid").read_text(), "4242\n")
         self.assertEqual(out.getvalue(), f"rsdev started (pid 4242), log {args.out / 'rsdev' / 'daemon.log'}\n")
         argv = popen.call_args.args[0]
@@ -1075,7 +1076,9 @@ class FollowRestartTests(unittest.TestCase):
                     break  # it exited (bind failed): try again
                 try:
                     get(port, "/cli/status")
-                    return proc
+                    if proc.poll() is None:  # else a stranger answered and our daemon is dead
+                        return proc
+                    break
                 except OSError:
                     time.sleep(0.05)
         self.fail("daemon did not come up")

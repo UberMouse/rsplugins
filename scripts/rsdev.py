@@ -94,7 +94,8 @@ def escape_arg(text):
 
 def _lost(store, key, dropped):
     """How many more events the sender lost since its last batch (`dropped` is cumulative), and
-    remember the highest count in `store[key]`. Not positive when nothing new was lost."""
+    remember the highest count in `store[key]`, so the caller must use the returned growth. Not
+    positive when nothing new was lost."""
     seen = store.get(key, 0)
     store[key] = max(seen, dropped)
     return dropped - seen
@@ -129,7 +130,8 @@ class State:
         self.events = deque(maxlen=MAX_EVENTS)
         self.last_n = 0  # n of the newest event
         self.total_dropped = 0
-        # (plugin, session) -> the cumulative dropped count last seen, per POST path
+        # (plugin, session) -> the highest cumulative dropped count seen: rec_dropped for /record
+        # batches, tee_dropped for /tee, so each sender's losses are counted once.
         self.rec_dropped = {}
         self.tee_dropped = {}
         self.run = secrets.token_hex(4)  # event numbers restart per daemon run; followers check it
@@ -172,7 +174,7 @@ class State:
                 path = folder / f"{stamp}-{batch['session']}-{n}.jsonl"
             current = RecSession(path, batch["seq"])
             self.rec_sessions[key] = current
-            self.rec_dropped[key] = 0
+            self.rec_dropped[key] = 0  # a new file counts drops from zero, not from the old file's
             header = {
                 "k": "session",
                 "schema": batch["schema"],

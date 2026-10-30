@@ -497,7 +497,7 @@ function protocol.probeErrorText(event, name, err)
 end
 
 -- The daemon escapes `\`, tab, newline and CR in an arg (rsdev.py escape_arg). Any other
--- escape is left as written, as rsdev.py's unescape_arg does.
+-- escape is left as written, as test_rsdev.py's unescape_arg does.
 local UNESCAPES = { ["\\"] = "\\", t = "\t", n = "\n", r = "\r" }
 
 ---@param text string

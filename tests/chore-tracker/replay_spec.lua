@@ -1,26 +1,10 @@
--- The Chore Tracker replaying two real beta-client sessions, each recorded by recorder-demo.
---
--- tests/fixtures/chore-tracker-feather-buy.jsonl: 20 ticks (recording 201740cf2b, ticks
--- 2810..2830) in which the player bought out the feathers at the Lumbridge fishing shop. In the
--- client the Feather Shop Run went from (0/4) to (1/4) and its row ticked.
---
--- tests/fixtures/chore-tracker-bert-sand.jsonl: 760 ticks (recording 7e06f091e8, ticks
--- 2680..3440) in which the player reset HANDSAND_BUCKETS with the cheat
--- `!setvar handsand_buckets_claimed_today 0` (fixture tick 550, 3 -> 1), then claimed Sand from
--- Bert (fixture tick 758, 1 -> 3). The client logged `seen bert-sand done` and
--- `celebrate bert-sand` and ticked the row. The window opens 550 ticks before the reset because
--- the tracker ignores var changes for 500 ticks after it loads (shell/vars.lua SETTLE_TICKS).
---
--- The recording is of recorder-demo, so it holds that plugin's reads and the world's events, not
--- the Chore Tracker's. The recorded InventoryUpdated carries the shop's whole inventory *after*
--- the buy, but detection compares it with the counts the tracker held from before (it had seen
--- the shop open); the recording's window starts after that, so the spec stocks the shop before
--- the load. The watched vars start at 0 as in the other specs. The clock, the login, the events
--- and the shop's final stock all come from the recording.
---
--- In the Bert replay the recorded VarTransmits of HANDSAND_BUCKETS drive the tracker's own var
--- detection (the harness packs HANDSAND_BUCKETS_CLAIMED_TODAY, bit 1, from the base var). The
--- spec supplies the base var's value from before the window, 3.
+-- Replays two sanitised recorder-demo sessions (a Lumbridge feather buy; a Bert's sand reset then
+-- claim) through the Chore Tracker's real detection. The recordings hold recorder-demo's reads,
+-- not the tracker's, so the spec supplies what they lack: the shop stock before the buy, the base
+-- var HANDSAND_BUCKETS = 3 before the Bert window (over the zeroed vars helpers.loaded sets), the
+-- PersistentDB keys, httpAccess declined, and nil Finds for unwatched shops. The Bert window
+-- opens 550 ticks before the reset because the tracker ignores var changes for SETTLE_TICKS (500)
+-- after load (plugins/chore-tracker/shell/vars.lua).
 
 local helpers = require("tests.chore-tracker.helpers")
 local paths = require("tests.harness.paths")
@@ -39,6 +23,7 @@ local BERT_CLOCK = 29889958
 
 -- FISHINGSHOP_LUM's lines as the recording ends, by obj id (the recording's own slots). Slot 6,
 -- FEATHER (obj 314), is the line bought out.
+local FEATHER_SLOT = 6
 local STOCK = {
     { obj = 303, count = 5 },
     { obj = 307, count = 10 },
@@ -137,7 +122,7 @@ local function feathersBought()
             for i, line in ipairs(STOCK) do
                 before[i] = { obj = line.obj, count = line.count }
             end
-            before[6].count = FEATHERS_BEFORE
+            before[FEATHER_SLOT].count = FEATHERS_BEFORE
             h.world:setInventory("FISHINGSHOP_LUM", before, 19)
         end,
     })
@@ -187,7 +172,7 @@ describe("chore-tracker replaying a recorded feather purchase", function()
 end)
 
 describe("chore-tracker replaying a recorded claim of Sand from Bert", function()
-    it("leaves Sand from Bert undone after the reset", function()
+    it("does not tick Sand from Bert on the reset itself", function()
         local h = sandSession(600) -- the reset is at 550, the claim not until 758
         assert.is_false(helpers.ticked(h, BERT.name))
         assert.are.same({}, helpers.stored(h, WHO).done)

@@ -192,6 +192,15 @@ function M.class(name, def)
             if def.tostring then return def.tostring(states[proxy]) end
             return name
         end,
+        -- A client object is sol userdata; neither pairs nor # over one has been probed (only
+        -- getmetatable lists its members, docs/api-concepts.md "Usertype members"). Without
+        -- these, pairs would silently walk nothing and # would read the empty proxy table.
+        __pairs = function()
+            M.fault("pairs over a client userdata: unprobed (" .. name .. ")")
+        end,
+        __len = function()
+            M.fault("# over a client userdata: unprobed (" .. name .. ")")
+        end,
     }
     if def.eq then
         mt.__eq = function(a, b)
@@ -211,11 +220,19 @@ function M.class(name, def)
     return class
 end
 
--- A read-only enum table: known values index normally, unknown names fault.
+-- A read-only enum table: known values index normally, unknown names fault. `opts` says what
+-- pairs() over it does:
+--   iterable = true     serves the values (probed: PluginPermissions lists its members)
+--   refusal  = "text"   faults with `text`, a probed refusal (PersistentDBType is "not
+--                       recognized as a container", docs/api-concepts.md)
+--   neither             faults as unprobed: the client's answer isn't recorded, and the old
+--                       plain-Lua iteration here was a guess
 ---@param name string
 ---@param values table name -> value
+---@param opts { iterable: boolean?, refusal: string? }?
 ---@return table
-function M.enum(name, values)
+function M.enum(name, values, opts)
+    opts = opts or {}
     M.declare("_G", name, "enum")
     local copy = {}
     for k, v in pairs(values) do
@@ -230,21 +247,31 @@ function M.enum(name, values)
         __newindex = function(_, key)
             M.fault(name .. "." .. tostring(key) .. " is read-only")
         end,
-        -- pairs() over an enum is plain Lua; serve the real values.
         __pairs = function()
-            return next, copy, nil
+            if opts.iterable then return next, copy, nil end
+            M.fault("pairs over " .. name .. ": " .. (opts.refusal or "unprobed"))
+            error("unreachable: fault raises")
         end,
     })
 end
 
 -- A lookup table whose keys are resolved on demand (var.VarPlayer.NAME, config.Obj.NAME):
 -- `lookup(key)` returns the value or faults. `extra` holds fixed members such as FromID.
+-- pairs() over it faults as unprobed (the keys aren't held, so it would silently walk nothing)
+-- unless `opts.iterable`, which serves `extra` (Plugin.urls, probed to iterate).
 ---@param lookup fun(key: any): any
 ---@param extra table?
+---@param opts { iterable: boolean? }?
 ---@return table
-function M.lookup(lookup, extra)
+function M.lookup(lookup, extra, opts)
     extra = extra or {}
+    local iterable = opts and opts.iterable
     return setmetatable({}, {
+        __pairs = function()
+            if iterable then return next, extra, nil end
+            M.fault("pairs over a lookup table: unprobed")
+            error("unreachable: fault raises")
+        end,
         __index = function(_, key)
             if extra[key] ~= nil then return extra[key] end
             return lookup(key)

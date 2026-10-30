@@ -1458,6 +1458,30 @@ function Driver:lib()
     return assert(instance.prettyui, "the plugin has no prettyui dependency")
 end
 
+-- The fake library if the plugin depends on PrettyUI, else nil. The raw pointer driver (click,
+-- press, hover, wheel on a plain ui.Layer) needs no PrettyUI, so it goes through this.
+---@return table?
+function Driver:optionalLib()
+    local instance = self.h.instance
+    assert(instance and instance.alive, "plugin not loaded")
+    return instance.prettyui
+end
+
+-- Every PrettyUI object the plugin has made, or none when it has no PrettyUI dependency:
+-- hit-testing a plain layer still asks what PrettyUI draws over it.
+---@return table[]
+function Driver:records()
+    local lib = self:optionalLib()
+    return lib and lib.records or {}
+end
+
+-- Forget the pointer state (hover, held press) for a plugin that is going away: the client
+-- keeps neither across a reload.
+function Driver:reset()
+    self.hovering = nil
+    self.pressing = nil
+end
+
 -- Every AchievementPopup the plugin has made, oldest first. Each is the popup's state:
 -- title, text, width, height, sound, soundID, `played` (the sound id it would have played,
 -- nil for none), `root`, `elapsed` Logic ticks, `destroyed` and `completed` (ended on its
@@ -1465,7 +1489,7 @@ end
 ---@return table[]
 function Driver:popups()
     local out = {}
-    for _, r in ipairs(self:lib().records) do
+    for _, r in ipairs(self:records()) do
         if r.kind == "AchievementPopup" then out[#out + 1] = r.s end
     end
     return out
@@ -1559,7 +1583,7 @@ end
 function Driver:find(kind, filter)
     filter = filter or {}
     local out = {}
-    for _, r in ipairs(self:lib().records) do
+    for _, r in ipairs(self:records()) do
         local ok = r.kind == kind and not gone(r)
         if ok and filter.sprite then ok = r.s.spriteName == filter.sprite:upper() end
         if ok and filter.visible then ok = ui.visible(r.s.rootState or r.s) end
@@ -1630,7 +1654,7 @@ function Driver:lands(cs, cx, cy)
     end
     local clip = self:clipped(cs, cx, cy)
     if clip then return false, clip end
-    for _, r in ipairs(self:lib().records) do
+    for _, r in ipairs(self:records()) do
         local s = r.s
         if r.kind == "Window" and s.title and not gone(r) and ui.within(cs, s.rootState) then
             -- The title-bar drag layer sits over the window, short of the X's slot (probe).
@@ -1659,7 +1683,7 @@ end
 function Driver:clipped(cs, x, y)
     local by = ui.clipper(cs, x, y)
     if by == nil then return nil end
-    for _, r in ipairs(self:lib().records) do
+    for _, r in ipairs(self:records()) do
         if r.kind == "Window" and not gone(r) and by == r.s.viewportState then
             return "clipped: scrolled out of the window's view"
         end
@@ -1894,10 +1918,10 @@ end
 ---@return boolean
 ---@return string?
 function Driver:click(target, value)
-    local lib = self:lib()
+    local lib = self:optionalLib()
     local h = self.h
     local cs = ui.stateOf(target)
-    if cs and lib.closeButtons[cs] then
+    if cs and lib and lib.closeButtons[cs] then
         local ok, why = self:lands(cs)
         if not ok then return false, why end
         local ws = lib.closeButtons[cs]
@@ -2050,9 +2074,10 @@ end
 ---@return table component state
 ---@return fun(): table?
 function Driver:hoverTarget(target, value)
-    local r = self:lib().byObj[target]
+    local lib = self:optionalLib()
+    local r = lib and lib.byObj[target]
     local cs = ui.stateOf(target)
-    if r == nil and cs then
+    if not r and cs then
         return cs, function() end
     end -- a plain component: no tooltip
     r = self:record(target)
@@ -2112,9 +2137,9 @@ function Driver:hoverComponent(cs)
     if not hit then return false, why end
     if self.hovering and self.hovering.cs == hit then return true end
     self:leave()
-    local lib = self:lib()
+    local lib = self:optionalLib()
     local function tipOf()
-        local tip = lib.rawTips[hit]
+        local tip = lib and lib.rawTips[hit]
         return tip and not tip.destroyed and tip or nil
     end
     self.hovering = { cs = hit, tipOf = tipOf, raw = true }
@@ -2153,7 +2178,8 @@ end
 ---@return string[]
 function Driver:tooltips()
     local out = {}
-    for _, tip in ipairs(self:lib().tooltips) do
+    local lib = self:optionalLib()
+    for _, tip in ipairs(lib and lib.tooltips or {}) do
         if tip.shown and not tip.destroyed and ui.visible(tip.parent) then
             out[#out + 1] = tip.text
         end

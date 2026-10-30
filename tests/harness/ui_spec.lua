@@ -164,14 +164,14 @@ describe("fake ui components", function()
     end)
 end)
 
--- A plugin's own components. `root` is the plugin layer, `row` a layer under it. The manifest
--- lists PrettyUI so the h.ui driver is there.
+-- A plugin's own components. `root` is the plugin layer, `row` a layer under it.
+-- Loaded with no manifest at all: the raw h.ui driver needs no PrettyUI.
 local PRELUDE = support.pluginLayer("root") .. "row = ui.Layer.new(root)\n"
 
 ---@param main string
 ---@return table h
 local function loadRows(main)
-    return harness.load(support.inline(PRELUDE .. main, { manifest = support.PRETTYUI_MANIFEST }))
+    return harness.load(support.inline(PRELUDE .. main))
 end
 
 describe("a plugin's own components", function()

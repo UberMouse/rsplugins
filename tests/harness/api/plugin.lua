@@ -113,13 +113,10 @@ function M.install(h, env)
     end
     local lookup = strict.lookup(function()
         return nil
-    end, urls)
-    -- The page calls urls a table, so pairs() over it lists the manifest's urls.
-    getmetatable(lookup).__pairs = function()
-        return next, urls, nil
-    end
+    end, urls, { iterable = true }) -- probed: pairs() over Plugin.urls lists the manifest's urls
     env.Plugin = Plugin.new({ h = h, urls = lookup })
-    env.PluginPermissions = strict.enum("PluginPermissions", M.PluginPermissions)
+    env.PluginPermissions =
+        strict.enum("PluginPermissions", M.PluginPermissions, { iterable = true })
 
     -- Console output is captured for tests to read (h:output()); `echo` also prints it.
     local function write(kind, ...)

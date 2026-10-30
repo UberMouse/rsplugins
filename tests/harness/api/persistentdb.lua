@@ -189,7 +189,9 @@ end
 ---@param env table the sandbox being built
 function M.install(h, env)
     env.PersistentDB = PersistentDB.new({ h = h, db = h.db })
-    env.PersistentDBType = strict.enum("PersistentDBType", M.PersistentDBType)
+    env.PersistentDBType = strict.enum("PersistentDBType", M.PersistentDBType, {
+        refusal = "not recognized as a container (probed, docs/api-concepts.md)",
+    })
 end
 
 return M

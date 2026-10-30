@@ -1,21 +1,25 @@
 -- Throwaway D2 probe: is it safe to Subscribe to other events from inside an
 -- OptionalPermissionChanged callback (what var-dump's start() does)? Deleted once answered.
+-- It now also subscribes VarTransmit, as var-dump's start() does. The question: is that
+-- subscription, made while the dev bridge runs the ppe inside its Logic callback and while
+-- another plugin subscribes VarTransmit, what crashes the client?
 
 -- Same table pattern as var-dump so Subscribe and Unsubscribe can't drift apart.
 local SUBS = {
     OptionalPermissionChanged = "probePermSubChanged",
     Logic = "probePermSubLogic",
     ServerLogic = "probePermSubServerLogic",
+    VarTransmit = "probePermSubVarTransmit",
 }
 
 -- Guards against subscribing twice on a repeated permission event.
 local started = false
 
--- Subscribes the tick events, each printing on its first call only.
+-- Subscribes the tick and var events, each printing on its first call only.
 local function start()
     if started then return end
     started = true
-    local logicSeen, serverSeen = false, false
+    local logicSeen, serverSeen, varSeen = false, false, false
     Event.Logic.Subscribe(SUBS.Logic, function()
         if not logicSeen then
             logicSeen = true
@@ -26,6 +30,12 @@ local function start()
         if not serverSeen then
             serverSeen = true
             print("[D2PROBE] permsub serverlogic tick")
+        end
+    end)
+    Event.VarTransmit.Subscribe(SUBS.VarTransmit, function()
+        if not varSeen then
+            varSeen = true
+            print("[D2PROBE] permsub vartransmit")
         end
     end)
 end

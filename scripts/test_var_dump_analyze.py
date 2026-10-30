@@ -20,9 +20,23 @@ spec.loader.exec_module(analyze)
 SNAPSHOT = [
     {"domain": "VarPlayer", "id": 100, "name": "DEMO_BASE", "valueTypeName": "INTEGER", "value": 5},
     # mask 0b111000: bits 3-5 of DEMO_BASE
-    {"domain": "VarPlayer", "id": 7, "name": "DEMO_FLAGS", "valueTypeName": "INTEGER", "value": 5,
-     "isVarBit": True, "baseVar": "DEMO_BASE", "mask": 56},
-    {"domain": "VarPlayer", "id": 101, "name": "DEMO_UID", "valueTypeName": "PLAYER_UID", "value": 12345},
+    {
+        "domain": "VarPlayer",
+        "id": 7,
+        "name": "DEMO_FLAGS",
+        "valueTypeName": "INTEGER",
+        "value": 5,
+        "isVarBit": True,
+        "baseVar": "DEMO_BASE",
+        "mask": 56,
+    },
+    {
+        "domain": "VarPlayer",
+        "id": 101,
+        "name": "DEMO_UID",
+        "valueTypeName": "PLAYER_UID",
+        "value": 12345,
+    },
     {"domain": "VarClient", "id": 3, "name": "DEMO_LABEL", "valueTypeName": "STRING", "value": ""},
 ]
 
@@ -107,9 +121,14 @@ class Snapshots(unittest.TestCase):
     def test_partial_files_are_never_the_newest(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
-            for name in ("snapshot-20260101-000000.jsonl", "snapshot-20260102-000000.jsonl.partial"):
+            for name in (
+                "snapshot-20260101-000000.jsonl",
+                "snapshot-20260102-000000.jsonl.partial",
+            ):
                 (d / name).write_text("")
-            self.assertEqual([p.name for p in analyze.list_snapshots(d)], ["snapshot-20260101-000000.jsonl"])
+            self.assertEqual(
+                [p.name for p in analyze.list_snapshots(d)], ["snapshot-20260101-000000.jsonl"]
+            )
 
     def test_split_sessions_splits_on_equal_seq(self):
         sessions = analyze.split_sessions([{"seq": 1}, {"seq": 2}, {"seq": 2}, {"seq": 3}])

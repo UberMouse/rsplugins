@@ -85,8 +85,9 @@ def name_pattern(names):
     """A regex matching any of `names`, case-insensitively, with spaces interchangeable."""
     alternatives = []
     for name in sorted(names, key=len, reverse=True):
-        alternatives.append("".join(
-            f"[{re.escape(SPACES)}]" if c in SPACES else re.escape(c) for c in name))
+        alternatives.append(
+            "".join(f"[{re.escape(SPACES)}]" if c in SPACES else re.escape(c) for c in name)
+        )
     return re.compile("|".join(alternatives), re.IGNORECASE)
 
 
@@ -202,7 +203,7 @@ def free_form(pattern):
         if pattern.startswith("(?", i):
             opener = next((g for g in GROUPS if pattern.startswith(g, i)), None)
             if opener is None:
-                return f"{pattern[i:i + 3]}... is a flag or construct a pattern may not use"
+                return f"{pattern[i : i + 3]}... is a flag or construct a pattern may not use"
             i = pattern.index(">", i) + 1 if opener == "(?P<" else i + len(opener)
             prev = None
             continue
@@ -213,7 +214,7 @@ def free_form(pattern):
                 return f"{c} may only follow {NUMBER}"
             if c == "{":
                 end = pattern.find("}", i)
-                if end < 0 or not re.fullmatch(r"[0-9]+(?:,[0-9]*)?", pattern[i + 1:end]):
+                if end < 0 or not re.fullmatch(r"[0-9]+(?:,[0-9]*)?", pattern[i + 1 : end]):
                     return "a { that isn't a {n} or {n,m} after a class"
                 i = end
             prev = "quantifier"
@@ -267,8 +268,7 @@ def redact_chat(entry, allowlist):
                 op[field] = REDACTED
         return "player"
     texts = [t for t in (payload.get("chatMessage"), op.get("message")) if t is not None]
-    if texts and all(isinstance(t, str) and any(p.fullmatch(t) for p in allowlist)
-                     for t in texts):
+    if texts and all(isinstance(t, str) and any(p.fullmatch(t) for p in allowlist) for t in texts):
         return "kept"
     for holder, field in ((payload, "chatMessage"), (op, "message")):
         if isinstance(holder.get(field), str):
@@ -327,33 +327,40 @@ def carried_state(before):
     return out
 
 
-def sanitise(lines, start, end, placeholder, allowlist, allow_dropped=False,
-             short_name_ok=False):
+def sanitise(lines, start, end, placeholder, allowlist, allow_dropped=False, short_name_ok=False):
     """The fixture's text for the recording `lines` (decoded JSON lines, header first), the
     name pattern to check it with, and counts of what was done. Raises Refused."""
     if not lines or lines[0].get("k") != "session" or lines[0].get("schema") != SCHEMA:
         raise Refused(f"not a schema {SCHEMA} recording (no session header)")
     header, entries = lines[0], lines[1:]
 
-    names = {e["v"] for e in entries
-             if e.get("k") == "read" and e.get("path") == NAME_PATH and isinstance(e.get("v"), str)}
+    names = {
+        e["v"]
+        for e in entries
+        if e.get("k") == "read" and e.get("path") == NAME_PATH and isinstance(e.get("v"), str)
+    }
     if not names:
         raise Refused(f"no {NAME_PATH} read, so the display name can't be found")
     if not short_name_ok and min(len(n) for n in names) < SHORT_NAME:
-        raise Refused(f"the display name is under {SHORT_NAME} characters, so replacing it as a "
-                      "substring would change unrelated text; check the output by hand and pass "
-                      "--short-name-ok")
+        raise Refused(
+            f"the display name is under {SHORT_NAME} characters, so replacing it as a "
+            "substring would change unrelated text; check the output by hand and pass "
+            "--short-name-ok"
+        )
     pattern = name_pattern(names)
 
     drops = [e for e in entries if e.get("k") == "dropped"]
     if any(not isinstance(e.get("t"), int) for e in drops):
-        raise Refused("a dropped line has no integer t, so its gap can't be placed against "
-                      "the window")
+        raise Refused(
+            "a dropped line has no integer t, so its gap can't be placed against the window"
+        )
     drops = [e for e in drops if e["t"] <= end]
     if drops and not allow_dropped:
-        raise Refused(f"the recorder lost {sum(e.get('n') or 0 for e in drops)} entries in "
-                      f"{len(drops)} gap(s) at or before --to (first at t={drops[0]['t']}); "
-                      "pick a window after them, or pass --allow-dropped")
+        raise Refused(
+            f"the recorder lost {sum(e.get('n') or 0 for e in drops)} entries in "
+            f"{len(drops)} gap(s) at or before --to (first at t={drops[0]['t']}); "
+            "pick a window after them, or pass --allow-dropped"
+        )
 
     stats = {"replaced": 0, "player": 0, "game": 0, "kept": 0}
 
@@ -395,15 +402,25 @@ def main():
         sys.exit("--to is before --from")
     # Writing the output, or deleting it after a leak, would destroy the private recording.
     if args.out.resolve() == args.session.resolve() or (
-            args.out.exists() and args.session.exists() and args.out.samefile(args.session)):
+        args.out.exists() and args.session.exists() and args.out.samefile(args.session)
+    ):
         sys.exit("the output is the session file; give a different output path")
 
-    lines = [json.loads(line) for line in args.session.read_text(encoding="utf-8").splitlines()
-             if line.strip()]
+    lines = [
+        json.loads(line)
+        for line in args.session.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     try:
-        text, pattern, stats = sanitise(lines, args.start, args.end, args.placeholder,
-                                        load_allowlist(ALLOWLIST), args.allow_dropped,
-                                        args.short_name_ok)
+        text, pattern, stats = sanitise(
+            lines,
+            args.start,
+            args.end,
+            args.placeholder,
+            load_allowlist(ALLOWLIST),
+            args.allow_dropped,
+            args.short_name_ok,
+        )
     except Refused as e:
         sys.exit(f"{args.session}: {e}")
 
@@ -414,10 +431,12 @@ def main():
         args.out.unlink()
         sys.exit("the display name is in the written file; deleted it")
     size = len(text.encode("utf-8"))
-    print(f"wrote {stats['entries']} entries ({size} bytes) to {args.out}: ticks "
-          f"{args.start}..{args.end} as 0..{args.end - args.start}, display name replaced in "
-          f"{stats['replaced']} places, chat redacted: {stats['player']} player, "
-          f"{stats['game']} game ({stats['kept']} allowlisted game lines kept)")
+    print(
+        f"wrote {stats['entries']} entries ({size} bytes) to {args.out}: ticks "
+        f"{args.start}..{args.end} as 0..{args.end - args.start}, display name replaced in "
+        f"{stats['replaced']} places, chat redacted: {stats['player']} player, "
+        f"{stats['game']} game ({stats['kept']} allowlisted game lines kept)"
+    )
 
 
 if __name__ == "__main__":

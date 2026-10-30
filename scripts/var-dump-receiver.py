@@ -114,8 +114,10 @@ class Handler(BaseHTTPRequestHandler):
                     change["received"] = received
                     f.write(json.dumps(change) + "\n")
             for change in payload["changes"]:
-                print(f"change {change.get('domain')}.{change.get('name')}: "
-                      f"{change.get('old')!r} -> {change.get('new')!r}")
+                print(
+                    f"change {change.get('domain')}.{change.get('name')}: "
+                    f"{change.get('old')!r} -> {change.get('new')!r}"
+                )
         else:
             return self.reply(404)
         self.reply(200)

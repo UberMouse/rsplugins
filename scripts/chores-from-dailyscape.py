@@ -38,7 +38,9 @@ import sys
 
 SOURCE_URL = "https://github.com/dailyscape/dailyscape.github.io"
 COMMIT = "f6a503cb3480ede1dfe1fe9d17867999939598c9"
-RAW_URL = f"https://raw.githubusercontent.com/dailyscape/dailyscape.github.io/{COMMIT}/dailyscape.js"
+RAW_URL = (
+    f"https://raw.githubusercontent.com/dailyscape/dailyscape.github.io/{COMMIT}/dailyscape.js"
+)
 
 # (table name in dailyscape.js, period, shop)
 TABLES = (
@@ -88,8 +90,17 @@ PUNCT = set("{}[]:,;")
 IDENT = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 NUMBER = re.compile(r"-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 SIMPLE_ESCAPES = {
-    "n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0": "\0",
-    "\\": "\\", "'": "'", '"': '"', "/": "/",
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "b": "\b",
+    "f": "\f",
+    "v": "\v",
+    "0": "\0",
+    "\\": "\\",
+    "'": "'",
+    '"': '"',
+    "/": "/",
 }
 
 
@@ -179,7 +190,7 @@ class Parser:
             return self.obj()
         if c == "[":
             return self.array()
-        if c in ("\"", "'"):
+        if c in ('"', "'"):
             return self.string()
         m = NUMBER.match(self.text, self.pos)
         if m:
@@ -194,7 +205,7 @@ class Parser:
 
     def key(self):
         c = self.peek()
-        if c in ("\"", "'"):
+        if c in ('"', "'"):
             return self.string()
         # Bare keys can be numbers too (outputs_max maps item ids to quantities).
         m = IDENT.match(self.text, self.pos) or re.compile(r"\d+").match(self.text, self.pos)
@@ -324,15 +335,17 @@ def chores_from(text):
             if not isinstance(desc, str):
                 raise Refused(f"{where}: desc is not a string")
             desc, links = convert_desc(desc, where)
-            chores.append({
-                "id": key,
-                "name": f["task"],
-                "period": period,
-                "shop": shop,
-                "url": https(f["url"], where),
-                "desc": desc,
-                "links": links,
-            })
+            chores.append(
+                {
+                    "id": key,
+                    "name": f["task"],
+                    "period": period,
+                    "shop": shop,
+                    "url": https(f["url"], where),
+                    "desc": desc,
+                    "links": links,
+                }
+            )
     return chores
 
 
@@ -375,7 +388,9 @@ def render(chores):
         for field in ("url", "desc"):
             lines.append(f"        {field} = {lua_string(c[field])},")
         links = [lua_string(l) for l in c["links"]]
-        one_line = "        links = { " + ", ".join(links) + " }," if links else "        links = {},"
+        one_line = (
+            "        links = { " + ", ".join(links) + " }," if links else "        links = {},"
+        )
         # stylua keeps a table on one line only while it fits.
         if len(one_line) <= COLUMN_WIDTH:
             lines.append(one_line)

@@ -87,9 +87,7 @@ def is_int(v):
 
 def escape_arg(text):
     """A command line's arg field: backslash, tab, newline and CR escaped, so it is one field."""
-    return (
-        text.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")
-    )
+    return text.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")
 
 
 def _lost(store, key, dropped):
@@ -143,7 +141,9 @@ class State:
         entries = batch["entries"]
         with self.cond:
             session = self._rec_session(batch)
-            lost = _lost(self.rec_dropped, (batch["plugin"], batch["session"]), batch.get("dropped", 0))
+            lost = _lost(
+                self.rec_dropped, (batch["plugin"], batch["session"]), batch.get("dropped", 0)
+            )
             with session.path.open("a") as f:
                 if lost > 0:
                     first_t = entries[0].get("t") if entries else None
@@ -248,10 +248,16 @@ class State:
                 # `logs` (and `logs --plugin X`) show which plugin lost lines.
                 self.total_dropped += lost
                 first_t = events[0]["t"] if events else None
-                marker = {"plugin": body["plugin"], "level": "dropped", "text": f"{lost} lines lost"}
+                marker = {
+                    "plugin": body["plugin"],
+                    "level": "dropped",
+                    "text": f"{lost} lines lost",
+                }
                 events.insert(0, {"t": first_t, "name": "Log", "payload": marker})
             # A directory per plugin: a joined name could not tell plugin a-b/session c from a/b-c.
-            self._add_events(Path("tee") / body["plugin"] / f"{body['session']}.jsonl", body["session"], events)
+            self._add_events(
+                Path("tee") / body["plugin"] / f"{body['session']}.jsonl", body["session"], events
+            )
 
     def _with_drop_marker(self, events, lost):
         """`events`, led by a dropped marker if `lost` events never arrived. Caller holds the lock."""
@@ -517,7 +523,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Game text isn't always valid UTF-8, and one bad byte shouldn't lose a batch.
             body = json.loads(raw.decode("utf-8", errors="replace"))
-        except (ValueError, RecursionError) as err:  # JSONDecodeError, int past the digit limit; deep nesting
+        except (
+            ValueError,
+            RecursionError,
+        ) as err:  # JSONDecodeError, int past the digit limit; deep nesting
             print(f"bad {route} body: {err!r}; {len(raw)} bytes, starts {raw[:80]!r}")
             return self.reply(400)
         state = self.server.state
@@ -681,7 +690,9 @@ def cmd_stop(args):
     # int > 1 from the pid file or a reply reaches os.kill (`type` also rejects floats like 1.5).
     for label, pid, optional in (("daemon", daemon_pid, False), ("pid file", file_pid, True)):
         if not (optional and pid is None) and not (type(pid) is int and pid > 1):
-            print(f"{label} pid {pid!r} is not a usable process id; not signalling", file=sys.stderr)
+            print(
+                f"{label} pid {pid!r} is not a usable process id; not signalling", file=sys.stderr
+            )
             return 1
     if file_pid is not None and file_pid != daemon_pid:
         print(
@@ -787,7 +798,10 @@ def send_command(args, kind, text):
     if outcome == "withdrawn":
         print(f"not delivered in {args.timeout}s (bridge not polling?); withdrawn", file=sys.stderr)
         return 2, None
-    print(f"delivered but no result in {args.timeout}s: outcome unknown ({reply['id']})", file=sys.stderr)
+    print(
+        f"delivered but no result in {args.timeout}s: outcome unknown ({reply['id']})",
+        file=sys.stderr,
+    )
     return 3, None
 
 
@@ -875,7 +889,9 @@ def number_arg(low, high, what, kind=float, low_open=False):
             raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
         ok = math.isfinite(value) and (value > low if low_open else value >= low) and value <= high
         if not ok:
-            raise argparse.ArgumentTypeError(f"{what} must be {'above' if low_open else 'from'} {low:g} to {high:g}")
+            raise argparse.ArgumentTypeError(
+                f"{what} must be {'above' if low_open else 'from'} {low:g} to {high:g}"
+            )
         return value
 
     return parse
@@ -956,7 +972,9 @@ def find_client_window():
     if not found:
         raise ShotError(2, "client window not found (is the RS3 client running?)")
     if len(found) > 1:
-        raise ShotError(2, f"several client windows found: {', '.join(found)}; pick one with --window")
+        raise ShotError(
+            2, f"several client windows found: {', '.join(found)}; pick one with --window"
+        )
     return found[0]
 
 
@@ -976,10 +994,15 @@ def check_visible(win, warn_focus=True):
     res = run_tool(["xwininfo", "-id", win])
     if res.returncode != 0:  # a --window id that names nothing fails here
         lines = [ln.strip() for ln in res.stderr.splitlines() if ln.strip()]
-        why = next((ln for ln in lines if "No such window" in ln), lines[0] if lines else "no output")
+        why = next(
+            (ln for ln in lines if "No such window" in ln), lines[0] if lines else "no output"
+        )
         raise ShotError(2, f"window {win} not found (xwininfo: {why.removeprefix('xwininfo: ')})")
     if not is_viewable(res.stdout):
-        raise ShotError(2, f"window {win} is not visible: {workspace_hint(win)}. Switch to it yourself and retry.")
+        raise ShotError(
+            2,
+            f"window {win} is not visible: {workspace_hint(win)}. Switch to it yourself and retry.",
+        )
     if not warn_focus:
         return
     active = re.findall(r"0x[0-9a-fA-F]+", tool_text(["xprop", "-root", "_NET_ACTIVE_WINDOW"]))
@@ -1029,7 +1052,9 @@ def take_shots(opts):
         time.sleep(opts.delay)
     started = None
     for path in paths:
-        if started is not None:  # `every` runs start to start; an overrun makes the next one immediate
+        if (
+            started is not None
+        ):  # `every` runs start to start; an overrun makes the next one immediate
             wait = started + opts.every - time.monotonic()
             if wait > 0:
                 time.sleep(wait)
@@ -1124,7 +1149,9 @@ def main(argv=None):
     common.add_argument("--port", type=int, default=DEFAULT_PORT)
     common.add_argument("--out", type=Path, default=DEFAULT_OUT)
     shot_opts = argparse.ArgumentParser(add_help=False)
-    shot_opts.add_argument("--window", type=window_arg, help="X window id; skips the lookup by WM_CLASS")
+    shot_opts.add_argument(
+        "--window", type=window_arg, help="X window id; skips the lookup by WM_CLASS"
+    )
     shot_opts.add_argument("--region", type=region_arg, help="WxH+X+Y inside the window")
     shot_opts.add_argument(
         "--max",
@@ -1140,8 +1167,12 @@ def main(argv=None):
     p = sub.add_parser("exec", parents=[common, shot_opts])
     p.set_defaults(max=None)  # unset, so a shot option given without --shot is detectable
     p.add_argument("command", nargs="+")
-    p.add_argument("--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0)
-    p.add_argument("--shot", action="store_true", help="capture the client once the command has a result")
+    p.add_argument(
+        "--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0
+    )
+    p.add_argument(
+        "--shot", action="store_true", help="capture the client once the command has a result"
+    )
     p.add_argument("--shot-delay", type=number_arg(0, 60, "--shot-delay"))
     p.set_defaults(run=cmd_exec)
     p = sub.add_parser("events", parents=[common])
@@ -1153,7 +1184,9 @@ def main(argv=None):
     p.add_argument("code", nargs="*")
     p.add_argument("--file", type=Path, help="read the Lua source from this file instead")
     p.add_argument("--reset", action="store_true", help="clear the plugin's eval state")
-    p.add_argument("--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0)
+    p.add_argument(
+        "--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0
+    )
     p.set_defaults(run=cmd_eval)
     p = sub.add_parser("logs", parents=[common], help="print the Log events plugins forward")
     p.add_argument("--since", type=int, default=0)
@@ -1161,14 +1194,18 @@ def main(argv=None):
     p.add_argument("--plugin")
     p.add_argument("--json", action="store_true", help="print the raw event JSON lines")
     p.set_defaults(run=cmd_logs)
-    p = sub.add_parser("shot", parents=[common, shot_opts], help="capture the client window to an image")
+    p = sub.add_parser(
+        "shot", parents=[common, shot_opts], help="capture the client window to an image"
+    )
     p.add_argument("--count", type=number_arg(1, MAX_SHOT_COUNT, "--count", int), default=1)
     p.add_argument("--every", type=number_arg(0, 3600, "--every", low_open=True), default=1.0)
     p.add_argument("--delay", type=number_arg(0, 3600, "--delay"), default=0.0)
     p.set_defaults(run=cmd_shot)
     args = parser.parse_args(argv)
     if args.cmd == "exec":
-        given = [f for f in ("window", "region", "max", "shot_delay") if getattr(args, f) is not None]
+        given = [
+            f for f in ("window", "region", "max", "shot_delay") if getattr(args, f) is not None
+        ]
         if given and not args.shot:
             parser.error("--window, --region, --max and --shot-delay only apply with --shot")
         args.max = DEFAULT_SHOT_MAX if args.max is None else args.max

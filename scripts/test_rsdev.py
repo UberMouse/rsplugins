@@ -36,7 +36,9 @@ def post(port, path, body, headers=None, cli=True):
     Sends X-Rsdev like the CLI does, unless cli=False."""
     data = body if isinstance(body, bytes) else json.dumps(body).encode()
     sent = {"X-Rsdev": "1"} if cli else {}
-    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=data, headers={**sent, **(headers or {})})
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}", data=data, headers={**sent, **(headers or {})}
+    )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status, resp.read().decode()
@@ -100,9 +102,7 @@ def scripted_call(replies, paths=None):
 def parse_lines(text):
     """The sync response as (id, kind, unescaped arg) tuples."""
     assert text == "" or text.endswith("\n")
-    return [
-        (i, k, unescape_arg(a)) for i, k, a in (ln.split("\t") for ln in text.splitlines())
-    ]
+    return [(i, k, unescape_arg(a)) for i, k, a in (ln.split("\t") for ln in text.splitlines())]
 
 
 class DaemonCase(unittest.TestCase):
@@ -111,7 +111,9 @@ class DaemonCase(unittest.TestCase):
         self.out = Path(self.tmp.name)
         self.server = rsdev.make_server(0, self.out)
         self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+        self.thread = threading.Thread(
+            target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+        )
         self.thread.start()
         self.log = StringIO()
         # The daemon prints a line per request; capture it. Handler threads share sys.stdout.
@@ -146,7 +148,9 @@ class DaemonCase(unittest.TestCase):
     def raw_post(self, path, length):
         """POST with a hand-written Content-Length and no body; returns the status code."""
         with socket.create_connection(("127.0.0.1", self.port), timeout=5) as s:
-            head = f"POST {path} HTTP/1.0\r\nHost: 127.0.0.1:{self.port}\r\n" + (f"Content-Length: {length}\r\n" if length else "")
+            head = f"POST {path} HTTP/1.0\r\nHost: 127.0.0.1:{self.port}\r\n" + (
+                f"Content-Length: {length}\r\n" if length else ""
+            )
             s.sendall((head + "\r\n").encode())
             with s.makefile("rb") as reply:
                 code = int(reply.readline().split()[1])
@@ -172,7 +176,9 @@ class RecordTests(DaemonCase):
         self.assertEqual(post(self.port, "/record", batch())[0], 200)
         (path,) = self.files()
         header, entry = self.lines(path)
-        self.assertEqual((header["k"], header["plugin"], header["session"]), ("session", "demo", "s1"))
+        self.assertEqual(
+            (header["k"], header["plugin"], header["session"]), ("session", "demo", "s1")
+        )
         self.assertEqual(list(entry), ["t", "k", "name"])  # t and k first
 
     def test_second_batch_appends_to_the_same_file(self):
@@ -284,7 +290,10 @@ class SyncTests(DaemonCase):
         t2.join()
 
     def test_events_get_increasing_n_and_are_persisted(self):
-        events = [{"t": 1, "name": "A", "payload": {"x": 1}}, {"t": 2, "name": "B", "payload": None}]
+        events = [
+            {"t": 1, "name": "A", "payload": {"x": 1}},
+            {"t": 2, "name": "B", "payload": None},
+        ]
         self.sync(events=events)
         self.sync(seq=2, events=[{"t": 3, "name": "A", "payload": 1}])
         got = get(self.port, "/cli/events")["events"]
@@ -296,7 +305,9 @@ class SyncTests(DaemonCase):
         self.sync(events=[{"t": 1, "name": "A", "n": 99, "session": "evil"}, {"t": 2, "name": "B"}])
         got = get(self.port, "/cli/events")["events"]
         self.assertEqual([(e["n"], e["session"]) for e in got], [(1, "b1"), (2, "b1")])
-        self.assertEqual([e["name"] for e in get(self.port, "/cli/events?since=1")["events"]], ["B"])
+        self.assertEqual(
+            [e["name"] for e in get(self.port, "/cli/events?since=1")["events"]], ["B"]
+        )
 
     def test_dropped_growth_becomes_a_marker_event(self):
         self.sync(dropped=3, events=[{"t": 9, "name": "A", "payload": 1}])
@@ -366,7 +377,12 @@ class ExecTests(DaemonCase):
         self.assertIn(f"queued command {line[0]}: exec 'give item'", self.log.getvalue())
 
     def test_bad_exec_request_is_400(self):
-        for bad in ({}, {"command": "", "timeout": 1}, {"command": "x"}, {"command": "x", "timeout": -1}):
+        for bad in (
+            {},
+            {"command": "", "timeout": 1},
+            {"command": "x"},
+            {"command": "x", "timeout": -1},
+        ):
             self.assertEqual(post(self.port, "/cli/exec", bad)[0], 400, bad)
 
     def test_cli_exec_exit_codes(self):
@@ -428,9 +444,16 @@ class BrowserGuardTests(DaemonCase):
             self.assertEqual(caught.exception.code, 403)
 
     def test_foreign_host_is_refused(self):
-        for host in ("evil.example", f"evil.example:{self.port}", "127.0.0.1", f"127.0.0.1:{self.port + 1}"):
+        for host in (
+            "evil.example",
+            f"evil.example:{self.port}",
+            "127.0.0.1",
+            f"127.0.0.1:{self.port + 1}",
+        ):
             for route, body in self.bodies().items():
-                self.assertEqual(post(self.port, route, body, {"Host": host})[0], 403, (host, route))
+                self.assertEqual(
+                    post(self.port, route, body, {"Host": host})[0], 403, (host, route)
+                )
         self.assert_untouched()
         self.assertIn("refused /record: Host 'evil.example'", self.log.getvalue())
 
@@ -513,25 +536,30 @@ class StopTests(DaemonCase):
     def test_unusable_pids_are_never_signalled(self):
         for bad in (0, -1, 1, "x", True, 1.5, None):
             with self.subTest(status_pid=bad):
-                with mock.patch.object(rsdev.os, "kill") as kill, mock.patch.object(
-                    rsdev, "call", lambda *a, _bad=bad, **k: {"pid": _bad}
-                ), mock.patch("sys.stderr", StringIO()):
+                with (
+                    mock.patch.object(rsdev.os, "kill") as kill,
+                    mock.patch.object(rsdev, "call", lambda *a, _bad=bad, **k: {"pid": _bad}),
+                    mock.patch("sys.stderr", StringIO()),
+                ):
                     self.assertEqual(rsdev.cmd_stop(self.args()), 1)
                 kill.assert_not_called()
         for bad in (0, -1, 1):
             with self.subTest(file_pid=bad):
                 self.write_pid(bad)
-                with mock.patch.object(rsdev.os, "kill") as kill, mock.patch.object(
-                    rsdev, "call", lambda *a, **k: {"pid": os.getpid()}
-                ), mock.patch("sys.stderr", StringIO()):
+                with (
+                    mock.patch.object(rsdev.os, "kill") as kill,
+                    mock.patch.object(rsdev, "call", lambda *a, **k: {"pid": os.getpid()}),
+                    mock.patch("sys.stderr", StringIO()),
+                ):
                     self.assertEqual(rsdev.cmd_stop(self.args()), 1)
                 kill.assert_not_called()
 
     def test_daemon_that_exited_before_the_signal_is_already_gone(self):
         path = self.write_pid(os.getpid())
-        with mock.patch.object(rsdev.os, "kill", side_effect=ProcessLookupError), redirect_stdout(
-            StringIO()
-        ) as out:
+        with (
+            mock.patch.object(rsdev.os, "kill", side_effect=ProcessLookupError),
+            redirect_stdout(StringIO()) as out,
+        ):
             self.assertEqual(rsdev.cmd_stop(self.args()), 0)
         self.assertFalse(path.exists())
         self.assertIn("already gone", out.getvalue())
@@ -681,7 +709,9 @@ class StatusStartTests(CliCase):
             self.assertEqual(rsdev.cmd_start(args), 0)
         self.addCleanup(popen.call_args.kwargs["stdout"].close)  # cmd_start leaves daemon.log open
         self.assertEqual((args.out / "rsdev" / "daemon.pid").read_text(), "4242\n")
-        self.assertEqual(out.getvalue(), f"rsdev started (pid 4242), log {args.out / 'rsdev' / 'daemon.log'}\n")
+        self.assertEqual(
+            out.getvalue(), f"rsdev started (pid 4242), log {args.out / 'rsdev' / 'daemon.log'}\n"
+        )
         argv = popen.call_args.args[0]
         self.assertEqual(argv[2:], ["daemon", "--port", str(self.port), "--out", str(args.out)])
 
@@ -856,7 +886,13 @@ class TeeTests(DaemonCase):
         self.assertEqual([e["n"] for e in got], [2, 3])
         self.assertEqual(
             got[1],
-            {"t": 8, "name": "Log", "payload": {"plugin": "demo", "level": "error", "text": "b"}, "n": 3, "session": "t1"},
+            {
+                "t": 8,
+                "name": "Log",
+                "payload": {"plugin": "demo", "level": "error", "text": "b"},
+                "n": 3,
+                "session": "t1",
+            },
         )
         path = self.out / "rsdev" / "events" / "tee" / "demo" / "t1.jsonl"
         self.assertEqual([json.loads(ln) for ln in path.read_text().splitlines()], got)
@@ -887,7 +923,10 @@ class TeeTests(DaemonCase):
         post(self.port, "/tee", tee_body(seq=2, dropped=3))
         post(self.port, "/tee", tee_body(seq=3, dropped=4))
         marks = [e for e in self.events("?name=Log") if e["payload"]["level"] == "dropped"]
-        self.assertEqual([(m["payload"]["text"], m["t"]) for m in marks], [("3 lines lost", 7), ("1 lines lost", 7)])
+        self.assertEqual(
+            [(m["payload"]["text"], m["t"]) for m in marks],
+            [("3 lines lost", 7), ("1 lines lost", 7)],
+        )
         self.assertEqual({m["payload"]["plugin"] for m in marks}, {"demo"})
         self.assertEqual(self.server.state.status()["dropped"], 4)
 
@@ -925,7 +964,16 @@ class LogsTests(CliCase):
         ]
         post(self.port, "/tee", tee_body(lines=lines))
         post(self.port, "/tee", tee_body(plugin="other", session="t2", lines=lines[:1]))
-        self.sync(seq=2, events=[{"t": 3, "name": "Log", "payload": {"plugin": "bridged", "level": "log", "text": "z"}}])
+        self.sync(
+            seq=2,
+            events=[
+                {
+                    "t": 3,
+                    "name": "Log",
+                    "payload": {"plugin": "bridged", "level": "log", "text": "z"},
+                }
+            ],
+        )
 
     def logs(self, *argv):
         t, out = self.run_cli("logs", *argv)
@@ -937,7 +985,13 @@ class LogsTests(CliCase):
         self.seed()
         self.assertEqual(
             self.logs().splitlines(),
-            ["2 [demo] print: one", "3 [demo] error: two", "    more", "4 [other] print: one", "5 [bridged] log: z"],
+            [
+                "2 [demo] print: one",
+                "3 [demo] error: two",
+                "    more",
+                "4 [other] print: one",
+                "5 [bridged] log: z",
+            ],
         )
 
     def test_plugin_filter_and_since(self):
@@ -961,7 +1015,11 @@ class LogsTests(CliCase):
         self.assertEqual(events[0]["payload"], {"plugin": "demo", "level": "print", "text": "one"})
 
     def test_follow_reuses_the_events_poll_and_asks_for_log_events(self):
-        log = lambda n, plugin: {"n": n, "name": "Log", "payload": {"plugin": plugin, "level": "log", "text": "t"}}  # noqa: E731
+        log = lambda n, plugin: {
+            "n": n,
+            "name": "Log",
+            "payload": {"plugin": plugin, "level": "log", "text": "t"},
+        }  # noqa: E731
         replies = [{"events": [log(1, "a"), log(2, "b")], "last": 2, "run": "r"}]
         paths = []
         fake_call = scripted_call(replies, paths)
@@ -970,7 +1028,9 @@ class LogsTests(CliCase):
         with mock.patch.object(rsdev, "call", fake_call), redirect_stdout(out):
             self.assertEqual(rsdev.cmd_logs(args), 0)
         self.assertEqual(out.getvalue().splitlines(), ["2 [b] log: t"])
-        self.assertEqual(paths, ["/cli/events?since=0&wait=25&name=Log", "/cli/events?since=2&wait=25&name=Log"])
+        self.assertEqual(
+            paths, ["/cli/events?since=0&wait=25&name=Log", "/cli/events?since=2&wait=25&name=Log"]
+        )
 
 
 class EventsTests(DaemonCase):
@@ -1026,11 +1086,23 @@ class EventsTests(DaemonCase):
         fake_call = scripted_call(replies, paths)
         args = SimpleNamespace(port=1, since=0, follow=True, name=None)
         err, out = StringIO(), StringIO()
-        with mock.patch.object(rsdev, "call", fake_call), mock.patch("sys.stderr", err), redirect_stdout(out):
+        with (
+            mock.patch.object(rsdev, "call", fake_call),
+            mock.patch("sys.stderr", err),
+            redirect_stdout(out),
+        ):
             self.assertEqual(rsdev.cmd_events(args), 0)
         self.assertIn("daemon restarted; numbering restarted", err.getvalue())
         self.assertEqual([json.loads(ln)["n"] for ln in out.getvalue().splitlines()], [5, 1])
-        self.assertEqual([p.split("&")[0] for p in paths[:4]], ["/cli/events?since=0", "/cli/events?since=5", "/cli/events?since=0", "/cli/events?since=1"])
+        self.assertEqual(
+            [p.split("&")[0] for p in paths[:4]],
+            [
+                "/cli/events?since=0",
+                "/cli/events?since=5",
+                "/cli/events?since=0",
+                "/cli/events?since=1",
+            ],
+        )
 
     def test_stale_since_reply_from_a_new_run_is_not_printed(self):
         replies = [
@@ -1055,7 +1127,6 @@ class EventsTests(DaemonCase):
         args = SimpleNamespace(port=self.port, since=0, follow=False, name=None)
         with mock.patch("sys.stderr", StringIO()):
             self.assertEqual(rsdev.cmd_events(args), 2)
-
 
 
 class FollowRestartTests(unittest.TestCase):
@@ -1114,17 +1185,27 @@ class FollowRestartTests(unittest.TestCase):
                 mock.patch.object(rsdev, "call", call_until_stopped),
                 redirect_stdout(out),
             ):
-                t = threading.Thread(target=lambda: result.append(rsdev.cmd_events(args)), daemon=True)
+                t = threading.Thread(
+                    target=lambda: result.append(rsdev.cmd_events(args)), daemon=True
+                )
                 t.start()
                 self.wait_for(lambda: len(out.getvalue().splitlines()) >= 1)
                 first.terminate()
                 first.wait()
                 self.wait_for(lambda: "retrying" in err.getvalue())
                 second = self.start_daemon(port, out_dir)
-                post(port, "/bridge/sync", sync_body(session="b2", events=[{"t": 9, "name": "NEW", "payload": 9}]))
+                post(
+                    port,
+                    "/bridge/sync",
+                    sync_body(session="b2", events=[{"t": 9, "name": "NEW", "payload": 9}]),
+                )
                 self.wait_for(lambda: len(out.getvalue().splitlines()) >= 2)
-                time.sleep(0.5)  # the duplicate-detection window: a repeated event would show up by now
-                self.assertEqual(result, [])  # still following; the daemon thread dies with the process
+                time.sleep(
+                    0.5
+                )  # the duplicate-detection window: a repeated event would show up by now
+                self.assertEqual(
+                    result, []
+                )  # still following; the daemon thread dies with the process
                 # Killing the daemon drops the long poll; the next call then stops the follower
                 # before the patches are undone, so it cannot write to the real stderr.
                 logged = err.getvalue()  # the shutdown below adds a second "retrying"
@@ -1179,7 +1260,11 @@ def fake_x(classes, viewable=True, active="0x10", desktop=3, fail=(), gone=()):
         elif argv[0] == "xprop" and argv[2] in gone:
             return SimpleNamespace(returncode=1, stdout="", stderr="BadWindow")
         elif argv[0] == "xprop":
-            out = classes[argv[2]] if argv[3] == "WM_CLASS" else f"_NET_WM_DESKTOP(CARDINAL) = {desktop}"
+            out = (
+                classes[argv[2]]
+                if argv[3] == "WM_CLASS"
+                else f"_NET_WM_DESKTOP(CARDINAL) = {desktop}"
+            )
         elif argv[0] == "xwininfo":
             out = "  Map State: " + ("IsViewable" if viewable else "IsUnviewable")
         elif argv[0] == "maim":
@@ -1200,13 +1285,33 @@ def shot_opts(out, **over):
 class ShotParseTests(unittest.TestCase):
     def test_region(self):
         self.assertEqual(rsdev.region_arg("200x100+0+30"), "200x100+0+30")
-        for bad in ("0x100+0+0", "100x0+0+0", "100x100+-1+0", "100x100", "100x100+1", "axb+0+0", "-1x5+0+0", "１０x10+0+0", "10x10+0+０"):
+        for bad in (
+            "0x100+0+0",
+            "100x0+0+0",
+            "100x100+-1+0",
+            "100x100",
+            "100x100+1",
+            "axb+0+0",
+            "-1x5+0+0",
+            "１０x10+0+0",
+            "10x10+0+０",
+        ):
             with self.subTest(bad), self.assertRaises(rsdev.argparse.ArgumentTypeError):
                 rsdev.region_arg(bad)
 
     def test_option_ranges(self):
-        for argv in (["--count", "0"], ["--count", "101"], ["--every", "0"], ["--every", "nan"], ["--max", "-1"]):
-            with self.subTest(argv), mock.patch("sys.stderr", StringIO()), self.assertRaises(SystemExit):
+        for argv in (
+            ["--count", "0"],
+            ["--count", "101"],
+            ["--every", "0"],
+            ["--every", "nan"],
+            ["--max", "-1"],
+        ):
+            with (
+                self.subTest(argv),
+                mock.patch("sys.stderr", StringIO()),
+                self.assertRaises(SystemExit),
+            ):
                 rsdev.main(["shot", *argv])
         with mock.patch("sys.stderr", StringIO()), self.assertRaises(SystemExit):
             rsdev.main(["shot", "--window", "5a0002d"])
@@ -1214,7 +1319,12 @@ class ShotParseTests(unittest.TestCase):
             rsdev.main(["shot", "--window", "0x１a"])
 
     def test_shot_options_need_shot_on_exec(self):
-        for argv in (["--window", "0x5"], ["--region", "1x1+0+0"], ["--max", "1600"], ["--shot-delay", "0"]):
+        for argv in (
+            ["--window", "0x5"],
+            ["--region", "1x1+0+0"],
+            ["--max", "1600"],
+            ["--shot-delay", "0"],
+        ):
             with self.subTest(argv), mock.patch("sys.stderr", StringIO()) as err:
                 with self.assertRaises(SystemExit) as caught:
                     rsdev.main(["exec", *argv, "x"])
@@ -1222,7 +1332,10 @@ class ShotParseTests(unittest.TestCase):
                 self.assertIn("only apply with --shot", err.getvalue())
 
     def test_property_parsers(self):
-        self.assertEqual(rsdev.parse_window_ids("_NET_CLIENT_LIST(WINDOW): window id # 0x1, 0x5a0002d"), ["0x1", "0x5a0002d"])
+        self.assertEqual(
+            rsdev.parse_window_ids("_NET_CLIENT_LIST(WINDOW): window id # 0x1, 0x5a0002d"),
+            ["0x1", "0x5a0002d"],
+        )
         self.assertEqual(rsdev.parse_window_ids("_NET_CLIENT_LIST:  not found."), [])
         self.assertEqual(rsdev.parse_cardinal("_NET_WM_DESKTOP(CARDINAL) = 3\n"), 3)
         self.assertIsNone(rsdev.parse_cardinal("_NET_WM_DESKTOP:  not found."))
@@ -1238,7 +1351,10 @@ class ShotParseTests(unittest.TestCase):
         self.assertEqual(rsdev.shot_paths(d, "T", 1, 0), [d / "T.png"])
         self.assertEqual(rsdev.shot_paths(d, "T", 3, 0), [d / f"T-0{i}.png" for i in (1, 2, 3)])
         self.assertEqual(rsdev.shot_paths(d, "T", 100, 1600)[-1], d / "T-100.jpg")
-        self.assertEqual(rsdev.convert_args("a.png", "b.jpg", 1600)[1:], ["a.png", "-resize", "1600x1600>", "-quality", "85", "b.jpg"])
+        self.assertEqual(
+            rsdev.convert_args("a.png", "b.jpg", 1600)[1:],
+            ["a.png", "-resize", "1600x1600>", "-quality", "85", "b.jpg"],
+        )
 
 
 class ShotTests(unittest.TestCase):
@@ -1352,9 +1468,13 @@ class ShotTests(unittest.TestCase):
                     raise KeyboardInterrupt
                 return res
 
-            with self.subTest(tool), mock.patch.object(rsdev, "run_tool", run), mock.patch(
-                "shutil.which", return_value="/bin/x"
-            ), mock.patch("sys.stderr", self.err), redirect_stdout(StringIO()):
+            with (
+                self.subTest(tool),
+                mock.patch.object(rsdev, "run_tool", run),
+                mock.patch("shutil.which", return_value="/bin/x"),
+                mock.patch("sys.stderr", self.err),
+                redirect_stdout(StringIO()),
+            ):
                 self.assertEqual(rsdev.cmd_shot(shot_opts(self.tmp.name)), 130)
             self.assertEqual([p for p in Path(self.tmp.name).rglob("*") if p.is_file()], [])
 
@@ -1375,7 +1495,10 @@ class ShotTests(unittest.TestCase):
             run = fake_x({"0x20": RS_CLASS}, active="0x20")
             with mock.patch.object(rsdev, "run_tool", run), redirect_stdout(StringIO()):
                 rsdev.take_shots(shot_opts(self.tmp.name, max=0))  # no ShotError
-            with mock.patch.object(rsdev, "run_tool", run), self.assertRaises(rsdev.ShotError) as cm:
+            with (
+                mock.patch.object(rsdev, "run_tool", run),
+                self.assertRaises(rsdev.ShotError) as cm,
+            ):
                 rsdev.take_shots(shot_opts(self.tmp.name))
         self.assertIn("magick", str(cm.exception))
 
@@ -1451,20 +1574,33 @@ class ShotTests(unittest.TestCase):
 
     def test_check_visible_messages(self):
         def gone(argv):
-            return SimpleNamespace(returncode=1, stdout="", stderr="xwininfo: error: No such window with id 0xdeadbee.\n")
+            return SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="xwininfo: error: No such window with id 0xdeadbee.\n",
+            )
 
-        with mock.patch.object(rsdev, "run_tool", gone), self.assertRaises(rsdev.ShotError) as caught:
+        with (
+            mock.patch.object(rsdev, "run_tool", gone),
+            self.assertRaises(rsdev.ShotError) as caught,
+        ):
             rsdev.check_visible("0xdeadbee")
         msg = str(caught.exception)
         self.assertIn("not found (xwininfo: error: No such window", msg)
         self.assertEqual(msg.count("xwininfo:"), 1)
         run = fake_x({"0x20": RS_CLASS}, viewable=False)
-        with mock.patch.object(rsdev, "run_tool", run), self.assertRaises(rsdev.ShotError) as caught:
+        with (
+            mock.patch.object(rsdev, "run_tool", run),
+            self.assertRaises(rsdev.ShotError) as caught,
+        ):
             rsdev.check_visible("0x20")
         self.assertTrue(str(caught.exception).startswith("window 0x20 is not visible"))
 
     def test_cmd_shot_exit_codes(self):
-        with mock.patch.object(rsdev, "take_shots", side_effect=rsdev.ShotError(2, "nope")), mock.patch("sys.stderr", self.err):
+        with (
+            mock.patch.object(rsdev, "take_shots", side_effect=rsdev.ShotError(2, "nope")),
+            mock.patch("sys.stderr", self.err),
+        ):
             self.assertEqual(rsdev.cmd_shot(shot_opts(self.tmp.name)), 2)
         with mock.patch.object(rsdev, "take_shots"):
             self.assertEqual(rsdev.cmd_shot(shot_opts(self.tmp.name)), 0)
@@ -1474,7 +1610,9 @@ class ShotTests(unittest.TestCase):
 
 class ExecShotTests(unittest.TestCase):
     def merge(self, exec_code, shot_code):
-        args = SimpleNamespace(shot=True, window=None, region=None, max=1600, out=Path("/o"), shot_delay=0.0)
+        args = SimpleNamespace(
+            shot=True, window=None, region=None, max=1600, out=Path("/o"), shot_delay=0.0
+        )
         with (
             mock.patch.object(rsdev, "exec_command", return_value=exec_code),
             mock.patch.object(rsdev, "cmd_shot", return_value=shot_code) as shot,
@@ -1495,7 +1633,10 @@ class ExecShotTests(unittest.TestCase):
 
     def test_no_shot_flag_no_shot(self):
         args = SimpleNamespace(shot=False)
-        with mock.patch.object(rsdev, "exec_command", return_value=0), mock.patch.object(rsdev, "cmd_shot") as shot:
+        with (
+            mock.patch.object(rsdev, "exec_command", return_value=0),
+            mock.patch.object(rsdev, "cmd_shot") as shot,
+        ):
             self.assertEqual(rsdev.cmd_exec(args), 0)
         shot.assert_not_called()
 

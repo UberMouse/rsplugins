@@ -27,24 +27,33 @@ HEADER = {"k": "session", "schema": 1, "plugin": "t", "session": "s", "started":
 
 def chat(t, message, sender="", chat_type=109):
     return {
-        "t": t, "k": "event", "name": "ChatMessage",
-        "payload": {"chatMessage": message, "senderNameUnfiltered": sender,
-                    "senderNameFiltered": sender, "senderNameSimple": sender,
-                    "chatType": chat_type, "timestamp": 1},
+        "t": t,
+        "k": "event",
+        "name": "ChatMessage",
+        "payload": {
+            "chatMessage": message,
+            "senderNameUnfiltered": sender,
+            "senderNameFiltered": sender,
+            "senderNameSimple": sender,
+            "chatType": chat_type,
+            "timestamp": 1,
+        },
         "op": {"op": "chat", "message": message, "chatType": chat_type, "sender": sender},
     }
 
 
 def session(*extra):
-    return [HEADER,
-            {"t": 0, "k": "read", "path": sanitiser.NAME_PATH, "v": NAME},
-            {"t": 5, "k": "read", "path": "Some.table", "v": {"Zoë X": "zoë_x was here"}},
-            chat(6, "You pick the target's pocket."),
-            chat(6, "3 coins have been added to your money pouch."),
-            chat(7, "Bob has logged in.", chat_type=0),
-            chat(7, "Zoë X has logged in.", chat_type=0),
-            chat(8, "hi Zoë X", sender="Bob", chat_type=2),
-            *extra]
+    return [
+        HEADER,
+        {"t": 0, "k": "read", "path": sanitiser.NAME_PATH, "v": NAME},
+        {"t": 5, "k": "read", "path": "Some.table", "v": {"Zoë X": "zoë_x was here"}},
+        chat(6, "You pick the target's pocket."),
+        chat(6, "3 coins have been added to your money pouch."),
+        chat(7, "Bob has logged in.", chat_type=0),
+        chat(7, "Zoë X has logged in.", chat_type=0),
+        chat(8, "hi Zoë X", sender="Bob", chat_type=2),
+        *extra,
+    ]
 
 
 class CarriedStateTest(unittest.TestCase):
@@ -101,12 +110,14 @@ class SanitiseTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             src, out = Path(tmp, "in.jsonl"), Path(tmp, "out.jsonl")
             src.write_text("".join(json.dumps(e) + "\n" for e in lines), encoding="utf-8")
-            argv = ["sanitise", str(src), str(out), "--from", str(start), "--to", str(end),
-                    *flags]
+            argv = ["sanitise", str(src), str(out), "--from", str(start), "--to", str(end), *flags]
             err = StringIO()
             code = 0
-            with mock.patch.object(sys, "argv", argv), redirect_stdout(StringIO()), \
-                    redirect_stderr(err):
+            with (
+                mock.patch.object(sys, "argv", argv),
+                redirect_stdout(StringIO()),
+                redirect_stderr(err),
+            ):
                 try:
                     sanitiser.main()
                 except SystemExit as e:
@@ -130,17 +141,26 @@ class SanitiseTest(unittest.TestCase):
 
     def test_keeps_allowlisted_game_chat_and_redacts_the_rest(self):
         _, text, _ = self.run_script(session())
-        chats = [(e["payload"]["chatType"], e["payload"]["chatMessage"], e["op"]["message"])
-                 for e in self.entries(text) if e.get("name") == "ChatMessage"]
-        self.assertEqual([
-            (109, "You pick the target's pocket.", "You pick the target's pocket."),
-            (109, "3 coins have been added to your money pouch.",
-             "3 coins have been added to your money pouch."),
-            # Naming a player: redacted, keeping its type and length.
-            (0, "<redacted:18 chars>", "<redacted:18 chars>"),
-            (0, "<redacted:20 chars>", "<redacted:20 chars>"),
-            (2, "<redacted>", "<redacted>"),
-        ], chats)
+        chats = [
+            (e["payload"]["chatType"], e["payload"]["chatMessage"], e["op"]["message"])
+            for e in self.entries(text)
+            if e.get("name") == "ChatMessage"
+        ]
+        self.assertEqual(
+            [
+                (109, "You pick the target's pocket.", "You pick the target's pocket."),
+                (
+                    109,
+                    "3 coins have been added to your money pouch.",
+                    "3 coins have been added to your money pouch.",
+                ),
+                # Naming a player: redacted, keeping its type and length.
+                (0, "<redacted:18 chars>", "<redacted:18 chars>"),
+                (0, "<redacted:20 chars>", "<redacted:20 chars>"),
+                (2, "<redacted>", "<redacted>"),
+            ],
+            chats,
+        )
         player = [e for e in self.entries(text) if e.get("name") == "ChatMessage"][-1]
         self.assertEqual("<redacted>", player["payload"]["senderNameUnfiltered"])
         self.assertEqual("<redacted>", player["op"]["sender"])
@@ -167,8 +187,10 @@ class SanitiseTest(unittest.TestCase):
             calls.append(text)
             return 0 if len(calls) == 1 else real(pattern, text)
 
-        with mock.patch.object(sanitiser, "replace_name", lambda t, p, r: (t, 0)), \
-                mock.patch.object(sanitiser, "leaks", miss_first):
+        with (
+            mock.patch.object(sanitiser, "replace_name", lambda t, p, r: (t, 0)),
+            mock.patch.object(sanitiser, "leaks", miss_first),
+        ):
             code, text, err = self.run_script(session())
         self.assertNotEqual(0, code)
         self.assertIsNone(text)
@@ -211,12 +233,22 @@ class SanitiseTest(unittest.TestCase):
         entries = self.entries(text)
         self.assertEqual(
             [
-                {"k": "session", "schema": 1, "plugin": "t", "session": "s", "started": 0,
-                 "window": [6, 7]},
+                {
+                    "k": "session",
+                    "schema": 1,
+                    "plugin": "t",
+                    "session": "s",
+                    "started": 0,
+                    "window": [6, 7],
+                },
                 # Carried in at t = 0: the reads from before the window, name replaced.
                 {"t": 0, "k": "read", "path": sanitiser.NAME_PATH, "v": "Fixture Player"},
-                {"t": 0, "k": "read", "path": "Some.table",
-                 "v": {"Fixture Player": "Fixture Player was here"}},
+                {
+                    "t": 0,
+                    "k": "read",
+                    "path": "Some.table",
+                    "v": {"Fixture Player": "Fixture Player was here"},
+                },
                 chat(0, "You pick the target's pocket."),
                 chat(0, "3 coins have been added to your money pouch."),
                 chat(1, "<redacted:18 chars>", chat_type=0),
@@ -254,35 +286,76 @@ class SanitiseTest(unittest.TestCase):
 
     def test_refuses_an_allowlist_pattern_not_anchored_as_a_whole(self):
         # ^You pick|.*$ is "^You pick" or ".*$", and the second matches any message.
-        for pattern in ("^a|b$", "^You pick|.*$", "^(?:a)|b$", "^a$|^b$", "^a(?:^b)$",
-                        "^a\\$", "a$", "^a", "^(?#\\))|.*$"):
+        for pattern in (
+            "^a|b$",
+            "^You pick|.*$",
+            "^(?:a)|b$",
+            "^a$|^b$",
+            "^a(?:^b)$",
+            "^a\\$",
+            "a$",
+            "^a",
+            "^(?#\\))|.*$",
+        ):
             with self.subTest(pattern), self.assertRaises(sanitiser.Refused):
                 self.load(pattern)
 
     def test_accepts_alternations_inside_a_group_and_escaped_or_in_a_class(self):
         # Most of these classes are free-form, so this checks the anchoring scan on its own.
-        for pattern in ("^a(?:b|c)$", "^[|]$", "^a\\|b$", "^[]|$^]$", "^[^]|]$",
-                        "^a(?#x|y\\))$", "^[\\]|]$"):
+        for pattern in (
+            "^a(?:b|c)$",
+            "^[|]$",
+            "^a\\|b$",
+            "^[]|$^]$",
+            "^[^]|]$",
+            "^a(?#x|y\\))$",
+            "^[\\]|]$",
+        ):
             with self.subTest(pattern):
                 self.assertIsNone(sanitiser.unanchored(pattern))
 
     def test_refuses_an_allowlist_pattern_with_a_free_form_slot(self):
-        for pattern in ("^(?:a|.*)$", "^.*$", "^\\w+ has logged in\\.$", "^[^x]*$",
-                        "^(?s:.*)$", "^(?x: a | .* )$", "^(a)?(?(1)a|.*)$", "^(?P<n>a|.*)$",
-                        "^(?i:a)$", "^\\d+$", "^\\bx$", "^[0-9A-Z]+$", "^(?:a)+$", "^a*$",
-                        "^[0-9A-Fa-f]+ has logged in\\.$", "^[0-9A-Fa-f]{1,6}$",
-                        "^[0-9A-Fa-f]$", "^[0-9A-Fa-f]{6}$", "^[0-9A-Fa-f]{6}?$",
-                        "^(?:a[0-9A-Fa-f]{6})?$", "^[0-9A-Fa-f]{6} has logged in\\.$",
-                        "^<col=[0-9A-Fa-f]{6}>?x$"):
+        for pattern in (
+            "^(?:a|.*)$",
+            "^.*$",
+            "^\\w+ has logged in\\.$",
+            "^[^x]*$",
+            "^(?s:.*)$",
+            "^(?x: a | .* )$",
+            "^(a)?(?(1)a|.*)$",
+            "^(?P<n>a|.*)$",
+            "^(?i:a)$",
+            "^\\d+$",
+            "^\\bx$",
+            "^[0-9A-Z]+$",
+            "^(?:a)+$",
+            "^a*$",
+            "^[0-9A-Fa-f]+ has logged in\\.$",
+            "^[0-9A-Fa-f]{1,6}$",
+            "^[0-9A-Fa-f]$",
+            "^[0-9A-Fa-f]{6}$",
+            "^[0-9A-Fa-f]{6}?$",
+            "^(?:a[0-9A-Fa-f]{6})?$",
+            "^[0-9A-Fa-f]{6} has logged in\\.$",
+            "^<col=[0-9A-Fa-f]{6}>?x$",
+        ):
             with self.subTest(pattern), self.assertRaises(sanitiser.Refused):
                 self.load(pattern)
 
     def test_loads_the_allowlist_and_the_slots_it_allows(self):
-        lines = [line for line in sanitiser.ALLOWLIST.read_text(encoding="utf-8").splitlines()
-                 if line.strip() and not line.startswith("#")]
+        lines = [
+            line
+            for line in sanitiser.ALLOWLIST.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
         self.assertEqual(len(lines), len(sanitiser.load_allowlist(sanitiser.ALLOWLIST)))
-        for pattern in ("^[0-9,]+ x$", "^<col=[0-9A-Fa-f]{6}>a$", "^(?P<n>a|b)?c$",
-                        "^a(?=b)(?!c)(?<=b)(?<!c)b$", "^a\\.b?$"):
+        for pattern in (
+            "^[0-9,]+ x$",
+            "^<col=[0-9A-Fa-f]{6}>a$",
+            "^(?P<n>a|b)?c$",
+            "^a(?=b)(?!c)(?<=b)(?<!c)b$",
+            "^a\\.b?$",
+        ):
             with self.subTest(pattern):
                 self.assertEqual(1, len(self.load(pattern)))
 
@@ -301,17 +374,27 @@ class SanitiseTest(unittest.TestCase):
             os.link(src, link)
             for out in (src, Path(tmp, ".", "in.jsonl"), link):
                 argv = ["sanitise", str(src), str(out), "--from", "0", "--to", "100"]
-                with mock.patch.object(sys, "argv", argv), redirect_stdout(StringIO()), \
-                        self.assertRaises(SystemExit) as caught:
+                with (
+                    mock.patch.object(sys, "argv", argv),
+                    redirect_stdout(StringIO()),
+                    self.assertRaises(SystemExit) as caught,
+                ):
                     sanitiser.main()
                 self.assertIn("the output is the session file", str(caught.exception.code))
                 self.assertEqual(original, src.read_text(encoding="utf-8"))
 
     def test_no_allowlist_pattern_matches_a_message_naming_a_player(self):
         for pattern in sanitiser.load_allowlist(sanitiser.ALLOWLIST):
-            for message in ("Bob", "Bob 123", "Bob <col=ffffff>", "Bob has logged in.",
-                            "Bead has logged in.", "Face", "Facade has logged in.",
-                            "Bob coins have been added to your money pouch."):
+            for message in (
+                "Bob",
+                "Bob 123",
+                "Bob <col=ffffff>",
+                "Bob has logged in.",
+                "Bead has logged in.",
+                "Face",
+                "Facade has logged in.",
+                "Bob coins have been added to your money pouch.",
+            ):
                 self.assertIsNone(pattern.fullmatch(message), pattern.pattern)
 
 

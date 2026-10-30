@@ -40,8 +40,10 @@ class Receiver(unittest.TestCase):
         return status
 
     def part(self, n, total, names):
-        return self.post("/snapshot", {"part": n, "totalParts": total, "totalVars": 9,
-                                       "vars": [{"name": x} for x in names]})
+        return self.post(
+            "/snapshot",
+            {"part": n, "totalParts": total, "totalVars": 9, "vars": [{"name": x} for x in names]},
+        )
 
     def test_snapshot_is_partial_until_last_part(self):
         self.assertEqual(self.part(1, 2, ["a"]), 200)

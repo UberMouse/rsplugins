@@ -29,10 +29,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Prefixes of vars that change constantly (clocks, timers, interface state) and drown a probe.
 NOISE = (
-    "DNDTRACKER_MINS", "DNDTRACKER_SINKHOLES_START", "DNDTRACKER_FAMIL", "DNDTRACKER_BIGCHIN",
-    "CLOCK_TIME", "DOUBLEXP_PERM1", "CHAT_V3", "PAGEPOS", "MAKEX2012", "MTX", "MAXLIFEPOINTS",
-    "PRAYER_BASE", "PLAYER_KIT", "TELEMETRY", "MUSIC_V3", "COMBATV2", "PLAYER_COORD",
-    "TOPLEVEL", "CURSE_PERM", "LEAGUE_CURRENT", "QUICK_TELE", "RAND_TEMP",
+    "DNDTRACKER_MINS",
+    "DNDTRACKER_SINKHOLES_START",
+    "DNDTRACKER_FAMIL",
+    "DNDTRACKER_BIGCHIN",
+    "CLOCK_TIME",
+    "DOUBLEXP_PERM1",
+    "CHAT_V3",
+    "PAGEPOS",
+    "MAKEX2012",
+    "MTX",
+    "MAXLIFEPOINTS",
+    "PRAYER_BASE",
+    "PLAYER_KIT",
+    "TELEMETRY",
+    "MUSIC_V3",
+    "COMBATV2",
+    "PLAYER_COORD",
+    "TOPLEVEL",
+    "CURSE_PERM",
+    "LEAGUE_CURRENT",
+    "QUICK_TELE",
+    "RAND_TEMP",
 )
 REDACTED_TYPES = {"PLAYER_UID"}
 
@@ -104,10 +122,14 @@ def main():
             continue
         moved = []
         if isinstance(old, int) and isinstance(new, int):
-            moved = [(b, lo, hi) for b, lo, hi in bits.get(name, [])
-                     if field(old, lo, hi) != field(new, lo, hi)]
-        if args.match and not (args.match.search(name)
-                               or any(args.match.search(b) for b, _, _ in moved)):
+            moved = [
+                (b, lo, hi)
+                for b, lo, hi in bits.get(name, [])
+                if field(old, lo, hi) != field(new, lo, hi)
+            ]
+        if args.match and not (
+            args.match.search(name) or any(args.match.search(b) for b, _, _ in moved)
+        ):
             continue
         if types.get(name) in REDACTED_TYPES or isinstance(old, str) or isinstance(new, str):
             print(e["seq"], e["tick"], e["domain"], e["id"], name, "<changed, value hidden>")

@@ -8,7 +8,7 @@
 -- scripts/rsdev.py.
 
 local json = require("dev/json")
-local recording = require("dev/recording")
+local batch = require("dev/batch")
 
 local protocol = {}
 
@@ -240,7 +240,7 @@ end
 ---@param results string[]
 ---@return string
 function protocol.syncBody(fields, events, results)
-    local body = recording.batchBody({
+    local body = batch.batchBody({
         schema = protocol.SCHEMA,
         plugin = protocol.PLUGIN,
         session = fields.session,
@@ -248,7 +248,7 @@ function protocol.syncBody(fields, events, results)
         dropped = fields.dropped,
         hello = fields.hello,
     }, events, "events")
-    return body:sub(1, -2) .. ',"results":[' .. table.concat(results, ",") .. "]}"
+    return batch.withField(body, "results", "[" .. table.concat(results, ",") .. "]")
 end
 
 -- The oldest results whose bytes fit in `maxBytes` (at least one, however big), and the rest.
@@ -278,9 +278,7 @@ end
 ---@return string
 ---@return boolean
 local function capText(text)
-    local max = protocol.limits.lineBytes
-    if #text <= max then return text, false end
-    return text:sub(1, max) .. string.format("<+%d bytes>", #text - max), true
+    return batch.cap(text, protocol.limits.lineBytes)
 end
 
 -- What one eval has printed so far: at most outputLines lines of at most lineBytes each.
@@ -316,7 +314,7 @@ function protocol.resultEntry(r)
     local truncated = r.output ~= nil and r.output.truncated
     if not r.ok then
         local cut
-        meta.error, cut = capText(recording.text(r.error))
+        meta.error, cut = capText(batch.text(r.error))
         truncated = truncated or cut
     end
     meta.output = r.output and r.output.lines
@@ -336,7 +334,7 @@ function protocol.resultEntry(r)
     local function encode()
         meta.truncated = truncated or nil
         if not values then return json.encode(meta) end
-        return recording.batchBody(meta, values, "values")
+        return batch.batchBody(meta, values, "values")
     end
     local entry = encode()
     if #entry > protocol.limits.resultBytes and meta.output then
@@ -362,16 +360,6 @@ function protocol.logEntry(t, level, text, source)
     })
 end
 
--- `objectJson` (an encoded, non-empty object) with `key` added, its value the already-encoded
--- `valueJson`.
----@param objectJson string
----@param key string
----@param valueJson string
----@return string
-local function withField(objectJson, key, valueJson)
-    return objectJson:sub(1, -2) .. "," .. json.encode(key) .. ":" .. valueJson .. "}"
-end
-
 -- An Emit event from a snippet's emit(tag, value). `value` is already serialised; past
 -- valueBytes encoded it is left out and the payload says truncated. The value is encoded
 -- once, for both the size check and the entry: a probe may emit a large table every tick,
@@ -381,14 +369,14 @@ end
 ---@param value any
 ---@return string
 function protocol.emitEntry(t, tag, value)
-    local payload = { tag = (capText(recording.text(tag))) }
+    local payload = { tag = (capText(batch.text(tag))) }
     local encoded = value ~= nil and json.encode(value) or nil
     if encoded and #encoded > protocol.limits.valueBytes then
         payload.truncated, encoded = true, nil
     end
     local payloadJson = json.encode(payload)
-    if encoded then payloadJson = withField(payloadJson, "value", encoded) end
-    return withField(json.encode({ t = t, name = "Emit" }), "payload", payloadJson)
+    if encoded then payloadJson = batch.withField(payloadJson, "value", encoded) end
+    return batch.withField(json.encode({ t = t, name = "Emit" }), "payload", payloadJson)
 end
 
 ---------------------------------------------------------------------------
@@ -477,7 +465,7 @@ end
 ---@return string?
 function protocol.probeEventError(event)
     if PROBE_SET[event] then return nil end
-    local name = "Event." .. recording.text(event)
+    local name = "Event." .. batch.text(event)
     local why = protocol.PROBE_EXCLUDED[event]
     if why then return name .. " is not probe-able: " .. why end
     return name .. " is not probe-able: no such event (dev-bridge's README lists the ones that are)"
@@ -504,7 +492,7 @@ function protocol.probeErrorText(event, name, err)
         "probe Event.%s %q removed after an error: %s",
         event,
         name,
-        recording.text(err)
+        batch.text(err)
     )
 end
 

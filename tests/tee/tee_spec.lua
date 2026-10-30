@@ -81,7 +81,7 @@ describe("dev tee", function()
             local h = loaded('print(string.rep("x", 5000))')
             h:step()
             assert.are.equal(
-                h.env.require("dev/teelog").MAX_TEXT + #"...[cut]",
+                h.env.require("dev/teelog").MAX_TEXT + #"<+2952 bytes>",
                 #support.batchTexts(h)[1]
             )
         end)

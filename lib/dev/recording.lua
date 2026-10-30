@@ -1,9 +1,10 @@
--- The dev recorder's pure core: turning API values into plain data, naming reads, mapping an
--- event to the world op it stands for, and the bounded buffer of encoded entries. Nothing
--- here calls the API or keeps state; dev/recorder.lua (the shell) does both. The recording
--- format is documented in docs/testing.md ("Recordings").
+-- The dev recorder's pure core: turning API values into plain data, naming reads, and mapping
+-- an event to the world op it stands for. Nothing here calls the API or keeps state; the
+-- batch transport it shares with the tee and the bridge is dev/batch.lua, and dev/recorder.lua
+-- (the shell) does the API work. The recording format is documented in docs/testing.md
+-- ("Recordings").
 
-local json = require("dev/json")
+local batch = require("dev/batch")
 
 local recording = {}
 
@@ -19,8 +20,7 @@ recording.MAX_STRING = 4096
 ---@param s string
 ---@return string
 local function capString(s)
-    if #s <= recording.MAX_STRING then return s end
-    return s:sub(1, recording.MAX_STRING) .. string.format("<+%d bytes>", #s - recording.MAX_STRING)
+    return (batch.cap(s, recording.MAX_STRING))
 end
 
 -- An API object's tostring() text without its memory address: the client's text is like
@@ -177,164 +177,6 @@ function recording.eventOp(name, p, contents)
         }
     end
     return nil
-end
-
--- The manifest url called `name` (Plugin.urls), or nil. The client's urls iterate with pairs
--- (their values are opaque userdata) and read nil for a missing name; iterating first, and
--- indexing under pcall, guard against a client where either raises.
----@param urls any
----@param name string
----@return PluginURL?
-function recording.manifestUrl(urls, name)
-    local ok, found = pcall(function()
-        for key, value in pairs(urls) do
-            if key == name then return value end
-        end
-        return nil
-    end)
-    if ok and found then return found end
-    local indexed, value = pcall(function()
-        return urls[name]
-    end)
-    return indexed and value or nil
-end
-
--- Any value as text, never raising: tostring() can, through a bad __tostring.
----@param v any
----@return string
-function recording.text(v)
-    if type(v) == "string" then return v end
-    local ok, text = pcall(tostring, v)
-    if ok then return text end
-    return "<a " .. type(v) .. " that tostring() fails on>"
-end
-
--- print's and log's text: their arguments separated by a space (docs/api/generated/core.lua).
----@param ... any
----@return string
-function recording.joined(...)
-    local parts = table.pack(...)
-    for i = 1, parts.n do
-        parts[i] = recording.text(parts[i])
-    end
-    return table.concat(parts, " ", 1, parts.n)
-end
-
--- An id telling one enable's batches apart from another's: six hex digits of a fresh table's
--- address (differs between runs even if math.random is seeded the same) then four random ones.
--- The random part is always there, so the id is never empty and is hex only, which the
--- daemon's session pattern accepts.
----@return string
-function recording.newSession()
-    return (tostring({}):match("(%x+)$") or ""):sub(-6)
-        .. string.format("%04x", math.random(0, 0xffff))
-end
-
----------------------------------------------------------------------------
--- The entry buffer: encoded entries waiting to be sent, oldest first
----------------------------------------------------------------------------
-
--- Entries sit at buffer[first..last]. An entry keeps its index until it leaves, and leaving
--- is normally from the front, so everything below `first` has been taken or dropped. A
--- failed batch goes back in front of `first` (requeue).
----@return table
-function recording.newBuffer()
-    return { first = 1, last = 0, bytes = 0 }
-end
-
----@param buffer table
----@return integer
-function recording.count(buffer)
-    return buffer.last - buffer.first + 1
-end
-
--- Drop the oldest entries until at most `maxBytes` bytes and, if given, `maxLines` entries
--- remain (always keeping the newest). Returns how many were dropped.
----@param buffer table
----@param maxBytes integer
----@param maxLines integer?
----@return integer
-local function trim(buffer, maxBytes, maxLines)
-    local dropped = 0
-    while
-        buffer.first < buffer.last
-        and (buffer.bytes > maxBytes or (maxLines and recording.count(buffer) > maxLines))
-    do
-        buffer.bytes = buffer.bytes - #buffer[buffer.first]
-        buffer[buffer.first] = nil
-        buffer.first = buffer.first + 1
-        dropped = dropped + 1
-    end
-    return dropped
-end
-
--- Add an encoded entry, then trim to `maxBytes` (and `maxLines` if given). Returns how many
--- were dropped.
----@param buffer table
----@param entry string
----@param maxBytes integer
----@param maxLines integer?
----@return integer
-function recording.push(buffer, entry, maxBytes, maxLines)
-    buffer.last = buffer.last + 1
-    buffer[buffer.last] = entry
-    buffer.bytes = buffer.bytes + #entry
-    return trim(buffer, maxBytes, maxLines)
-end
-
--- Remove and return the oldest entries, up to `maxBytes` in all and `maxLines` entries if
--- given (at least one, however big).
----@param buffer table
----@param maxBytes integer
----@param maxLines integer?
----@return string[]
-function recording.take(buffer, maxBytes, maxLines)
-    local out, bytes = {}, 0
-    while buffer.first <= buffer.last do
-        local entry = buffer[buffer.first]
-        if #out > 0 and (bytes + #entry > maxBytes or (maxLines and #out >= maxLines)) then
-            break
-        end
-        out[#out + 1] = entry
-        bytes = bytes + #entry
-        buffer[buffer.first] = nil
-        buffer.first = buffer.first + 1
-        buffer.bytes = buffer.bytes - #entry
-    end
-    return out
-end
-
--- Put entries taken earlier back in front, oldest first, then trim: a batch that failed to
--- send keeps its entries unless the caps say otherwise. Returns how many were dropped.
----@param buffer table
----@param items string[]
----@param maxBytes integer
----@param maxLines integer?
----@return integer
-function recording.requeue(buffer, items, maxBytes, maxLines)
-    if #items == 0 then return 0 end
-    for i = #items, 1, -1 do
-        buffer.first = buffer.first - 1
-        buffer[buffer.first] = items[i]
-        buffer.bytes = buffer.bytes + #items[i]
-    end
-    return trim(buffer, maxBytes, maxLines)
-end
-
--- A batch's POST body: `meta` (schema, plugin, session...) plus the already-encoded entries,
--- spliced in as "<key>": [...] (key "entries" unless given) so they aren't encoded twice.
----@param meta table
----@param entries string[]
----@param key string?
----@return string
-function recording.batchBody(meta, entries, key)
-    local head = json.encode(meta) -- "{...}"; meta is never empty, so it's an object
-    return head:sub(1, -2)
-        .. ',"'
-        .. (key or "entries")
-        .. '":['
-        .. table.concat(entries, ",")
-        .. "]}"
 end
 
 return recording

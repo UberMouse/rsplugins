@@ -36,6 +36,7 @@
 
 local protocol = require("protocol")
 local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is missing")
+local batch = assert(require("dev/batch"), "dev/ (a link to lib/dev) is missing")
 
 -- The client has load, and honours its mode and env arguments (docs/api-concepts.md, "Seen
 -- with dev-bridge"). Without it eval reports an error.
@@ -67,7 +68,7 @@ local eval = {}
 local function serialise(v)
     local ok, data = pcall(recording.serialise, v, recording.objectData)
     if ok then return data end
-    return "<could not serialise: " .. recording.text(data) .. ">"
+    return "<could not serialise: " .. batch.text(data) .. ">"
 end
 
 -- A new evaluator for one bridge session. `host.push(entry)` buffers an encoded Log or Emit
@@ -90,7 +91,7 @@ function eval.new(host)
     -- A print or log from scratch code: into the running snippet's output, else a Log event.
     ---@param level "print"|"log"
     local function capture(level, ...)
-        local text = recording.joined(...)
+        local text = batch.joined(...)
         if output then
             protocol.addOutput(output, text)
         else

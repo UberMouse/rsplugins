@@ -3,7 +3,7 @@
 -- both. The wire format is docs/dev-environment.md ("Log tee").
 
 local json = require("dev/json")
-local recording = require("dev/recording")
+local batch = require("dev/batch")
 
 local teelog = {}
 
@@ -13,17 +13,14 @@ teelog.SCHEMA = 1
 -- A line's text is cut to this many bytes, so one huge print can't fill a batch.
 teelog.MAX_TEXT = 2048
 
-local CUT_MARK = "...[cut]"
-
--- `text` cut to at most `max` bytes plus a marker. The cut is by byte, so it can split a
--- UTF-8 character; the daemon decodes request bodies with errors="replace" (scripts/rsdev.py),
--- so that costs a replacement character, not the batch.
+-- `text` cut to at most `max` bytes plus batch.cap's "<+N bytes>" marker. The cut is by byte,
+-- so it can split a UTF-8 character; the daemon decodes request bodies with errors="replace"
+-- (scripts/rsdev.py), so that costs a replacement character, not the batch.
 ---@param text string
 ---@param max integer
 ---@return string
 function teelog.cut(text, max)
-    if #text <= max then return text end
-    return text:sub(1, max) .. CUT_MARK
+    return (batch.cap(text, max))
 end
 
 -- One line, encoded for a batch: `tick` is Logic ticks since the tee installed.
@@ -44,7 +41,7 @@ end
 ---@param lines string[]
 ---@return string
 function teelog.body(meta, lines)
-    return recording.batchBody(meta, lines, "lines")
+    return batch.batchBody(meta, lines, "lines")
 end
 
 -- Ticks to wait after the `failures`-th failure in a row: `base`, doubling each time, up to `max`.

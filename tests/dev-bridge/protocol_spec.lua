@@ -6,7 +6,7 @@
 local dkjson = require("dkjson")
 local support = require("tests.dev-bridge.support")
 local protocol = require("protocol")
-local recording = require("dev/recording")
+local batch = require("dev/batch")
 
 describe("protocol.syncBody", function()
     it("holds the schema-1 fields with the encoded events spliced in", function()
@@ -349,8 +349,8 @@ end)
 
 describe("protocol text", function()
     it("joins arguments with spaces, as print and log do, nils included", function()
-        assert.are.equal("a 1 nil true", recording.joined("a", 1, nil, true))
-        assert.are.equal("", recording.joined())
+        assert.are.equal("a 1 nil true", batch.joined("a", 1, nil, true))
+        assert.are.equal("", batch.joined())
     end)
 
     it("never raises on a value whose tostring fails", function()
@@ -359,8 +359,8 @@ describe("protocol text", function()
                 error("no")
             end,
         })
-        assert.are.equal("<a table that tostring() fails on>", recording.text(bad))
-        assert.are.equal("x <a table that tostring() fails on>", recording.joined("x", bad))
+        assert.are.equal("<a table that tostring() fails on>", batch.text(bad))
+        assert.are.equal("x <a table that tostring() fails on>", batch.joined("x", bad))
     end)
 end)
 

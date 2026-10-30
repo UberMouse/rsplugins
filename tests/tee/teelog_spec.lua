@@ -14,14 +14,17 @@ end
 describe("dev tee core", function()
     local t = teelog()
 
-    it("cuts long text at a byte cap and leaves the rest as it was", function()
-        assert.are.equal("short", t.cut("short", 10))
-        assert.are.equal("abcde", t.cut("abcde", 5))
-        assert.are.equal("abcde...[cut]", t.cut("abcdefgh", 5))
-        -- A byte cut may split a multibyte character: the daemon decodes with replacement.
-        assert.are.equal("ab\195...[cut]", t.cut("ab\195\169", 3))
-        assert.are.equal("a\255b", t.cut("a\255b", 10))
-    end)
+    it(
+        "cuts long text at a byte cap with a byte-count marker and leaves the rest as it was",
+        function()
+            assert.are.equal("short", t.cut("short", 10))
+            assert.are.equal("abcde", t.cut("abcde", 5))
+            assert.are.equal("abcde<+3 bytes>", t.cut("abcdefgh", 5))
+            -- A byte cut may split a multibyte character: the daemon decodes with replacement.
+            assert.are.equal("ab\195<+1 bytes>", t.cut("ab\195\169", 3))
+            assert.are.equal("a\255b", t.cut("a\255b", 10))
+        end
+    )
 
     it("doubles the wait with each failure, up to the maximum", function()
         assert.are.same({ 10, 20, 40, 50, 50 }, {

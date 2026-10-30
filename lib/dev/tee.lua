@@ -32,7 +32,7 @@
 -- other order would make the tee's own POSTs show up in the recording.
 
 local teelog = require("dev/teelog")
-local recording = require("dev/recording")
+local batch = require("dev/batch")
 
 local tee = {}
 
@@ -71,7 +71,7 @@ local url = nil ---@type PluginURL?
 local pluginName, session = "", ""
 local http = nil ---@type table? the HTTPRequest table, taken at install
 local tick = 0 -- Logic ticks since install
-local queue = recording.newBuffer()
+local queue = batch.newBuffer()
 local dropped = 0 -- lines lost so far (queue full, or a batch the daemon refused)
 local seq = 0 -- POSTs so far
 local nextPost = 0
@@ -82,7 +82,7 @@ local inFlight = nil ---@type { request: HTTPRequest, body: string, lines: strin
 ---@param level string
 ---@param text string
 local function push(level, text)
-    local lost = recording.push(
+    local lost = batch.push(
         queue,
         teelog.encode(tick, level, text),
         tee.limits.bufferBytes,
@@ -112,7 +112,7 @@ local function consoleStandIn(level, real)
     return function(...)
         real(...)
         pcall(function(...)
-            push(level, recording.joined(...))
+            push(level, batch.joined(...))
         end, ...)
     end
 end
@@ -186,8 +186,7 @@ end
 -- applies, and what it drops is counted.
 ---@param lines string[]
 local function giveBack(lines)
-    dropped = dropped
-        + recording.requeue(queue, lines, tee.limits.bufferBytes, tee.limits.bufferLines)
+    dropped = dropped + batch.requeue(queue, lines, tee.limits.bufferBytes, tee.limits.bufferLines)
 end
 
 -- The completion callback for a batch. It must not start a request (that crashed the client),
@@ -224,10 +223,10 @@ end
 -- Send the next batch when one is due and none is in flight.
 local function flush()
     assert(url and http, "install() found urls.rsdev and took HTTPRequest")
-    if not active or inFlight or tick < nextPost or recording.count(queue) == 0 then return end
+    if not active or inFlight or tick < nextPost or batch.count(queue) == 0 then return end
     nextPost = tick + tee.limits.postEveryTicks
     if not Plugin.HasPermission(PluginPermissions.httpAccess) then return end
-    local lines = recording.take(queue, tee.limits.batchBytes, tee.limits.batchLines)
+    local lines = batch.take(queue, tee.limits.batchBytes, tee.limits.batchLines)
     seq = seq + 1
     local body = teelog.body({
         schema = teelog.SCHEMA,
@@ -278,7 +277,7 @@ end
 function tee.install(env, plugin)
     if installed then return end
     installed = true
-    url = recording.manifestUrl(Plugin.urls, URL_NAME)
+    url = batch.manifestUrl(Plugin.urls, URL_NAME)
     if not url then
         say("no urls." .. URL_NAME .. " in plugin.json, so not teeing")
         return
@@ -297,7 +296,7 @@ function tee.install(env, plugin)
         return
     end
     pluginName = plugin
-    session = recording.newSession()
+    session = batch.newSession()
     http = env.HTTPRequest
     realLog = env.log
     realEvent = env.Event

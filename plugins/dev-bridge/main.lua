@@ -34,6 +34,7 @@
 local protocol = require("protocol")
 -- dev/ is a symlink to lib/dev (the dev recorder's modules); require gives nil without it.
 local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is missing")
+local batch = assert(require("dev/batch"), "dev/ (a link to lib/dev) is missing")
 local payloads = assert(require("dev/payloads"), "dev/ (a link to lib/dev) is missing")
 local eval = assert(require("eval"), "eval.lua is missing")
 
@@ -52,14 +53,14 @@ local FORWARDED = {
 ---------------------------------------------------------------------------
 
 -- An opaque userdata in the client: never concatenated or formatted.
-local url = recording.manifestUrl(Plugin.urls, "rsdev") ---@type PluginURL?
+local url = batch.manifestUrl(Plugin.urls, "rsdev") ---@type PluginURL?
 -- Tells this enable's syncs apart from another's.
-local session = recording.newSession()
+local session = batch.newSession()
 
 local tick = 0 -- the last Logic tick seen; events are stamped with it
 local seq = 0 -- syncs started
 local nextSync = 0 -- the tick the next sync may start at
-local buffer = recording.newBuffer() -- encoded events waiting to be sent
+local buffer = batch.newBuffer() -- encoded events waiting to be sent
 local dropped = 0 -- events lost so far: buffer full, or in a sync the daemon never got
 local queue = {} -- commands from the daemon not yet run, oldest first
 local results = {} -- results not yet sent, encoded (protocol.resultEntry)
@@ -105,14 +106,14 @@ end
 ---@param entry string
 local function push(entry)
     if stopped then return end
-    local lost = recording.push(buffer, entry, protocol.limits.bufferBytes)
+    local lost = batch.push(buffer, entry, protocol.limits.bufferBytes)
     if lost > 0 then noteDropped(lost, "buffer full") end
 end
 
 -- Log a tagged console line, and send it to the daemon as a Log event too.
 say = function(...)
     log(protocol.TAG, ...)
-    push(protocol.logEntry(tick, "log", recording.joined(...)))
+    push(protocol.logEntry(tick, "log", batch.joined(...)))
 end
 
 local evaluator = eval.new({
@@ -273,7 +274,7 @@ local function runOne()
     end
     result.id = command.id
     if not result.ok then
-        say("command " .. command.id .. " failed: " .. recording.text(result.error))
+        say("command " .. command.id .. " failed: " .. batch.text(result.error))
     end
     results[#results + 1] = protocol.resultEntry(result)
 end
@@ -352,7 +353,7 @@ end
 
 -- Start a sync: the oldest buffered events (up to syncBytes) and results (up to resultBytes).
 local function startSync()
-    local events = recording.take(buffer, protocol.limits.syncBytes)
+    local events = batch.take(buffer, protocol.limits.syncBytes)
     local sending, rest = protocol.takeResults(results, protocol.limits.resultBytes)
     results = rest
     seq = seq + 1

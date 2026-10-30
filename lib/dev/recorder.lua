@@ -28,6 +28,7 @@
 local json = require("dev/json")
 local payloads = require("dev/payloads")
 local recording = require("dev/recording")
+local batch = require("dev/batch")
 
 local recorder = {}
 
@@ -68,7 +69,7 @@ local sendFailed = false -- set if flush raised outside starting a request; noth
 local url = nil ---@type PluginURL?
 local pluginName, session = "", ""
 local tick = 0 -- Logic ticks since install
-local buffer = recording.newBuffer()
+local buffer = batch.newBuffer()
 local dropped = 0 -- entries lost so far (buffer full, or a batch the receiver didn't take)
 local warnedDrop = false
 local seq = 0 -- batches sent, so the receiver can tell a new enable from a late batch
@@ -114,7 +115,7 @@ end
 ---@param entry table
 local function push(entry)
     entry.t = tick
-    local lost = recording.push(buffer, json.encode(entry), recorder.limits.bufferBytes)
+    local lost = batch.push(buffer, json.encode(entry), recorder.limits.bufferBytes)
     if lost > 0 then noteDropped(lost, "buffer full") end
 end
 
@@ -505,7 +506,7 @@ local function permissionName(permission)
     for name, value in pairs(PluginPermissions) do
         if rawequal(value, permission) then return name end
     end
-    return recording.text(permission)
+    return batch.text(permission)
 end
 
 -- Plugin, with HasPermission recorded as { k = "perm", permission, v } when its answer changes.
@@ -654,12 +655,12 @@ end
 -- Called every Logic tick: send the next batch when one is due and none is in flight.
 local function flush()
     assert(url, "install() found urls.recorder")
-    if inFlight or tick < nextPost or recording.count(buffer) == 0 then return end
+    if inFlight or tick < nextPost or batch.count(buffer) == 0 then return end
     nextPost = tick + recorder.limits.postEveryTicks
     if not realPlugin.HasPermission(PluginPermissions.httpAccess) then return end
-    local entries = recording.take(buffer, recorder.limits.batchBytes)
+    local entries = batch.take(buffer, recorder.limits.batchBytes)
     seq = seq + 1
-    local body = recording.batchBody({
+    local body = batch.batchBody({
         schema = recording.SCHEMA,
         plugin = pluginName,
         session = session,
@@ -727,13 +728,13 @@ end
 function recorder.install(env, plugin)
     if installed then return end
     installed = true
-    url = recording.manifestUrl(realPlugin.urls, URL_NAME)
+    url = batch.manifestUrl(realPlugin.urls, URL_NAME)
     if not url then
         say("no urls." .. URL_NAME .. " in plugin.json, so not recording")
         return
     end
     pluginName = plugin
-    session = recording.newSession()
+    session = batch.newSession()
     if not realPlugin.HasPermission(PluginPermissions.httpAccess) then
         -- ppr first: ppe on a permission the plugin hasn't requested silently does nothing.
         say(

@@ -116,30 +116,12 @@ return {
         links = {},
     },
     {
-        id = "bloodwood-tree",
-        name = "Bakriminel Bolts",
-        period = "daily",
-        category = "skilling",
-        url = "https://runescape.wiki/w/Money_making_guide/Fletching_bakriminel_bolts",
-        desc = "Fletch bakriminel bolts from your bloodwood tree, every 6 hours",
-        links = {},
-    },
-    {
         id = "book-of-char",
         name = "Book of Char",
         period = "daily",
         category = "skilling",
         url = "https://runescape.wiki/w/The_Book_of_Char",
         desc = "Drop logs on the ground and light them with the book for fast Firemaking XP",
-        links = {},
-    },
-    {
-        id = "crystal-tree-blossom",
-        name = "Crystal Tree Blossom",
-        period = "daily",
-        category = "skilling",
-        url = "https://runescape.wiki/w/Crystal_tree_blossom",
-        desc = "Collect blossom from a crystal tree, for perfect plus potions",
         links = {},
     },
     {
@@ -159,15 +141,6 @@ return {
         url = "https://runescape.wiki/w/Fixate",
         desc = "Use three fixate charges for guaranteed artefacts, e.g. at Red Rum Relics III",
         links = { "https://runescape.wiki/w/Red_Rum_Relics_III" },
-    },
-    {
-        id = "herb-run",
-        name = "Herb Run",
-        period = "daily",
-        category = "skilling",
-        url = "https://runescape.wiki/w/Money_making_guide/Farming_spirit_weed",
-        desc = "Plant and harvest your herb patches",
-        links = {},
     },
     {
         id = "rapid-growth",
@@ -190,6 +163,33 @@ return {
 
     -- Daily: upkeep
 
+    {
+        id = "bloodwood-tree",
+        name = "Bakriminel Bolts",
+        period = "daily",
+        category = "upkeep",
+        url = "https://runescape.wiki/w/Money_making_guide/Fletching_bakriminel_bolts",
+        desc = "Fletch bakriminel bolts from your bloodwood tree, every 6 hours",
+        links = {},
+    },
+    {
+        id = "crystal-tree-blossom",
+        name = "Crystal Tree Blossom",
+        period = "daily",
+        category = "upkeep",
+        url = "https://runescape.wiki/w/Crystal_tree_blossom",
+        desc = "Collect blossom from a crystal tree, for perfect plus potions",
+        links = {},
+    },
+    {
+        id = "herb-run",
+        name = "Herb Run",
+        period = "daily",
+        category = "upkeep",
+        url = "https://runescape.wiki/w/Money_making_guide/Farming_spirit_weed",
+        desc = "Plant and harvest your herb patches",
+        links = {},
+    },
     {
         id = "invention-machine",
         name = "Invention Machines",

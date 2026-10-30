@@ -127,7 +127,7 @@ describe("dev-bridge eval", function()
         local t =
             support.eval(h, "error(setmetatable({}, { __tostring = function() return 'obj' end }))")
         assert.are.same({ false, "obj" }, { t.ok, t.error })
-        assert.are.equal(1, support.lines(h, "[BRIDGE] command e failed: obj"))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] command e failed: obj"))
     end)
 
     it("captures print and log into the result, and still writes the console", function()
@@ -136,7 +136,7 @@ describe("dev-bridge eval", function()
         assert.are.same({ "a 1 nil", "b" }, r.output)
         assert.are.same({ 2 }, r.values)
         assert.are.same({}, evalLogs(body)) -- output is returned, not streamed
-        assert.are.equal(1, support.lines(h, "a 1 nil"))
+        assert.are.equal(1, h:consoleCount("a 1 nil"))
     end)
 
     it("cuts output past its caps and says truncated, ok staying true", function()
@@ -206,7 +206,7 @@ describe("dev-bridge eval", function()
             { plugin = "dev-bridge", level = "print", text = "probe 1", source = "eval" },
             logs[1]
         )
-        assert.is_true(support.lines(h, "probe 1") >= 1)
+        assert.is_true(h:consoleCount("probe 1") >= 1)
     end)
 
     it(
@@ -304,7 +304,7 @@ end)]]
         assert.matches('Event.Logic "bad" removed after an error: eval:1: kaput', errors[1].text)
         assert.is_true(#support.payloads(body, "Emit") > 0) -- good kept running
         h:advance(20 * 100)
-        assert.are.equal(1, support.lines(h, '[BRIDGE] probe Event.Logic "bad"'))
+        assert.are.equal(1, h:consoleCount('[BRIDGE] probe Event.Logic "bad"'))
         -- Its slot is free again.
         assert.is_true(support.eval(h, "Event.Logic.Subscribe('next', function() end)").ok)
     end)
@@ -388,7 +388,7 @@ end)]]
             error("boom")
         end
         support.answer(h, { status = 200, body = support.line("c", "exec", "plist") })
-        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         local before = hits
         h:advance(20 * 10)
         assert.are.equal(before, hits)
@@ -404,9 +404,9 @@ end)]]
             error("broken")
         end
         support.eval(h, "Event.Logic.Subscribe('q', function() error('x') end)")
-        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         h:advance(20 * 30)
-        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
     end)
 
     it("resets: clears probes and the scratch env, answers ok, with no reload", function()
@@ -417,7 +417,7 @@ end)]]
         local calls = spyEvent(h)
         local results, body = support.run(h, { { "r1", "reset", "" } })
         assert.are.same({ id = "r1", ok = true }, results.r1)
-        assert.are.equal(1, support.lines(h, "[BRIDGE] reset r1: probes and scratch env cleared"))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] reset r1: probes and scratch env cleared"))
         support.answer(h) -- the sync that carried the result, and the emits before the reset
         h:advance(20 * 10)
         assert.are.same({}, support.payloads(support.last(h), "Emit"))
@@ -545,7 +545,7 @@ Event.Logic.Unsubscribe('l')]]
         support.eval(h, "Event.KeyTyped.Subscribe('bad', function() error('x') end)")
         local calls = spyEvent(h)
         h:fire("KeyTyped", { char = 65, modifiers = 0, timestamp = 0 })
-        assert.are.equal(1, support.lines(h, 'probe Event.KeyTyped "bad" removed'))
+        assert.are.equal(1, h:consoleCount('probe Event.KeyTyped "bad" removed'))
         assert.are.same({}, calls) -- not from inside KeyTyped's own dispatch
         h:step()
         assert.are.same({ "Unsubscribe KeyTyped devBridgeProbeKeyTyped" }, calls)
@@ -654,7 +654,7 @@ Event.Logic.Subscribe('l', function() end)]]
             body = support.line("u", "eval", "Event.ServerLogic.Unsubscribe('a')"),
         })
         h:step() -- the tick's Unsubscribe raises, which stops the bridge
-        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         h:unload()
         local expected = { "Unsubscribe ServerLogic " .. SERVER }
         for _, call in ipairs(shutdownUnsubscribes(h)) do
@@ -671,7 +671,7 @@ Event.Logic.Subscribe('l', function() end)]]
             error("boom")
         end
         support.answer(h, { status = 200, body = support.line("c", "exec", "plist") })
-        assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] stopped after an error"))
         h:advance(20 * 30)
         assert.are.same({}, calls) -- stopping makes no client call
         h:unload()
@@ -690,6 +690,6 @@ describe("dev-bridge Log events", function()
             level = "log",
             text = "enabled, session " .. body.session,
         }, logs[1])
-        assert.are.equal(1, support.lines(h, "[BRIDGE] enabled, session " .. body.session))
+        assert.are.equal(1, h:consoleCount("[BRIDGE] enabled, session " .. body.session))
     end)
 end)

@@ -102,6 +102,10 @@ n end` gives `utils.CalcTextWidth` its font metrics (without it, the call faults
 | `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "" }` (a status of 400 or more arrives failed), `{ timedOut = true }` or `{ error = "info", errorCode = n }`; any other field faults. Delivered on the next step. A request left unanswered for 10 s (500 steps) times out by itself |
 | `h:useRecording(source, opts?)` | Drive the world from a recording (a `.jsonl` path, repo-relative or absolute, or a list of entries); call before `h:load()`. A recording with `dropped` entries is refused unless `opts.allowDropped`. See [Replaying a recording](#replaying-a-recording) |
 | `h:playRecording()` | Step the clock to the recording's last tick |
+| `h:consoleCount(text)` | How many console lines contain `text` (plain match) |
+| `h:requestsTo(url)` | The started HTTP requests to exactly `url`, in order |
+| `h:answerAll(url, response?)` | `h:respond` to every unanswered request to `url`; `{ status = 200 }` by default |
+| `harness.decodeJson(text, what)` | Module function: decode JSON a test expects to be valid; fails with `<what> is not JSON: <msg> at <pos>: <first 200 chars>` |
 | `h:output()` | Everything the plugin printed or logged, one line per call |
 | `h.env` | The current sandbox environment |
 | `h.console` | `{ kind = "print"|"log", text }` per call |

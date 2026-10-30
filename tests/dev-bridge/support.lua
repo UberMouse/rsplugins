@@ -2,7 +2,6 @@
 -- root (docs/plugin-anatomy.md), so the plugin root goes first on the module path; dev/ is
 -- found through lib/ (.busted).
 
-local dkjson = require("dkjson")
 local harness = require("tests.harness")
 
 local root = "./plugins/dev-bridge/?.lua;"
@@ -93,11 +92,7 @@ end
 ---@param h table
 ---@return table[]
 function M.syncs(h)
-    local out = {}
-    for _, record in ipairs(h.requests) do
-        if record.url == M.SYNC_URL then out[#out + 1] = record end
-    end
-    return out
+    return h:requestsTo(M.SYNC_URL)
 end
 
 -- The sync requests neither answered nor cancelled.
@@ -115,7 +110,7 @@ end
 ---@param record table
 ---@return table
 function M.body(record)
-    return assert(dkjson.decode(record.body), "sync body is not JSON")
+    return harness.decodeJson(record.body, "sync body")
 end
 
 -- The latest sync, decoded.
@@ -169,18 +164,6 @@ function M.payloads(body, name)
         if e.name == name then out[#out + 1] = e.payload end
     end
     return out
-end
-
--- How many console lines contain `text`.
----@param h table
----@param text string
----@return integer
-function M.lines(h, text)
-    local n = 0
-    for _, line in ipairs(h.console) do
-        if line.text:find(text, 1, true) then n = n + 1 end
-    end
-    return n
 end
 
 -- The console commands run so far after the three self-grant ones.

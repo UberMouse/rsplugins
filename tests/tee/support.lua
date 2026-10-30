@@ -1,8 +1,8 @@
 -- Shared helpers for the dev log tee's specs: inline test plugins that carry lib/dev/ as their
 -- dev/ folder, and reading back the batches the tee POSTed.
 
-local dkjson = require("dkjson")
-local paths = require("tests.harness.paths")
+local devplugin = require("tests.support.devplugin")
+local harness = require("tests.harness")
 
 local M = {}
 
@@ -23,24 +23,14 @@ M.INSTALL = 'local tee = require("dev/tee")\ntee.install(_ENV, "t")\n'
 ---@param manifest string?
 ---@return table
 function M.plugin(main, manifest)
-    local files = { ["main.lua"] = main, ["plugin.json"] = manifest or M.MANIFEST }
-    for _, name in ipairs({ "tee", "teelog", "recorder", "recording", "json", "payloads" }) do
-        files["dev/" .. name .. ".lua"] =
-            assert(paths.read(paths.repo("lib/dev/" .. name .. ".lua")))
-    end
-    return files
+    return devplugin.inlinePlugin(main, manifest or M.MANIFEST)
 end
 
 -- The tee's requests, in order.
 ---@param h table
----@param url string?
 ---@return table[]
-function M.posts(h, url)
-    local out = {}
-    for _, record in ipairs(h.requests) do
-        if record.url == (url or M.URL) then out[#out + 1] = record end
-    end
-    return out
+function M.posts(h)
+    return h:requestsTo(M.URL)
 end
 
 -- Every batch POSTed so far, decoded.
@@ -49,7 +39,7 @@ end
 function M.batches(h)
     local out = {}
     for i, record in ipairs(M.posts(h)) do
-        out[i] = assert(dkjson.decode(record.body), "batch body is not JSON")
+        out[i] = harness.decodeJson(record.body, "batch body")
     end
     return out
 end
@@ -57,7 +47,7 @@ end
 -- Every line in every batch so far, in order.
 ---@param h table
 ---@return table[]
-function M.lines(h)
+function M.batchLines(h)
     local out = {}
     for _, batch in ipairs(M.batches(h)) do
         for _, line in ipairs(batch.lines) do
@@ -67,12 +57,12 @@ function M.lines(h)
     return out
 end
 
--- The text of every line, in order.
+-- The text of every batch line, in order.
 ---@param h table
 ---@return string[]
-function M.texts(h)
+function M.batchTexts(h)
     local out = {}
-    for i, line in ipairs(M.lines(h)) do
+    for i, line in ipairs(M.batchLines(h)) do
         out[i] = line.text
     end
     return out
@@ -82,21 +72,7 @@ end
 ---@param h table
 ---@param response table?
 function M.answer(h, response)
-    for _, record in ipairs(M.posts(h)) do
-        if not record.response then h:respond(record, response or { status = 200 }) end
-    end
-end
-
--- How many console lines contain `text`.
----@param h table
----@param text string
----@return integer
-function M.count(h, text)
-    local n = 0
-    for _, line in ipairs(h.console) do
-        if line.text:find(text, 1, true) then n = n + 1 end
-    end
-    return n
+    h:answerAll(M.URL, response)
 end
 
 return M

@@ -285,7 +285,7 @@ describe("dev recorder", function()
         local entries = support.entries(h)
         assert.are.equal(1, #support.where(entries, { path = "var.VarPlayer.QP.value" }))
         assert.are.equal(0, #support.where(entries, { path = "var.VarPlayer.OPTION_RUN.value" }))
-        assert.are.equal(1, support.lines(h, "[RECORDER] recording stopped after an error"))
+        assert.are.equal(1, h:consoleCount("[RECORDER] recording stopped after an error"))
     end)
 
     it("stops sending, once, when building a batch fails", function()
@@ -306,7 +306,7 @@ describe("dev recorder", function()
         assert.are.equal(0, #h.requests)
         assert.are.equal(
             1,
-            support.lines(h, "[RECORDER] recording and sending stopped after an error")
+            h:consoleCount("[RECORDER] recording and sending stopped after an error")
         )
     end)
 
@@ -334,7 +334,7 @@ describe("dev recorder", function()
         h.env.failStart = true
         h:advance(100)
         assert.are.equal(0, #h.requests)
-        assert.are.equal(1, support.lines(h, "[RECORDER] dropping the oldest entries"))
+        assert.are.equal(1, h:consoleCount("[RECORDER] dropping the oldest entries"))
         assert.matches("starting the request failed", h:output())
         assert.is_nil(h:output():find("sending stopped", 1, true))
 
@@ -345,7 +345,7 @@ describe("dev recorder", function()
         local batches = support.batches(h)
         assert.are.equal(1, #batches)
         assert.is_true(batches[1].dropped > 0)
-        assert.are.equal(1, support.lines(h, "[RECORDER] dropping"))
+        assert.are.equal(1, h:consoleCount("[RECORDER] dropping"))
     end)
 
     it("ignores a batch completing after shutdown, and cancels the request in flight", function()
@@ -366,7 +366,7 @@ describe("dev recorder", function()
         -- Later ticks send nothing and log nothing (no drop, no fault).
         h:advance(3000)
         assert.are.equal(1, #support.posts(h))
-        assert.are.equal(0, support.lines(h, "[RECORDER]"))
+        assert.are.equal(0, h:consoleCount("[RECORDER]"))
 
         -- A completion racing the Cancel must be ignored too. The harness never delivers a
         -- cancelled request (h:respond is a no-op for it), so call the captured callback
@@ -378,7 +378,7 @@ describe("dev recorder", function()
         record.onDone(record.request)
         h:advance(3000)
         assert.are.equal(1, #support.posts(h))
-        assert.are.equal(0, support.lines(h, "[RECORDER]"))
+        assert.are.equal(0, h:consoleCount("[RECORDER]"))
         recorder.shutdown() -- twice is fine
     end)
 
@@ -392,7 +392,7 @@ describe("dev recorder", function()
             { grant = { "httpAccess" } }
         )
         h:load()
-        assert.are.equal(1, support.lines(h, "[RECORDER] no urls.recorder"))
+        assert.are.equal(1, h:consoleCount("[RECORDER] no urls.recorder"))
         h:unload()
     end)
 

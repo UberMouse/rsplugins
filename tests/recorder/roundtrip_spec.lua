@@ -24,17 +24,10 @@ end
 describe("plugins/recorder-demo round trip", function()
     it("replayed without the recorder, reaches the state it reached recorded", function()
         -- Recorded: an enable with a stored counter, then a few minutes of world changes.
-        local recorded = harness.new("recorder-demo", {
-            grant = { "httpAccess", "chatAccess" },
-            stdlib = { os = true, io = true },
+        local recorded = support.demo({
+            clock = 29881543,
+            db = { enables = { type = harness.enums.PersistentDBType.INT, value = 4 } },
         })
-        recorded.db.enables = { type = harness.enums.PersistentDBType.INT, value = 4 }
-        recorded.world:setVar("VarPlayer", "QP", 10)
-        recorded.world:setVar("VarPlayer", "OPTION_RUN", 0)
-        recorded.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", 29881543)
-        recorded.world:login("Zezima")
-        recorded.world:setInventory("INV", { [1] = { obj = "LOGS", count = 5 } }, 28)
-        recorded:load()
         recorded.world:setVar("VarPlayer", "OPTION_RUN", 1)
         recorded:advance(3000)
         recorded.world:setInventory(

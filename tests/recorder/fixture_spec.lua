@@ -94,7 +94,9 @@ describe("plugins/recorder-demo replaying a sanitised client session", function(
         assert.are.equal("Fixture Player", h.world.state.player.displayName)
     end)
 
-    it("lets a test script on from where the recording ends", function()
+    -- The demo keeps its re-read state to itself, so the asserts only read back what the test set:
+    -- the point is that advance() after playRecording() doesn't fault.
+    it("keeps running without a fault when a test advances past the recording's end", function()
         local h = replayed()
         h.world:setInventory("MONEY_POUCH", { { obj = "COINS", count = 5 } })
         assert.are.same({ 995, 5 }, slot(h.world.state.invs[623].slots, 1))

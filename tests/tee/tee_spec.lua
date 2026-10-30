@@ -46,8 +46,8 @@ describe("dev tee", function()
             local h = loaded('print("a", 1)\nlog("b", nil)')
             assert.are.equal(0, #support.posts(h)) -- nothing is sent outside Logic
             h:step()
-            assert.are.same({ "a 1", "b nil" }, support.texts(h))
-            local lines = support.lines(h)
+            assert.are.same({ "a 1", "b nil" }, support.batchTexts(h))
+            local lines = support.batchLines(h)
             assert.are.same({ "print", "log" }, { lines[1].level, lines[2].level })
             assert.is_not_nil(h:output():find("a 1\nb nil", 1, true))
         end)
@@ -66,7 +66,7 @@ describe("dev tee", function()
             })
             h.env.print("x", bad)
             h:step()
-            assert.are.same({ "x <a table that tostring() fails on>" }, support.texts(h))
+            assert.are.same({ "x <a table that tostring() fails on>" }, support.batchTexts(h))
         end)
 
         it("stamps each line with the Logic tick since install", function()
@@ -74,20 +74,23 @@ describe("dev tee", function()
             h:advance(100) -- 5 ticks
             h.env.print("late")
             h:step()
-            assert.are.equal(5, support.lines(h)[1].t)
+            assert.are.equal(5, support.batchLines(h)[1].t)
         end)
 
         it("cuts a long line", function()
             local h = loaded('print(string.rep("x", 5000))')
             h:step()
-            assert.are.equal(2048 + #"...[cut]", #support.texts(h)[1])
+            assert.are.equal(
+                h.env.require("dev/teelog").MAX_TEXT + #"...[cut]",
+                #support.batchTexts(h)[1]
+            )
         end)
 
         it("does not queue its own console lines", function()
             local h = loaded("")
             h:step()
             assert.are.same({}, support.posts(h))
-            assert.are.equal(1, support.count(h, "[TEE] sending"))
+            assert.are.equal(1, h:consoleCount("[TEE] sending"))
         end)
     end)
 
@@ -96,7 +99,7 @@ describe("dev tee", function()
             local h = loaded('HAS_UTF8 = rawget(_G, "utf8") ~= nil\nprint("caf\195\169 \255")')
             assert.is_false(h.env.HAS_UTF8)
             h:step()
-            assert.are.same({ "caf\195\169 ?" }, support.texts(h))
+            assert.are.same({ "caf\195\169 ?" }, support.batchTexts(h))
         end)
     end)
 
@@ -158,7 +161,7 @@ describe("dev tee", function()
             assert.is_false(ok)
             assert.are.equal(expected, err) -- the same text: no second position added
             h:step()
-            local lines = support.lines(h)
+            local lines = support.batchLines(h)
             assert.are.equal("error", lines[1].level)
             assert.is_not_nil(
                 lines[1].text:find("Event.VarTransmit subscriber 'tbl': table:", 1, true)
@@ -237,7 +240,7 @@ describe("dev tee", function()
             support.answer(h)
             h:advance(2000)
             assert.are.equal(2, #support.posts(h))
-            assert.are.same({ "a", "b" }, support.texts(h))
+            assert.are.same({ "a", "b" }, support.batchTexts(h))
             assert.are.equal(2, support.batches(h)[2].seq)
         end)
 
@@ -254,7 +257,7 @@ describe("dev tee", function()
                 h.env.print("n" .. i)
             end
             h:step()
-            assert.are.same({ "n3", "n4", "n5" }, support.texts(h))
+            assert.are.same({ "n3", "n4", "n5" }, support.batchTexts(h))
             assert.are.equal(2, support.batches(h)[1].dropped)
         end)
 
@@ -300,7 +303,7 @@ describe("dev tee", function()
             local batches = support.batches(h)
             assert.are.same({ "a", "b" }, { batches[2].lines[1].text, batches[2].lines[2].text })
             assert.are.same({ 1, 2, 3 }, { batches[1].seq, batches[2].seq, batches[3].seq })
-            assert.are.equal(1, support.count(h, "POST failed")) -- one line per streak
+            assert.are.equal(1, h:consoleCount("POST failed")) -- one line per streak
         end)
 
         it("treats a non-200 reply as a failure to retry", function()
@@ -326,7 +329,7 @@ describe("dev tee", function()
             stepsUntilPosts(h, 3, 30)
             support.answer(h, { error = "refused" })
             h:step()
-            assert.are.equal(2, support.count(h, "POST failed"))
+            assert.are.equal(2, h:consoleCount("POST failed"))
         end)
 
         it("drops a batch the daemon refuses with a 400, once", function()
@@ -341,7 +344,7 @@ describe("dev tee", function()
             assert.are.same({ "next" }, { batch.lines[1].text })
             assert.are.equal(1, #batch.lines)
             assert.are.equal(1, batch.dropped)
-            assert.are.equal(1, support.count(h, "refused a batch"))
+            assert.are.equal(1, h:consoleCount("refused a batch"))
         end)
 
         -- A plugin whose HTTPRequest fails as the test sets FAIL: "new" throws from new, "post"
@@ -378,12 +381,12 @@ HTTPRequest = {
                     h.env.FAIL = mode
                     h:step()
                     assert.are.equal(0, #support.posts(h))
-                    assert.are.equal(1, support.count(h, "could not start a POST"))
+                    assert.are.equal(1, h:consoleCount("could not start a POST"))
                     h.env.print("b")
                     h.env.FAIL = false
                     stepsUntilPosts(h, 1, 30)
-                    assert.are.same({ "a", "b" }, support.texts(h))
-                    assert.are.equal(1, support.count(h, "could not start a POST"))
+                    assert.are.same({ "a", "b" }, support.batchTexts(h))
+                    assert.are.equal(1, h:consoleCount("could not start a POST"))
                     assert.are.equal(0, support.batches(h)[1].dropped)
                 end
             )
@@ -410,8 +413,8 @@ HTTPRequest = {
             -- The client's Plugin.urls values can't be concatenated; this raised live.
             local h = harness.new(support.plugin(support.INSTALL), { grant = { "httpAccess" } })
             h:load()
-            assert.are.equal(1, support.count(h, "[TEE] sending this plugin's console output"))
-            assert.are.equal(0, support.count(h, "127.0.0.1"))
+            assert.are.equal(1, h:consoleCount("[TEE] sending this plugin's console output"))
+            assert.are.equal(0, h:consoleCount("127.0.0.1"))
         end)
 
         it("does nothing without urls.rsdev, after one console line", function()
@@ -426,15 +429,15 @@ HTTPRequest = {
             h:load()
             h:advance(2000)
             assert.are.equal(0, #h.requests)
-            assert.are.equal(1, support.count(h, "[TEE] no urls.rsdev"))
-            assert.are.equal(1, support.count(h, "x"))
+            assert.are.equal(1, h:consoleCount("[TEE] no urls.rsdev"))
+            assert.are.equal(1, h:consoleCount("x"))
             assert.are.equal(0, #h.instance.subs.Logic)
         end)
 
         it("does nothing without httpAccess, even if it is granted later", function()
             local h = loaded('print("x")', { grant = {} })
             h:advance(500)
-            assert.are.equal(1, support.count(h, "[TEE] httpAccess not granted"))
+            assert.are.equal(1, h:consoleCount("[TEE] httpAccess not granted"))
             assert.are.equal(0, #h.instance.subs.Logic)
             h.world:grant("httpAccess")
             h.env.print("y")
@@ -477,15 +480,13 @@ HTTPRequest = {
             end)
             assert.is_false(ok) -- the callback's error still reaches the client
             h:advance(100)
-            local texts = support.texts(h)
+            local texts = support.batchTexts(h)
             assert.are.equal("saw var", texts[1])
             assert.is_not_nil(texts[2]:find("Event.VarTransmit subscriber 'v': ", 1, true))
             assert.is_not_nil(texts[2]:find("bad var", 1, true))
             local recorded = {}
-            for _, record in ipairs(h.requests) do
-                if record.url == "http://127.0.0.1:8766/record" then
-                    recorded[#recorded + 1] = record.body
-                end
+            for _, record in ipairs(h:requestsTo("http://127.0.0.1:8766/record")) do
+                recorded[#recorded + 1] = record.body
             end
             assert.is_true(#recorded > 0)
             assert.is_not_nil(table.concat(recorded):find('"VarTransmit"', 1, true))

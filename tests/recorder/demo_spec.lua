@@ -2,7 +2,6 @@
 -- what happens while the receiver is down, and the pass-through without httpAccess.
 
 local harness = require("tests.harness")
-local paths = require("tests.harness.paths")
 local support = require("tests.recorder.support")
 
 ---@param list table[]
@@ -17,14 +16,14 @@ end
 describe("plugins/recorder-demo with the recorder", function()
     it("logs one environment probe line", function()
         local h = support.demo()
-        assert.are.equal(1, support.lines(h, "[RECDEMO] probe:"))
+        assert.are.equal(1, h:consoleCount("[RECDEMO] probe:"))
         assert.matches(
             "_VERSION=Lua 5.4 os=true io=true .* recorder=true moduleSharesEnv=true "
                 .. "moduleSeesSameEvent=true",
             h:output()
         )
         assert.matches("%[RECDEMO%] enabled 1 times", h:output())
-        assert.are.equal(0, support.lines(h, "[RECORDER]"))
+        assert.are.equal(0, h:consoleCount("[RECORDER]"))
     end)
 
     it("records reads, events with their world ops, and PersistentDB", function()
@@ -130,7 +129,7 @@ describe("plugins/recorder-demo with the recorder", function()
             -- What's left is the newest: the last VarTransmit (OPTION_RUN back to 0) is there.
             local events = support.where(second.entries, { k = "event", name = "VarTransmit" })
             assert.are.equal(0, events[#events].payload.newValue)
-            assert.are.equal(1, support.lines(h, "[RECORDER] dropping the oldest entries"))
+            assert.are.equal(1, h:consoleCount("[RECORDER] dropping the oldest entries"))
             assert.matches("connection refused", h:output())
 
             -- The plugin and the recorder carry on.
@@ -141,13 +140,13 @@ describe("plugins/recorder-demo with the recorder", function()
                 11,
                 one(last.entries, { k = "event", name = "VarTransmit" }).payload.newValue
             )
-            assert.are.equal(1, support.lines(h, "[RECORDER] dropping"))
+            assert.are.equal(1, h:consoleCount("[RECORDER] dropping"))
         end
     )
 
     it("without httpAccess sends nothing until it is granted, then sends the buffer", function()
-        local h = support.demo({ "chatAccess" })
-        assert.are.equal(1, support.lines(h, "[RECORDER]"))
+        local h = support.demo({ grant = { "chatAccess" } })
+        assert.are.equal(1, h:consoleCount("[RECORDER]"))
         assert.matches(
             "%[RECORDER%] waiting for httpAccess %(`ppr recorder%-demo`, then "
                 .. "`ppe recorder%-demo httpAccess`%)",
@@ -170,16 +169,14 @@ describe("plugins/recorder-demo with the recorder", function()
         h:step() -- batch 1 is in flight
         assert.are.equal(1, #support.posts(h))
         h:unload() -- faults on a subscription PluginShutdown left
-        assert.are.equal(0, support.lines(h, "[RECORDER] dropping"))
+        assert.are.equal(0, h:consoleCount("[RECORDER] dropping"))
     end)
 
     it("runs without dev/", function()
-        local files = {}
-        for _, name in ipairs({ "main.lua", "envprobe.lua", "plugin.json" }) do
-            files[name] = paths.read(paths.repo("plugins/recorder-demo/" .. name))
-        end
-        local h =
-            harness.new(files, { grant = { "httpAccess" }, stdlib = { os = true, io = true } })
+        local h = harness.new(
+            support.demoFiles(),
+            { grant = { "httpAccess" }, stdlib = { os = true, io = true } }
+        )
         h.world:login("Zezima")
         h.world:setVar("VarPlayer", "QP", 10)
         h.world:setVar("VarPlayer", "OPTION_RUN", 0)

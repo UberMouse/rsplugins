@@ -9,7 +9,7 @@ local function object(v)
 end
 
 describe("recording.newSession", function()
-    it("is ten hex digits, a valid daemon session id", function()
+    it("is 4 to 10 hex digits, a valid daemon session id", function()
         for _ = 1, 50 do
             local id = recording.newSession()
             assert.is_not_nil(id:match("^%x+$"))

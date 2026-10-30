@@ -45,6 +45,21 @@ M.enums = {
     ValueType = vars.ValueType,
 }
 
+-- Decode JSON text a test expects to be valid, failing with what it was and where it broke.
+---@param text string
+---@param what string what the text is, for the failure message
+---@return any
+function M.decodeJson(text, what)
+    local value, pos, msg = dkjson.decode(text)
+    if value == nil and msg then
+        error(
+            ("%s is not JSON: %s at %s: %s"):format(what, msg, tostring(pos), text:sub(1, 200)),
+            2
+        )
+    end
+    return value
+end
+
 local Harness = {}
 Harness.__index = Harness
 
@@ -293,6 +308,37 @@ end
 ---@return any
 function Harness:recorded(key, message)
     return replay.lookup(self, key, message)
+end
+
+-- How many console lines contain `text` (a plain match).
+---@param text string
+---@return integer
+function Harness:consoleCount(text)
+    local n = 0
+    for _, line in ipairs(self.console) do
+        if line.text:find(text, 1, true) then n = n + 1 end
+    end
+    return n
+end
+
+-- The started HTTP requests to exactly `url`, in order.
+---@param url string
+---@return table[]
+function Harness:requestsTo(url)
+    local out = {}
+    for _, record in ipairs(self.requests) do
+        if record.url == url then out[#out + 1] = record end
+    end
+    return out
+end
+
+-- Answer every request to `url` that has no response yet (a 200 by default).
+---@param url string
+---@param response table? as for h:respond
+function Harness:answerAll(url, response)
+    for _, record in ipairs(self:requestsTo(url)) do
+        if not record.response then self:respond(record, response or { status = 200 }) end
+    end
 end
 
 -- Everything the plugin printed or logged, one line per call.

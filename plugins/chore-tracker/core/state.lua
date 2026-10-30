@@ -94,6 +94,18 @@ function M.find(chores, id)
     return nil
 end
 
+-- The chore with this id; a miss fails naming `source` (the data file that holds the id) and
+-- the id, since the data files name only chores in data/chores.lua.
+---@param chores Chore[]
+---@param id string
+---@param source string
+---@return Chore
+function M.resolve(chores, id, source)
+    local found = M.find(chores, id)
+    assert(found, source .. " names a chore that data/chores.lua lacks: " .. id)
+    return found
+end
+
 ---@param state ChoreState
 ---@param id string
 ---@return boolean

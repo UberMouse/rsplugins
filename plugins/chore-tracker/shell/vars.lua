@@ -50,8 +50,7 @@ function M.init(o)
     local missing = {}
     for _, rule in ipairs(o.rules) do
         -- Resolved for every rule, watched or not, so a bad chore id fails at load.
-        local chore = state.find(o.chores, rule.chore)
-        assert(chore, "data/vars.lua names a chore that data/chores.lua lacks: " .. rule.chore)
+        local chore = state.resolve(o.chores, rule.chore, "data/vars.lua")
         local names, complete = varCore.names(rule), true
         for _, name in ipairs(names) do
             if not varTypes[name] and not missing[name] then
@@ -137,7 +136,7 @@ local function onChanged(before, after, changed)
             if cause and varCore.ticks(entry.rule, before, after, day) then
                 local ticked = state.autoMark(tracker, entry.chore, now)
                 if ticked ~= tracker then
-                    say("seen", entry.rule.chore, "done", "(" .. cause .. ")")
+                    say("seen", entry.chore.id, "done", "(" .. cause .. ")")
                 end
                 tracker = ticked
             end

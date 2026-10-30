@@ -179,6 +179,18 @@ local function onDrop(id, slot)
     say(string.format("moved %s to %d in %s", id, slot, chore.period))
 end
 
+-- A section's row ids from its rows or chores, top to bottom.
+---@param period ChorePeriod
+---@param items {id: string}[]
+---@return ChoreSectionIds
+local function sectionIds(period, items)
+    local ids = {}
+    for i, item in ipairs(items) do
+        ids[i] = item.id
+    end
+    return { period = period, ids = ids }
+end
+
 -- The list: the settings button and any notice in PrettyUI's flow, then a heading per period
 -- and a hand-built row per picked chore below them, at the spots core/listlayout.lua gives.
 ---@param w prettyui.Window
@@ -201,11 +213,7 @@ local function buildList(w, openSettings)
     -- Each section's row ids, built once for both the layout and the grips.
     local lists = {} ---@type ChoreSectionIds[]
     for i, section in ipairs(sections) do
-        local ids = {}
-        for j, row in ipairs(section.rows) do
-            ids[j] = row.id
-        end
-        lists[i] = { period = section.period, ids = ids }
+        lists[i] = sectionIds(section.period, section.rows)
     end
     local spots = listlayout.place(lists, top)
     local wheel = internals.wheelHandler(w)
@@ -285,11 +293,7 @@ local function buildSettings(w)
     local groups = view.byPeriod(chores)
     local sections = {} ---@type ChoreSectionIds[]
     for i, group in ipairs(groups) do
-        local ids = {}
-        for j, chore in ipairs(group.chores) do
-            ids[j] = chore.id
-        end
-        sections[i] = { period = group.period, ids = ids }
+        sections[i] = sectionIds(group.period, group.chores)
     end
     local spots = listlayout.place(sections, switches.root.y + switches.root.height)
     local wheel = internals.wheelHandler(w)

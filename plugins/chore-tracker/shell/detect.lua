@@ -27,7 +27,7 @@ local BACKPACK = "INV"
 ---clock.
 ---@field apply fun(change: ChoreChange)
 
----@class ChoreShopHit
+---@class ChoreShopHit a core/shops ChoreShopEntry with its chore resolved
 ---@field chore Chore
 ---@field shop ChoreShop
 
@@ -49,31 +49,13 @@ local objTypes = {} ---@type table<string, ObjType>
 local shopCounts = {} ---@type table<string, integer[]>
 local noteCounts = nil ---@type table<string, integer>?
 
--- The chore with id `id`. The data files name only chores in data/chores.lua, so a miss fails
--- at load, naming the id.
----@param chores Chore[]
----@param id string
----@return Chore
-local function resolve(chores, id)
-    local found = state.find(chores, id)
-    assert(found, "data names a chore that data/chores.lua lacks: " .. id)
-    return found
-end
-
 ---@param o ChoreDetectOptions
 function M.init(o)
     options = o
-    -- Chore ids resolve here, for every shop and collection, watched or not.
-    local hits = {} ---@type table<string, ChoreShopHit[]>
-    for name, entries in pairs(shopCore.index(o.shops)) do
-        hits[name] = {}
-        for i, entry in ipairs(entries) do
-            hits[name][i] = { chore = resolve(o.chores, entry.chore), shop = entry.shop }
-        end
-    end
     collectionHits = {}
     for i, collection in ipairs(o.collections) do
-        collectionHits[i] = { chore = resolve(o.chores, collection.chore), collection = collection }
+        collectionHits[i] =
+            { chore = state.resolve(o.chores, collection.chore, "data"), collection = collection }
     end
     -- A listed name the client's config lacks (a game update renamed it, say) is said once
     -- and left unwatched, so a nil config never reaches Inventory.Find or GetTotal. The
@@ -81,7 +63,12 @@ function M.init(o)
     -- in pcall because whether the client returns nil or raises for an unknown name is
     -- unconfirmed.
     shopIndex, invTypes = {}, {}
-    for name, entries in pairs(hits) do
+    -- Chore ids resolve for every shop, watched or not.
+    for name, indexed in pairs(shopCore.index(o.shops)) do
+        local entries = {} ---@type ChoreShopHit[]
+        for i, entry in ipairs(indexed) do
+            entries[i] = { chore = state.resolve(o.chores, entry.chore, "data"), shop = entry.shop }
+        end
         local ok, invType = pcall(function()
             return config.Inv[name] --[[@as InvType?]]
         end)

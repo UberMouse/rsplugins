@@ -21,7 +21,7 @@ M.FLOW_PADDING = 14
 ---@field rows table<string, integer> each row's y, by chore id
 ---@field height integer the content height that holds them all, padding included
 
----@class ChoreSectionIds
+---@class ChoreSectionIds the row-id shape both the list layout and the grips use
 ---@field period ChorePeriod
 ---@field ids string[] the chore ids of its rows, top to bottom
 

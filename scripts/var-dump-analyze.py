@@ -50,6 +50,7 @@ DUMP_DIR = ROOT / "dumps/var-dump"
 
 # --- Family tree tuning -------------------------------------------------------
 LEAF_MAX = 60  # a group with more members than this is split by its next name token
+TOP_FAMILIES = 60  # rows in the Biggest families table, independent of LEAF_MAX
 MIN_GROUP = 3  # sub-groups smaller than this are folded back into their parent
 MAX_DEPTH = 4  # never split deeper than this many name tokens
 
@@ -842,12 +843,12 @@ def themes_table(tree, with_set):
 
 
 def families_table(tree, stats_fn, with_set):
-    """Markdown lines for the Biggest families table (top 60). stats_fn is structure_stats
-    or node_stats; with_set adds a Set column and needs node_stats."""
+    """Markdown lines for the Biggest families table (the biggest TOP_FAMILIES families).
+    stats_fn is structure_stats or node_stats; with_set adds a Set column and needs node_stats."""
     head = "| Family | Vars | VarBits | VarClient |" + (" Set |" if with_set else "")
     rule = "|---|---:|---:|---:|" + ("---:|" if with_set else "")
     lines = [head + " Main sub-groups | Meaning |", rule + "---|---|"]
-    for node in tree[:60]:
+    for node in tree[:TOP_FAMILIES]:
         stats = stats_fn(node["members"])
         subs = ", ".join(f"{c['label']} {len(c['members'])}" for c in node["children"][:4])
         note = FAMILY_NOTES.get(node["label"].rstrip("*"), "")

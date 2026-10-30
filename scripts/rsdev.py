@@ -523,10 +523,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Game text isn't always valid UTF-8, and one bad byte shouldn't lose a batch.
             body = json.loads(raw.decode("utf-8", errors="replace"))
-        except (
-            ValueError,
-            RecursionError,
-        ) as err:  # JSONDecodeError, int past the digit limit; deep nesting
+        # ValueError covers JSONDecodeError and an int past the digit limit; RecursionError covers
+        # deep nesting.
+        except (ValueError, RecursionError) as err:
             print(f"bad {route} body: {err!r}; {len(raw)} bytes, starts {raw[:80]!r}")
             return self.reply(400)
         state = self.server.state
@@ -1052,9 +1051,8 @@ def take_shots(opts):
         time.sleep(opts.delay)
     started = None
     for path in paths:
-        if (
-            started is not None
-        ):  # `every` runs start to start; an overrun makes the next one immediate
+        # `every` runs start to start; an overrun makes the next one immediate.
+        if started is not None:
             wait = started + opts.every - time.monotonic()
             if wait > 0:
                 time.sleep(wait)

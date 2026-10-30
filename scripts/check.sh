@@ -21,7 +21,7 @@
 #  10. submission    scripts/check-submission.selftest.sh: the submission check's cases (always)
 #  11. mod checks     claude plugin validate + test on each Claude Code mod under .claude/skills/
 #                     (always; tsc needs hand-copied engine types, see .claude/skills/rsp-ops/README.md)
-# 12. ruff           ruff check + ruff format --check on scripts/, per ruff.toml (always)
+#  12. ruff           ruff check + ruff format --check on scripts/, per ruff.toml (always)
 #
 # Usage: scripts/check.sh [path ...]
 #   Paths default to plugins/, lib/ and tests/ (those that exist) and only narrow steps 1-5. Any

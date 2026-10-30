@@ -6,7 +6,8 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
   direnv, run `direnv allow` once and they load whenever you `cd` in. Otherwise use `nix develop`.
   Claude Code's Bash tool gets them from `SessionStart`, `CwdChanged` and `FileChanged`
   (`.envrc|flake.nix|flake.lock`) hooks in `~/.claude/settings.json`, each running
-  `direnv export zsh > "$CLAUDE_ENV_FILE"`, so agents never need `direnv exec`.
+  `direnv export zsh > "$CLAUDE_ENV_FILE"`, so agents normally never need `direnv exec` (a shell
+  started before `flake.nix` changed does: see the message `scripts/check.sh` prints).
 - Once per clone, `git config blame.ignoreRevsFile .git-blame-ignore-revs` keeps `git blame` past
   the formatting-only commits.
 - [docs/](docs/README.md): our notes on the plugin API, dev environment, guidelines and Mod.io

@@ -87,6 +87,9 @@ class Receiver(unittest.TestCase):
             ("/changes", {"changes": {}}),
             ("/snapshot", {}),
             ("/snapshot", {"part": "1", "totalParts": 1, "vars": []}),
+            ("/snapshot", {"part": 2, "totalParts": 1, "vars": []}),  # would never finish
+            ("/snapshot", {"part": 0, "totalParts": 1, "vars": []}),
+            ("/snapshot", {"part": 1, "totalParts": 0, "vars": []}),
         ):
             self.assertEqual(self.post(path, body), 400, (path, body))
 

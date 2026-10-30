@@ -25,4 +25,4 @@ class ReadJsonl(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()) as err:
                 rows = changes.read_jsonl(path)
         self.assertEqual(rows, [{"seq": 1}, {"seq": 2}])
-        self.assertEqual(err.getvalue().count("skipping unparsable line"), 2)
+        self.assertEqual(err.getvalue().count("skipping line that is not a JSON object"), 2)

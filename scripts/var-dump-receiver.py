@@ -36,6 +36,8 @@ def problem(path, payload):
         for key in ("part", "totalParts"):
             if type(payload.get(key)) is not int:
                 return f"{key} is not an integer"
+        if not 1 <= payload["part"] <= payload["totalParts"]:
+            return "part is outside 1..totalParts"
         items = payload.get("vars")
     elif path == "/changes":
         items = payload.get("changes")

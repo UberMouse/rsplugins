@@ -9,10 +9,10 @@ Usage: python3 -I scripts/var-dump-analyze.py [snapshot.jsonl] [options]
                      snapshot, if it exists); only read, never written
   --compare PATH     an older snapshot to diff against (default: the snapshot
                      before this one, if there is one; "none" to skip)
-  --out DIR          where to write (default: dumps/var-dump/analysis)
+  --out DIR          where to write (default: <repo>/dumps/var-dump/analysis)
   --catalog [DIR]    also write the account-independent var catalog (names,
                      types, families, VarBit layout; no values) to DIR
-                     (default: docs/vars). That folder is gitignored; the
+                     (default: <repo>/docs/vars). That folder is gitignored; the
                      plugin tests need it.
 
 Writes to the output dir:
@@ -238,7 +238,7 @@ def read_jsonl(path):
             if isinstance(row, dict):
                 yield row
             else:
-                print(f"{path}:{number}: skipping unparsable line", file=sys.stderr)
+                print(f"{path}:{number}: skipping line that is not a JSON object", file=sys.stderr)
 
 
 def list_snapshots(directory):
@@ -505,6 +505,8 @@ def decode_fields(base, old, new):
 def split_sessions(changes):
     """The log spans several plugin enables; seq restarts at each one, and ticks count
     from that enable. Return a list of sessions, each a list of events."""
+    # A seq not above the last starts a session. The limit: var-dump requeues a /changes body
+    # that got no reply, so a batch the receiver already wrote and re-sent reads as a restart.
     sessions, previous = [], None
     for event in changes:
         if previous is None or event["seq"] <= previous:

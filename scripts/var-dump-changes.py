@@ -67,7 +67,7 @@ def read_jsonl(path):
             except json.JSONDecodeError:
                 row = None
             if not isinstance(row, dict):
-                print(f"{path}:{number}: skipping unparsable line", file=sys.stderr)
+                print(f"{path}:{number}: skipping line that is not a JSON object", file=sys.stderr)
                 continue
             rows.append(row)
     return rows
@@ -86,6 +86,8 @@ def main():
     bits, types = load_catalog(args.catalog)
     rows = read_jsonl(args.changes)
     if args.last_session:
+        # seq restarts with each plugin load, so a seq not above the last starts a session. A
+        # retried batch the receiver already wrote (reply lost) therefore reads as a restart.
         start = 0
         for i in range(1, len(rows)):
             if rows[i]["seq"] <= rows[i - 1]["seq"]:

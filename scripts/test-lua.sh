@@ -21,5 +21,5 @@ if [[ ! -e docs/vars/vars.csv ]]; then
     exit 2
 fi
 
-# .busted (repo root) sets the spec root, the _spec.lua pattern and the module path.
+# .busted (repo root) sets the spec root, the _spec.lua pattern, module path and warm helper.
 exec busted "$@"

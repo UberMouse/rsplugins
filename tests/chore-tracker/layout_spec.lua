@@ -13,8 +13,7 @@ describe("chore-tracker layout", function()
         )
     end)
 
-    -- The offsets the specs above and window_spec read from layout, pinned here once: PrettyUI's
-    -- close X sits 28 px left of the window's right edge and 7 px down.
+    -- Pins SLOT_X/SLOT_Y so the other specs here and window_spec use them symbolically.
     it("puts the close X's slot 28 px left of the right edge and 7 px down", function()
         assert.are.same({ -28, 7 }, { layout.SLOT_X, layout.SLOT_Y })
     end)

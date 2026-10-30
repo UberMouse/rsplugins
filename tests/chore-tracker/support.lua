@@ -82,7 +82,7 @@ end
 ---@param chores table[]
 ---@param ids string[]
 ---@return table
-function M.picked(chores, ids)
+function M.stateWith(chores, ids)
     local state = require("core/state")
     local s = state.new()
     for _, id in ipairs(ids) do

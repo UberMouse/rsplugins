@@ -26,7 +26,7 @@ describe("chore-tracker celebrate", function()
 
     describe("a chore the plugin ticked", function()
         it("celebrates a picked chore turning done, named by its text", function()
-            local old = support.picked(chores, { "d1", "d2" })
+            local old = support.stateWith(chores, { "d1", "d2" })
             local new = state.autoMark(old, byId.d1, NOW)
             local out = celebrate.decide(old, new, chores, NOW, false)
             assert.are.same({ "d1" }, labels(out))
@@ -36,33 +36,33 @@ describe("chore-tracker celebrate", function()
         end)
 
         it("doesn't celebrate a tick by hand", function()
-            local old = support.picked(chores, { "d1", "d2" })
+            local old = support.stateWith(chores, { "d1", "d2" })
             local new = state.mark(old, "d1", NOW)
             assert.are.same({}, celebrate.decide(old, new, chores, NOW, true))
         end)
 
         it("doesn't celebrate unticking", function()
-            local old = state.mark(support.picked(chores, { "d1", "d2" }), "d1", NOW)
+            local old = state.mark(support.stateWith(chores, { "d1", "d2" }), "d1", NOW)
             local new = state.unmark(old, "d1")
             assert.are.same({}, celebrate.decide(old, new, chores, NOW, true))
             assert.are.same({}, celebrate.decide(old, new, chores, NOW, false))
         end)
 
         it("doesn't celebrate a chore that isn't picked", function()
-            local old = support.picked(chores, { "d1" })
+            local old = support.stateWith(chores, { "d1" })
             local new = state.autoMark(old, byId.d2, NOW)
             assert.are.same({}, celebrate.decide(old, new, chores, NOW, false))
         end)
 
         it("doesn't celebrate a chore already done this period", function()
-            local old = state.mark(support.picked(chores, { "d1", "d2" }), "d1", NOW)
+            local old = state.mark(support.stateWith(chores, { "d1", "d2" }), "d1", NOW)
             local new = state.autoMark(old, byId.d1, NOW + 5)
             assert.are.same({}, celebrate.decide(old, new, chores, NOW + 5, false))
         end)
 
         it("doesn't celebrate a purchase that only records another shop of a done chore", function()
             local old = state.recordPurchase(
-                support.picked(chores, { "dshop", "d1" }),
+                support.stateWith(chores, { "dshop", "d1" }),
                 byId.dshop,
                 "inv-a",
                 NOW
@@ -73,7 +73,7 @@ describe("chore-tracker celebrate", function()
         end)
 
         it("celebrates a chore marked done in a new period", function()
-            local old = state.mark(support.picked(chores, { "d1", "d2" }), "d1", NOW)
+            local old = state.mark(support.stateWith(chores, { "d1", "d2" }), "d1", NOW)
             local new = state.autoMark(old, byId.d1, NEXT_DAY)
             assert.are.same({ "d1" }, labels(celebrate.decide(old, new, chores, NEXT_DAY, false)))
         end)
@@ -81,7 +81,7 @@ describe("chore-tracker celebrate", function()
 
     describe("a cleared period", function()
         it("celebrates the last picked chore of a period, by hand or not", function()
-            local old = state.mark(support.picked(chores, { "d1", "d2" }), "d1", NOW)
+            local old = state.mark(support.stateWith(chores, { "d1", "d2" }), "d1", NOW)
             local byHand = state.mark(old, "d2", NOW)
             local out = celebrate.decide(old, byHand, chores, NOW, true)
             assert.are.same({ "daily cleared" }, labels(out))
@@ -95,18 +95,18 @@ describe("chore-tracker celebrate", function()
         end)
 
         it("titles each period, and counts one chore in the singular", function()
-            local weekly = support.picked(chores, { "w1" })
+            local weekly = support.stateWith(chores, { "w1" })
             local out = celebrate.decide(weekly, state.mark(weekly, "w1", NOW), chores, NOW, true)
             assert.are.equal("WEEKLIES COMPLETE", out[1].title)
             assert.matches("All 1 of your weekly chore done", out[1].text)
-            local monthly = support.picked(chores, { "m1" })
+            local monthly = support.stateWith(chores, { "m1" })
             out = celebrate.decide(monthly, state.mark(monthly, "m1", NOW), chores, NOW, true)
             assert.are.equal("MONTHLIES COMPLETE", out[1].title)
             assert.are.same({ "monthly cleared" }, labels(out))
         end)
 
         it("doesn't celebrate while a picked chore is still to do", function()
-            local old = support.picked(chores, { "d1", "d2" })
+            local old = support.stateWith(chores, { "d1", "d2" })
             assert.are.same(
                 {},
                 celebrate.decide(old, state.mark(old, "d1", NOW), chores, NOW, true)
@@ -114,14 +114,17 @@ describe("chore-tracker celebrate", function()
         end)
 
         it("doesn't count chores of other periods or unpicked ones", function()
-            local old = support.picked(chores, { "d1", "w1" })
+            local old = support.stateWith(chores, { "d1", "w1" })
             local out = celebrate.decide(old, state.mark(old, "d1", NOW), chores, NOW, true)
             assert.are.same({ "daily cleared" }, labels(out))
         end)
 
         it("celebrates again after an untick and re-tick", function()
-            local full =
-                state.mark(state.mark(support.picked(chores, { "d1", "d2" }), "d1", NOW), "d2", NOW)
+            local full = state.mark(
+                state.mark(support.stateWith(chores, { "d1", "d2" }), "d1", NOW),
+                "d2",
+                NOW
+            )
             local undone = state.unmark(full, "d2")
             assert.are.same({}, celebrate.decide(full, undone, chores, NOW, true))
             local again = state.mark(undone, "d2", NOW)
@@ -132,7 +135,7 @@ describe("chore-tracker celebrate", function()
         end)
 
         it("doesn't celebrate a period that was already all done", function()
-            local full = state.mark(support.picked(chores, { "d1" }), "d1", NOW)
+            local full = state.mark(support.stateWith(chores, { "d1" }), "d1", NOW)
             assert.are.same(
                 {},
                 celebrate.decide(full, state.mark(full, "d1", NOW + 1), chores, NOW + 1, true)
@@ -140,7 +143,7 @@ describe("chore-tracker celebrate", function()
         end)
 
         it("orders chores before the periods they clear, periods daily first", function()
-            local old = support.picked(chores, { "d1", "w1" })
+            local old = support.stateWith(chores, { "d1", "w1" })
             local new = state.autoMark(state.autoMark(old, byId.w1, NOW), byId.d1, NOW)
             assert.are.same(
                 { "d1", "w1", "daily cleared", "weekly cleared" },

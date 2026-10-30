@@ -47,7 +47,7 @@ local function isTicked(sprite)
     error("not a checkbox sprite: " .. tostring(sprite))
 end
 
--- Epoch minutes (checked against Python's datetime, UTC).
+-- Epoch minutes, looked up from support.MINUTES (checked there against Python's datetime, UTC).
 M.NOW = support.MINUTES["2026-10-25 01:43"] -- a Sunday
 M.NEXT_DAY = support.MINUTES["2026-10-26"] -- 00:00, a daily reset
 M.WEDNESDAY = support.MINUTES["2026-10-28"] -- 00:00, a weekly reset

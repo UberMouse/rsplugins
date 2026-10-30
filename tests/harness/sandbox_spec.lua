@@ -117,6 +117,44 @@ describe("strict environment", function()
         assert.matches("is read%-only", harness.errorOf(harness.load, plugin("ChatType.X = 1")))
     end)
 
+    it("reads a name in opts.absentNames as the client reads an unknown one", function()
+        local main = [[
+            invNil = config.Inv.INV == nil
+            objNil = config.Obj.LOGS == nil
+            varNil = var.VarPlayer.ABSYSTEM == nil
+            sprite, obj = id.Sprite.XP_TOKEN_0, id.Obj.POP_LOG
+            known = config.Inv.BANK ~= nil
+        ]]
+        local h = harness.load(plugin(main), {
+            absentNames = {
+                "config.Inv.INV",
+                "config.Obj.LOGS",
+                "var.VarPlayer.ABSYSTEM",
+                "id.Sprite.XP_TOKEN_0",
+                "id.Obj.POP_LOG",
+            },
+        })
+        assert.is_true(h.env.invNil and h.env.objNil and h.env.varNil and h.env.known)
+        assert.are.same({ -1, -1 }, { h.env.sprite, h.env.obj })
+        -- Other unknown names still fault, so a typo is caught.
+        assert.matches(
+            "unknown sprite: id.Sprite.NOPE",
+            harness.errorOf(harness.load, plugin("local _ = id.Sprite.NOPE"), {
+                absentNames = { "id.Sprite.XP_TOKEN_0" },
+            })
+        )
+        assert.matches(
+            "unmocked API: config.Inv.NOPE",
+            harness.errorOf(harness.load, plugin("local _ = config.Inv.NOPE"), {
+                absentNames = { "config.Inv.INV" },
+            })
+        )
+        assert.matches(
+            "opts.absentNames id.Font.X: only",
+            harness.errorOf(harness.new, plugin(""), { absentNames = { "id.Font.X" } })
+        )
+    end)
+
     it("reads a global named in opts.absent as nil, and rejects naming a provided one", function()
         local h = harness.load(plugin("seen = World == nil"), { absent = { "World" } })
         assert.is_true(h.env.seen)

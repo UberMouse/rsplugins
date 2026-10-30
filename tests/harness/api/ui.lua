@@ -752,11 +752,14 @@ local IdNamespace = strict.class("_global.id", {
 
 -- id.<kind>.NAME from docs/api/consts/<kind>.lua (loaded on first use): a plugin can only name
 -- one that exists. `label` is the singular for the fault. FromID isn't modelled.
+---@param h table the harness
 ---@param kind string "Sound", "Font", "Sprite", "Obj" or "Cursor"
 ---@param label string
 ---@return table
-local function idNames(kind, label)
+local function idNames(h, kind, label)
     return strict.lookup("id." .. kind, function(name)
+        -- A spec's opts.absentNames: the client reads -1 for an unknown Sprite or Obj name.
+        if h.absentNames["id." .. kind .. "." .. tostring(name)] then return -1 end
         if name == "FromID" then strict.fault("unmocked API: id." .. kind .. ".FromID") end
         local found = catalog.config(kind, name)
         if not found then
@@ -785,11 +788,11 @@ function M.install(h, env)
         Component = strict.lookup("id.Component", function(name)
             strict.fault("unmocked API: id.Component." .. tostring(name))
         end, { extra = { [M.PLUGIN_LAYER_NAME] = M.PLUGIN_LAYER_ID } }),
-        Sound = idNames("Sound", "sound"), -- the mock plays nothing
-        Font = idNames("Font", "font"),
-        Sprite = idNames("Sprite", "sprite"),
-        Obj = idNames("Obj", "object"), -- for SetAssociatedObject
-        Cursor = idNames("Cursor", "cursor"), -- for the cursor configs
+        Sound = idNames(h, "Sound", "sound"), -- the mock plays nothing
+        Font = idNames(h, "Font", "font"),
+        Sprite = idNames(h, "Sprite", "sprite"),
+        Obj = idNames(h, "Obj", "object"), -- for SetAssociatedObject
+        Cursor = idNames(h, "Cursor", "cursor"), -- for the cursor configs
     })
 end
 

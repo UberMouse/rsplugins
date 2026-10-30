@@ -160,17 +160,6 @@ describe("chore-tracker detect", function()
         detect.onInventoryUpdated({ inv = { configName = "INV" } })
         assert.are.equal(1, applied)
     end)
-
-    it("treats a config lookup that raises like a name the config lacks", function()
-        for _, domain in ipairs({ "Inv", "Obj" }) do
-            setmetatable(_G.config[domain], {
-                __index = function(_, name)
-                    error("no " .. domain .. " " .. name)
-                end,
-            })
-        end
-        initAndCheck()
-    end)
 end)
 
 -- shell/vars with a var name the client's config lacks, by the same stand-in approach: the
@@ -259,19 +248,6 @@ describe("chore-tracker var detect", function()
                 apply = function() end,
             })
         end, "data/vars.lua names a chore that data/chores.lua lacks: nochore")
-    end)
-
-    it("treats a var lookup that raises like a name the config lacks", function()
-        load(setmetatable({ BASE = base, FLAG = flag }, {
-            __index = function(_, name)
-                error("no var " .. name)
-            end,
-        }))
-        assert.are.same({ "unknown var GONE; not watched" }, said)
-        flag.value = 1
-        vars.onVarTransmit({ var = base })
-        assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
-        assert.are.equal(1, applied)
     end)
 
     it("takes a var with no value at load as unread until it has one", function()

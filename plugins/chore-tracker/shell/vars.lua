@@ -54,11 +54,10 @@ function M.init(o)
         local names, complete = varsCore.names(rule), true
         for _, name in ipairs(names) do
             if not varTypes[name] and not missing[name] then
-                -- Whether the client returns nil or raises for an unknown name is unconfirmed.
-                local ok, v = pcall(function()
-                    return var.VarPlayer[name] --[[@as VarType?]]
-                end)
-                if ok and v then
+                -- The client reads nil for an unknown name, without raising
+                -- (docs/api-concepts.md#configs-vs-entities).
+                local v = var.VarPlayer[name] --[[@as VarType?]]
+                if v then
                     varTypes[name] = v
                 else
                     missing[name] = true

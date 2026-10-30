@@ -60,6 +60,11 @@ The official reference annotates Lua with pseudo-types:
   name: `config.NPC.DOG_STRAY.name`, `.gridSize`, `config.Obj.LOGS`, `config.Inv.BANK`. To find
   names, use the console command `pan <Type>`. Display names and config names often differ, and
   several configs can share a display name (`DOG_STRAY`, `DOG_STRAY2`).
+- **An unknown name reads as absent, without raising**: `config.Inv.NOPE`, `config.Obj.NOPE` and
+  `var.VarPlayer.NOPE` read nil, but `id.Sprite.NOPE` and `id.Obj.NOPE` read the number -1, not
+  nil, so test an `id.*` read for -1. Known names read as usual (`config.Inv.FISHINGSHOP`,
+  `id.Sprite.XP_TOKEN_0`, `id.Obj.POP_LOG`). A plugin needs no `pcall` around such a read.
+  (dev-bridge eval, 2026-10-31)
 - An **entity** is a live instance the client is currently receiving from the server: only things
   near the player. Entities have position, facing, etc., and `.config` points back to the config.
   They come and go as you move.

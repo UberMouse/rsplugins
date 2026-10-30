@@ -59,9 +59,8 @@ function M.init(o)
     end
     -- A listed name the client's config lacks (a game update renamed it, say) is said once
     -- and left unwatched, so a nil config never reaches Inventory.Find or GetTotal. The
-    -- casts drop config.Inv's and config.Obj's FromID member from the type. The lookups run
-    -- in pcall because whether the client returns nil or raises for an unknown name is
-    -- unconfirmed.
+    -- casts drop config.Inv's and config.Obj's FromID member from the type. The client
+    -- reads nil for an unknown name, without raising (docs/api-concepts.md#configs-vs-entities).
     shopIndex, invTypes = {}, {}
     -- Chore ids resolve for every shop, watched or not.
     for name, indexed in pairs(detectCore.index(o.shops)) do
@@ -69,10 +68,8 @@ function M.init(o)
         for i, entry in ipairs(indexed) do
             entries[i] = { chore = state.resolve(o.chores, entry.chore, "data"), shop = entry.shop }
         end
-        local ok, invType = pcall(function()
-            return config.Inv[name] --[[@as InvType?]]
-        end)
-        if ok and invType then
+        local invType = config.Inv[name] --[[@as InvType?]]
+        if invType then
             shopIndex[name], invTypes[name] = entries, invType
         else
             o.say("unknown inventory", name .. "; not watched")
@@ -84,10 +81,8 @@ function M.init(o)
         for _, name in ipairs(collection.notes) do
             if not seen[name] then
                 seen[name] = true
-                local ok, obj = pcall(function()
-                    return config.Obj[name] --[[@as ObjType?]]
-                end)
-                if ok and obj then
+                local obj = config.Obj[name] --[[@as ObjType?]]
+                if obj then
                     noteNames[#noteNames + 1], objTypes[name] = name, obj
                 else
                     o.say("unknown obj", name .. "; not watched")

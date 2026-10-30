@@ -77,7 +77,7 @@ Builder.__index = Builder
 ---@param plugin string|table "name" for plugins/<name>, a path containing "/", or a table of
 ---  inline files { ["main.lua"] = "...", ["plugin.json"] = "..." }
 ---@param opts table? { grant = { perm... }, budgetMs = 1000, stdlib = { os = true }, echo = false,
----  absent = { "load", ... }, randomSeed = 1, textWidth = function(fontID, text) return n end,
+---  absent = { "load", ... }, absentNames = { "config.Inv.NAME", ... }, randomSeed = 1, textWidth = function(fontID, text) return n end,
 ---  allowLeftSubscriptions = false }
 ---@return table h
 function M.new(plugin, opts)
@@ -99,6 +99,7 @@ function M.new(plugin, opts)
         consoleCommands = {}, -- ExecuteConsoleCommand arguments, in order
         onConsoleCommand = nil, -- set by a test: called with each console command
         absent = {}, -- globals that read nil, as in a client without them (opts.absent)
+        absentNames = {}, -- "config.Inv.NAME" -> true: names read as the client reads an unknown one
         db = {}, -- PersistentDB entries: key -> { type, value }
         dbWrites = 0, -- PersistentDB stores (Set and the typed setters) so far, across reloads
         varProxies = {},
@@ -132,6 +133,27 @@ function M.new(plugin, opts)
 
     for _, name in ipairs(opts.absent or {}) do
         h.absent[name] = true
+    end
+
+    -- Probed domains only (docs/api-concepts.md#configs-vs-entities); the name itself may be
+    -- one the catalog lacks, which is what a renamed name looks like.
+    local ABSENT_DOMAINS = {
+        ["config.Inv"] = true,
+        ["config.Obj"] = true,
+        ["var.VarPlayer"] = true,
+        ["id.Sprite"] = true,
+        ["id.Obj"] = true,
+    }
+    for _, path in ipairs(opts.absentNames or {}) do
+        local domain = path:match("^(.-)%.[^.]+$")
+        assert(
+            domain and ABSENT_DOMAINS[domain],
+            "opts.absentNames "
+                .. path
+                .. ": only config.Inv, config.Obj, var.VarPlayer, id.Sprite"
+                .. " and id.Obj are probed"
+        )
+        h.absentNames[path] = true
     end
 
     h.world = setmetatable({ h = h, state = world.new(h.manifest) }, Builder)

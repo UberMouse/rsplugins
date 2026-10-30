@@ -86,17 +86,15 @@ function M.init(opts)
 end
 
 -- The id behind an icon's constant name, or nil when this client has no such name (a game
--- update renamed it, say), which is logged once.
+-- update renamed it, say), which is logged once. An unknown name reads -1 in id.Sprite and
+-- id.Obj, not nil, and doesn't raise (docs/api-concepts.md#configs-vs-entities).
 ---@param icon ChoreIcon
 ---@return integer?
 local function resolve(icon)
     assert(say, "rows.init sets say first")
     local domain, name = icon.obj and "Obj" or "Sprite", icon.obj or icon.sprite
-    -- Whether the client gives nil or raises for a name it lacks is unprobed: handle both.
-    local ok, found = pcall(function()
-        return id[domain][name]
-    end)
-    if ok and type(found) == "number" then return found end
+    local found = id[domain][name]
+    if type(found) == "number" and found ~= -1 then return found end
     local key = domain .. "." .. tostring(name)
     if not reported[key] then
         reported[key] = true

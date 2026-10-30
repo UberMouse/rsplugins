@@ -287,19 +287,8 @@ describe("chore-tracker window", function()
     end)
 
     it("gives a chore whose icon this client lacks a row without one, saying so once", function()
-        local h = loaded()
-        -- A client where POP_LOG was renamed: the name reads nil.
-        local real = h.env.id
-        h.env.id = {
-            Obj = setmetatable({}, {
-                __index = function(_, name)
-                    if name == "POP_LOG" then return nil end
-                    return real.Obj[name]
-                end,
-            }),
-            Sprite = real.Sprite,
-            Font = real.Font,
-        }
+        -- A client where POP_LOG was renamed: the name reads -1.
+        local h = loaded({ absentNames = { "id.Obj.POP_LOG" } })
         togglePicks(h, { "daily-challenge", "player-owned-ports" })
         local ports = row(h, "Player Owned Ports")
         assert.is_nil(ports.icon)
@@ -312,6 +301,26 @@ describe("chore-tracker window", function()
         helpers.back(h)
         local _, lines = h:output():gsub("%[CHORES%] unknown icon id%.Obj%.POP_LOG", "")
         assert.are.equal(1, lines)
+    end)
+
+    it("leaves a shop, note or var the client lacks unwatched, saying so once", function()
+        local h = loaded({
+            absentNames = {
+                "config.Inv.FISHINGSHOP",
+                "config.Obj.CERT_PINEAPPLE",
+                "var.VarPlayer.ATAR_ESS_USED",
+            },
+        })
+        local out = h:output()
+        for _, line in ipairs({
+            "unknown inventory FISHINGSHOP; not watched",
+            "unknown obj CERT_PINEAPPLE; not watched",
+            "unknown var ATAR_ESS_USED; not watched",
+        }) do
+            local _, count = out:gsub("%[CHORES%] " .. line, "")
+            assert.are.equal(1, count, line)
+        end
+        assert.is_not_nil(window(h))
     end)
 
     it("leaves no tooltip up across a collapse and expand", function()

@@ -126,7 +126,8 @@ end
 
 -- A harness with the clock at `opts.clock` (default NOW; 0 for not ready) and logged in as
 -- `opts.login` (default "Zezima"; false for logged out), loaded unless `opts.load` is false.
--- `opts.grant` lists permissions to grant (none by default).
+-- `opts.grant` lists permissions to grant (none by default). `opts.absentNames` is the
+-- harness's: names that read as the client reads an unknown one.
 -- Every var data/vars.lua watches starts at 0, because the harness faults on reading an
 -- unset one (detect_spec.lua covers a var with no value, with stand-in globals); set one
 -- before loading to start it elsewhere.
@@ -134,7 +135,7 @@ end
 ---@return table h
 function M.loaded(opts)
     opts = opts or {}
-    local h = harness.new("chore-tracker", { grant = opts.grant })
+    local h = harness.new("chore-tracker", { grant = opts.grant, absentNames = opts.absentNames })
     h.world:setVar("VarPlayer", "CLOCK_TIME_DATE_MINUTES", opts.clock or M.NOW)
     for _, rule in ipairs(varRules) do
         for _, name in ipairs(varsCore.names(rule)) do

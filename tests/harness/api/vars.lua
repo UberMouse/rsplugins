@@ -90,6 +90,8 @@ function M.install(h, env)
             return catalog.var(domain, varId) and M.proxy(h, domain, varId)
         end
         domains[domain] = strict.lookup("var." .. domain, function(name)
+            -- A spec's opts.absentNames: the client reads nil for an unknown name.
+            if h.absentNames["var." .. domain .. "." .. tostring(name)] then return nil end
             if not catalog.var(domain, name) then
                 strict.fault(
                     string.format(

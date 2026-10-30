@@ -7,7 +7,10 @@
 -- destroyed. A name too long for its row is cut short with "..." (ui.Text can't
 -- clip), and its tooltip then leads with the full text.
 -- PrettyUI 1.2.0's CheckboxButton can neither show an icon nor be recoloured or retexted, so
--- neither view uses it for chore rows.
+-- neither view uses it for chore rows (only the settings view's Celebrations switches do).
+-- Instead both views place these rows at the spots core/listlayout.lua works out, and change
+-- them in place, so the window is rebuilt only for a view switch, a login change or the clock
+-- starting or stopping.
 
 local fit = require("core/fit")
 local listlayout = require("core/listlayout")

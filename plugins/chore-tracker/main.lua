@@ -1,98 +1,33 @@
--- Chore Tracker: a checklist of RuneScape's daily, weekly and monthly chores (the list from
--- dailyscape, MIT; see data/chores.lua), drawn with PrettyUI.
+-- Chore Tracker: a checklist of RuneScape's daily, weekly and monthly chores (the list comes
+-- from dailyscape, MIT; see data/chores.lua), in a PrettyUI window.
 --
---   * The window lists the chores you picked, grouped Daily / Weekly / Monthly, each headed
---     with how many are done. Each chore is a row with its icon (data/icons.lua: a built-in
---     item icon or interface sprite), its name and a tick box. A click anywhere on the row
---     ticks it; done chores stay in place, ticked, icon and name dimmed, and a second click
---     unticks them. Over any row the cursor is the hyperlink hand and the box shows a
---     hovered sprite. Hover a chore for its description and wiki links (shown as text:
---     plugins can't open URLs).
---   * Each list row has a grip (the HAMBURGER_MENU_ICON sprite) at its left, under the PUSH
---     cursor. Drag a chore by its grip to reorder it within its period: the row follows the
---     pointer, its period's other rows slide apart to show where it will drop, and the list
---     scrolls while the pointer is past its top or bottom edge. The release drops it there; a
---     click on the grip ticks nothing. shell/grips.lua does this (see there for why the presses
---     are taken by layers on the plugin layer, not by the rows). A chore picked later goes to
---     the end of its period. A drop that changes the order logs "[CHORES] moved <chore id> to
---     <n> in <period>".
---   * The settings button (top left of the content) opens the settings view, which has the
---     Celebrations switches and lists every chore to pick from, as the same icon rows under
---     Daily / Weekly / Monthly headings: click a row to pick or unpick it (its box ticks).
---     There, the title bar's top-right slot is a back button to the list, in reach however far
---     the settings are scrolled.
---   * In the list, the hamburger in that slot (where PrettyUI's close X would be) collapses
---     the window into a single hamburger button at the same spot. Alt-drag that
---     button to move it (with the console closed); click it to open the window again, grown
---     left and down from the button.
---   * A chore counts as done until its period resets, by the game clock (UTC): daily at
---     00:00, weekly on Wednesday 00:00, monthly at 00:00 on the 1st. Ticks clear by
---     themselves when the clock passes a reset.
---   * Some chores tick themselves, whether or not they are picked; ticking by hand still
---     works for them and changes no shop's progress.
---       - Shop runs: any purchase at any of a chore's shops (data/shops.lua, where the ones
---         not yet seen in the client are marked unproven) marks it done for the period. A
---         shop is an inventory the client gets only while that shop is open, and its stock
---         is the player's own, so a line whose count drops is the player buying. A shop
---         with a before- and an after-quest inventory counts a purchase in either. A chore
---         with more than one shop shows how many were bought from this period, as "Feather
---         Shop Run (1/4)", and its tooltip lists each shop as bought or not yet.
---       - Collections (data/collections.lua): Dell Monti's apples and pineapples and the
---         Weird Old Man's potato cacti (unproven) arrive as banknotes in the backpack, so
---         such a chore ticks when its notes rise while the player is within 10 tiles of
---         the giver, on the same plane. shell/detect.lua does these two, reading only the
---         listed shops' inventories, the backpack and the player's own tile.
---       - Game vars: Bert's, Geoffrey's, Cromperty's and Coeden's freebies, the Daily
---         Challenge, Advance Time, Divine Locations and others in data/vars.lua (unproven
---         ones are marked there) tick when one of the player's own VarPlayer vars changes so
---         that the chore's rule turns true (the Daily Challenge's when its count of claimed
---         challenges rises, so any claim of a challenge's reward ticks it). A rule already
---         true when first read never ticks, nor does one turning true within 10 seconds of
---         loading or a character switch (the login's burst of vars), so a chore done while
---         the plugin was off is left to tick by hand. shell/vars.lua does this, reading only
---         the vars those rules name; no var's value is shown.
---     Each chore they tick (or shop first recorded in a period) logs "[CHORES] purchase
---     <chore id> at <shop>", "[CHORES] collected <chore id> near <giver>" or "[CHORES] seen
---     <chore id> done (<var>)" (grep: \[CHORES\] (purchase|collected|seen)).
---   * Celebrations (shell/popups.lua, core/celebrate.lua): when the plugin ticks a picked chore
---     itself, a PrettyUI AchievementPopup says so ("CHORE COMPLETE", the chore's name), and
---     when a period's picked chores are all done, a bigger one follows ("DAILIES COMPLETE").
---     The second also shows when the last is ticked by hand; picks, unticks, logins and
---     character switches show nothing. One popup at a time in the plugin layer, built-in
---     sounds, dropped at logout, a character switch, shutdown or when turned off. The
---     settings view's Celebrations section turns the popups and their sound off, saved for all
---     characters. Each popup logs "[CHORES] celebrate <chore id>" or "[CHORES] celebrate
---     <period> cleared" (grep: \[CHORES\] (purchase|collected|seen|celebrate) for all the
---     lines above and these).
---   * Picks, their order and ticks are saved per character (by display name) as they change.
---     The window's position, size and collapsed state, and the collapsed button's spot, are
---     saved for all characters, as are the celebration settings. Logged out, the window says
---     so; until the game clock reads, nothing can be ticked.
+-- In the settings view you pick the chores you do; the list then shows them under Daily,
+-- Weekly and Monthly headings, and you tick one off by clicking its row, or drag it by its grip
+-- to reorder it within its period. Ticks clear themselves when the game clock passes the
+-- period's reset (UTC: daily at 00:00, weekly on Wednesday 00:00, monthly on the 1st). Some
+-- chores also tick themselves, picked or not: a shop run when you buy at one of its shops and
+-- a collection when its notes rise in your backpack near the giver (shell/detect.lua), and
+-- others when one of your own game vars changes to show them done (shell/vars.lua; a chore
+-- already done at login or while the plugin was off is left to tick by hand). When the plugin
+-- ticks a picked chore, or a period's picked chores are all done, a popup celebrates it
+-- (shell/popups.lua); settings turn the popups or their sound off. Picks, their order and
+-- ticks are saved per character, by display name; the window's place, size and collapsed
+-- state (shell/window.lua) and the celebration settings are saved for all characters.
 --
--- It reads only what the game already gives the player's client (an open shop's stock, their
--- own backpack, position and game vars): no permissions, nothing sent to the game, nothing
--- about other players. Console lines carry [CHORES] (grep: \[CHORES\]); the display name is never
--- logged.
+-- It reads only what the game already gives your client: the game clock, your own display
+-- name and position, your backpack, an open shop's stock and your own game vars. It asks for
+-- no permissions, sends nothing to the game or anywhere else, and reads nothing about other
+-- players.
+--
+-- Console lines carry [CHORES] (grep: \[CHORES\]); the display name is never logged. Chores
+-- ticked by the plugin and celebrations log "[CHORES] purchase", "collected", "seen" or
+-- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)).
 --
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
 -- local daemon; scripts/check-submission.sh fails until it is stripped (README, "Before
 -- submitting").
 --
--- The rows of both views, list and settings, are built by hand (shell/rows.lua) in the
--- window's content, at spots core/listlayout.lua works out, because PrettyUI 1.2.0's
--- CheckboxButton can't show an icon, be recoloured or be retexted (only the Celebrations
--- switches use it). Ticks, colours, counts and tooltips change in place; the window
--- is rebuilt only for a view switch, a login change or the clock starting or stopping.
---
--- The PrettyUI 1.2.0 internals the window leans on (scroll, wheel, grips, resize) are all in
--- shell/prettyui_internals.lua.
---
--- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
--- background, scrolling off, and the hamburger as a child of the Panel's own root at its
--- origin, so the button covers the Panel's 4 px frame. A Panel always draws that frame, but
--- it is what makes Alt-drag work, and the button's screen spot is then the Panel's own.
--- The Panel is made on collapse and destroyed on expand: kept hidden while the window is
--- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
+-- README.md describes everything the plugin does for the player in full.
 
 -- Dev only (remove before submitting, see the README): forwards console output to rsdev.py.
 local tee = require("dev/tee") -- nil when dev/ isn't there; see PluginShutdown
@@ -116,6 +51,7 @@ local internals = require("shell/prettyui_internals")
 local rows = require("shell/rows")
 local store = require("shell/store")
 local varDetect = require("shell/vars")
+local window = require("shell/window")
 
 -- Every console line from this plugin carries this tag, so it's easy to grep.
 local function say(...)
@@ -123,14 +59,6 @@ local function say(...)
 end
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
-
--- The smallest the window can be resized to.
-local MIN_WIDTH, MIN_HEIGHT = 240, 160
-
--- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapseAt).
-local COLLAPSE_TOOLTIP = { text = "Collapse" }
--- The same slot's tooltip while the settings view is open.
-local BACK_TOOLTIP = { text = "Back to the list" }
 
 -- Tooltips wrap at this width; wiki URLs are long.
 local TOOLTIP_WIDTH = 360
@@ -158,23 +86,14 @@ local tracker = state.new()
 ---@alias ChoreMode "list"|"settings"
 local phase = nil ---@type ChorePhase?
 local mode = "list" ---@type ChoreMode
-local win = nil ---@type prettyui.Window?
--- The title-bar slot's button: the hamburger, or back to the list in settings.
-local openButton = nil ---@type prettyui.SpriteButton?
-local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
-local collapsedButton = nil ---@type prettyui.SpriteButton?
 -- The open view's components, to update in place: chore id -> its row (list rows or settings
 -- rows, whichever view is open; ids are the same in both), and period -> its list heading. Both
 -- go with the window.
 local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
--- Work left for the next Logic tick. A button's action mustn't destroy the button while
--- PrettyUI is still handling its click, so a view switch (which rebuilds the window) and
--- removing the collapsed panel after expanding wait a tick.
+-- A view switch left for the next Logic tick. A button's action mustn't destroy the button
+-- while PrettyUI is still handling its click, and a view switch rebuilds the window.
 local pendingMode = nil ---@type ChoreMode?
-local retiring = nil ---@type prettyui.Panel?
--- The layout the store holds, so it's written only when the window has really moved.
-local savedLayout = nil ---@type ChoreLayout?
 -- The celebration settings, for all characters.
 local celebrations = settingsCore.default()
 
@@ -201,15 +120,6 @@ end
 ---------------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------------
-
--- A component's on-screen position relative to the plugin layer, in whole pixels.
----@param component ui.Component
----@return integer x
----@return integer y
-local function screenPos(component)
-    local at, origin = component.xyGlobal, parent.xyGlobal
-    return math.floor(at.x - origin.x + 0.5), math.floor(at.y - origin.y + 0.5)
-end
 
 -- A chore's tooltip: its description, then `extra` lines (a list row's shops), then its wiki
 -- page and any other links, as text.
@@ -242,6 +152,7 @@ end
 -- Bring the list's headings, rows and tooltips up to date with the tracker and the clock,
 -- in place: each row changes only what differs (rows.lua).
 local function refreshList()
+    local win = window.current()
     assert(win, "the list is only refreshed while its window exists")
     local content = win.content
     for _, section in ipairs(view.view(tracker, chores, clockNow(), shops)) do
@@ -265,7 +176,7 @@ end
 -- stop before the tick box). rows.fit returns at once for a row whose width is unchanged, so
 -- fitting every row on each poll costs nothing while the window is idle.
 local function refitRows()
-    assert(win, "rows are only refitted while the window exists")
+    assert(window.current(), "rows are only refitted while the window exists")
     for _, rowView in pairs(rowViews) do
         rows.fit(rowView)
     end
@@ -432,175 +343,52 @@ local function buildSettings(w)
 end
 
 ---------------------------------------------------------------------------
--- The window and its collapsed button
+-- The window (its chrome and collapsed button are shell/window.lua's)
 ---------------------------------------------------------------------------
 
-local collapse -- defined below; the window's hamburger calls it
-
--- The settings view's way out, in the title-bar slot so it stays in reach however far the
--- list is scrolled. Like every view switch, it waits a tick.
-local function backToList()
-    pendingMode = "list"
+-- Whether the window shows the settings view. Logged out there is nothing to pick, so the
+-- logged-out notice shows whatever the mode.
+---@return boolean
+local function inSettings()
+    return phase ~= "loggedOut" and mode == "settings"
 end
 
--- Keep the grips' targets over their grips, shown only while the window is open.
-local function followGrips()
-    grips.follow(collapsed == nil)
-end
-
--- (Re)build the window at `at` for the current phase and mode. There's no PrettyUI call to
--- clear a window's content, so a view switch, a login change or the clock starting
--- rebuilds the window where it was.
----@param at { x: integer, y: integer, width: integer, height: integer }
-local function buildWindow(at)
-    -- The grips' targets go first: they are the plugin layer's, not the window's, and a drag
-    -- in progress ends unsaved with its rows.
-    grips.clear()
-    if win then win:Destroy() end
-    rowViews, headings = {}, {}
-    local w = prettyui.Window.new(parent, {
-        title = "Chores",
-        x = at.x,
-        y = at.y,
-        width = at.width,
-        height = at.height,
-        resizable = true,
-        minWidth = MIN_WIDTH,
-        minHeight = MIN_HEIGHT,
-    })
-    win = w
-    internals.setResizeCursors(w)
-    w.closeButton.hidden = true
-    -- The title-bar slot is the one spot of the title bar the drag layer leaves clickable.
-    -- It collapses the window, except in the settings view, where it goes back to the list
-    -- (collapsing from there means going back first). A view switch rebuilds the window, so
-    -- each view simply makes its own button.
-    local settings = phase ~= "loggedOut" and mode == "settings"
-    openButton = prettyui.SpriteButton.new(
-        w.root,
-        settings and "BACK" or "MENU",
-        settings and backToList or collapse,
-        {
-            x = layout.SLOT_X,
-            y = layout.SLOT_Y,
-            xAnchor = 1.0,
-            size = BUTTON_SIZE,
-            tooltip = settings and BACK_TOOLTIP or COLLAPSE_TOOLTIP,
-        }
-    )
+-- A new window's content for the current phase and mode.
+---@param w prettyui.Window
+local function buildContent(w)
     if phase == "loggedOut" then
         w:AddText("Log in to see your chores.")
-    elseif settings then
+    elseif inSettings() then
         buildSettings(w)
     else
         buildList(w, function()
             pendingMode = "settings"
         end)
     end
-    followGrips()
 end
 
--- Rebuild the window where it is, staying closed if collapsed. With `keepScroll`, the new
--- content is scrolled as far as the old (PrettyUI clamps it to the new content), so a login
--- change or the clock starting doesn't jump the list to the top; a view switch starts at the
--- top.
----@param keepScroll boolean
-local function rebuild(keepScroll)
-    assert(win, "the window exists from load to shutdown")
-    local r = win.root
-    local scrollY = keepScroll and internals.scrollPosition(win) or nil
-    buildWindow({ x = r.x, y = r.y, width = r.width, height = r.height })
-    if scrollY then win:SetScrollPosition(scrollY) end
-    if collapsed then win:Close() end
-end
-
-local expand
-
--- Close the window and put a lone hamburger at (x, y) in the plugin layer.
----@param x integer
----@param y integer
-local function collapseAt(x, y)
-    assert(win and openButton, "the window's hamburger only exists with the window")
-    -- The hamburger's tooltip is drawn inside the window, not in its content, so Close hides
-    -- it only with the window, and it would be back on the next Show. Replacing it with a
-    -- table leaves a fresh, hidden one (a string would only retext it: PrettyUI 1.2.0's
-    -- Tooltip.set, src/tooltip.lua).
-    openButton:SetTooltip(COLLAPSE_TOOLTIP)
+window.init({
+    parent = parent,
+    say = say,
+    inSettings = inSettings,
+    -- The settings view's way out, in the title-bar slot so it stays in reach however far the
+    -- list is scrolled. Like every view switch, it waits a tick.
+    backToList = function()
+        pendingMode = "list"
+    end,
+    -- The old window's rows and headings went with it.
+    clearViews = function()
+        rowViews, headings = {}, {}
+    end,
+    build = buildContent,
     -- Close hides the rows, and the client sends no mouse-leave to a hidden layer, so a hovered
     -- row would reopen with its hovered box.
-    for _, rowView in pairs(rowViews) do
-        rows.unhover(rowView)
-    end
-    win:Close()
-    -- Not followGrips: that reads `collapsed`, which is only assigned below.
-    grips.follow(false)
-    collapsed = prettyui.Panel.new(parent, {
-        x = x,
-        y = y,
-        width = BUTTON_SIZE,
-        height = BUTTON_SIZE,
-        backgroundAlpha = 0,
-        scrollable = false,
-    })
-    collapsedButton = prettyui.SpriteButton.new(collapsed.root, "MENU", expand, {
-        size = BUTTON_SIZE,
-        tooltip = "Chores (Alt-drag to move)",
-    })
-end
-
--- The window's hamburger: collapse where it is.
-collapse = function()
-    assert(openButton, "the window's hamburger called this")
-    local x, y = screenPos(openButton.root)
-    collapseAt(x, y)
-    say("collapsed at", x, y)
-end
-
--- Re-open the window so its hamburger lands on the collapsed one, then drop the panel.
-expand = function()
-    assert(win and collapsed and collapsedButton, "the collapsed button only exists collapsed")
-    local x, y = screenPos(collapsedButton.root)
-    local r = win.root
-    local wx, wy = layout.windowForButton(x, y, r.width, r.height, parent.width, parent.height)
-    -- A bare SetPos is snapped back by PrettyUI; SetSize after it makes the spot stick.
-    r:SetPos(wx, wy)
-    win:SetSize(r.width, r.height)
-    -- Show brings the window to the front; followGrips below shows the grips' targets, which
-    -- brings them back over it.
-    win:Show()
-    collapsed.root.hidden = true
-    -- An earlier panel still waiting for the tick is past its click, so it can go now.
-    if retiring then retiring:Destroy() end
-    retiring, collapsed, collapsedButton = collapsed, nil, nil
-    followGrips()
-    say("expanded from", x, y)
-end
-
--- Where everything is now, as a layout to save.
----@return ChoreLayout
-local function currentLayout()
-    assert(win and openButton, "the window exists from load to shutdown")
-    local r = win.root
-    local button = collapsedButton and collapsedButton.root or openButton.root
-    local bx, by = screenPos(button)
-    return {
-        x = r.x,
-        y = r.y,
-        width = r.width,
-        height = r.height,
-        collapsed = collapsed ~= nil,
-        buttonX = bx,
-        buttonY = by,
-    }
-end
-
--- Save the layout if it differs from what the store holds.
-local function saveLayoutIfChanged()
-    local now = currentLayout()
-    if savedLayout and layout.same(savedLayout, now) then return end
-    store.saveLayout(now)
-    savedLayout = now
-end
+    onCollapse = function()
+        for _, rowView in pairs(rowViews) do
+            rows.unhover(rowView)
+        end
+    end,
+})
 
 ---------------------------------------------------------------------------
 -- Chores the plugin sees done (shell/detect.lua)
@@ -676,7 +464,7 @@ local function sync(clockTicked)
         -- A view switch clicked in the old content is stale now (it would reopen settings
         -- after a logout).
         pendingMode = nil
-        if win then rebuild(true) end
+        if window.current() then window.rebuild(true) end
     elseif clockTicked and phase == "ready" and mode == "list" then
         refreshList()
     end
@@ -688,23 +476,21 @@ end
 
 Event.Logic.Subscribe("chore-tracker", function(ev)
     varDetect.tick()
-    if retiring then
-        retiring:Destroy()
-        retiring = nil
-    end
+    -- Before the view switch: a panel retired by expand last tick is past its click.
+    window.dropRetired()
     if pendingMode then
         mode = pendingMode
         pendingMode = nil
-        rebuild(false)
+        window.rebuild(false)
     end
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)
-        saveLayoutIfChanged()
+        window.saveLayoutIfChanged()
         refitRows()
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.
-    followGrips()
-    internals.reviveResize(win, collapsed ~= nil)
+    window.followGrips()
+    internals.reviveResize(window.current(), window.isCollapsed())
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)
@@ -718,14 +504,9 @@ Event.InventoryRemoved.Subscribe("chore-tracker", detect.onInventoryRemoved)
 
 celebrations = store.loadSettings()
 popups.configure(celebrations)
+-- The login and clock first, so the window opens on the right view.
 sync(false)
--- The layout as stored, then fitted to the plugin layer. savedLayout keeps the stored one,
--- so a layout that had to be moved in gets saved at the next check.
-savedLayout = store.loadLayout()
-local start =
-    layout.clamp(savedLayout, parent.width, parent.height, MIN_WIDTH, MIN_HEIGHT, BUTTON_SIZE)
-buildWindow(start)
-if start.collapsed then collapseAt(start.buttonX, start.buttonY) end
+window.open()
 say("loaded", #chores, "chores")
 
 function PluginShutdown()
@@ -734,13 +515,7 @@ function PluginShutdown()
     Event.InventoryAdded.Unsubscribe("chore-tracker")
     Event.InventoryUpdated.Unsubscribe("chore-tracker")
     Event.InventoryRemoved.Unsubscribe("chore-tracker")
-    grips.clear()
-    if win then
-        saveLayoutIfChanged()
-        win:Destroy()
-    end
-    if collapsed then collapsed:Destroy() end
-    if retiring then retiring:Destroy() end
+    window.shutdown()
     popups.clear()
     if tee then tee.shutdown() end -- dev only: the tee's own Logic subscription
 end

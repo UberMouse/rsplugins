@@ -1,6 +1,6 @@
 -- Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI
 -- versions. PrettyUI 1.2.0 offers no public way to do these, so this is the one file that
--- reaches into its state and internals; main.lua goes through it.
+-- reaches into its state and internals; main.lua and shell/window.lua go through it.
 --
 -- State and internals used, each guarded so a version without it loses only that. The rule:
 -- reads are type-guarded, method calls are pcalled.

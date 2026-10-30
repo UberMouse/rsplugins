@@ -217,7 +217,8 @@ permissions") is true only after that check passes.
 
 | File | What |
 |---|---|
-| `main.lua` | The window, its collapsed button, the two views, and following the login and clock |
+| `main.lua` | The two views, list and settings, ticking and picking, and following the login and clock |
+| `shell/window.lua` | The window itself: making it, collapsing it to its button and opening it again, and saving where it is |
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |

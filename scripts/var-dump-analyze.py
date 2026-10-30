@@ -801,6 +801,79 @@ def structure_stats(members):
     }
 
 
+def var_kind(v):
+    """The row a var counts under in the overview: VarBit, else its domain."""
+    return "VarBit" if v.get("isVarBit") else v["domain"]
+
+
+def unsupported_count(vars_):
+    """Vars whose value type the plugin can't convert (type_label UNSUPPORTED)."""
+    return sum(1 for v in vars_ if type_label(v) == "UNSUPPORTED")
+
+
+def md_cell(text):
+    return str(text).replace("|", "\\|")
+
+
+def themes_table(tree, with_set):
+    """Markdown lines for the Themes table. with_set adds a Set column, which needs the
+    value-bearing node_stats; the catalog omits it because it carries no values."""
+    themes = defaultdict(lambda: [0, 0, 0])
+    for node in tree:
+        t = themes[node["theme"]]
+        t[0] += 1
+        t[1] += len(node["members"])
+        if with_set:
+            t[2] += node_stats(node["members"])["set"]
+    head, rule = "| Theme | Families | Vars |", "|---|---:|---:|"
+    if with_set:
+        head, rule = head + " Set |", rule + "---:|"
+    lines = [head, rule]
+    for theme, (fams, count, held_count) in sorted(themes.items(), key=lambda kv: -kv[1][1]):
+        lines.append(
+            f"| {theme} | {fams} | {count:,} |" + (f" {held_count:,} |" if with_set else "")
+        )
+    return lines
+
+
+def families_table(tree, stats_fn, with_set):
+    """Markdown lines for the Biggest families table (top 60). stats_fn is structure_stats
+    or node_stats; with_set adds a Set column and needs node_stats."""
+    head = "| Family | Vars | VarBits | VarClient |" + (" Set |" if with_set else "")
+    rule = "|---|---:|---:|---:|" + ("---:|" if with_set else "")
+    lines = [head + " Main sub-groups | Meaning |", rule + "---|---|"]
+    for node in tree[:60]:
+        stats = stats_fn(node["members"])
+        subs = ", ".join(f"{c['label']} {len(c['members'])}" for c in node["children"][:4])
+        note = FAMILY_NOTES.get(node["label"].rstrip("*"), "")
+        lines.append(
+            f"| `{node['label']}` | {stats['vars']:,} | {stats['varbits']:,} "
+            f"| {stats['varclient']:,} |"
+            + (f" {stats['set']:,} |" if with_set else "")
+            + f" {subs} | {md_cell(note)} |"
+        )
+    return lines
+
+
+def basevar_lines(bases, name_vars):
+    """The VarBit-widths and overlapping-VarBits bullets, as a (widths, overlapping) pair
+    because the report puts another bullet between them. name_vars lists the overlapping
+    base vars by name; the catalog leaves them out."""
+    widths = Counter(f["width"] for b in bases for f in b["varbits"])
+    overlapping = [b for b in bases if b["overlapping"]]
+    names = ""
+    if name_vars and overlapping:
+        names = ": " + ", ".join(f"`{b['name']}`" for b in overlapping[:10])
+    return (
+        "- VarBit widths (bits: count): "
+        + ", ".join(f"{w}: {n:,}" for w, n in sorted(widths.items()))
+        + ".",
+        f"- {len(overlapping)} base vars have overlapping VarBits (one field read two ways)"
+        + names
+        + ".",
+    )
+
+
 def write_catalog(out, snapshot_day, vars_, var_rows, tree, bases):
     """The account-independent reference in docs/vars/: every var's name, id, type,
     family and VarBit layout, but no values (those belong to whoever was logged in;
@@ -820,8 +893,7 @@ def write_catalog(out, snapshot_day, vars_, var_rows, tree, bases):
 
     md = []
     add = md.append
-    kind = lambda v: "VarBit" if v.get("isVarBit") else v["domain"]
-    by_kind = Counter(kind(v) for v in vars_)
+    by_kind = Counter(var_kind(v) for v in vars_)
     packed = sum(1 for v in vars_ if v["_packed"])
     types = Counter(type_label(v) for v in vars_)
     add("# Var catalog\n")
@@ -869,14 +941,7 @@ def write_catalog(out, snapshot_day, vars_, var_rows, tree, bases):
         'Families rolled up by topic (THEMES in the script; "(auto)" = placed by keywords '
         "in the var names).\n"
     )
-    add("| Theme | Families | Vars |")
-    add("|---|---:|---:|")
-    themes = defaultdict(lambda: [0, 0])
-    for node in tree:
-        themes[node["theme"]][0] += 1
-        themes[node["theme"]][1] += len(node["members"])
-    for theme, (fams, count) in sorted(themes.items(), key=lambda kv: -kv[1][1]):
-        add(f"| {theme} | {fams} | {count:,} |")
+    md.extend(themes_table(tree, with_set=False))
     add("")
 
     add("## Biggest families\n")
@@ -884,36 +949,22 @@ def write_catalog(out, snapshot_day, vars_, var_rows, tree, bases):
         "`*` marks a family merging several spellings (TRH, TRH189, ...). Full tree: "
         "`families.txt`.\n"
     )
-    add("| Family | Vars | VarBits | VarClient | Main sub-groups | Meaning |")
-    add("|---|---:|---:|---:|---|---|")
-    for node in tree[:60]:
-        stats = structure_stats(node["members"])
-        subs = ", ".join(f"{c['label']} {len(c['members'])}" for c in node["children"][:4])
-        note = FAMILY_NOTES.get(node["label"].rstrip("*"), "")
-        add(
-            f"| `{node['label']}` | {stats['vars']:,} | {stats['varbits']:,} "
-            f"| {stats['varclient']:,} | {subs} | {md_cell(note)} |"
-        )
+    md.extend(families_table(tree, structure_stats, with_set=False))
     add("")
 
     add("## Base vars and VarBits\n")
     sizes = [len(b["varbits"]) for b in bases]
-    widths = Counter(f["width"] for b in bases for f in b["varbits"])
-    overlapping = [b for b in bases if b["overlapping"]]
+    widths_line, overlap_line = basevar_lines(bases, name_vars=False)
     add(
         f"- {len(bases):,} base VarPlayers carry VarBits; median {statistics.median(sizes)} "
         f"VarBits each, max {max(sizes)}. All masks are contiguous, and a VarBit's value is "
         "`(base & mask) >> low bit`."
     )
-    add(
-        "- VarBit widths (bits: count): "
-        + ", ".join(f"{w}: {n:,}" for w, n in sorted(widths.items()))
-        + "."
-    )
-    add(f"- {len(overlapping)} base vars have overlapping VarBits (one field read two ways).\n")
+    add(widths_line)
+    add(overlap_line + "\n")
 
     add("## Reading values: what we've seen\n")
-    add("From dumps of one account (2026-10-20); check before relying on them.\n")
+    add(f"From the {snapshot_day} snapshot of one account; check before relying on them.\n")
     add(f"- {BOOLEAN_NOTE}")
     add(
         f"- COMPONENT vars ({types.get('COMPONENT', 0)}) return no value through the API. Types "
@@ -1067,21 +1118,21 @@ def main():
 
     # Summary and report.
     leaves = [v for v in vars_ if not v["_packed"]]
-    kind = lambda v: "VarBit" if v.get("isVarBit") else v["domain"]
     summary = {
         "snapshot": str(snapshot),
         "snapshot_time": utc_text(now),
         "vars": len(vars_),
-        "by_domain": dict(Counter(kind(v) for v in vars_)),
+        "by_domain": dict(Counter(var_kind(v) for v in vars_)),
         "packed_bases": len(vars_) - len(leaves),
         "leaf_vars": len(leaves),
         "leaf_states": dict(Counter(v["_state"] for v in leaves)),
         "set_but_sentinel": sum("sentinel" in v["_hint"] for v in leaves),
         "leaf_states_by_domain": {
-            d: dict(Counter(v["_state"] for v in leaves if kind(v) == d))
+            d: dict(Counter(v["_state"] for v in leaves if var_kind(v) == d))
             for d in ("VarPlayer", "VarBit", "VarClient")
         },
         "types": dict(Counter(v.get("valueTypeName") or "?" for v in vars_).most_common()),
+        "unsupported": unsupported_count(vars_),
         "families": len(tree),
         "redactable_vars": sum(is_redacted_type(v) for v in vars_),
         "change_sessions": len(sessions),
@@ -1121,10 +1172,6 @@ def main():
             bases,
         )
         print(f"wrote catalog to {args.catalog}/")
-
-
-def md_cell(text):
-    return str(text).replace("|", "\\|")
 
 
 def write_report(
@@ -1185,7 +1232,7 @@ def write_report(
     add("### Caveats\n")
     add(f"- {BOOLEAN_NOTE}")
     add(
-        "- COMPONENT vars return no value through the API, and 9 vars have value types the "
+        f"- COMPONENT vars return no value through the API, and {summary['unsupported']} vars have value types the "
         "plugin can't convert (`unsupported ValueType`)."
     )
     add(
@@ -1205,17 +1252,7 @@ def write_report(
         "Families rolled up by topic. The patterns are in THEMES in the script; "
         '"(auto)" families were placed by keywords in their var names.\n'
     )
-    add("| Theme | Families | Vars | Set |")
-    add("|---|---:|---:|---:|")
-    themes = defaultdict(lambda: [0, 0, 0])
-    for node in tree:
-        stats = node_stats(node["members"])
-        t = themes[node["theme"]]
-        t[0] += 1
-        t[1] += stats["vars"]
-        t[2] += stats["set"]
-    for theme, (fams, count, held_count) in sorted(themes.items(), key=lambda kv: -kv[1][1]):
-        add(f"| {theme} | {fams} | {count:,} | {held_count:,} |")
+    md.extend(themes_table(tree, with_set=True))
     add("")
 
     # Biggest families with notes and sub-groups.
@@ -1225,16 +1262,7 @@ def write_report(
         "a family merging several spellings (TRH, TRH189, ...). Full tree: "
         "`families-tree.txt` / `families.csv`.\n"
     )
-    add("| Family | Vars | VarBits | VarClient | Set | Main sub-groups | Meaning |")
-    add("|---|---:|---:|---:|---:|---|---|")
-    for node in tree[:60]:
-        stats = node_stats(node["members"])
-        subs = ", ".join(f"{c['label']} {len(c['members'])}" for c in node["children"][:4])
-        note = FAMILY_NOTES.get(node["label"].rstrip("*"), "")
-        add(
-            f"| `{node['label']}` | {stats['vars']:,} | {stats['varbits']:,} | {stats['varclient']:,} "
-            f"| {stats['set']:,} | {subs} | {md_cell(note)} |"
-        )
+    md.extend(families_table(tree, node_stats, with_set=True))
     add("")
 
     # Where this character's state actually is.
@@ -1279,12 +1307,8 @@ def write_report(
         f"- VarBits per base var: median {statistics.median(sizes)}, max {max(sizes)}; "
         f"{sizes.count(1)} base vars have a single VarBit."
     )
-    widths = Counter(f["width"] for b in bases for f in b["varbits"])
-    add(
-        "- VarBit widths (bits: count): "
-        + ", ".join(f"{w}: {n:,}" for w, n in sorted(widths.items()))
-        + "."
-    )
+    widths_line, overlap_line = basevar_lines(bases, name_vars=True)
+    add(widths_line)
     unmapped = [b for b in bases if b["unmapped_set_bits"] != "0x00000000"]
     add(
         f"- {len(unmapped)} base vars have set bits no VarBit covers (state only readable from "
@@ -1296,12 +1320,7 @@ def write_report(
         )
         + "."
     )
-    overlapping = [b for b in bases if b["overlapping"]]
-    add(
-        f"- {len(overlapping)} base vars have overlapping VarBits (one field read two ways)"
-        + (": " + ", ".join(f"`{b['name']}`" for b in overlapping[:10]) if overlapping else "")
-        + "."
-    )
+    add(overlap_line)
     fullest = sorted(bases, key=lambda b: -b["set_fields"])[:8]
     add(
         "- Most set VarBits: "

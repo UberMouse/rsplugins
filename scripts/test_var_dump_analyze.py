@@ -107,6 +107,45 @@ class WriteCatalog(unittest.TestCase):
         self.assertNotIn("12345", text)
 
 
+class SharedSections(unittest.TestCase):
+    def test_unsupported_count_comes_from_the_data(self):
+        vars_ = [dict(v) for v in SNAPSHOT]
+        self.assertEqual(analyze.unsupported_count(vars_), 0)
+        # the real dump leaves valueTypeName off the types the API cannot convert
+        for i in (0, 3):
+            vars_[i].pop("valueTypeName")
+            vars_[i]["valueType"] = -1
+        self.assertEqual(analyze.unsupported_count(vars_), 2)
+
+    def test_var_kind(self):
+        self.assertEqual(
+            [analyze.var_kind(v) for v in SNAPSHOT],
+            ["VarPlayer", "VarBit", "VarPlayer", "VarClient"],
+        )
+        self.assertEqual(analyze.var_kind(SNAPSHOT[1]), "VarBit")
+
+    def test_set_column_only_with_values(self):
+        vars_ = annotated(SNAPSHOT)
+        tree, _ = analyze.catalog_rows(vars_)
+        plain, with_set = analyze.themes_table(tree, False), analyze.themes_table(tree, True)
+        self.assertEqual(plain[0], "| Theme | Families | Vars |")
+        self.assertEqual(with_set[0], "| Theme | Families | Vars | Set |")
+        fam_plain = analyze.families_table(tree, analyze.structure_stats, False)
+        fam_set = analyze.families_table(tree, analyze.node_stats, True)
+        self.assertNotIn("Set", fam_plain[0])
+        self.assertIn("| Set |", fam_set[0])
+        # header, rule and the single DEMO family
+        self.assertEqual(len(fam_set), 3)
+
+    def test_basevar_lines_name_overlaps_only_on_request(self):
+        bases = analyze.build_basevars(annotated(SNAPSHOT))
+        bases[0]["overlapping"] = True
+        self.assertTrue(analyze.basevar_lines(bases, True)[1].endswith(": `DEMO_BASE`."))
+        self.assertTrue(
+            analyze.basevar_lines(bases, False)[1].endswith("(one field read two ways).")
+        )
+
+
 class ReadJsonl(unittest.TestCase):
     def test_torn_and_non_object_lines_are_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:

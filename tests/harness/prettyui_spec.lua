@@ -4,6 +4,7 @@
 
 local harness = require("tests.harness")
 local ui = require("tests.harness.api.ui")
+local strict = require("tests.harness.strict")
 
 local MANIFEST = [[{ "name": "t", "version": "1", "contactEmailAddress": "t@example.com",
     "requiredDependencies": { "prettyui": 6398181 } }]]
@@ -1706,6 +1707,55 @@ describe("prettyui Window resize and title-bar state", function()
                 titleDrag = w.titleDrag ~= nil,
             }, mode)
         end
+    end)
+
+    it("names the getter each scrollInternals mode takes away, and 'all' has every one", function()
+        local expected = {
+            all = { _scroll = true, viewport = true, _onScrollWheel = true },
+            noScroll = { _scroll = false, viewport = true, _onScrollWheel = true },
+            noViewport = { _scroll = true, viewport = false, _onScrollWheel = true },
+            noWheel = { _scroll = true, viewport = true, _onScrollWheel = false },
+        }
+        for mode, shape in pairs(expected) do
+            local h = load(WINDOW)
+            h.ui:scrollInternals(mode)
+            local w = h.env.prettyui.Window.new(h.env.parent, { title = "T", resizable = true })
+            w:SetContentHeight(1000)
+            assert.are.same(shape, {
+                _scroll = w._scroll ~= nil,
+                viewport = w.viewport ~= nil,
+                _onScrollWheel = w._onScrollWheel ~= nil,
+            }, mode)
+            -- The fake's own scrolling and wheel handler don't go through the getters.
+            local s = h.ui:record(w, "Window").s
+            local onWheel = s.onWheel ---@type fun(component: any, delta: number): boolean
+            assert.is_false(onWheel(w.content, 1))
+            assert.are.equal(32, s.scrollY, mode)
+            w:SetScrollPosition(40)
+            assert.are.equal(40, s.scrollY, mode)
+        end
+    end)
+
+    it("makes _RegisterOverlay raise a catchable error, with no fault and no overlay", function()
+        local h = load(WINDOW)
+        local w = h.env.win
+        local overlay = h.env.prettyui.Window.new(h.env.parent, { title = "O" }).root
+        h.ui:overlayRaises(true)
+        local raising = h.env.prettyui.Window.new(h.env.parent, { title = "R" })
+        local faults = #strict.faults
+        assert.matches(
+            "changed signature",
+            harness.errorOf(raising._RegisterOverlay, raising, overlay)
+        )
+        assert.are.equal(faults, #strict.faults)
+        assert.are.same({}, h.ui:overlays(raising))
+        -- A window made before keeps the working internal, and false restores it for new ones.
+        w:_RegisterOverlay(overlay, nil, function() end)
+        assert.are.same({ overlay }, h.ui:overlays(w))
+        h.ui:overlayRaises(false)
+        local ok = h.env.prettyui.Window.new(h.env.parent, { title = "K" })
+        ok:_RegisterOverlay(overlay, nil, function() end)
+        assert.are.same({ overlay }, h.ui:overlays(ok))
     end)
 
     it("has the eight handles, and faults on any other key", function()

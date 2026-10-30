@@ -642,6 +642,8 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
         assert.are.equal(0, gripTargets(h))
         assertStillWorks(h)
         assert.are.equal(0, gripTargets(h))
+        -- Last: the settings button is the first thing in the scrolling content, so a scrolled
+        -- window puts it out of the viewport and the harness refuses its click (internals on too).
         -- The rows still scroll with the wheel.
         local first = helpers.rows(h)[1]
         assert.are.same({ true, 1 }, { h.ui:wheel(first.label, 1) })

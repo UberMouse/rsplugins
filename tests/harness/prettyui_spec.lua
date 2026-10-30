@@ -1642,7 +1642,8 @@ describe("prettyui Window resize and title-bar state", function()
         assert.is_true(h.env.win.resize.enabled)
     end)
 
-    -- 1.2.0 delivers a quick click backwards, so it ends with the resize off and no hold.
+    -- 1.2.0 delivers a quick click backwards, so it ends with the resize off and no hold: not a
+    -- harness bug (docs/api-concepts.md, the 2026-10-29 title-bar probe; docs/testing.md, clickTitle).
     it("ends a quick title-bar click with the resize off and the bar not held", function()
         local h = load(WINDOW)
         h.ui:clickTitle(h.env.win)

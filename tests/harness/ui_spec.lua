@@ -317,6 +317,7 @@ describe("a plugin's own components", function()
             row.cursorConfig.mouseOverCursor = -1
             none = row.cursorConfig.mouseOverCursor
         ]])
+        -- 196 is id.Cursor.CURSOR_PUSH; -1 is the fake's "no cursor" value.
         assert.are.same({ 196, -1 }, { h.env.pushed, h.env.none })
     end)
 

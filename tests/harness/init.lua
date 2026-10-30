@@ -25,6 +25,7 @@ local prettyui = require("tests.harness.api.prettyui")
 local replay = require("tests.harness.replay")
 local runtime = require("tests.harness.runtime")
 local sandbox = require("tests.harness.sandbox")
+local strict = require("tests.harness.strict")
 local vars = require("tests.harness.api.vars")
 local world = require("tests.harness.world")
 
@@ -54,7 +55,8 @@ Builder.__index = Builder
 ---@param plugin string|table "name" for plugins/<name>, a path containing "/", or a table of
 ---  inline files { ["main.lua"] = "...", ["plugin.json"] = "..." }
 ---@param opts table? { grant = { perm... }, budgetMs = 1000, stdlib = { os = true }, echo = false,
----  absent = { "load", ... }, randomSeed = 1, textWidth = function(fontID, text) return n end }
+---  absent = { "load", ... }, randomSeed = 1, textWidth = function(fontID, text) return n end,
+---  allowLeftSubscriptions = false }
 ---@return table h
 function M.new(plugin, opts)
     opts = opts or {}
@@ -62,6 +64,8 @@ function M.new(plugin, opts)
         budgetMs = opts.budgetMs or 1000,
         stdlib = opts.stdlib or {},
         echo = opts.echo or false,
+        -- unload() faults on subscriptions PluginShutdown left, unless a spec about leaking says so
+        allowLeftSubscriptions = opts.allowLeftSubscriptions or false,
         randomState = opts.randomSeed or 1, -- random()'s generator (api/helpers.lua)
         textWidth = opts.textWidth, -- utils.CalcTextWidth's metrics, from the test
         tick = 0, -- logic ticks so far; Logic payloads carry it as logicTick
@@ -174,7 +178,26 @@ function Harness:unload()
     self.ui.hovering = nil
     -- And no press is held on it.
     self.ui.pressing = nil
+    -- A PluginShutdown that raises or times out is reported by runtime.call alone: the leak
+    -- check below doesn't run, since a half-run shutdown leaves subscriptions by definition.
     if type(shutdown) == "function" then runtime.call(self.budgetMs, "PluginShutdown", shutdown) end
+    if not self.allowLeftSubscriptions then
+        local left = {}
+        for event, list in pairs(instance.subs) do
+            for _, entry in ipairs(list) do
+                left[#left + 1] = event .. " '" .. entry.name .. "'"
+            end
+        end
+        table.sort(left)
+        if #left > 0 then
+            -- The repo rule from crash 8 (docs/api-concepts.md), not a probed client behaviour.
+            strict.fault(
+                "PluginShutdown left subscriptions behind (unsubscribe each one, "
+                    .. "tee.shutdown()/recorder.shutdown() included): "
+                    .. table.concat(left, ", ")
+            )
+        end
+    end
 end
 
 -- `prl <plugin>`: unload, then load into a fresh environment. PersistentDB, the world and

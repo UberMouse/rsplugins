@@ -89,12 +89,14 @@ eval specs), `echo = true` (also print the plugin's console output), `absent = {
 reports what its environment has, like `plugins/dev-bridge`). A global can't be both opted in
 and absent. `randomSeed = 1` seeds `random()`, and `textWidth = function(fontID, text) return
 n end` gives `utils.CalcTextWidth` its font metrics (without it, the call faults).
+`allowLeftSubscriptions = true` skips the leftover-subscription check in `h:unload()` /
+`h:reload()` (below); use it only in a spec about leaking, never to quiet a plugin.
 
 ### The harness `h`
 
 | Member | Does |
 |---|---|
-| `h:load()` / `h:unload()` / `h:reload()` | Enable (fresh env, run `main.lua`), disable (call a global `PluginShutdown`, drop subscriptions and pending HTTP callbacks), or both |
+| `h:load()` / `h:unload()` / `h:reload()` | Enable (fresh env, run `main.lua`), disable (call a global `PluginShutdown`, drop subscriptions and pending HTTP callbacks), or both. After `PluginShutdown` (or with none), `h:unload()` faults, naming each event and subscription name, if the instance still holds a subscription; `h:reload()` inherits it. A `PluginShutdown` that raises or times out is reported alone, without the leak check |
 | `h:advance(ms)` | Run the clock forward in 20 ms logic steps; a remainder carries over. Each step: deliver answered HTTP requests, deliver queued `Chat.AddMessage` messages, fire `Logic`, and every 30th step `ServerLogic` |
 | `h:fire(event, fields?)` | Fire any stub event; `fields` must be fields of the stub's `<Event>EventPayload`. For events the world builder doesn't model (`KeyDown`, `SkillTransmit`...) |
 | `h:respond(record, response)` | Answer an HTTP request: `{ status = 200, body = "", header = "" }` (a status of 400 or more arrives failed), `{ timedOut = true }` or `{ error = "info", errorCode = n }`; any other field faults. Delivered on the next step. A request left unanswered for 10 s (500 steps) times out by itself |
@@ -623,6 +625,7 @@ Python tests it discovers.
 | Behaviour | Harness does |
 |---|---|
 | A subscriber error | Fails the test, naming the event and subscriber (the client logs it to the console) |
+| `h:unload()` / `h:reload()` with a subscription still held after `PluginShutdown` | Fault: "PluginShutdown left subscriptions behind", listing `Event 'name'` for each. This enforces the repo's rule (crash 8 in [api-concepts.md](api-concepts.md#runtime-limits-weve-hit): unsubscribe everything in `PluginShutdown`; a leftover subscription is the unproven suspect), not a probed client behaviour. Opt out per harness with `allowLeftSubscriptions = true` |
 | `var.<Domain>.FromID` for an ID that isn't in the catalog | nil (the catalog holds every ID `FromID` returned a var for in `plugins/var-dump`; the client may raise instead) |
 | `Plugin.urls` values | Opaque proxies: `..` raises, `tostring` is a pointer-style string, and `HTTPRequest.new` takes only proxies. Live, 2026-10-26 (beta 951-1): a userdata, `..` raises `attempt to concatenate a ...LuaPluginMetadata::URL value`, `tostring` is `sol.jag::scripting::LuaPluginMetadata::URL: 0x...`, `HTTPRequest.new` accepts it. Gap: the proxy is a table, so `type()` says `table` |
 | `utf8` | Absent from a plugin's environment. Live, 2026-10-26 (beta client 951-1): `type(utf8)` is `nil` (`string.pack`, `math.tointeger`, `table.move` and `string.format` are functions). The tee's `utf8.len` raised in every `teelog.encode` while 520+ specs passed on a harness that provided it; `lib/dev/teelog.lua` now checks UTF-8 by hand |

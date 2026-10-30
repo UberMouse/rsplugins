@@ -236,13 +236,68 @@ describe("lifecycle", function()
         assert.are.equal("", h:output())
     end)
 
+    describe("leftover subscriptions", function()
+        local LEAK = "Event.Logic.Subscribe('tick', function() end)"
+
+        it(
+            "faults on unload when the plugin has no PluginShutdown, naming event and name",
+            function()
+                local h = harness.load(plugin(LEAK))
+                local err = harness.errorOf(h.unload, h)
+                assert.is_not_nil(string.find(err, "left subscriptions behind", 1, true))
+                assert.is_not_nil(string.find(err, "Logic 'tick'", 1, true))
+            end
+        )
+
+        it("names only what PluginShutdown left, in event order", function()
+            local h = harness.load(plugin([[
+                Event.Logic.Subscribe("a", function() end)
+                Event.KeyTyped.Subscribe("b", function() end)
+                Event.Logic.Subscribe("c", function() end)
+                function PluginShutdown() Event.Logic.Unsubscribe("a") end
+            ]]))
+            local err = harness.errorOf(h.unload, h)
+            assert.is_not_nil(string.find(err, "KeyTyped 'b', Logic 'c'", 1, true))
+            assert.is_nil(err:find("'a'", 1, true))
+        end)
+
+        it("faults on reload too", function()
+            local h = harness.load(plugin(LEAK))
+            assert.is_not_nil(string.find(harness.errorOf(h.reload, h), "Logic 'tick'", 1, true))
+        end)
+
+        it("passes when PluginShutdown unsubscribes everything", function()
+            local h = harness.load(
+                plugin(LEAK .. " function PluginShutdown() Event.Logic.Unsubscribe('tick') end")
+            )
+            h:unload()
+        end)
+
+        it("is skipped by allowLeftSubscriptions, on unload and reload", function()
+            local h = harness.load(plugin(LEAK), { allowLeftSubscriptions = true })
+            h:reload()
+            h:unload()
+        end)
+
+        it("reports a raising PluginShutdown alone", function()
+            local h = harness.load(plugin(LEAK .. " function PluginShutdown() error('boom') end"))
+            local err = harness.errorOf(h.unload, h)
+            assert.is_not_nil(string.find(err, "boom", 1, true))
+            assert.is_nil(err:find("left subscriptions", 1, true))
+        end)
+    end)
+
     it("reload shuts down, drops subscriptions, and keeps PersistentDB", function()
-        local h = harness.load(plugin([[
+        -- The plugin leaves its Logic subscription on purpose: the harness itself must drop it.
+        local h = harness.load(
+            plugin([[
             loads = (PersistentDB:Get("loads") or 0) + 1
             PersistentDB:Set("loads", loads)
             Event.Logic.Subscribe("tick", function() print("tick " .. loads) end)
             function PluginShutdown() print("shutdown " .. loads) end
-        ]]))
+        ]]),
+            { allowLeftSubscriptions = true }
+        )
         h:reload()
         h:advance(20)
         assert.are.equal("shutdown 1\ntick 2", h:output())

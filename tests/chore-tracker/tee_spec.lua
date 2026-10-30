@@ -26,14 +26,7 @@ describe("chore tracker with the dev log tee", function()
     it("leaves no subscription behind when it shuts down", function()
         local h = helpers.loaded({ grant = { "httpAccess" } })
         h:step()
-        h:unload()
-        for event, list in pairs(h.instance.subs) do
-            local names = {}
-            for i, entry in ipairs(list) do
-                names[i] = entry.name
-            end
-            assert.are.same({}, names, "still subscribed to " .. event)
-        end
+        h:unload() -- faults on a subscription PluginShutdown left
     end)
 
     it("does nothing without httpAccess: one [TEE] line, no requests", function()

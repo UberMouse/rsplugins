@@ -250,8 +250,7 @@ describe("chore-tracker popups", function()
         local popups = h.ui:popups()
         h:unload()
         assert.are.equal(1, #popups)
-        assert.is_true(popups[1].destroyed)
-        assert.are.equal(0, popupSubs())
+        assert.is_true(popups[1].destroyed) -- and unload found no popup subscription left
     end)
 
     it("skips a popup PrettyUI can't show, and the queue moves on", function()

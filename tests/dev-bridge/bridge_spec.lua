@@ -500,7 +500,6 @@ describe("dev-bridge", function()
         assert.are.equal(requests, #h.requests)
         assert.are.equal(1, support.lines(h, "[BRIDGE] stopped after an error"))
         h:unload()
-        assert.are.same({}, h.instance.subs.Logic)
     end)
 
     it("unsubscribes everything and cancels the sync in flight on shutdown", function()
@@ -509,8 +508,5 @@ describe("dev-bridge", function()
         local open = support.open(h)[1]
         h:unload()
         assert.is_true(open.state.fields.cancelled)
-        for _, event in ipairs(h.env.require("protocol").LOAD_EVENTS) do
-            assert.are.same({}, h.instance.subs[event], event)
-        end
     end)
 end)

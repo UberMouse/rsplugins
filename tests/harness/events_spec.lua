@@ -127,7 +127,10 @@ describe("Event subscriptions", function()
     it("allows Unsubscribe in PluginShutdown from a self-reload mid-dispatch", function()
         local h = harness.load(plugin([[
             Event.KeyTyped.Subscribe("x", function() end)
-            function PluginShutdown() Event.KeyTyped.Unsubscribe("x") end
+            function PluginShutdown()
+                Event.KeyTyped.Unsubscribe("x")
+                Event.WindowFocusChanged.Unsubscribe("y")
+            end
             Event.WindowFocusChanged.Subscribe("y", function() ExecuteConsoleCommand("prl me") end)
         ]]))
         h.onConsoleCommand = function()

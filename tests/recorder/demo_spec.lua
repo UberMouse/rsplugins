@@ -169,14 +169,7 @@ describe("plugins/recorder-demo with the recorder", function()
         local h = support.demo()
         h:step() -- batch 1 is in flight
         assert.are.equal(1, #support.posts(h))
-        h:unload()
-        for event, list in pairs(h.instance.subs) do
-            local names = {}
-            for i, entry in ipairs(list) do
-                names[i] = entry.name
-            end
-            assert.are.same({}, names, "still subscribed to " .. event)
-        end
+        h:unload() -- faults on a subscription PluginShutdown left
         assert.are.equal(0, support.lines(h, "[RECORDER] dropping"))
     end)
 

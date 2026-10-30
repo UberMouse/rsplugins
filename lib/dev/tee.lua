@@ -152,9 +152,8 @@ local function wrapEvent(real)
             if sub == nil then return nil end
             local handle = {
                 Subscribe = function(name, callback, ...)
-                    -- Kept as non-tail calls out of caution. The theory that a tail call
-                    -- breaks the client's caller identification was withdrawn (see
-                    -- docs/api-concepts.md).
+                    -- Plain calls, not tail calls: tail calls were seen to be safe
+                    -- (docs/api-concepts.md), but nothing needs them.
                     -- A bad name or callback is passed on as given: the API reports it.
                     if type(name) == "string" and type(callback) == "function" then
                         callback = guarded(event, name, callback)

@@ -1,7 +1,6 @@
 -- The dev log tee's pure core: shaping a console line, a batch's body, and the retry
--- backoff. Nothing here calls the API or
--- keeps state of its own; dev/tee.lua (the shell) does both. The wire format is
--- docs/dev-environment.md ("Log tee").
+-- backoff. Nothing here calls the API or keeps state of its own; dev/tee.lua (the shell) does
+-- both. The wire format is docs/dev-environment.md ("Log tee").
 
 local json = require("dev/json")
 local recording = require("dev/recording")

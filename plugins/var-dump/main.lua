@@ -43,6 +43,9 @@ function PluginShutdown()
     end
 end
 
+-- dev/ is the symlink to lib/dev shared with the other dev tools, and must be present for the
+-- plugin to load. If the client rejects symlinks, copy instead (docs/testing.md, "Opting a
+-- plugin in").
 local json = require("dev/json")
 local recording = require("dev/recording")
 
@@ -92,9 +95,10 @@ local VALUE_TYPE_NAMES = {
     [73] = "STRUCT", [14] = "SYNTH", [209] = "VAR_INT", [57] = "VORBIS",
 }
 
--- Turn a var's value into something JSON can hold: numbers and strings pass through, config
--- values (NPCType, ObjType, ...) become { config = name, id = n, type = typeName } and other
--- game types such as CoordGrid become their tostring() text.
+-- Turn a var's value into something JSON can hold (recording.serialise): numbers and booleans
+-- are unchanged; config values (NPCType, ObjType, ...) become { config = name, id = n,
+-- type = typeName }; other game types such as CoordGrid become their tostring() text; strings
+-- over 4096 bytes are cut with a `<+N bytes>` suffix.
 ---@param value any
 ---@return any
 local function plainValue(value)

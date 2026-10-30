@@ -23,7 +23,8 @@ What the console should show: `[RECDEMO] enabled N times`, one
 
 What this checks in the client, which the test harness can't:
 
-- the directory symlink `dev -> ../../lib/dev` loads (the recording grows; if the plugin runs unrecorded, copy instead, see docs/testing.md),
+- the directory symlink `dev -> ../../lib/dev` loads (the recording grows; if the plugin runs
+  unrecorded, copy instead, see docs/testing.md),
 - the stand-ins work against the real API (no `[ERROR]`, and the recording has reads, events and
   `db` entries).
 

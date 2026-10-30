@@ -9,6 +9,10 @@ client are visible, so "every" means "every one the client knows about".
 
 ## Use
 
+The plugin loads its JSON and serialiser through `dev/`, a symlink to `lib/dev` shared with the
+other dev tools. It must be present, or the plugin won't load; if the client rejects symlinks,
+copy the folder instead (see [docs/testing.md](../../docs/testing.md#opting-a-plugin-in)).
+
 1. Start the receiver from the repo root: `scripts/var-dump-receiver.py` (writes to
    `dumps/var-dump/`, which is gitignored).
 2. In the client console: `prf`, `pon var-dump`, `ppr var-dump`, then
@@ -55,9 +59,11 @@ To find which var something you do in game moves, run
 rerun with `--after <seq>`. It prints each change in order with the VarBits it moved (an update
 can name the base var rather than the VarBit); `--match <regex>` narrows it.
 
-Config-typed values (NPC, Obj, ...) are written as `{"config": NAME, "id": n, "type": TYPE}`. Other game types
-(e.g. CoordGrid) are written as their text form. If a value couldn't be read, there's an
-`error` field instead of `value`.
+Config-typed values (NPC, Obj, ...) are written as
+`{"config": NAME, "id": n, "type": TYPE}`. Other game types (e.g. CoordGrid) are written as their
+text form. A string longer than 4096 bytes is cut there and ends in `<+N bytes>`, N being the
+bytes dropped, so a long string var is incomplete in the dump. If a value couldn't be read,
+there's an `error` field instead of `value`.
 
 ## How it finds the vars
 

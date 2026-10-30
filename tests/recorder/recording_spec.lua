@@ -85,6 +85,21 @@ describe("recording.objectData", function()
         assert.matches("^file %(", recording.objectData(io.stdout))
     end)
 
+    it("is what var-dump writes: configs, game objects and long strings", function()
+        local logs = setmetatable(
+            {},
+            { __index = { configName = "LOGS", id = 1511, typeName = "Obj" } }
+        )
+        local out = recording.serialise({
+            config = logs,
+            game = io.stdout,
+            long = string.rep("x", recording.MAX_STRING + 3),
+        }, recording.objectData)
+        assert.are.same({ config = "LOGS", id = 1511, type = "Obj" }, out.config)
+        assert.matches("^file %(", out.game)
+        assert.are.equal(string.rep("x", recording.MAX_STRING) .. "<+3 bytes>", out.long)
+    end)
+
     it("leaves the memory address out of an object's text", function()
         -- The client's text for an Inv, from recording 20261025-144642-8f7250b863.
         local inv = setmetatable({}, {

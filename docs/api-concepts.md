@@ -478,7 +478,8 @@ From `plugins/dev-bridge` in the beta client.
   (cbb88037d4): the self-reload that aborted the client seven times with the `pcall` form (below).
 - **`utf8` is nil in the client** (2026-10-26, beta client 951-1): `type(utf8)` is `nil`, while
   `string.pack`, `math.tointeger`, `table.move` and `string.format` are functions. The tee's
-  `utf8.len` raised on every line until `lib/dev/teelog.lua` checked UTF-8 by hand.
+  `utf8.len` raised on every line, so the tee caps a line by bytes and leaves decoding to the
+  daemon (`errors="replace"`, `scripts/rsdev.py`).
 - **Crash 8 (SIGSEGV, coredump 2600170, 2026-10-26 14:48)**: `prl chore-tracker`, sent from
   the dev-bridge, unloaded a chore-tracker with the log tee on. The fault was in a shallow
   main-loop stack with no Lua frames running, and no POST was in flight. Every reload that

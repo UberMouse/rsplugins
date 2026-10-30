@@ -301,8 +301,9 @@ end
 -- client's behaviour is undocumented, and a plugin that keeps using one has lost track of it.
 ---@param s table object state, `destroyed` set once it is gone
 ---@param label string names the object in the fault
-function M.live(s, label)
-    if s.destroyed then M.fault(label .. " used after Destroy()") end
+---@param why string? what ended it, for objects with no Destroy(); default "Destroy()"
+function M.live(s, label, why)
+    if s.destroyed then M.fault(label .. " used after " .. (why or "Destroy()")) end
 end
 
 return M

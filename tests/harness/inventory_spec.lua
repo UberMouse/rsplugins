@@ -86,7 +86,7 @@ describe("Inventory", function()
         assert.is_false(inv.isValid)
         assert.is_nil(h.env.refind())
         assert.matches(
-            "Inv used after Destroy%(%)",
+            "Inv used after its inventory was removed %(check inv.isValid%)",
             harness.errorOf(function()
                 return inv.slotCount
             end)

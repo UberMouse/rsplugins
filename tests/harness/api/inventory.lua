@@ -106,8 +106,9 @@ local InvSlot = strict.class("InvSlot", {
 ---@return table
 local function live(s)
     local inv = s.h.world.state.invs[s.id]
+    -- Marking it destroyed is what lets strict.live see the removal.
     if not (inv and inv.generation == s.generation) then s.destroyed = true end
-    strict.live(s, "Inv")
+    strict.live(s, "Inv", "its inventory was removed (check inv.isValid)")
     return inv
 end
 

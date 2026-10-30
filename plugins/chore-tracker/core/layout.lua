@@ -100,23 +100,24 @@ local function within(pos, size, parentSize)
     return clamp(pos, 0, math.max(0, parentSize - size))
 end
 
--- `l` moved and shrunk to fit a parent of `parentWidth` x `parentHeight`, e.g. one saved at a
--- bigger window size. The window stays at least MIN_WIDTH x MIN_HEIGHT; the button stays whole.
----@param l ChoreLayout
+-- `saved` moved and shrunk to fit a parent of `parentWidth` x `parentHeight`, e.g. one saved at a
+-- bigger window size. The window stays at least MIN_WIDTH x MIN_HEIGHT; the BUTTON_SIZE button
+-- is moved fully inside the parent (pinned at 0 if the parent is smaller).
+---@param saved ChoreLayout
 ---@param parentWidth integer
 ---@param parentHeight integer
 ---@return ChoreLayout
-function M.keepInside(l, parentWidth, parentHeight)
-    local width = clamp(l.width, M.MIN_WIDTH, math.max(M.MIN_WIDTH, parentWidth))
-    local height = clamp(l.height, M.MIN_HEIGHT, math.max(M.MIN_HEIGHT, parentHeight))
+function M.keepInside(saved, parentWidth, parentHeight)
+    local width = clamp(saved.width, M.MIN_WIDTH, math.max(M.MIN_WIDTH, parentWidth))
+    local height = clamp(saved.height, M.MIN_HEIGHT, math.max(M.MIN_HEIGHT, parentHeight))
     return {
-        x = within(l.x, width, parentWidth),
-        y = within(l.y, height, parentHeight),
+        x = within(saved.x, width, parentWidth),
+        y = within(saved.y, height, parentHeight),
         width = width,
         height = height,
-        collapsed = l.collapsed,
-        buttonX = within(l.buttonX, M.BUTTON_SIZE, parentWidth),
-        buttonY = within(l.buttonY, M.BUTTON_SIZE, parentHeight),
+        collapsed = saved.collapsed,
+        buttonX = within(saved.buttonX, M.BUTTON_SIZE, parentWidth),
+        buttonY = within(saved.buttonY, M.BUTTON_SIZE, parentHeight),
     }
 end
 

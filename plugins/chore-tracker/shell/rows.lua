@@ -39,6 +39,8 @@ local LABEL_GAP = 6
 local TEXT_COLOUR = 0xE7D7B0FF
 local DONE_COLOUR = 0x7A7262FF
 local DONE_ALPHA = 0.5
+-- A settings subheading's colour: a muted gold, so it reads apart from the chore names.
+local SUBHEADING_COLOUR = 0xD2A84EFF
 
 -- The box's sprite by state. This is the full RS3_BTN_CHECKBOX set rather than the SMALL one
 -- PrettyUI 1.2.0 uses: the SMALL set has no ticked-and-hovered sprite, RS3_BTN_CHECKBOX_3 is one.
@@ -135,6 +137,21 @@ function M.newText(parent)
     text:AlignTo(ui.AlignMode.TOPLEFT, ui.AlignMode.CENTRE)
     text.clickthrough = true
     return text
+end
+
+-- A settings subheading (a chore category) at content height `y` under `content`, lined up with
+-- the rows' left edge. It lets clicks and the wheel through to the window.
+---@param content ui.Layer
+---@param y integer
+---@param text string
+---@return ui.Text
+function M.newSubheading(content, y, text)
+    local label = M.newText(content)
+    label:SetPos(PADDING, y)
+    label:SetSize(-PADDING * 2, listlayout.SUBHEADING_HEIGHT, 1.0, 0)
+    label.rgba = SUBHEADING_COLOUR
+    label.content = text
+    return label
 end
 
 -- Show `icon` on the row, or no icon for nil or a name that doesn't resolve. An item's icon and

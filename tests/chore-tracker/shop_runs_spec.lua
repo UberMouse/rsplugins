@@ -7,7 +7,7 @@ local loaded, ticked, togglePicks, rowShown, doneAt =
     helpers.loaded, helpers.ticked, helpers.togglePicks, helpers.rowShown, helpers.doneAt
 
 local FEATHERS = { name = "Feather Shop Run", id = "feather-shop-run" }
-local YAK = { name = "Yak Hide", id = "yak-hide" }
+local YAK = { name = "Yak Hides from Vanligga", id = "yak-hide" }
 local DAILY = { name = "Daily Challenge", id = "daily-challenge" }
 
 local POLL_MS, setClock = helpers.POLL_MS, helpers.setClock
@@ -99,7 +99,7 @@ describe("chore-tracker shop runs", function()
         assert.are.equal(win, window(h))
         assert.is_true(ticked(h, YAK.name))
         local text, tooltip = rowShown(h, YAK.name)
-        assert.are.equal("Yak Hide", text)
+        assert.are.equal("Yak Hides from Vanligga", text)
         assert.matches("Shops this week %(1/1%):<br>bought  Vanligga, Jatizso", tooltip)
     end)
 
@@ -243,7 +243,7 @@ describe("chore-tracker shop runs", function()
         helpers.buy(h, "AFR_MEATSHOP", "LOGS", 5, 4)
         helpers.buy(h, "PEST_RUNE_STORE", "AIRRUNE", 7000, 0)
         h:advance(20)
-        assert.is_true(ticked(h, "Meat Packs"))
+        assert.is_true(ticked(h, "Meat Packs from Chargurr"))
         assert.is_true(ticked(h, "Rune Shop Run"))
         assert.are.equal("Rune Shop Run (1/11)", (rowShown(h, "Rune Shop Run")))
         assert.matches("%[CHORES%] purchase meat%-packs at Chargurr, Oo'glog", h:output())

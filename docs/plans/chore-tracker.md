@@ -292,8 +292,6 @@ it with location or a var. There is no interface-opened event.
   README lists only `Log` text, `Emit` tags and errors as cut. Return several values instead.
 - No spec covers the VarTransmit domain filter: the harness would need a var with the same id in
   another domain.
-- `scripts/chores-from-dailyscape.py` raises a raw `OSError` on an unreadable input or unwritable
-  output.
 - `docs/testing.md`'s replay "Not applied" bullet doesn't mention out-of-range ints (real values
   don't hit it).
 - The dev recorder buffers silently until `httpAccess` is granted. A probe once sent nothing and

@@ -301,12 +301,36 @@ end
 function M.settingsRow(h, id)
     local list, n = M.rows(h), 0
     for _, group in ipairs(view.byPeriod(chores)) do
-        for _, chore in ipairs(group.chores) do
-            n = n + 1
-            if chore.id == id then return assert(list[n], "no settings row " .. id) end
+        for _, subgroup in ipairs(group.subgroups) do
+            for _, chore in ipairs(subgroup.chores) do
+                n = n + 1
+                if chore.id == id then return assert(list[n], "no settings row " .. id) end
+            end
         end
     end
     error("no chore " .. id)
+end
+
+-- The settings view's category subheadings, top to bottom: each one's text and content y.
+-- They are the content's own texts (PrettyUI's titles are tracked apart) that name a category.
+---@param h table
+---@return { text: string, y: number }[]
+function M.subheadings(h)
+    local titles = {}
+    for _, title in pairs(view.CATEGORY_TITLES) do
+        titles[title] = true
+    end
+    local out = {}
+    for _, proxy in ipairs(h.ui:children(M.window(h).content)) do
+        local part = assert(uiFake.stateOf(proxy))
+        if part.class == "ui.Text" and titles[part.content] then
+            out[#out + 1] = { text = part.content, y = proxy.y }
+        end
+    end
+    table.sort(out, function(a, b)
+        return a.y < b.y
+    end)
+    return out
 end
 
 -- Whether `id` is ticked in the settings view: a Celebrations switch by its value, else a

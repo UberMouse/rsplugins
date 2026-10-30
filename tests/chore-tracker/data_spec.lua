@@ -1,40 +1,39 @@
--- The generated chore list (plugins/chore-tracker/data/chores.lua, from
--- scripts/chores-from-dailyscape.py): what the core and the window rely on.
+-- The hand-written chore list (plugins/chore-tracker/data/chores.lua): what the core and the
+-- window rely on, and the rules its header gives.
 
 require("tests.chore-tracker.support")
 local chores = require("data/chores")
+local period = require("core/period")
+local view = require("core/view")
+
+-- Each value's position in a list, for ordering by it.
+---@param list string[]
+---@return table<string, integer>
+local function positions(list)
+    local out = {}
+    for i, v in ipairs(list) do
+        out[v] = i
+    end
+    return out
+end
 
 describe("chore-tracker data", function()
-    it("has dailyscape's 67 chores", function()
-        assert.are.equal(67, #chores)
-    end)
-
-    it("splits them into dailyscape's periods and shop tables", function()
+    it("has 67 chores: 20 daily, 42 weekly, 5 monthly", function()
         local counts = { daily = 0, weekly = 0, monthly = 0 }
-        local shops = { daily = 0, weekly = 0, monthly = 0 }
         for _, c in ipairs(chores) do
             counts[c.period] = counts[c.period] + 1
-            if c.shop then shops[c.period] = shops[c.period] + 1 end
         end
         assert.are.same({ daily = 20, weekly = 42, monthly = 5 }, counts)
-        assert.are.same({ daily = 3, weekly = 17, monthly = 0 }, shops)
     end)
 
-    it("keeps dailyscape's order: daily, daily shops, weekly, weekly shops, monthly", function()
-        local order = {}
+    it("has unique ids, and unique names within a period", function()
+        local ids, names = {}, {}
         for _, c in ipairs(chores) do
-            local group = c.period .. (c.shop and " shop" or "")
-            if order[#order] ~= group then order[#order + 1] = group end
-        end
-        assert.are.same({ "daily", "daily shop", "weekly", "weekly shop", "monthly" }, order)
-        assert.are.equal("daily-challenge", chores[1].id)
-    end)
-
-    it("has unique ids", function()
-        local seen = {}
-        for _, c in ipairs(chores) do
-            assert(seen[c.id] == nil, "duplicate id " .. c.id)
-            seen[c.id] = true
+            assert(ids[c.id] == nil, "duplicate id " .. c.id)
+            ids[c.id] = true
+            local key = c.period .. " " .. c.name
+            assert(names[key] == nil, "duplicate name " .. key)
+            names[key] = true
         end
     end)
 
@@ -45,11 +44,49 @@ describe("chore-tracker data", function()
             end
             assert(c.id ~= "" and c.name ~= "", c.id)
             assert(c.period == "daily" or c.period == "weekly" or c.period == "monthly", c.id)
-            assert.are.equal("boolean", type(c.shop), c.id)
             assert.are.equal("table", type(c.links), c.id)
             for _, link in ipairs(c.links) do
                 assert.are.equal("string", type(link), c.id)
             end
+        end
+    end)
+
+    it("puts every daily and weekly chore in a category, and no monthly one", function()
+        local known = positions(view.CATEGORIES)
+        for _, c in ipairs(chores) do
+            if c.period == "monthly" then
+                assert(c.category == nil, c.id .. " is monthly but has a category")
+            else
+                assert(known[c.category], c.id .. " has no known category")
+            end
+        end
+    end)
+
+    it("lists chores in settings order: by period, then category, then name", function()
+        local periods, categories = positions(period.PERIODS), positions(view.CATEGORIES)
+        ---@param c table
+        ---@return table
+        local function key(c)
+            return { periods[c.period], c.category and categories[c.category] or 0, c.name }
+        end
+        for i = 2, #chores do
+            local a, b = key(chores[i - 1]), key(chores[i])
+            local before = a[1] < b[1]
+                or (a[1] == b[1] and (a[2] < b[2] or (a[2] == b[2] and a[3] < b[3])))
+            assert(before, chores[i - 1].id .. " should come after " .. chores[i].id)
+        end
+    end)
+
+    it("files every shop-run chore under Shops and every collection under Free supplies", function()
+        local byId = {}
+        for _, c in ipairs(chores) do
+            byId[c.id] = c
+        end
+        for id in pairs(require("data/shops")) do
+            assert.are.equal("shops", byId[id].category, id)
+        end
+        for _, collection in ipairs(require("data/collections")) do
+            assert.are.equal("supplies", byId[collection.chore].category, collection.chore)
         end
     end)
 
@@ -67,19 +104,6 @@ describe("chore-tracker data", function()
             local rest = c.desc:gsub("<br>", "")
             assert(not rest:find("<[%a/!]"), c.id .. ": " .. c.desc)
         end
-    end)
-
-    it("turns a desc's anchors into text and links", function()
-        local ports
-        for _, c in ipairs(chores) do
-            if c.id == "player-owned-ports" then ports = c end
-        end
-        assert(ports, "player-owned-ports is one of dailyscape's daily chores")
-        assert.are.equal(
-            "Manage your player owned port<br>Buy resources from Black Marketeer",
-            ports.desc
-        )
-        assert.are.same({ "https://runescape.wiki/w/The_Black_Marketeer" }, ports.links)
     end)
 end)
 

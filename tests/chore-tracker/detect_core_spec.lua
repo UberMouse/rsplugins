@@ -51,14 +51,14 @@ describe("chore-tracker shops core", function()
 end)
 
 describe("chore-tracker shop list", function()
-    it("names only chores in the chore list, each a shop chore", function()
+    it("names only chores in the chore list, each in the Shops category", function()
         for id in pairs(shops) do
             local found = nil
             for _, chore in ipairs(chores) do
                 if chore.id == id then found = chore end
             end
             assert(found, "no chore " .. id)
-            assert(found.shop, id .. " is not a shop chore")
+            assert(found.category == "shops", id .. " is not a shop chore")
         end
     end)
 

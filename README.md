@@ -46,7 +46,6 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
 | `scripts/recording-sanitise.py`, `recording-chat-allowlist.txt` | Turn a recorded session into a committed fixture | [docs/testing.md](docs/testing.md#turning-a-session-into-a-fixture) |
 | `scripts/var-dump-receiver.py` | Local HTTP receiver for the `var-dump` plugin | [plugins/var-dump/README.md](plugins/var-dump/README.md) |
 | `scripts/var-dump-analyze.py`, `var-dump-changes.py` | Turn a var dump and its change log into navigable files, and print the changes in order | [plugins/var-dump/README.md](plugins/var-dump/README.md) |
-| `scripts/chores-from-dailyscape.py` | Generates Chore Tracker's chore list from dailyscape's data | [its docstring](scripts/chores-from-dailyscape.py) |
 | `scripts/test_*.py` | Unit tests for the Python scripts above, run by `check.sh` | [`check.sh` header](scripts/check.sh) |
 
 ## License

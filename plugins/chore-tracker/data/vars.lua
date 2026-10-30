@@ -6,8 +6,8 @@
 --
 -- `proven` marks a rule whose var was seen to move as the chore was done in the beta client
 -- (the var-dump session of 2026-10-25, docs/api-concepts.md); an unproven one ticks the same
--- way. The four free collections keep the weekly period dailyscape's chore list gives them,
--- so a claim ticks one until Wednesday's reset, although the game's flag is daily.
+-- way. The four free collections keep their weekly period (data/chores.lua), so a claim
+-- ticks one until Wednesday's reset, although the game's flag is daily.
 
 ---@type ChoreVarRule[]
 return {

@@ -12,30 +12,46 @@ describe("chore-tracker view", function()
         byId = support.byId(chores)
     end)
 
-    it("groups chores by period in display order, omitting an empty period", function()
+    it("groups chores by period, then category, in display order, omitting empty ones", function()
         ---@param groups table[]
         ---@return table[]
         local function summary(groups)
             local out = {}
             for i, group in ipairs(groups) do
-                local ids = {}
-                for j, chore in ipairs(group.chores) do
-                    ids[j] = chore.id
+                local subs = {}
+                for j, subgroup in ipairs(group.subgroups) do
+                    local ids = {}
+                    for k, chore in ipairs(subgroup.chores) do
+                        ids[k] = chore.id
+                    end
+                    subs[j] = { subgroup.category or "none", ids }
                 end
-                out[i] = { group.period, group.title, ids }
+                out[i] = { group.period, group.title, subs }
             end
             return out
         end
         assert.are.same({
-            { "daily", "Daily", { "d1", "d2", "dshop" } },
-            { "weekly", "Weekly", { "w1", "wshop" } },
-            { "monthly", "Monthly", { "m1" } },
+            {
+                "daily",
+                "Daily",
+                { { "none", { "d2" } }, { "activities", { "d1" } }, { "shops", { "dshop" } } },
+            },
+            { "weekly", "Weekly", { { "combat", { "w1" } }, { "shops", { "wshop" } } } },
+            { "monthly", "Monthly", { { "none", { "m1" } } } },
         }, summary(view.byPeriod(chores)))
-        assert.are.same(
-            { { "daily", "Daily", { "d1" } }, { "monthly", "Monthly", { "m1" } } },
-            summary(view.byPeriod({ byId.m1, byId.d1 }))
-        )
+        -- Categories go in CATEGORIES order whatever the list's order; chores keep list order.
+        local wshop2 = { id = "wshop2", period = "weekly", category = "shops" }
+        assert.are.same({
+            { "daily", "Daily", { { "activities", { "d1" } }, { "shops", { "dshop" } } } },
+            { "weekly", "Weekly", { { "shops", { "wshop2", "wshop" } } } },
+        }, summary(view.byPeriod({ byId.dshop, wshop2, byId.d1, byId.wshop })))
         assert.are.same({}, view.byPeriod({}))
+    end)
+
+    it("titles every category", function()
+        for _, c in ipairs(view.CATEGORIES) do
+            assert.are.equal("string", type(view.CATEGORY_TITLES[c]), c)
+        end
     end)
 
     it("shows nothing when nothing is selected", function()
@@ -275,13 +291,5 @@ describe("chore-tracker view", function()
                 assert.are.same(expected, view.strip(sections(picks, { "d1", "d2", "w1" })).texts)
             end
         )
-    end)
-
-    it("marks a shop run in a settings row's text, and a plain chore not", function()
-        assert.are.equal(
-            "Feather Shop Run (shop)",
-            view.pickText({ name = "Feather Shop Run", shop = true })
-        )
-        assert.are.equal("D1", view.pickText({ name = "D1", shop = false }))
     end)
 end)

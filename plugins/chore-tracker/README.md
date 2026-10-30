@@ -13,9 +13,11 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Opening it.** Enable the plugin and a window titled **Chores** opens. On the first run it
   says no chores are picked yet.
 - **Picking chores.** Click the settings button at the top left of the window. Above the chores
-  is a Celebrations section (see below). Every chore is listed under Daily, Weekly and Monthly;
-  ones that are bought from a shop end in "(shop)". Each is a row with its icon, its name and a
-  tick box: click anywhere on a row to pick it (the box ticks) or click again to drop it.
+  is a Celebrations section (see below). Every chore is listed under Daily, Weekly and Monthly,
+  and within Daily and Weekly under a gold subheading for its kind: Activities, Combat,
+  Skilling, Upkeep, Free supplies (handed out by someone who is no shop) and Shops, each in
+  alphabetical order. Monthly has too few chores to need them. Each is a row with its icon, its
+  name and a tick box: click anywhere on a row to pick it (the box ticks) or click again to drop it.
   Changes save straight away. To return to your list, click the back button in the window's top-right
   corner, where the menu button usually sits. It stays there however far down you have scrolled.
   (Collapse the window from the list, not from here.)
@@ -94,7 +96,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   |---|---|
   | Sand from Bert | the game marks Bert's sand claimed |
   | Flax from Geoffrey | the game marks Geoffrey's flax given |
-  | Pure Essence from Wizard Cromperty | the game marks Cromperty's essence claimed |
+  | Pure Essence from Cromperty | the game marks Cromperty's essence claimed |
   | Logs from Coeden | the game marks Coeden's logs claimed |
   | Daily Challenge | you claim a challenge's reward in the challenge window: any claim ticks it for the day, even before you've claimed all three |
   | Advance Time (*unproven*) | the spell's last charge of the week is used |
@@ -112,8 +114,8 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Shattered Worlds (*unproven*) | the game marks all three of the week's reward challenges (bronze, silver and gold) complete |
   | Aquarium Treasure Chest (*unproven*) | the game marks your aquarium's treasure chest used |
   | Agoroth (*unproven*) | you have defeated Agoroth twice this week |
-  | Replay Broken Home (*unproven*) | the game marks the week's Broken Home replay completed |
-  | Soul Supplies (*unproven*) | the game marks Lupe's supplies claimed |
+  | Broken Home Replay (*unproven*) | the game marks the week's Broken Home replay completed |
+  | Soul Supplies from Lupe (*unproven*) | the game marks Lupe's supplies claimed |
   | Effigy Incubator (*unproven*) | the game marks the month's Effigy Incubator completed |
 
   *Unproven* ones haven't been checked in game yet. The four free collections keep the
@@ -130,14 +132,14 @@ list of shop inventories but no purchase there has been checked yet; they tick t
 | Chore | Shops |
 |---|---|
 | Feather Shop Run | Gerrant (Port Sarim), Lumbridge Fishing Supplies, Harry (Catherby), Shantay Pass |
-| Vial of Water Packs | Jatix (Taverley), Obli (Shilo Village), Lady Meilyr (Prifddinas), Jossik (Lighthouse), Granny Rowan (Fort Forinthry, *unproven*) |
-| Yak Hide | Vanligga (Jatizso) |
+| Vial of Water Shop Run | Jatix (Taverley), Obli (Shilo Village), Lady Meilyr (Prifddinas), Jossik (Lighthouse), Granny Rowan (Fort Forinthry, *unproven*) |
+| Yak Hides from Vanligga | Vanligga (Jatizso) |
 | Feathers of Ma'at | Feathers of Ma'at (Sophanem) |
-| Broad Arrowheads | Turael (Burthorpe), Sumona (Pollnivneach) |
+| Broad Arrowhead Shop Run | Turael (Burthorpe), Sumona (Pollnivneach) |
 | Rune Shop Run | Aubury (Varrock), Betty (Port Sarim), Ali Morrisane (Al Kharid), Carwen Essencebinder, Void Knight Magic Store, Magic Guild (Yanille), Tutab (Ape Atoll), Lundail (Mage Arena), Rune store (Anachronia), Baba Yaga (Lunar Isle), Mage of Zamorak (Wilderness), the last five *unproven* |
-| Meat Packs | Chargurr (Oo'glog, *unproven*) |
+| Meat Packs from Chargurr | Chargurr (Oo'glog, *unproven*) |
 | Planks from Razmire | Razmire Keelgan (Mort'ton, *unproven*) |
-| Seaweed and Pineapples | Arhein (Catherby) |
+| Seaweed and Pineapples from Arhein | Arhein (Catherby) |
 
 Not watched yet, so tick it by hand: Bandit Duty Free (no match for Noterazzo's shop was found
 in the game's list).
@@ -176,9 +178,9 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 ## Credits
 
-The chore list (names, descriptions, wiki links and reset periods) comes from
-[dailyscape](https://github.com/dailyscape/dailyscape.github.io), used under its MIT licence.
-`data/chores.lua` holds the copy, the licence text, and how to regenerate it.
+The chore list (names, descriptions, wiki links and reset periods) started as a copy of
+[dailyscape](https://github.com/dailyscape/dailyscape.github.io)'s, used under its MIT licence,
+and is now kept by hand in edited form. `data/chores.lua` holds it and the licence text.
 
 ## Console lines
 
@@ -248,14 +250,14 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
 | `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
-| `core/view.lua` | What the list and the collapsed strip show, as plain data |
+| `core/view.lua` | What the list, the collapsed strip and the settings groups show, as plain data |
 | `core/fit.lua` | Cutting a row's name short with "..." so it fits before the tick box |
 | `core/layout.lua` | The saved window layout, read back and kept on screen, and where the collapsed strip goes |
-| `core/listlayout.lua` | Where the list's headings and rows go in the window |
+| `core/listlayout.lua` | Where the list's and settings' headings, subheadings and rows go in the window |
 | `core/reorder.lua` | Where a dragged row and its neighbours go, and when the list scrolls under a drag |
 | `core/celebrate.lua` | Which celebrations a change to the picks and ticks earns |
 | `core/settings.lua` | The celebration settings, defaults and reading them back |
-| `data/chores.lua` | The dailyscape chore list (generated) |
+| `data/chores.lua` | The chore list, in settings order, and its naming rules (hand-written) |
 | `data/shops.lua` | The shops each shop-run chore watches (hand-written) |
 | `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
 | `data/vars.lua` | The chores seen from game vars and each one's rule (hand-written) |

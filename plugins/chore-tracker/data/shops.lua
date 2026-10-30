@@ -1,4 +1,4 @@
--- The shops each shop-run chore can be done at, hand-written (data/chores.lua is generated).
+-- The shops each shop-run chore can be done at, hand-written.
 -- A purchase at any of a chore's shops ticks it (see shell/detect.lua).
 --
 -- `invs` are the shop's inventory config names (config.Inv.<name>), which is how the client

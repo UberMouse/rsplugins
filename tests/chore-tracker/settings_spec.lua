@@ -5,6 +5,7 @@ local helpers = require("tests.chore-tracker.helpers")
 local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
 local fonts = require("tests.harness.api.fonts")
+local listlayout = require("core/listlayout")
 local loaded, openSettings = helpers.loaded, helpers.openSettings
 
 local BOX_EMPTY, BOX_EMPTY_HOVERED = helpers.BOX_EMPTY, helpers.BOX_EMPTY_HOVERED
@@ -15,7 +16,7 @@ local TEXT_COLOUR = helpers.TEXT_COLOUR
 local window = helpers.window
 
 describe("chore-tracker settings rows", function()
-    it("lists every chore as an icon row under its period's heading, shop ones suffixed", function()
+    it("lists every chore as an icon row under its period's heading and category", function()
         local h = loaded()
         openSettings(h)
         -- Wide enough that no name is cut short.
@@ -23,26 +24,47 @@ describe("chore-tracker settings rows", function()
         h:advance(600)
         local list = helpers.rows(h)
         assert.are.equal(#chores, #list)
-        local shop = 0
-        for _, group in ipairs(require("core/view").byPeriod(chores)) do
-            h.ui:get("Title", { text = group.title })
-            for _, chore in ipairs(group.chores) do
-                local r = helpers.settingsRow(h, chore.id)
-                if chore.shop then
-                    assert.are.equal(chore.name, r.label.content:sub(1, #chore.name))
-                    assert.are.equal(" (shop)", r.label.content:sub(#chore.name + 1))
-                    shop = shop + 1
-                else
-                    assert.are.equal(chore.name, r.label.content)
+        local view = require("core/view")
+        local expected = {} ---@type { text: string, y: number }[]
+        for _, group in ipairs(view.byPeriod(chores)) do
+            local heading = h.ui:get("Title", { text = group.title })
+            for _, subgroup in ipairs(group.subgroups) do
+                local first = helpers.settingsRow(h, subgroup.chores[1].id)
+                if subgroup.category then
+                    -- Its subheading sits just above its first row, below the period's title.
+                    local y = first.layer.y - listlayout.SUBHEADING_HEIGHT
+                    assert.is_true(y > heading.y)
+                    expected[#expected + 1] =
+                        { text = view.CATEGORY_TITLES[subgroup.category], y = y }
                 end
-                assert.is_not_nil(r.icon)
-                assert.are.equal(BOX_EMPTY, r.box.spriteID)
+                for _, chore in ipairs(subgroup.chores) do
+                    local r = helpers.settingsRow(h, chore.id)
+                    assert.are.equal(chore.name, r.label.content)
+                    assert.is_not_nil(r.icon)
+                    assert.are.equal(BOX_EMPTY, r.box.spriteID)
+                end
             end
         end
-        assert.is_true(shop > 0)
+        assert.are.same(expected, helpers.subheadings(h))
+        local texts = {}
+        for i, sub in ipairs(helpers.subheadings(h)) do
+            texts[i] = sub.text
+        end
+        -- Monthly has no categories, so its rows come straight after its title.
+        assert.are.same({
+            "Activities",
+            "Skilling",
+            "Upkeep",
+            "Activities",
+            "Combat",
+            "Upkeep",
+            "Free supplies",
+            "Shops",
+        }, texts)
+        local monthly = h.ui:get("Title", { text = "Monthly" })
         assert.are.equal(
-            "Pure Essence from Wizard Cromperty (shop)",
-            helpers.settingsRow(h, "cromperty-pure-essence").label.content
+            monthly.y + listlayout.HEADING_HEIGHT + listlayout.AFTER_HEADING,
+            helpers.settingsRow(h, "dream-of-iaia-xp").layer.y
         )
         -- The Celebrations switches stay in PrettyUI's flow, above the rows.
         local switches = h.ui:find("CheckboxButton")
@@ -89,13 +111,13 @@ describe("chore-tracker settings rows", function()
     it("cuts a long name with dots, with a tooltip led by the full name", function()
         local h = loaded()
         openSettings(h)
-        local r = helpers.settingsRow(h, "cromperty-pure-essence")
-        local full = "Pure Essence from Wizard Cromperty (shop)"
+        local r = helpers.settingsRow(h, "dellmonti-pineapples")
+        local full = "Pineapples and Apples from Dell Monti"
         assert.are.equal("...", r.label.content:sub(-3))
         assert.is_true(fonts.width(r.label.content, false) <= h.ui:layout(r.label).width)
         window(h):SetScrollPosition(r.layer.y - 40)
         assert.is_true(h.ui:hover(r.layer))
-        assert.are.equal(full .. "<br>Weekly stock", h.ui:tooltips()[1]:sub(1, #full + 16))
+        assert.are.equal(full .. "<br>https://", h.ui:tooltips()[1]:sub(1, #full + 12))
         h.ui:leave()
         -- A wider window re-fits the settings rows too.
         local before = #r.label.content

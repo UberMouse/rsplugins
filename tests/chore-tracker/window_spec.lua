@@ -108,7 +108,7 @@ describe("chore-tracker window", function()
         )
         h.ui:get("Title", { text = "Daily  0/2" })
 
-        local challenge, ports = row(h, "Daily Challenge"), row(h, "Player Owned Ports")
+        local challenge, ports = row(h, "Daily Challenge"), row(h, "Player-Owned Port")
         -- An XP reward's sprite, and an item's own icon.
         assert.are.equal(sprite("XP_TOKEN_0"), challenge.icon.spriteID)
         assert.are.equal(obj("POP_LOG"), ports.icon.associatedObjectID)
@@ -258,7 +258,8 @@ describe("chore-tracker window", function()
         -- A description, the wiki page, then the extra link.
         local _, nemi = helpers.rowShown(h, "Nemi Forest")
         assert.are.equal(
-            "'NemiForest' FC. See also Daily Maps<br>https://runescape.wiki/w/Nemi_Forest"
+            "The day's map is in the 'NemiForest' friends chat and on its subreddit<br>"
+                .. "https://runescape.wiki/w/Nemi_Forest"
                 .. "<br>https://www.reddit.com/r/NemiForest/new/",
             nemi
         )
@@ -291,11 +292,11 @@ describe("chore-tracker window", function()
         -- A client where POP_LOG was renamed: the name reads -1.
         local h = loaded({ absentNames = { "id.Obj.POP_LOG" } })
         togglePicks(h, { "daily-challenge", "player-owned-ports" })
-        local ports = row(h, "Player Owned Ports")
+        local ports = row(h, "Player-Owned Port")
         assert.is_nil(ports.icon)
         assert.are.equal(h.ui:layout(row(h, "Daily Challenge").label).x, h.ui:layout(ports.label).x)
         assert.is_true(h.ui:click(ports.layer))
-        assert.is_true(ticked(h, "Player Owned Ports"))
+        assert.is_true(ticked(h, "Player-Owned Port"))
 
         -- Rebuilt, still one line.
         helpers.openSettings(h)
@@ -413,21 +414,21 @@ describe("chore-tracker window", function()
         helpers.click(h, row(h, "Daily Challenge").label)
         helpers.collapse(h)
         local shown = strip(h)
-        assert.are.equal("Daily: Player Owned Ports", shown.text)
+        assert.are.equal("Daily: Player-Owned Port", shown.text)
 
         local writes = h.dbWrites
         assert.is_true(h.ui:click(shown.label))
         assert.are.equal(writes + 1, h.dbWrites)
         shown = strip(h)
-        assert.are.equal("Daily: Player Owned Farm", shown.text)
+        assert.are.equal("Daily: Player-Owned Farm", shown.text)
         assert.is_true(h.ui:click(shown.label))
         assert.are.same({ text = view.ALL_DONE }, strip(h))
         h:advance(20)
         assert.matches("%[CHORES%] celebrate daily cleared", h:output())
 
         helpers.expand(h)
-        assert.is_true(ticked(h, "Player Owned Ports"))
-        assert.is_true(ticked(h, "Player Owned Farm"))
+        assert.is_true(ticked(h, "Player-Owned Port"))
+        assert.is_true(ticked(h, "Player-Owned Farm"))
         h.ui:get("Title", { text = "Daily  3/3" })
     end)
 
@@ -448,7 +449,7 @@ describe("chore-tracker window", function()
     it("shows the logged-out notice while collapsed, narrowed with its hamburger put", function()
         local h = loaded()
         -- A long name, so the notice needs a narrower strip.
-        togglePicks(h, { "cromperty-pure-essence" })
+        togglePicks(h, { "dellmonti-pineapples" })
         helpers.collapse(h)
         local panel = h.ui:get("Panel")
         local button = h.ui:get("SpriteButton", { sprite = "MENU", visible = true })
@@ -502,7 +503,7 @@ describe("chore-tracker window", function()
 end)
 
 describe("chore-tracker long names", function()
-    local CROMPERTY = "Pure Essence from Wizard Cromperty"
+    local DELL = "Pineapples and Apples from Dell Monti"
     -- The chore's label text, its tooltip (by hovering), and the label width available to it.
     ---@param h table
     ---@param name string
@@ -516,31 +517,31 @@ describe("chore-tracker long names", function()
 
     it("cuts a long name with dots, leads its tooltip with the full name, and re-fits", function()
         local h = loaded()
-        togglePicks(h, { "cromperty-pure-essence" })
-        local shown, tip, avail = onlyRow(h, CROMPERTY)
-        assert.is_true(fonts.width(CROMPERTY, false) > avail)
+        togglePicks(h, { "dellmonti-pineapples" })
+        local shown, tip, avail = onlyRow(h, DELL)
+        assert.is_true(fonts.width(DELL, false) > avail)
         assert.are.equal("...", shown:sub(-3))
         assert.is_true(fonts.width(shown, false) <= avail)
-        assert.are.equal(CROMPERTY .. "<br>Weekly stock", tip:sub(1, #CROMPERTY + 16))
+        assert.are.equal(DELL .. "<br>https://", tip:sub(1, #DELL + 12))
 
         -- A wider window shows more of it, and all of it once it fits, with the plain tooltip.
         h.ui:resize(window(h), 60, 0)
         h:advance(600)
-        local wider, _, avail2 = onlyRow(h, CROMPERTY)
+        local wider, _, avail2 = onlyRow(h, DELL)
         assert.is_true(#wider > #shown)
         assert.is_true(fonts.width(wider, false) <= avail2)
         h.ui:resize(window(h), 400, 0)
         h:advance(600)
-        local whole, tip3 = onlyRow(h, CROMPERTY)
-        assert.are.equal(CROMPERTY, whole)
-        assert.are.equal("Weekly stock", tip3:sub(1, 12))
+        local whole, tip3 = onlyRow(h, DELL)
+        assert.are.equal(DELL, whole)
+        assert.are.equal("https://", tip3:sub(1, 8))
 
         -- And back to narrow: cut again.
         h.ui:resize(window(h), -460, 0)
         h:advance(600)
-        local again, tip4 = onlyRow(h, CROMPERTY)
+        local again, tip4 = onlyRow(h, DELL)
         assert.are.equal(shown, again)
-        assert.are.equal(CROMPERTY .. "<br>", tip4:sub(1, #CROMPERTY + 4))
+        assert.are.equal(DELL .. "<br>", tip4:sub(1, #DELL + 4))
     end)
 
     it("leaves a short name and its tooltip alone", function()
@@ -597,7 +598,7 @@ describe("chore-tracker long names", function()
 
     it("shows full names and logs once when the font can't measure", function()
         local h = loaded()
-        togglePicks(h, { "cromperty-pure-essence", "daily-challenge" })
+        togglePicks(h, { "dellmonti-pineapples", "daily-challenge" })
         h.env.config = {
             Font = setmetatable({}, {
                 __index = function()
@@ -607,7 +608,7 @@ describe("chore-tracker long names", function()
         }
         h.ui:resize(window(h), 10, 0)
         h:advance(600)
-        assert.are.equal(CROMPERTY, helpers.rows(h)[2].label.content)
+        assert.are.equal(DELL, helpers.rows(h)[2].label.content)
         local _, n = h:output():gsub("%[CHORES%] cannot measure text", "")
         assert.are.equal(1, n)
     end)

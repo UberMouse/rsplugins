@@ -6,7 +6,7 @@
 -- A completion is stored as the epoch minute it was marked. It counts as done while that
 -- minute is inside the chore's current period, so a reset needs no timer or explicit step:
 -- once the period rolls over, the old minute is simply before its start. Sub-daily chores
--- ("Every 6H", "2x a day") keep dailyscape's daily period.
+-- ("every 6 hours", "twice a day") keep a daily period.
 --
 -- Shop runs also keep, per shop, the epoch minute of the last purchase there, so the window
 -- can show how many of a chore's shops were bought from this period, by the same rule.
@@ -19,11 +19,13 @@ local M = {}
 -- ignores any other.
 local VERSION = 2
 
+---@alias ChoreCategory "activities"|"combat"|"skilling"|"upkeep"|"supplies"|"shops"
+
 ---@class Chore
----@field id string dailyscape's key
+---@field id string fixed for good: saved state and the other data files are keyed by it
 ---@field name string
 ---@field period ChorePeriod
----@field shop boolean
+---@field category ChoreCategory? its settings subheading; none sits straight under the period
 ---@field url string
 ---@field desc string plain text; `<br>` is its only markup
 ---@field links string[]

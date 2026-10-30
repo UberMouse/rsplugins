@@ -270,7 +270,7 @@ local function onPick(chore)
         tracker = state.deselect(tracker, chore.id)
     end
     store.saveState(character, tracker)
-    rows.showPick(rowViews[chore.id], view.pickText(chore), picked)
+    rows.showPick(rowViews[chore.id], chore.name, picked)
 end
 
 -- A celebration setting was ticked or unticked: apply it and save it for all characters.
@@ -284,8 +284,16 @@ local function onCelebrationSetting(_, _values, setting, on)
     store.saveSettings(celebrations)
 end
 
--- The settings view: the Celebrations switches in PrettyUI's flow, then a heading per period
--- and a hand-built row per chore below them.
+-- A settings subheading's key in the layout, unique across periods.
+---@param p ChorePeriod
+---@param category ChoreCategory
+---@return string
+local function subheadingKey(p, category)
+    return p .. "/" .. category
+end
+
+-- The settings view: the Celebrations switches in PrettyUI's flow, then a heading per period,
+-- a subheading per category within it, and a hand-built row per chore below them.
 ---@param w prettyui.Window
 local function buildSettings(w)
     w:AddTitle("Celebrations")
@@ -296,19 +304,35 @@ local function buildSettings(w)
     local groups = view.byPeriod(chores)
     local sections = {} ---@type ChoreSectionIds[]
     for i, group in ipairs(groups) do
-        sections[i] = sectionIds(group.period, group.chores)
+        local ids, subheads = {}, {}
+        for _, subgroup in ipairs(group.subgroups) do
+            if subgroup.category then
+                subheads[#ids + 1] = subheadingKey(group.period, subgroup.category)
+            end
+            for _, chore in ipairs(subgroup.chores) do
+                ids[#ids + 1] = chore.id
+            end
+        end
+        sections[i] = { period = group.period, ids = ids, subheads = subheads }
     end
     local spots = listlayout.place(sections, switches.root.y + switches.root.height)
     local wheel = prettyuiInternals.wheelHandler(w)
     for _, group in ipairs(groups) do
         w:AddTitle({ text = group.title, y = spots.headings[group.period] })
-        for _, chore in ipairs(group.chores) do
-            local row = rows.new(w.content, spots.rows[chore.id], icons[chore.id], function()
-                onPick(chore)
-            end, { wheel = wheel })
-            rowViews[chore.id] = row
-            rows.showPick(row, view.pickText(chore), state.isSelected(tracker, chore.id))
-            rows.setTooltip(row, view.tooltip(chore))
+        for _, subgroup in ipairs(group.subgroups) do
+            if subgroup.category then
+                local key = subheadingKey(group.period, subgroup.category)
+                local title = view.CATEGORY_TITLES[subgroup.category]
+                rows.newSubheading(w.content, spots.subheadings[key], title)
+            end
+            for _, chore in ipairs(subgroup.chores) do
+                local row = rows.new(w.content, spots.rows[chore.id], icons[chore.id], function()
+                    onPick(chore)
+                end, { wheel = wheel })
+                rowViews[chore.id] = row
+                rows.showPick(row, chore.name, state.isSelected(tracker, chore.id))
+                rows.setTooltip(row, view.tooltip(chore))
+            end
         end
     end
     w:SetContentHeight(spots.height)

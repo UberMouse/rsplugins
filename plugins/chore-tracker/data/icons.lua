@@ -1,4 +1,4 @@
--- The icon each chore's list row shows, hand-written (data/chores.lua is generated). Each entry
+-- The icon each chore's list row shows, hand-written. Each entry
 -- names one built-in client graphic by its constant name: `obj`, an item (id.Obj.<name>, from
 -- docs/api/consts/Obj.lua), or `sprite`, an interface sprite (id.Sprite.<name>, from
 -- docs/api/consts/Sprite.lua). Names, not ids, so this stays plain data (the specs read it

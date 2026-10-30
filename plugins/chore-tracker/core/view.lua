@@ -38,23 +38,54 @@ M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 ---@field done integer how many rows are done
 ---@field total integer how many rows there are
 
+-- The settings view's subheadings within a period, in display order, and their text.
+M.CATEGORIES = { "activities", "combat", "skilling", "upkeep", "supplies", "shops" } ---@type ChoreCategory[]
+M.CATEGORY_TITLES = {
+    activities = "Activities",
+    combat = "Combat",
+    skilling = "Skilling",
+    upkeep = "Upkeep",
+    supplies = "Free supplies",
+    shops = "Shops",
+}
+
+---@class ChoreSubgroup
+---@field category ChoreCategory? nil for the period's chores without one, which get no subheading
+---@field chores Chore[] in chore-list order
+
 ---@class ChoreGroup
 ---@field period ChorePeriod
 ---@field title string
----@field chores Chore[] in chore-list order
+---@field subgroups ChoreSubgroup[] uncategorised chores first, then by CATEGORIES
 
--- `chores` grouped by period in the order Daily, Weekly, Monthly. A period with no chores
--- has no group.
+-- `chores` grouped by period in the order Daily, Weekly, Monthly, and within a period by
+-- category, for the settings view. A period or category with no chores has no group.
 ---@param chores Chore[]
 ---@return ChoreGroup[]
 function M.byPeriod(chores)
     local groups = {}
     for _, p in ipairs(period.PERIODS) do
-        local group = { period = p, title = M.TITLES[p], chores = {} }
+        local byCategory, loose = {}, {} ---@type table<ChoreCategory, Chore[]>, Chore[]
         for _, chore in ipairs(chores) do
-            if chore.period == p then group.chores[#group.chores + 1] = chore end
+            if chore.period == p then
+                local into = loose
+                if chore.category then
+                    into = byCategory[chore.category] or {}
+                    byCategory[chore.category] = into
+                end
+                into[#into + 1] = chore
+            end
         end
-        if #group.chores > 0 then groups[#groups + 1] = group end
+        local subgroups = {} ---@type ChoreSubgroup[]
+        if #loose > 0 then subgroups[1] = { chores = loose } end
+        for _, c in ipairs(M.CATEGORIES) do
+            if byCategory[c] then
+                subgroups[#subgroups + 1] = { category = c, chores = byCategory[c] }
+            end
+        end
+        if #subgroups > 0 then
+            groups[#groups + 1] = { period = p, title = M.TITLES[p], subgroups = subgroups }
+        end
     end
     return groups
 end
@@ -208,13 +239,6 @@ function M.strip(sections, notice)
     local message = notice or (#texts == 0 and M.NOTHING_PICKED or M.ALL_DONE)
     texts[#texts + 1] = message
     return { text = message, texts = texts }
-end
-
--- A settings row's text: the chore's name, marked when it is a shop run.
----@param chore Chore
----@return string
-function M.pickText(chore)
-    return chore.shop and chore.name .. " (shop)" or chore.name
 end
 
 return M

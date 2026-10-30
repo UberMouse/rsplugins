@@ -39,31 +39,32 @@ M.MINUTES = {
     ["2028-03-01"] = 30591360,
 }
 
--- A small chore list: daily two plain and a shop, weekly a plain and a shop, monthly a plain.
+-- A small chore list: daily an activity, an uncategorised one and a shop, weekly a combat chore
+-- and a shop, monthly an uncategorised one.
 ---@return table[]
 function M.chores()
     ---@param id string
     ---@param period string
-    ---@param shop boolean
+    ---@param category string?
     ---@return table
-    local function chore(id, period, shop)
+    local function chore(id, period, category)
         return {
             id = id,
             name = id:upper(),
             period = period,
-            shop = shop,
+            category = category,
             url = "https://example.test/" .. id,
             desc = "about " .. id,
             links = {},
         }
     end
     return {
-        chore("d1", "daily", false),
-        chore("d2", "daily", false),
-        chore("dshop", "daily", true),
-        chore("w1", "weekly", false),
-        chore("wshop", "weekly", true),
-        chore("m1", "monthly", false),
+        chore("d1", "daily", "activities"),
+        chore("d2", "daily", nil),
+        chore("dshop", "daily", "shops"),
+        chore("w1", "weekly", "combat"),
+        chore("wshop", "weekly", "shops"),
+        chore("m1", "monthly", nil),
     }
 end
 

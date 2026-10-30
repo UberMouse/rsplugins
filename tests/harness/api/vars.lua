@@ -91,7 +91,7 @@ function M.install(h, env)
         end
         domains[domain] = strict.lookup("var." .. domain, function(name)
             -- A spec's opts.absentNames: the client reads nil for an unknown name.
-            if h.absentNames["var." .. domain .. "." .. tostring(name)] then return nil end
+            if h:isAbsentName("var." .. domain, name) then return nil end
             if not catalog.var(domain, name) then
                 strict.fault(
                     string.format(

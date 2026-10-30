@@ -322,7 +322,7 @@ local Inventory = strict.class("Inventory", {
 local function configTable(h, kind)
     return strict.lookup("config." .. kind, function(name)
         -- A spec's opts.absentNames: the client reads nil for an unknown name.
-        if h.absentNames["config." .. kind .. "." .. tostring(name)] then return nil end
+        if h:isAbsentName("config." .. kind, name) then return nil end
         local id = catalog.config(kind, name)
         if not id then
             strict.fault(

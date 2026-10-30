@@ -74,11 +74,31 @@ Harness.__index = Harness
 local Builder = {}
 Builder.__index = Builder
 
+-- Domains whose answer for an unknown name was probed (docs/api-concepts.md#configs-vs-entities);
+-- the name itself may be one the catalog lacks, which is what a renamed name looks like.
+local ABSENT_DOMAINS = {
+    ["config.Inv"] = true,
+    ["config.Obj"] = true,
+    ["var.VarPlayer"] = true,
+    ["id.Sprite"] = true,
+    ["id.Obj"] = true,
+}
+
+---@return string # the domains, sorted and comma-separated
+local function absentDomainList()
+    local list = {}
+    for domain in pairs(ABSENT_DOMAINS) do
+        list[#list + 1] = domain
+    end
+    table.sort(list)
+    return table.concat(list, ", ")
+end
+
 ---@param plugin string|table "name" for plugins/<name>, a path containing "/", or a table of
 ---  inline files { ["main.lua"] = "...", ["plugin.json"] = "..." }
 ---@param opts table? { grant = { perm... }, budgetMs = 1000, stdlib = { os = true }, echo = false,
----  absent = { "load", ... }, absentNames = { "config.Inv.NAME", ... }, randomSeed = 1, textWidth = function(fontID, text) return n end,
----  allowLeftSubscriptions = false }
+---  absent = { "load", ... }, absentNames = { "config.Inv.NAME", ... }, randomSeed = 1,
+---  textWidth = function(fontID, text) return n end, allowLeftSubscriptions = false }
 ---@return table h
 function M.new(plugin, opts)
     opts = opts or {}
@@ -99,7 +119,7 @@ function M.new(plugin, opts)
         consoleCommands = {}, -- ExecuteConsoleCommand arguments, in order
         onConsoleCommand = nil, -- set by a test: called with each console command
         absent = {}, -- globals that read nil, as in a client without them (opts.absent)
-        absentNames = {}, -- "config.Inv.NAME" -> true: names read as the client reads an unknown one
+        absentNames = {}, -- "config.Inv.NAME" -> true: names read as the client reads unknown ones
         db = {}, -- PersistentDB entries: key -> { type, value }
         dbWrites = 0, -- PersistentDB stores (Set and the typed setters) so far, across reloads
         varProxies = {},
@@ -135,23 +155,11 @@ function M.new(plugin, opts)
         h.absent[name] = true
     end
 
-    -- Probed domains only (docs/api-concepts.md#configs-vs-entities); the name itself may be
-    -- one the catalog lacks, which is what a renamed name looks like.
-    local ABSENT_DOMAINS = {
-        ["config.Inv"] = true,
-        ["config.Obj"] = true,
-        ["var.VarPlayer"] = true,
-        ["id.Sprite"] = true,
-        ["id.Obj"] = true,
-    }
     for _, path in ipairs(opts.absentNames or {}) do
         local domain = path:match("^(.-)%.[^.]+$")
         assert(
             domain and ABSENT_DOMAINS[domain],
-            "opts.absentNames "
-                .. path
-                .. ": only config.Inv, config.Obj, var.VarPlayer, id.Sprite"
-                .. " and id.Obj are probed"
+            "opts.absentNames " .. path .. ": only " .. absentDomainList() .. " are probed"
         )
         h.absentNames[path] = true
     end
@@ -188,6 +196,13 @@ end
 ---------------------------------------------------------------------------
 -- Plugin lifecycle
 ---------------------------------------------------------------------------
+
+---@param domain string "config.Inv", "var.VarPlayer", "id.Obj"...
+---@param name any the looked-up name
+---@return boolean # whether a spec listed domain.name in opts.absentNames
+function Harness:isAbsentName(domain, name)
+    return self.absentNames[domain .. "." .. tostring(name)] == true
+end
 
 -- Enable the plugin: a fresh environment, then main.lua.
 function Harness:load()

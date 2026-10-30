@@ -759,7 +759,7 @@ local IdNamespace = strict.class("_global.id", {
 local function idNames(h, kind, label)
     return strict.lookup("id." .. kind, function(name)
         -- A spec's opts.absentNames: the client reads -1 for an unknown Sprite or Obj name.
-        if h.absentNames["id." .. kind .. "." .. tostring(name)] then return -1 end
+        if h:isAbsentName("id." .. kind, name) then return -1 end
         if name == "FromID" then strict.fault("unmocked API: id." .. kind .. ".FromID") end
         local found = catalog.config(kind, name)
         if not found then

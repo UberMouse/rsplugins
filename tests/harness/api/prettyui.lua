@@ -160,8 +160,9 @@ local function parentState(what, parent)
     return s
 end
 
--- Every method but Destroy faults once the object is destroyed. The real library ignores
--- some calls on a destroyed object (Show) and fails on others; a plugin shouldn't rely on it.
+-- Every method but Destroy, and every field but the ones 1.2.0 clears (see liveField), faults
+-- once the object is destroyed. The real library ignores some calls on a destroyed object
+-- (Show) and fails on others; a plugin shouldn't rely on it.
 ---@param s table
 local function live(s)
     if s.destroyed then strict.fault("prettyui " .. s.kind .. " used after Destroy()") end
@@ -917,7 +918,9 @@ end
 local ScrollController = strict.class("prettyui.Window instance._scroll", {
     undeclared = true,
     fields = {
+        ---@return number
         scrollY = function(s)
+            live(s.owner)
             return s.scrollY
         end,
     },
@@ -929,9 +932,12 @@ local Window = strict.class("prettyui.Window instance", {
         root = function(s)
             return s.root
         end,
-        closeButton = liveField(function(s)
-            return s.closeButton
-        end),
+        closeButton = liveField(
+            ---@return table
+            function(s)
+                return s.closeButton
+            end
+        ),
         -- The scrolling layer the rows live in, for a plugin's own components.
         content = function(s)
             if s.destroyed then return nil end
@@ -945,12 +951,16 @@ local Window = strict.class("prettyui.Window instance", {
         end,
         -- 1.2.0's internal wheel handler (also set on the window by its scroll controller):
         -- a plugin hands it to a row's ONSCROLLWHEEL so the wheel still scrolls the window.
-        _onScrollWheel = liveField(function(s)
-            return s.onWheel
-        end),
+        _onScrollWheel = liveField(
+            ---@return function
+            function(s)
+                return s.onWheel
+            end
+        ),
+        ---@return table?
         _scroll = function(s)
             if s.destroyed then return nil end
-            return ScrollController.new({ scrollY = s.scrollY })
+            return ScrollController.new({ scrollY = s.scrollY, owner = s })
         end,
         -- 1.2.0's internal title-bar drag layer (a titled window's only), a sibling of the root
         -- on the window's parent. Only its stacking and `hidden` are modelled: its rect is left
@@ -977,12 +987,18 @@ local Window = strict.class("prettyui.Window instance", {
             end
             return ResizeController.new({ handles = handles, win = s })
         end,
-        _RegisterOverlay = liveField(function(s)
-            return overlayMethod(s, "_RegisterOverlay", registerOverlay)
-        end),
-        _UnregisterOverlay = liveField(function(s)
-            return overlayMethod(s, "_UnregisterOverlay", unregisterOverlay)
-        end),
+        _RegisterOverlay = liveField(
+            ---@return function?
+            function(s)
+                return overlayMethod(s, "_RegisterOverlay", registerOverlay)
+            end
+        ),
+        _UnregisterOverlay = liveField(
+            ---@return function?
+            function(s)
+                return overlayMethod(s, "_UnregisterOverlay", unregisterOverlay)
+            end
+        ),
     },
     methods = {
         SetSize = function(s, width, height)
@@ -1047,12 +1063,18 @@ local Panel = strict.class("prettyui.Panel instance", {
         root = function(s)
             return s.root
         end,
-        width = liveField(function(s)
-            return s.width
-        end),
-        height = liveField(function(s)
-            return s.height
-        end),
+        width = liveField(
+            ---@return number
+            function(s)
+                return s.width
+            end
+        ),
+        height = liveField(
+            ---@return number
+            function(s)
+                return s.height
+            end
+        ),
     },
     methods = {
         -- Clamped to at least 9x9, then kept inside the parent; also makes the current

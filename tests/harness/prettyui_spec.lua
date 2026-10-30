@@ -563,6 +563,18 @@ other = ui.Layer.new(parent)
         )
     end)
 
+    it("faults on the scrollY of a _scroll handle kept across Destroy", function()
+        local h = load(WINDOW)
+        local sc = h.env.win._scroll
+        h.env.win:Destroy()
+        assert.matches(
+            "used after Destroy",
+            harness.errorOf(function()
+                return sc.scrollY
+            end)
+        )
+    end)
+
     it("faults when the driver clicks a destroyed button or close X", function()
         local h = load(WINDOW .. "x = win.closeButton; win:Destroy()")
         for _, target in ipairs({ h.env.menu, h.env.x }) do

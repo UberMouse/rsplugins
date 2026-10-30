@@ -19,9 +19,10 @@
 -- no permissions, sends nothing to the game or anywhere else, and reads nothing about other
 -- players.
 --
--- Console lines carry [CHORES] (grep: \[CHORES\]); the display name is never logged. Chores
--- ticked by the plugin and celebrations log "[CHORES] purchase", "collected", "seen" or
--- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)).
+-- Every console line carries [CHORES] (grep: \[CHORES\]); the display name is never logged.
+-- Chores ticked by the plugin and celebrations log "[CHORES] purchase", "collected", "seen" or
+-- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)); README.md's
+-- "Console lines" section lists the others.
 --
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
 -- local daemon; scripts/check-submission.sh fails until it is stripped (README, "Before
@@ -253,12 +254,13 @@ local function buildList(w, openSettings)
     w:SetContentHeight(spots.height)
     refreshList()
     -- The grips' press targets sit over the window, placed from its viewport (see grips.lua).
-    if w.viewport ~= nil then
+    local viewport = internals.viewport(w)
+    if viewport ~= nil then
         grips.build({
             -- The plugin layer takes children (docs/api-concepts.md, "UI"); GetComponent's
             -- stub types it as a plain component.
             parent = parent --[[@as ui.ComponentCollection]],
-            viewport = w.viewport,
+            viewport = viewport,
             rows = rowViews,
             sections = order,
             scrollY = function()
@@ -489,8 +491,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
         refitRows()
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.
-    window.followGrips()
-    internals.reviveResize(window.current(), window.isCollapsed())
+    window.tick()
 end)
 
 Event.VarTransmit.Subscribe("chore-tracker", function(ev)

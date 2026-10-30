@@ -595,8 +595,8 @@ describe("chore-tracker resize cursors", function()
 end)
 
 -- The plugin promises that a PrettyUI version without one of the internals it reaches into
--- loses only what that internal gave it (the header of main.lua lists them). The harness
--- toggles stand in for such a version; nothing is probed against one.
+-- loses only what that internal gave it (the header of shell/prettyui_internals.lua lists
+-- them). The harness toggles stand in for such a version; nothing is probed against one.
 describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
     local BERT_FLAG = "HANDSAND_BUCKETS_CLAIMED_TODAY"
 

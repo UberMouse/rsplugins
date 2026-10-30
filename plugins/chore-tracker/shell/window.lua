@@ -59,18 +59,12 @@ function M.current()
     return win
 end
 
--- Whether the window is collapsed to its button.
----@return boolean
-function M.isCollapsed()
-    return collapsed ~= nil
-end
-
 -- A component's on-screen position relative to the plugin layer, in whole pixels.
 ---@param component ui.Component
 ---@return integer x
 ---@return integer y
 local function screenPos(component)
-    assert(opts, "window.init sets the parent first")
+    assert(opts, "window.init runs before any window function")
     local at, origin = component.xyGlobal, opts.parent.xyGlobal
     return math.floor(at.x - origin.x + 0.5), math.floor(at.y - origin.y + 0.5)
 end
@@ -82,7 +76,7 @@ end
 
 -- Re-open the window so its hamburger lands on the collapsed one, then drop the panel.
 local function expand()
-    assert(opts, "window.init sets the parent and say first")
+    assert(opts, "window.init runs before any window function")
     assert(win and collapsed and collapsedButton, "the collapsed button only exists collapsed")
     local parent = opts.parent
     local x, y = screenPos(collapsedButton.root)
@@ -104,7 +98,7 @@ end
 
 -- Close the window and put a lone hamburger at (x, y) in the plugin layer.
 --
--- The collapsed button is a PrettyUI Panel exactly the button's size (20x20), with no
+-- The collapsed button is a PrettyUI Panel exactly the button's size, with no
 -- background, scrolling off, and the hamburger as a child of the Panel's own root at its
 -- origin, so the button covers the Panel's 4 px frame. A Panel always draws that frame, but
 -- it is what makes Alt-drag work, and the button's screen spot is then the Panel's own.
@@ -112,8 +106,8 @@ end
 -- open, it would still take Alt-drags, and so clicks, over the window's hamburger.
 ---@param x integer
 ---@param y integer
-function M.collapseAt(x, y)
-    assert(opts, "window.init sets the parent and onCollapse first")
+local function collapseAt(x, y)
+    assert(opts, "window.init runs before any window function")
     assert(win and openButton, "the window's hamburger only exists with the window")
     -- The hamburger's tooltip is drawn inside the window, not in its content, so Close hides
     -- it only with the window, and it would be back on the next Show. Replacing it with a
@@ -141,10 +135,10 @@ end
 
 -- The window's hamburger: collapse where it is.
 local function collapse()
-    assert(opts, "window.init sets say first")
+    assert(opts, "window.init runs before any window function")
     assert(openButton, "the window's hamburger called this")
     local x, y = screenPos(openButton.root)
-    M.collapseAt(x, y)
+    collapseAt(x, y)
     opts.say("collapsed at", x, y)
 end
 
@@ -152,8 +146,8 @@ end
 -- window's content, so a view switch, a login change or the clock starting rebuilds the
 -- window where it was.
 ---@param at { x: integer, y: integer, width: integer, height: integer }
-function M.build(at)
-    assert(opts, "window.init sets the parent and the content builder first")
+local function build(at)
+    assert(opts, "window.init runs before any window function")
     -- The grips' targets go first: they are the plugin layer's, not the window's, and a drag
     -- in progress ends unsaved with its rows.
     grips.clear()
@@ -202,7 +196,7 @@ function M.rebuild(keepScroll)
     assert(win, "the window exists from load to shutdown")
     local r = win.root
     local scrollY = keepScroll and internals.scrollPosition(win) or nil
-    M.build({ x = r.x, y = r.y, width = r.width, height = r.height })
+    build({ x = r.x, y = r.y, width = r.width, height = r.height })
     if scrollY then win:SetScrollPosition(scrollY) end
     if collapsed then win:Close() end
 end
@@ -211,13 +205,13 @@ end
 -- the plugin layer first; savedLayout keeps the stored one, so a layout that had to be moved
 -- in gets saved at the next check.
 function M.open()
-    assert(opts, "window.init sets the parent first")
+    assert(opts, "window.init runs before any window function")
     local parent = opts.parent
     savedLayout = store.loadLayout()
     local start =
         layout.clamp(savedLayout, parent.width, parent.height, MIN_WIDTH, MIN_HEIGHT, BUTTON_SIZE)
-    M.build(start)
-    if start.collapsed then M.collapseAt(start.buttonX, start.buttonY) end
+    build(start)
+    if start.collapsed then collapseAt(start.buttonX, start.buttonY) end
 end
 
 -- Where everything is now, as a layout to save.
@@ -247,12 +241,19 @@ function M.saveLayoutIfChanged()
 end
 
 -- Destroy the collapsed panel an expand left behind, now that its click is over. main.lua
--- calls this at the start of each Logic tick.
+-- calls this early in each Logic tick, before the view switch.
 function M.dropRetired()
     if retiring then
         retiring:Destroy()
         retiring = nil
     end
+end
+
+-- The window's per-tick upkeep, called every Logic tick so a grip's target keeps up with the
+-- window moving or scrolling, and a stuck resize comes back.
+function M.tick()
+    M.followGrips()
+    internals.reviveResize(win, collapsed ~= nil)
 end
 
 -- The window's part of PluginShutdown: the grips' targets, then the layout saved and the

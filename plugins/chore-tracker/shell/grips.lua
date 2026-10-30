@@ -12,8 +12,9 @@
 -- scrolls. The release drops the row there and hands the move to the caller to save.
 --
 -- follow() re-docks the targets every Logic tick so they track the window being moved, resized
--- or scrolled. It is also called as a plain re-dock right after a build, collapse or expand,
--- when no press or drag can be live, so its tick counters are unaffected.
+-- or scrolled. shell/window.lua also calls it right after a build, collapse or expand; by then
+-- a build has cleared the grips and a collapse or expand came from a click elsewhere, so at
+-- most a just-ended press ages a tick early.
 --
 -- PrettyUI raises the window over the targets when it is shown, when its title bar is pressed
 -- and when a resize begins. A MoveToFront on a hidden layer is lost and one on a layer under
@@ -315,7 +316,7 @@ end
 
 -- Keep the targets over their grips and in front of the window, and drop a drag whose release
 -- never came or whose window closed (its stretched target would take clicks). Call every Logic
--- tick, `open` false while the window is closed.
+-- tick, `open` false while the window is closed; one extra call is a harmless re-dock.
 ---@param open boolean
 function M.follow(open)
     if pressed and not drag then

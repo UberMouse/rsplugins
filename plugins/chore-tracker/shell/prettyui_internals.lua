@@ -7,8 +7,8 @@
 -- - `_scroll.scrollY`: keeps the scroll through a rebuild (scrollPosition) and places the
 --   grips' press targets over scrolled rows.
 -- - `_onScrollWheel`: lets the wheel over a row scroll the window (wheelHandler).
--- - `viewport`: where the grips' targets are placed from; without it, or the scroll, the
---   grips don't drag.
+-- - `viewport` (viewport): where the grips' targets are placed from; without it, or the
+--   scroll, the grips don't drag.
 -- - `_RegisterOverlay` / `_UnregisterOverlay`: to hear when the window lays out its overlays,
 --   so the grips' targets can be raised back over it (overlaySync); without them the targets
 --   stay under the window after a title-bar press or a resize.
@@ -29,8 +29,21 @@ local M = {}
 ---@return number?
 function M.scrollPosition(w)
     local scroll = w._scroll
-    local y = scroll and scroll.scrollY
+    local y = type(scroll) == "table" and scroll.scrollY
     if type(y) == "number" then return y end
+    return nil
+end
+
+-- The layer the window's content is clipped to and scrolls in, or nil if there is none.
+-- PrettyUI 1.2.0's `viewport` is internal; client components are userdata, the harness's
+-- fakes tables.
+---@param w prettyui.Window
+---@return ui.Layer?
+function M.viewport(w)
+    local viewport = w.viewport
+    if type(viewport) == "userdata" or type(viewport) == "table" then
+        return viewport --[[@as ui.Layer]]
+    end
     return nil
 end
 

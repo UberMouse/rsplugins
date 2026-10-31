@@ -20,7 +20,8 @@ local PERIOD_TITLES = {
 ---@field kind "chore"|"period"
 ---@field title string the popup's heading
 ---@field text string the popup's body
----@field label string what the console line names: a chore's id, or "<period> cleared"
+---@field label string console-line name (a chore's id, or "<period> cleared") and the identity
+---  shell/popups.lua dedupes on, so equal labels mean the same celebration
 
 -- How many of `period`'s chores `s` has picked, and whether all of them are done at `now`.
 ---@param s ChoreState

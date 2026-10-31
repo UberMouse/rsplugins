@@ -4,12 +4,12 @@
     {
       "name": "01-overview",
       "layout": "hero",
-      "tagline": "Your daily, weekly and monthly RS3 chores in one checklist.",
+      "tagline": "Your daily, weekly and monthly chores in one checklist.",
       "features": [
         "<b>Pick</b> the chores you actually do",
         "<b>Tick</b> them off; they clear at the game's resets",
         "<b>Shop runs</b> and many more tick themselves",
-        "<b>Drag</b> chores into your own order"
+        "<b>Drag</b> chores into your own run order"
       ],
       "images": [
         {
@@ -18,8 +18,7 @@
           "x": 1246,
           "y": 81
         }
-      ],
-      "eyebrow": "RS3 plugin"
+      ]
     },
     {
       "name": "02-list",
@@ -87,7 +86,7 @@
               ],
               "side": "left",
               "x": 950,
-              "text": "Progress per period"
+              "text": "Progress per type"
             },
             {
               "box": [
@@ -139,7 +138,7 @@
               ],
               "side": "right",
               "x": 1610,
-              "text": "How many shops<br>make each run"
+              "text": "How many shops<br>you buy from"
             },
             {
               "box": [
@@ -151,17 +150,6 @@
               "side": "right",
               "x": 1610,
               "text": "Click a row to pick it"
-            },
-            {
-              "box": [
-                4,
-                76,
-                186,
-                48
-              ],
-              "side": "right",
-              "x": 1610,
-              "text": "Popups and their<br>sound, on or off"
             },
             {
               "box": [
@@ -182,7 +170,7 @@
       "name": "04-strip-and-popup",
       "layout": "annotated",
       "title": "Fold it away",
-      "desc": "The menu button folds the window into a strip that shows your next chore. Finish a period's chores and a popup celebrates it.",
+      "desc": "The menu button folds the window into a strip that shows your current chore, in your defined run order. Finish a period's chores and a popup celebrates it.",
       "descWidth": 1300,
       "note": "Chores the plugin ticks for you get their own CHORE COMPLETE popup. Turn popups or their sound off in settings.",
       "images": [

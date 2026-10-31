@@ -17,8 +17,8 @@ Upload them in that order (Media, `docs/submission.md`).
 
 Edit `specs.json`, then `python3 scripts/gallery.py compose media/chore-tracker` (or name pages
 after the folder to render only those). No client needed. Each page has a `layout`: `hero`
-(`eyebrow`, `tagline`, `features`) or `annotated` (`title`, `desc`, optional `note`). Its
-`images` place a raw crop at `scale` and `x`,`y` on the page. Each callout draws a box round
+(`tagline`, `features`, optional `eyebrow`) or `annotated` (`title`, `desc`, optional
+`note`). Its `images` place a raw crop at `scale` and `x`,`y` on the page. Each callout draws a box round
 `box` (`[x, y, w, h]` in raw-crop pixels) and puts its `text` on one `side` at page `x`, the
 label's edge nearest the screenshot. Labels never wrap on their own, so break long ones with
 `<br>`. Moving a box means reading its coordinates off the raw crop.

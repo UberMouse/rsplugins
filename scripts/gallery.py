@@ -212,8 +212,9 @@ def hero(media: pathlib.Path, spec: dict) -> str:
     """The listing image: plugin name, tagline and features left, screenshots right."""
     shots = "".join(place(media, img)[0] for img in spec["images"])
     feats = "".join(f"<li>{f}</li>" for f in spec["features"])
+    eyebrow = f'<div class="eyebrow">{spec["eyebrow"]}</div>' if "eyebrow" in spec else ""
     text = (
-        f'<div class="hero-text"><div class="eyebrow">{spec["eyebrow"]}</div>'
+        f'<div class="hero-text">{eyebrow}'
         f'<h1>{spec["plugin"]}</h1><div class="rule"></div>'
         f'<div class="tagline">{spec["tagline"]}</div><ul class="features">{feats}</ul></div>'
     )

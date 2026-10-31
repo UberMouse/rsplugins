@@ -536,7 +536,14 @@ never ran with results recorded (recover it with
   `CURSOR_TICK` 157, `CURSOR_CROSS` 158, `CURSOR_BLANK` 41, `TOPLEVEL_V2_MOVE` 194, `CURSOR_MOVE` 0
   and `CURSOR_TELE_GRAB` 111, and chose 175 for clickable rows; `TOPLEVEL_V2_MOVE` (PrettyUI
   1.2.0's title-bar drag cursor) reads as a resize cursor. Whether `mouseOverCursor` alone,
-  without `SetOpCursor`, is enough was not settled. A second round (same day, dev bridge) chose
+  without `SetOpCursor`, is enough is suggestive but not settled (dev-bridge probe, 2026-11-01:
+  two 40x20 `clickthrough = false` layers in Chore Tracker's window, hovered with `rsdev.py
+  move`, X cursor image read with `XFixesGetCursorImage`). A layer with only
+  `mouseOverCursor = 196` showed the grip's 28x31 PUSH image in 2 of 2 clean reads; one with
+  only `SetOpCursor(0, 196)` showed the 13x19 default arrow in every read. But after a 1 px
+  xdotool nudge every target, real rows that set both included, read as the arrow, so the
+  client seems to refresh the cursor only on some pointer events. Chore Tracker keeps setting
+  both. A second round (same day, dev bridge) chose
   a drag grip's cursor, shown over the grip and for the whole drag: `CURSOR_PUSH` 196, over
   `CURSOR_MOVE` 0, `CURSOR_TELE_GRAB` 111, `TOPLEVEL_V2_SCALE_VERT` 190, `CURSOR_HAND` 204,
   `CURSOR_PULL` 197, `CURSOR_TAKE` 45 and `CURSOR_ACC_CREATE_HOVER` 187 /

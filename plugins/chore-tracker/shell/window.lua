@@ -53,7 +53,7 @@ local stripWidth = nil ---@type integer?
 -- A button's action mustn't destroy the button while PrettyUI is still handling its click, so
 -- the collapsed panel left behind by expanding waits here for the next Logic tick (M.tick).
 local retiring = nil ---@type prettyui.Panel?
--- The layout the store holds, so it's written only when the window has really moved.
+-- The layout shown at open or saved since, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
 -- The layout at the previous check, so a move or resize is saved once it has stopped.
 local seenLayout = nil ---@type ChoreLayout?
@@ -266,18 +266,6 @@ function M.rebuild(keepScroll)
     end
 end
 
--- Open the window where the store says, collapsed if it was. The stored layout is fitted to
--- the plugin layer first; savedLayout keeps the stored one, so a layout that had to be moved
--- in gets saved at the next check.
-function M.open()
-    assert(opts, "window.init runs before any window function")
-    local parent = opts.parent
-    savedLayout = store.loadLayout()
-    local start = layout.keepInside(savedLayout, parent.width, parent.height)
-    build(start)
-    if start.collapsed then collapseAt(start.buttonX, start.buttonY) end
-end
-
 -- Where everything is now, as a layout to save.
 ---@return ChoreLayout
 local function currentLayout()
@@ -296,9 +284,25 @@ local function currentLayout()
     }
 end
 
+-- Open the window where the store says, collapsed if it was. The stored layout is fitted to
+-- the plugin layer, but a fitted layout is only shown, never saved: the layer may be small for
+-- a moment at load, and saving the squeezed spot would lose the player's own. Only a real
+-- move, resize, collapse or expand is saved, so savedLayout and seenLayout start as the layout
+-- actually shown.
+function M.open()
+    assert(opts, "window.init runs before any window function")
+    local parent = opts.parent
+    local start = layout.keepInside(store.loadLayout(), parent.width, parent.height)
+    build(start)
+    if start.collapsed then collapseAt(start.buttonX, start.buttonY) end
+    savedLayout = currentLayout()
+    seenLayout = savedLayout
+end
+
 -- Save the layout if it differs from what the store holds and has held since the previous
--- check, so a window being dragged or resized isn't written on every check. `force` saves it
--- whether or not it has held, as at shutdown.
+-- check, so a window being dragged or resized isn't written on every check. `force`, as at
+-- shutdown, skips waiting for it to hold, so a move just made is kept; an unchanged layout is
+-- still not written.
 ---@param force boolean?
 function M.saveLayoutIfChanged(force)
     local now = currentLayout()

@@ -252,15 +252,54 @@ describe("chore-tracker saved layout", function()
         assert.are.same({ spot.globalX, spot.globalY }, { open.globalX, open.globalY })
     end)
 
-    it("moves a saved layout that no longer fits back inside the plugin layer", function()
+    it(
+        "shows a saved layout that no longer fits inside the plugin layer, keeping it saved",
+        function()
+            local h = loaded()
+            h.ui:dragTitle(window(h), 10, 10)
+            h:unload()
+            local stored = h.db.layout.value
+            stored.x, stored.y, stored.width, stored.height = 5000, -40, 9000, 300
+            h:load()
+            assert.are.same({ 0, 0, uiFake.ROOT_WIDTH, 300 }, geometry(h))
+            local writes = h.dbWrites
+            h:advance(4 * POLL_MS)
+            assert.are.equal(writes, h.dbWrites)
+            assert.are.same({ 5000, -40, 9000, 300 }, {
+                h.db.layout.value.x,
+                h.db.layout.value.y,
+                h.db.layout.value.width,
+                h.db.layout.value.height,
+            })
+            -- Shutting down unmoved writes nothing either, and the next load fits it again.
+            h:reload()
+            assert.are.equal(5000, h.db.layout.value.x)
+            assert.are.same({ 0, 0, uiFake.ROOT_WIDTH, 300 }, geometry(h))
+
+            h.ui:dragTitle(window(h), 10, 10)
+            h:advance(2 * POLL_MS)
+            assert.are.same(geometry(h), {
+                h.db.layout.value.x,
+                h.db.layout.value.y,
+                h.db.layout.value.width,
+                h.db.layout.value.height,
+            })
+        end
+    )
+
+    it("shows a collapsed button saved outside the plugin layer, keeping it saved", function()
         local h = loaded()
-        h.ui:dragTitle(window(h), 10, 10)
+        helpers.collapse(h)
+        h:advance(2 * POLL_MS)
         h:unload()
         local stored = h.db.layout.value
-        stored.x, stored.y, stored.width, stored.height = 5000, -40, 9000, 300
+        stored.buttonX, stored.buttonY = 9000, 9000
         h:load()
-        assert.are.same({ 0, 0, uiFake.ROOT_WIDTH, 300 }, geometry(h))
-        h:advance(2 * POLL_MS)
-        assert.are.same(0, h.db.layout.value.x)
+        assert.is_false(h.ui:layout(window(h)).visible)
+        local writes = h.dbWrites
+        h:advance(4 * POLL_MS)
+        h:reload()
+        assert.are.equal(writes, h.dbWrites)
+        assert.are.same({ 9000, 9000 }, { h.db.layout.value.buttonX, h.db.layout.value.buttonY })
     end)
 end)

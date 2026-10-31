@@ -316,6 +316,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/prettyui_internals.lua` | Keeping the window's grips and resize cursors working across PrettyUI versions: the one file that uses PrettyUI's private internals |
 | `shell/store.lua` | Saving and loading in PersistentDB |
+| `shell/say.lua` | The console logger every module uses, which tags each line [CHORES] |
 | `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks, parts done and needed counts, and whether a chore is done now |
 | `core/parts.lua` | Each chore's parts (shops, herb patches, penguins...), built from the data files |

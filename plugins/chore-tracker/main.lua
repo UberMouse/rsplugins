@@ -63,7 +63,6 @@ local info = require("core/info")
 local layout = require("core/layout")
 local listlayout = require("core/listlayout")
 local partsCore = require("core/parts")
-local settings = require("core/settings")
 local state = require("core/state")
 local view = require("core/view")
 local detect = require("shell/detect")
@@ -71,15 +70,11 @@ local grips = require("shell/grips")
 local popups = require("shell/popups")
 local prettyuiInternals = require("shell/prettyui_internals")
 local rows = require("shell/rows")
+local say = require("shell/say")
 local stepper = require("shell/stepper")
 local store = require("shell/store")
 local vars = require("shell/vars")
 local window = require("shell/window")
-
--- Every console line from this plugin carries this tag, so it's easy to grep.
-local function say(...)
-    log("[CHORES]", ...)
-end
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
 
@@ -102,23 +97,25 @@ assert(parent, "the plugin layer should exist once a plugin runs")
 -- their picks and ticks.
 local character = nil ---@type string?
 local tracker = state.new()
--- What the window shows: logged out, waiting for the game clock, or ready.
+-- What the window shows: logged out, waiting for the game clock, or ready. Logged out there
+-- is nothing to pick or tick, so the window shows a notice and the mode is the list.
 ---@alias ChorePhase "loggedOut"|"waiting"|"ready"
 ---@alias ChoreMode "list"|"settings"|"info"
 local phase = nil ---@type ChorePhase?
 local mode = "list" ---@type ChoreMode
--- The open view's components, to update in place: chore id -> its row (list, settings or info
--- rows, whichever view is open; ids are the same in all), and period -> its list heading. Both
--- go with the window.
-local rowViews = {} ---@type table<string, ChoreRowView>
-local headings = {} ---@type table<string, ui.Text>
--- The settings view's count lines, refitted with the rows; they go with the window too.
-local stepperViews = {} ---@type ChoreStepperView[]
--- While the info view, or the settings view's help for an empty How many to do block, is open:
--- the window width its help was wrapped for, and the width at the last poll, to re-lay the help
--- once a resize settles. They go with the window too.
-local helpWidth = nil ---@type integer?
-local polledWidth = nil ---@type integer?
+
+-- The open window's views, kept to update in place. All of them go with the window, so
+-- clearViews starts a fresh set each time it is rebuilt.
+---@class ChoreViews
+---@field rows table<string, ChoreRowView> chore id -> its row in the open view (list, settings
+--- or info: ids are the same in all)
+---@field headings table<string, ui.Text> period -> its list heading
+---@field steppers ChoreStepperView[] the settings view's count lines, refitted with the rows
+---@field helpWidth integer? the window width the open view's help was wrapped for (the info
+--- view, or settings with an empty How many to do block), to re-lay it after a resize
+---@field polledWidth integer? the window width at the last poll, to tell when a resize settles
+local views = { rows = {}, headings = {}, steppers = {} } ---@type ChoreViews
+
 -- A view switch left for the next Logic tick. A button's action mustn't destroy the button
 -- while PrettyUI is still handling its click, and a view switch rebuilds the window.
 local pendingMode = nil ---@type ChoreMode?
@@ -126,20 +123,18 @@ local pendingMode = nil ---@type ChoreMode?
 -- or unpicked, whose count line comes or goes. Its row's content height is kept until then,
 -- so the rebuild can keep that row where it was in the window.
 local pendingCounts = nil ---@type { id: string, y: integer }?
--- The settings view's rows' content heights, by chore id; they go with the window too.
-local settingsRowYs = {} ---@type table<string, integer>
 -- The celebration settings, for all characters.
-local celebrations = settings.default()
+local celebrations = store.loadSettings()
 
 -- dev-only:begin
 -- The state above, for `rsdev.py eval --plugin` snippets and press(). A getter, since tracker,
--- mode and phase are replaced as the plugin runs.
+-- mode, phase and the views are replaced as the plugin runs.
 if remote then
     remote.expose("main", function()
         return {
-            rows = rowViews,
-            steppers = stepperViews,
-            headings = headings,
+            rows = views.rows,
+            steppers = views.steppers,
+            headings = views.headings,
             tracker = tracker,
             mode = mode,
             phase = phase,
@@ -179,10 +174,10 @@ local function refreshList()
     local win = window.current()
     assert(win, "the list is only refreshed while its window exists")
     for _, section in ipairs(view.view(tracker, chores, clockNow(), parts)) do
-        local heading = headings[section.period]
+        local heading = views.headings[section.period]
         if heading then heading.content = view.headingText(section) end
         for _, row in ipairs(section.rows) do
-            local rowView = rowViews[row.id]
+            local rowView = views.rows[row.id]
             if rowView then
                 rows.show(rowView, view.rowText(row), row.done)
                 rows.setTooltip(rowView, view.tooltip(row, view.partTooltip(row, section.period)))
@@ -198,10 +193,10 @@ end
 -- costs nothing while the window is idle.
 local function refitRows()
     assert(window.current(), "rows are only refitted while the window exists")
-    for _, rowView in pairs(rowViews) do
+    for _, rowView in pairs(views.rows) do
         rows.fit(rowView)
     end
-    for _, stepperView in ipairs(stepperViews) do
+    for _, stepperView in ipairs(views.steppers) do
         stepper.fit(stepperView)
     end
 end
@@ -254,15 +249,17 @@ end
 
 -- The list: the settings button and any notice in PrettyUI's flow, with the info button beside
 -- the settings button, then a heading per period and a hand-built row per picked chore below
--- them, at the spots core/listlayout.lua gives.
+-- them, at the spots core/listlayout.lua gives. Each button leaves its view switch for the
+-- next Logic tick (pendingMode).
 ---@param w prettyui.Window
----@param openSettings fun()
----@param openInfo fun()
-local function buildList(w, openSettings, openInfo)
-    local button =
-        w:AddSpriteButton("SETTINGS", openSettings, { size = BUTTON_SIZE, tooltip = "Pick chores" })
+local function buildList(w)
+    local button = w:AddSpriteButton("SETTINGS", function()
+        pendingMode = "settings"
+    end, { size = BUTTON_SIZE, tooltip = "Pick chores" })
     -- At an explicit x and y, so it sits on the settings button's row and the flow doesn't move.
-    w:AddSpriteButton("INFO", openInfo, {
+    w:AddSpriteButton("INFO", function()
+        pendingMode = "info"
+    end, {
         x = button.root.x + BUTTON_SIZE + layout.BUTTON_GAP,
         y = button.root.y,
         size = BUTTON_SIZE,
@@ -288,10 +285,10 @@ local function buildList(w, openSettings, openInfo)
     local spots = listlayout.place(lists, top)
     local wheel = window.wheelHandler(w)
     for _, section in ipairs(sections) do
-        headings[section.period] =
+        views.headings[section.period] =
             w:AddTitle({ text = view.headingText(section), y = spots.headings[section.period] })
         for _, row in ipairs(section.rows) do
-            rowViews[row.id] = rows.new(w.content, spots.rows[row.id], icons[row.id], function()
+            views.rows[row.id] = rows.new(w.content, spots.rows[row.id], icons[row.id], function()
                 onTick(row.id)
             end, { wheel = wheel, grip = true })
         end
@@ -304,7 +301,7 @@ local function buildList(w, openSettings, openInfo)
         -- stub types it as a plain component.
         parent = parent --[[@as ui.ComponentCollection]],
         viewport = w.viewport,
-        rows = rowViews,
+        rows = views.rows,
         sections = lists,
         scrollY = function()
             return w.scrollY
@@ -336,11 +333,26 @@ local function onPick(chore)
         tracker = state.deselect(tracker, chore.id)
     end
     store.saveState(character, tracker)
-    rows.showPick(rowViews[chore.id], chore.name, picked)
+    local row = views.rows[chore.id]
+    rows.showPick(row, chore.name, picked)
     local own = parts[chore.id]
-    if own and view.hasCount(own) then
-        pendingCounts = { id = chore.id, y = assert(settingsRowYs[chore.id], "a settings row") }
-    end
+    -- Settings rows never move once made, so the row's y is its content height.
+    if own and view.hasCount(own) then pendingCounts = { id = chore.id, y = row.layer.y } end
+end
+
+-- Rebuild settings for a count line come or gone (onPick), keeping the clicked chore's row
+-- where it was in the window: the scroll moves by as much as the block above it grew or
+-- shrank. Skipped if the view has moved on (logged out, collapsed, or no longer settings).
+---@param pending { id: string, y: integer }
+local function rebuildCounts(pending)
+    local w = window.current()
+    if not w or window.isCollapsed() or mode ~= "settings" then return end
+    local scrollY = w.scrollY
+    window.rebuild(true)
+    -- The rebuilt window, and the clicked chore's row in it.
+    local fresh = window.current()
+    local row = views.rows[pending.id]
+    if row and fresh then fresh:SetScrollPosition(scrollY + row.layer.y - pending.y) end
 end
 
 -- A celebration setting was ticked or unticked: apply it and save it for all characters.
@@ -390,14 +402,14 @@ local function buildCounts(w, wheel)
     local title = w:AddTitle("How many to do")
     local settingsLines = view.countSettings(tracker, chores, parts)
     if #settingsLines == 0 then
-        helpWidth = w.root.width
-        polledWidth = helpWidth
+        local helpWidth = w.root.width
+        views.helpWidth, views.polledWidth = helpWidth, helpWidth
         local help = w:AddText(rows.wrapText(view.NO_COUNTS, layout.helpTextWidth(helpWidth)))
         return help.y + help.height
     end
     local ys, bottom = listlayout.stack(#settingsLines, title.y + title.height)
     for i, line in ipairs(settingsLines) do
-        stepperViews[#stepperViews + 1] = stepper.new(
+        views.steppers[#views.steppers + 1] = stepper.new(
             w.content,
             ys[i],
             line.label,
@@ -459,8 +471,7 @@ local function buildSettings(w)
                 local row = rows.new(w.content, spots.rows[chore.id], icons[chore.id], function()
                     onPick(chore)
                 end, { wheel = wheel })
-                rowViews[chore.id] = row
-                settingsRowYs[chore.id] = spots.rows[chore.id]
+                views.rows[chore.id] = row
                 rows.showPick(row, chore.name, state.isSelected(tracker, chore.id))
                 rows.setTooltip(row, view.tooltip(chore))
             end
@@ -479,8 +490,8 @@ end
 -- from the data files. Nothing here reads the game.
 ---@param w prettyui.Window
 local function buildInfo(w)
-    helpWidth = w.root.width
-    polledWidth = helpWidth
+    local helpWidth = w.root.width
+    views.helpWidth, views.polledWidth = helpWidth, helpWidth
     local textWidth = layout.helpTextWidth(helpWidth)
     local top = 0
     for _, paragraph in ipairs(info.HELP) do
@@ -499,7 +510,7 @@ local function buildInfo(w)
         for _, chore in ipairs(group.chores) do
             local row =
                 rows.new(w.content, spots.rows[chore.id], icons[chore.id], nil, { wheel = wheel })
-            rowViews[chore.id] = row
+            views.rows[chore.id] = row
             rows.show(row, info.rowName(chore, chores), false)
             rows.setTooltip(row, view.tooltip(chore))
         end
@@ -512,27 +523,20 @@ end
 -- was wrapped for and has stopped changing (layout.relayHelp), unless a resize drag is in
 -- progress, since the rebuild would end it. Does nothing without help shown or while collapsed.
 local function relayHelpOnPoll()
+    local helpWidth, polledWidth = views.helpWidth, views.polledWidth
     if helpWidth == nil or window.isCollapsed() then return end
     local w = window.current()
     assert(w, "help is only re-laid while its window exists")
     assert(polledWidth, "the view that wraps help sets both widths")
     local width = w.root.width
     local settled = layout.relayHelp(helpWidth, polledWidth, width)
-    polledWidth = width
+    views.polledWidth = width
     if settled and not prettyuiInternals.resizing(w) then window.rebuild(true) end
 end
 
 ---------------------------------------------------------------------------
--- The window (its chrome and collapsed button are shell/window.lua's)
+-- The window (its chrome and collapsed strip are shell/window.lua's)
 ---------------------------------------------------------------------------
-
--- The view the window shows. Logged out there is nothing to pick or tick, so the logged-out
--- notice shows whatever the mode.
----@return ChoreMode|"loggedOut"
-local function shownView()
-    if phase == "loggedOut" then return "loggedOut" end
-    return mode
-end
 
 -- What the collapsed strip shows: the next chore not done, or a notice while logged out or
 -- waiting for the clock.
@@ -549,55 +553,44 @@ end
 -- A new window's content for the current phase and mode.
 ---@param w prettyui.Window
 local function buildContent(w)
-    local shown = shownView()
-    if shown == "loggedOut" then
+    if phase == "loggedOut" then
         w:AddText("Log in to see your chores.")
-    elseif shown == "settings" then
+    elseif mode == "settings" then
         buildSettings(w)
-    elseif shown == "info" then
+    elseif mode == "info" then
         buildInfo(w)
     else
-        buildList(w, function()
-            pendingMode = "settings"
-        end, function()
-            pendingMode = "info"
-        end)
+        buildList(w)
     end
 end
 
-window.init({
-    parent = parent,
-    say = say,
-    -- Settings and info both go back to the list from the title-bar slot.
-    awayFromList = function()
-        local shown = shownView()
-        return shown == "settings" or shown == "info"
-    end,
-    -- The way back from settings or info, in the title-bar slot so it stays in reach however
-    -- far the view is scrolled. Like every view switch, it waits a tick.
-    backToList = function()
-        pendingMode = "list"
-    end,
-    -- The old window's rows, headings, count lines and help widths went with it.
-    clearViews = function()
-        rowViews, headings, stepperViews, settingsRowYs = {}, {}, {}, {}
-        helpWidth, polledWidth = nil, nil
-    end,
-    build = buildContent,
-    -- Close hides the rows, and the client sends no mouse-leave to a hidden layer, so a hovered
-    -- row would reopen with its hovered box.
-    onCollapse = function()
-        for _, rowView in pairs(rowViews) do
-            rows.unhover(rowView)
-        end
-    end,
-    strip = stripContent,
-    -- The strip only shows a chore not done, so its click ticks it, as on its list row.
-    onStripTick = onTick,
-})
+-- Settings and info both go back to the list from the title-bar slot.
+---@return boolean
+local function awayFromList()
+    return mode ~= "list"
+end
+
+-- The way back from settings or info, in the title-bar slot so it stays in reach however far
+-- the view is scrolled. Like every view switch, it waits a tick.
+local function backToList()
+    pendingMode = "list"
+end
+
+-- The old window's views went with it.
+local function clearViews()
+    views = { rows = {}, headings = {}, steppers = {} }
+end
+
+-- Close hides the rows, and the client sends no mouse-leave to a hidden layer, so a hovered
+-- row would reopen with its hovered box.
+local function onCollapse()
+    for _, rowView in pairs(views.rows) do
+        rows.unhover(rowView)
+    end
+end
 
 ---------------------------------------------------------------------------
--- Chores the plugin sees done (shell/detect.lua)
+-- Chores the plugin sees done (shell/detect.lua, shell/vars.lua)
 ---------------------------------------------------------------------------
 
 -- Keep a changed tracker: save it and show it. `changed` the same table as `tracker` means
@@ -622,27 +615,6 @@ local function apply(change)
     keep(changed)
     popups.enqueue(celebrate.decide(before, changed, chores, now, false))
 end
-
-popups.init({ parent = parent, say = say })
-rows.init({ say = say })
-
-detect.init({
-    chores = chores,
-    shops = shops,
-    collections = collections,
-    machines = machines,
-    parts = parts,
-    say = say,
-    apply = apply,
-})
-vars.init({
-    chores = chores,
-    rules = varRules,
-    parts = parts,
-    say = say,
-    apply = apply,
-    where = detect.playerTile,
-})
 
 ---------------------------------------------------------------------------
 -- Following the game
@@ -685,28 +657,11 @@ local function sync(clockTicked)
     end
 end
 
--- Rebuild settings for a count line come or gone (onPick), keeping the clicked chore's row
--- where it was in the window: the scroll moves by as much as the block above it grew or
--- shrank. Skipped if the view has moved on (logged out, collapsed, or no longer settings).
----@param pending { id: string, y: integer }
-local function rebuildCounts(pending)
-    local w = window.current()
-    if not w or window.isCollapsed() or shownView() ~= "settings" then return end
-    local scrollY = w.scrollY
-    window.rebuild(true)
-    local moved = settingsRowYs[pending.id]
-    local now = window.current()
-    if moved and now then now:SetScrollPosition(scrollY + moved - pending.y) end
-end
-
----------------------------------------------------------------------------
--- Start and stop
----------------------------------------------------------------------------
-
-Event.Logic.Subscribe("chore-tracker", function(ev)
+-- Each Logic tick: a view switch or settings rebuild left by a click, then on the poll the
+-- login, the layout, re-laid help and refitted rows, then the window's own upkeep.
+---@param ev LogicEventPayload
+local function onLogic(ev)
     vars.tick()
-    -- Before the view switch: a panel retired by expand last tick is past its click.
-    window.dropRetired()
     if pendingMode then
         mode = pendingMode
         pendingMode = nil
@@ -724,22 +679,57 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.
     window.tick()
-end)
+end
 
-Event.VarTransmit.Subscribe("chore-tracker", function(ev)
+-- The clock ticking over syncs at once; every var update also goes to shell/vars.lua.
+---@param ev VarTransmitEventPayload
+local function onVarTransmit(ev)
     if ev.var.id == CLOCK_ID and ev.var.typeName == CLOCK_DOMAIN then sync(true) end
     vars.onVarTransmit(ev)
-end)
+end
 
+---------------------------------------------------------------------------
+-- Start and stop
+---------------------------------------------------------------------------
+
+window.init({
+    parent = parent,
+    awayFromList = awayFromList,
+    backToList = backToList,
+    clearViews = clearViews,
+    build = buildContent,
+    onCollapse = onCollapse,
+    strip = stripContent,
+    -- The strip only shows a chore not done, so its click ticks it, as on its list row.
+    onStripTick = onTick,
+})
+popups.init({ parent = parent })
+detect.init({
+    chores = chores,
+    shops = shops,
+    collections = collections,
+    machines = machines,
+    parts = parts,
+    apply = apply,
+})
+vars.init({
+    chores = chores,
+    rules = varRules,
+    parts = parts,
+    apply = apply,
+    where = detect.playerTile,
+})
+popups.configure(celebrations)
+-- The login and clock before the window, so it opens on the right view. sync clears the
+-- popups and scans what detect and vars watch, so their inits come first.
+sync(false)
+window.open()
+
+Event.Logic.Subscribe("chore-tracker", onLogic)
+Event.VarTransmit.Subscribe("chore-tracker", onVarTransmit)
 Event.InventoryAdded.Subscribe("chore-tracker", detect.onInventoryAdded)
 Event.InventoryUpdated.Subscribe("chore-tracker", detect.onInventoryUpdated)
 Event.InventoryRemoved.Subscribe("chore-tracker", detect.onInventoryRemoved)
-
-celebrations = store.loadSettings()
-popups.configure(celebrations)
--- The login and clock first, so the window opens on the right view.
-sync(false)
-window.open()
 say("loaded", #chores, "chores")
 
 function PluginShutdown()

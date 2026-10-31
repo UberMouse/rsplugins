@@ -1,15 +1,31 @@
 -- shell/detect with a listed name the client's config lacks, as one might after a game update
 -- renames it. The harness faults on any config name not in docs/api/consts (to catch typos),
 -- so this runs detect.lua on its own, with globals that stand in for a config missing a name.
+-- Lines said go through shell/say.lua to the global `log`, which these specs stand in for too.
 
 local support = require("tests.chore-tracker.support")
 local detect = require("shell/detect")
 
+-- A stand-in for the client's `log` that appends each line, its parts joined by spaces, to
+-- `lines`.
+---@param lines string[]
+---@return fun(...)
+local function logInto(lines)
+    return function(...)
+        local parts = table.pack(...)
+        for i = 1, parts.n do
+            parts[i] = tostring(parts[i])
+        end
+        lines[#lines + 1] = table.concat(parts, " ", 1, parts.n)
+    end
+end
+
 describe("chore-tracker detect", function()
     local saved, said, found
     before_each(function()
-        saved = { config = _G.config, Inventory = _G.Inventory, Player = _G.Player }
+        saved = { config = _G.config, Inventory = _G.Inventory, Player = _G.Player, log = _G.log }
         said, found = {}, {}
+        _G.log = logInto(said)
         _G.config = {
             Inv = { INV = { name = "INV" }, KNOWN_SHOP = { name = "KNOWN_SHOP" } },
             Obj = { CERT_KNOWN = { name = "CERT_KNOWN" } },
@@ -36,6 +52,7 @@ describe("chore-tracker detect", function()
     end)
     after_each(function()
         _G.config, _G.Inventory, _G.Player = saved.config, saved.Inventory, saved.Player
+        _G.log = saved.log
     end)
 
     -- Init with a shop and a note the config lacks, then check each is said once and unwatched.
@@ -62,9 +79,6 @@ describe("chore-tracker detect", function()
                 { chore = "d1", invs = { "GONE_OUTPUT" }, proven = true },
                 { chore = "wshop", invs = { "GONE_OUTPUT" }, proven = true },
             },
-            say = function(...)
-                said[#said + 1] = table.concat({ ... }, " ")
-            end,
             apply = function()
                 error("nothing here is bought or collected")
             end,
@@ -75,9 +89,9 @@ describe("chore-tracker detect", function()
         detect.onInventoryRemoved({ inv = { configName = "GONE_SHOP" } })
         detect.onInventoryUpdated({ inv = { configName = "GONE_OUTPUT" } })
         assert.are.same({
-            "unknown inventory GONE_SHOP; not watched",
-            "unknown inventory GONE_OUTPUT; not watched",
-            "unknown obj CERT_GONE; not watched",
+            "[CHORES] unknown inventory GONE_SHOP; not watched",
+            "[CHORES] unknown inventory GONE_OUTPUT; not watched",
+            "[CHORES] unknown obj CERT_GONE; not watched",
         }, said)
         table.sort(found)
         assert.are.same({ "INV", "INV", "KNOWN_SHOP", "KNOWN_SHOP" }, found)
@@ -86,7 +100,6 @@ describe("chore-tracker detect", function()
     it("leaves an inventory or note the config lacks unwatched, saying so once", initAndCheck)
 
     it("fails at init naming a shop or collection chore that chores.lua lacks", function()
-        local function say() end
         local function apply() end
         assert.has_error(function()
             detect.init({
@@ -95,7 +108,6 @@ describe("chore-tracker detect", function()
                 collections = {},
                 machines = {},
                 parts = {},
-                say = say,
                 apply = apply,
             })
         end, "data/shops.lua names a chore that data/chores.lua lacks: nochore")
@@ -115,7 +127,6 @@ describe("chore-tracker detect", function()
                 },
                 machines = {},
                 parts = {},
-                say = say,
                 apply = apply,
             })
         end, "data/collections.lua names a chore that data/chores.lua lacks: nochore")
@@ -157,7 +168,6 @@ describe("chore-tracker detect", function()
             },
             machines = {},
             parts = {},
-            say = function() end,
             apply = function()
                 applied = applied + 1
             end,
@@ -207,6 +217,7 @@ describe("chore-tracker var detect", function()
     ---@param varPlayer table
     local function load(varPlayer)
         said, applied = {}, 0
+        _G.log = logInto(said)
         _G.var = { VarPlayer = varPlayer }
         flag.value = 0
         vars.init({
@@ -222,9 +233,6 @@ describe("chore-tracker var detect", function()
             },
             where = function() end,
             parts = {},
-            say = function(...)
-                said[#said + 1] = table.concat({ ... }, " ")
-            end,
             apply = function(change)
                 applied = applied + 1
                 change(require("core/state").new(), 29881543)
@@ -237,19 +245,22 @@ describe("chore-tracker var detect", function()
     end
 
     before_each(function()
-        saved = _G.var
+        saved = { var = _G.var, log = _G.log }
         load({ BASE = base, FLAG = flag })
     end)
     after_each(function()
-        _G.var = saved
+        _G.var, _G.log = saved.var, saved.log
     end)
 
     it("leaves a var the config lacks unwatched, dropping its rules, saying so once", function()
-        assert.are.same({ "unknown var GONE; not watched" }, said)
+        assert.are.same({ "[CHORES] unknown var GONE; not watched" }, said)
         flag.value = 1
         vars.onVarTransmit({ var = base })
         -- Only d1's rule is left to tick.
-        assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
+        assert.are.same(
+            { "[CHORES] unknown var GONE; not watched", "[CHORES] seen d1 done (FLAG)" },
+            said
+        )
         assert.are.equal(1, applied)
     end)
 
@@ -260,7 +271,6 @@ describe("chore-tracker var detect", function()
                 rules = { { chore = "nochore", done = { { "FLAG", "==", 1 } }, proven = true } },
                 where = function() end,
                 parts = {},
-                say = function() end,
                 apply = function() end,
             })
         end, "data/vars.lua names a chore that data/chores.lua lacks: nochore")
@@ -275,13 +285,16 @@ describe("chore-tracker var detect", function()
         -- Its first value, already true, is the baseline: no tick.
         flag.value = 1
         vars.onVarTransmit({ var = flag })
-        assert.are.same({ "unknown var GONE; not watched" }, said)
+        assert.are.same({ "[CHORES] unknown var GONE; not watched" }, said)
         -- A later change from that first value ticks as usual.
         flag.value = 0
         vars.onVarTransmit({ var = flag })
         flag.value = 1
         vars.onVarTransmit({ var = flag })
-        assert.are.same({ "unknown var GONE; not watched", "seen d1 done (FLAG)" }, said)
+        assert.are.same(
+            { "[CHORES] unknown var GONE; not watched", "[CHORES] seen d1 done (FLAG)" },
+            said
+        )
     end)
 
     it("matches a base by id and domain, not by object", function()

@@ -1,18 +1,19 @@
 -- The Chore Tracker's window chrome: making and remaking the PrettyUI window, its title-bar
--- slot button, collapsing it to a lone button and expanding it again, and saving where it all
--- is. What goes in the window is main.lua's: it hands in a `build` that fills a new window's
+-- slot button, collapsing it to a strip and expanding it again, and saving where it all is.
+-- What goes in the window is main.lua's: it hands in a `build` that fills a new window's
 -- content for the current view, and the window calls it on every (re)build.
 --
 -- The title-bar slot (where PrettyUI's close X would be) holds the hamburger, which collapses
--- the window, or in the settings and info views a back button to the list. Collapsed, the window is
--- closed and a strip stands with its hamburger where the slot was, and the next chore to do
--- (shell/strip.lua) to its left: Alt-drag it to move it (with the console closed), click the
--- chore to tick it, or click the hamburger to open the window again, grown left and down from
--- the button.
+-- the window, or in the settings and info views a back button to the list. Collapsed, the
+-- window is closed and a strip stands with its hamburger where the slot was, and the next
+-- chore to do (shell/strip.lua) to its left: Alt-drag it to move it (with the console closed),
+-- click the chore to tick it, or click the hamburger to open the window again, grown left and
+-- down from the button.
 
 local grips = require("shell/grips")
 local prettyuiInternals = require("shell/prettyui_internals")
 local layout = require("core/layout")
+local say = require("shell/say")
 local store = require("shell/store")
 local strip = require("shell/strip")
 
@@ -30,14 +31,13 @@ local COLLAPSE_TOOLTIP = { text = "Collapse" }
 local BACK_TOOLTIP = { text = "Back to the list" }
 
 ---@class ChoreWindowOpts
----@field parent ui.Component the plugin layer, where the window and the collapsed button go
----@field say fun(...) where log lines go (main.lua's, so they carry [CHORES])
+---@field parent ui.Component the plugin layer, where the window and the collapsed strip go
 ---@field awayFromList fun(): boolean whether a view the slot goes back from (settings or info)
 --- is the one to show; its slot button is then the back button
 ---@field backToList fun() the back button's action
 ---@field clearViews fun() forget the old window's content views; called once it is destroyed
 ---@field build fun(w: prettyui.Window) fill a new window's content for the current view
----@field onCollapse fun() called as the window closes to its button, just before Close
+---@field onCollapse fun() called as the window collapses to its strip, just before Close
 ---@field strip fun(): ChoreStrip what the collapsed strip shows now
 ---@field onStripTick fun(id: string) the collapsed strip's chore was clicked
 
@@ -51,7 +51,7 @@ local stripView = nil ---@type ChoreStripView? the collapsed panel's chore row a
 -- The row width the collapsed panel was sized for.
 local stripWidth = nil ---@type integer?
 -- A button's action mustn't destroy the button while PrettyUI is still handling its click, so
--- the collapsed panel left behind by expanding waits here for the next Logic tick (dropRetired).
+-- the collapsed panel left behind by expanding waits here for the next Logic tick (M.tick).
 local retiring = nil ---@type prettyui.Panel?
 -- The layout the store holds, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
@@ -99,7 +99,7 @@ local function screenPos(component)
 end
 
 -- Keep the grips' targets over their grips, shown only while the window is open.
-function M.followGrips()
+local function followGrips()
     grips.follow(collapsed == nil)
 end
 
@@ -122,8 +122,8 @@ local function expand()
     if retiring then retiring:Destroy() end
     retiring, collapsed, collapsedButton = collapsed, nil, nil
     stripView, stripWidth = nil, nil
-    M.followGrips()
-    opts.say("expanded from", x, y)
+    followGrips()
+    say("expanded from", x, y)
 end
 
 -- Close the window and put the collapsed strip so its hamburger is at (x, y) in the plugin
@@ -198,7 +198,7 @@ local function collapse()
     assert(openButton, "the window's hamburger called this")
     local x, y = screenPos(openButton.root)
     collapseAt(x, y)
-    opts.say("collapsed at", x, y)
+    say("collapsed at", x, y)
 end
 
 -- (Re)build the window at `at` for the current view. There's no PrettyUI call to clear a
@@ -244,7 +244,7 @@ local function build(at)
         }
     )
     opts.build(w)
-    M.followGrips()
+    followGrips()
 end
 
 -- Rebuild the window where it is, staying closed if collapsed. With `keepScroll`, the new
@@ -302,19 +302,15 @@ function M.saveLayoutIfChanged()
     savedLayout = now
 end
 
--- Destroy the collapsed panel an expand left behind, now that its click is over. main.lua
--- calls this early in each Logic tick, before the view switch.
-function M.dropRetired()
+-- The window's per-tick upkeep, called every Logic tick: the collapsed panel an expand left
+-- behind goes, now that its click is over (expand runs from a click, never inside Logic), a
+-- grip's target keeps up with the window moving or scrolling, and a stuck resize comes back.
+function M.tick()
     if retiring then
         retiring:Destroy()
         retiring = nil
     end
-end
-
--- The window's per-tick upkeep, called every Logic tick so a grip's target keeps up with the
--- window moving or scrolling, and a stuck resize comes back.
-function M.tick()
-    M.followGrips()
+    followGrips()
     prettyuiInternals.reviveResize(win, collapsed ~= nil)
 end
 

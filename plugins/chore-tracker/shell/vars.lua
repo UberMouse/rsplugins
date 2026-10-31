@@ -7,6 +7,7 @@
 
 local state = require("core/state")
 local varsCore = require("core/vars")
+local say = require("shell/say")
 
 local M = {}
 
@@ -18,7 +19,6 @@ local SETTLE_TICKS = 500
 ---@field chores Chore[]
 ---@field rules ChoreVarRule[]
 ---@field parts table<string, ChoreParts> chore id -> its parts (core/parts.lua), for rules naming one
----@field say fun(...: any)
 ---@field apply fun(change: ChoreChange) as ChoreDetectOptions.apply
 ---@field where fun(): ChoreTile? the player's tile, for rules that must be seen near one
 
@@ -70,7 +70,7 @@ function M.init(o)
                     table.insert(byBase[id], name)
                 else
                     missing[name] = true
-                    o.say("unknown var", name .. "; not watched")
+                    say("unknown var", name .. "; not watched")
                 end
             end
             if missing[name] then complete = false end
@@ -125,7 +125,7 @@ end
 ---@param changed table<string, true>
 local function onChanged(before, after, changed)
     assert(options, "init runs before any var event")
-    local say, parts = options.say, options.parts
+    local parts = options.parts
     local tile = options.where()
     options.apply(function(tracker, now)
         for _, entry in ipairs(watched) do

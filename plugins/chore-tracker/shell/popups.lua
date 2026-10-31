@@ -2,6 +2,8 @@
 -- AchievementPopups in the plugin layer. A popup lasts about four seconds and calls
 -- `onComplete` as it ends, which starts the next one in the queue.
 
+local say = require("shell/say")
+
 local M = {}
 
 -- Size in pixels and built-in sound (id.Sound, docs/api/consts/Sound.lua) per kind of popup:
@@ -15,16 +17,15 @@ local STYLES = {
 local Y_ANCHOR = 1 / 3
 
 local parent = nil ---@type ui.Component?
-local say = nil ---@type fun(...)?
 local sound = true
 local enabled = true
 local queue = {} ---@type ChoreCelebration[]
 local showing = nil ---@type prettyui.AchievementPopup? the popup on screen
 
--- Where the popups go and where their log lines go. Call once, before anything else.
----@param opts { parent: ui.Component, say: fun(...) }
+-- Where the popups go. Call once, before anything else.
+---@param opts { parent: ui.Component }
 function M.init(opts)
-    parent, say = opts.parent, opts.say
+    parent = opts.parent
 end
 
 local showNext
@@ -59,7 +60,6 @@ end
 
 -- Start the queue's first popup that PrettyUI can show; one it can't is dropped.
 showNext = function()
-    assert(say, "popups.init sets say first")
     while showing == nil and #queue > 0 do
         local c = table.remove(queue, 1)
         showing = show(c)

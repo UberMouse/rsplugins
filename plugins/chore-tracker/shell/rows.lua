@@ -17,6 +17,7 @@
 
 local fit = require("core/fit")
 local listlayout = require("core/listlayout")
+local say = require("shell/say")
 
 local M = {}
 
@@ -60,7 +61,6 @@ M.ROW_CURSOR = id.Cursor.CURSOR_HYPERLINK_HAND
 
 local FONT_NAME = "MUSEO_SANS_15PT_REGULAR"
 
-local say = nil ---@type fun(...)?
 -- Whether a failed measurement has been reported (once per load).
 local measureReported = false
 -- Icon names already reported missing, so each is logged once per load.
@@ -74,8 +74,6 @@ local reported = {} ---@type table<string, boolean>
 ---@field layer ui.Layer
 ---@field icon ui.Sprite? the icon showing; nil when there is none or its name didn't resolve
 ---@field iconX integer where the icon goes in the row
----@field iconSprites { obj: ui.Sprite?, sprite: ui.Sprite? } one sprite per kind of icon, made
---- as first needed
 ---@field label ui.Text
 ---@field box ui.Sprite? nil on a display-only row
 ---@field textX integer where the label starts in the row
@@ -86,19 +84,11 @@ local reported = {} ---@type table<string, boolean>
 ---@field content ui.Layer the layer that owns the tooltip: the row layer's parent
 ---@field baseTooltip ChoreTooltip? the tooltip as given to setTooltip
 ---@field ticked boolean? whether the box is ticked
--- Only dev/remote's press() reads onClick back (a dev tool). It stays in the submitted plugin,
--- unread there, so what ships is the code that was tested.
 ---@field onClick fun()? what a press on the row does; nil on a display-only row
 ---@field dimmed boolean? whether the icon and text are dimmed
 ---@field hovered boolean whether the mouse is over the row
 ---@field tooltipText string?
 ---@field tooltip prettyui.TooltipAttachment?
-
--- Where log lines go. Call once at load.
----@param opts { say: fun(...) }
-function M.init(opts)
-    say, reported, measureReported = opts.say, {}, false
-end
 
 -- The id behind an icon's constant name, or nil when this client has no such name (a game
 -- update renamed it, say), which is logged once. An unknown name reads -1 in id.Sprite and
@@ -106,7 +96,6 @@ end
 ---@param icon ChoreIcon
 ---@return integer?
 local function resolve(icon)
-    assert(say, "rows.init sets say first")
     local domain, name = icon.obj and "Obj" or "Sprite", icon.obj or icon.sprite
     local found = id[domain][name]
     if type(found) == "number" and found ~= -1 then return found end
@@ -163,27 +152,20 @@ function M.newSubheading(content, y, text)
     return label
 end
 
--- Show `icon` on the row, or no icon for nil or a name that doesn't resolve. An item's icon and
--- an interface sprite each get their own sprite, so a row whose icon changes kind never has
--- both set on one sprite (how the client draws that is unchecked).
+-- Show `icon` on the row, or no icon for nil or a name that doesn't resolve. A change of icon
+-- replaces the sprite, so one sprite never holds both an item's icon and an interface sprite
+-- (how the client draws that is unchecked).
 ---@param row ChoreRowView
 ---@param icon ChoreIcon?
 function M.setIcon(row, icon)
-    local found = icon and resolve(icon)
-    local kind = icon and icon.obj and "obj" or "sprite"
+    if row.icon then row.icon:Destroy() end
     row.icon = nil
-    for k, sprite in pairs(row.iconSprites) do
-        sprite.hidden = k ~= kind or found == nil
-    end
+    local found = icon and resolve(icon)
     if not (icon and found) then return end
-    local sprite = row.iconSprites[kind]
-    if not sprite then
-        sprite = ui.Sprite.new(row.layer)
-        sprite:SetPos(row.iconX, (ROW_HEIGHT - ICON_SIZE) // 2)
-        sprite:SetSize(ICON_SIZE, ICON_SIZE)
-        sprite.clickthrough = true
-        row.iconSprites[kind] = sprite
-    end
+    local sprite = ui.Sprite.new(row.layer)
+    sprite:SetPos(row.iconX, (ROW_HEIGHT - ICON_SIZE) // 2)
+    sprite:SetSize(ICON_SIZE, ICON_SIZE)
+    sprite.clickthrough = true
     if icon.obj then
         sprite:SetAssociatedObject(found)
     else
@@ -248,7 +230,6 @@ function M.new(content, y, icon, onClick, opts)
             layer = layer,
             content = content,
             iconX = left,
-            iconSprites = {},
             label = label,
             textX = textX,
             rightGap = rightGap,
@@ -322,7 +303,6 @@ end
 -- Log, once per load, that the client font can't measure text.
 ---@param err any the measurement's error
 local function reportMeasure(err)
-    assert(say, "rows.init sets say first")
     if measureReported then return end
     measureReported = true
     say("cannot measure text with the client font; names stay unshortened: " .. tostring(err))

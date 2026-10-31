@@ -466,6 +466,46 @@ describe("chore-tracker window", function()
         assert.are.same(before, h.ui:layout(panel))
     end)
 
+    -- The live icon sprites of the strip's row: its sprites other than the tick box.
+    ---@param h table
+    ---@return table[] the sprites' fake states
+    local function stripIcons(h)
+        local boxes = {
+            [helpers.BOX_EMPTY] = true,
+            [helpers.BOX_EMPTY_HOVERED] = true,
+            [helpers.BOX_TICKED] = true,
+            [helpers.BOX_TICKED_HOVERED] = true,
+        }
+        local found = {}
+        for _, proxy in ipairs(h.ui:children(h.ui:get("Panel").root)) do
+            local part = assert(uiFake.stateOf(proxy))
+            if part.class == "ui.Layer" then
+                for _, child in ipairs(h.ui:children(proxy)) do
+                    local cs = assert(uiFake.stateOf(child))
+                    if cs.class == "ui.Sprite" and not boxes[cs.spriteID] then
+                        found[#found + 1] = cs
+                    end
+                end
+            end
+        end
+        return found
+    end
+
+    it("keeps one icon on the strip's row as it moves to a chore with another kind", function()
+        local h = loaded()
+        togglePicks(h, { "player-owned-ports", "daily-challenge" })
+        helpers.collapse(h)
+        local icons = stripIcons(h)
+        assert.are.equal(1, #icons)
+        assert.are.equal(obj("POP_LOG"), icons[1].objectID)
+
+        assert.is_true(h.ui:click(assert(strip(h).label, "the strip shows a chore")))
+        icons = stripIcons(h)
+        assert.are.equal(1, #icons)
+        assert.are.equal(sprite("XP_TOKEN_0"), icons[1].spriteID)
+        assert.are.equal(-1, icons[1].objectID)
+    end)
+
     it("shows the logged-out notice while collapsed, narrowed with its hamburger put", function()
         local h = loaded()
         -- A long name, so the notice needs a narrower strip.

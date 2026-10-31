@@ -75,7 +75,7 @@ local RESIZE_CURSORS = {
 -- good. Resize off with the title bar not held is that stuck state; turn it back on. A
 -- collapsed (or missing) window is left alone.
 ---@param w prettyui.Window? the window, nil before it is built
----@param isCollapsed boolean whether the window is collapsed to its button
+---@param isCollapsed boolean whether the window is collapsed to its strip
 function M.reviveResize(w, isCollapsed)
     local win = w ---@type table?
     if isCollapsed or not win then return end

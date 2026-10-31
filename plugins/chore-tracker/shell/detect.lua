@@ -10,6 +10,7 @@
 
 local detectCore = require("core/detect")
 local state = require("core/state")
+local say = require("shell/say")
 
 local M = {}
 
@@ -24,7 +25,6 @@ local BACKPACK = "INV"
 ---@field collections ChoreCollection[]
 ---@field machines ChoreMachine[]
 ---@field parts table<string, ChoreParts> chore id -> its parts (core/parts.lua)
----@field say fun(...: any)
 ---Run `change` on the tracker at the clock's minute and keep what it returns (the same
 ---table means nothing changed); skipped, `change` uncalled, without a character and a
 ---clock.
@@ -59,9 +59,8 @@ local noteCounts = nil ---@type table<string, integer>?
 
 -- Watch inventory `name` if the client's config has it; say so and return false if not.
 ---@param name string
----@param say fun(...: any)
 ---@return boolean
-local function watchInv(name, say)
+local function watchInv(name)
     local invType = config.Inv[name] --[[@as InvType?]]
     if not invType then
         say("unknown inventory", name .. "; not watched")
@@ -76,7 +75,7 @@ local function indexShops(o)
     shopIndex = {}
     -- core/detect resolves every shop's chore, watched or not.
     for name, hits in pairs(detectCore.index(o.shops, o.chores)) do
-        if watchInv(name, o.say) then shopIndex[name] = hits end
+        if watchInv(name) then shopIndex[name] = hits end
     end
 end
 
@@ -91,7 +90,7 @@ local function indexMachines(o)
         end
     end
     for name in pairs(machineChores) do
-        if not watchInv(name, o.say) then machineChores[name] = nil end
+        if not watchInv(name) then machineChores[name] = nil end
     end
 end
 
@@ -109,7 +108,7 @@ local function indexCollections(o)
                 if obj then
                     noteNames[#noteNames + 1], objTypes[name] = name, obj
                 else
-                    o.say("unknown obj", name .. "; not watched")
+                    say("unknown obj", name .. "; not watched")
                 end
             end
         end
@@ -202,7 +201,7 @@ end
 ---@param name string
 local function onPurchase(name)
     assert(options, "init runs before any inventory event")
-    local say, parts = options.say, options.parts
+    local parts = options.parts
     options.apply(function(tracker, now)
         for _, entry in ipairs(shopIndex[name]) do
             local own = parts[entry.chore.id]
@@ -220,7 +219,7 @@ end
 ---@param after table<string, integer>
 local function onNotesRose(before, after)
     assert(options, "init runs before any inventory event")
-    local say, at = options.say, M.playerTile()
+    local at = M.playerTile()
     if not at then return end
     for _, hit in ipairs(collectionHits) do
         local collection = hit.collection
@@ -242,7 +241,6 @@ end
 ---@param name string
 local function onCollected(name)
     assert(options, "init runs before any inventory event")
-    local say = options.say
     options.apply(function(tracker, now)
         for _, chore in ipairs(machineChores[name]) do
             local ticked = state.autoMark(tracker, chore, now)

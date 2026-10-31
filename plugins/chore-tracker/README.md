@@ -73,8 +73,8 @@ game already gives your client, never does anything in game for you, and sends n
   time and last about four seconds, whether the window is open, collapsed or in settings. A
   popup already showing or waiting isn't queued again, so ticking, unticking and re-ticking a
   chore while its popup is showing or waiting shows it once. In the settings view, under
-  **Celebrations**, untick "Celebration popups" to turn them off, or "Popup sound" to keep them quiet. Both
-  are saved for all characters.
+  **Celebrations**, untick "Celebration popups" to turn them off, or "Popup sound" to keep
+  them quiet. Both are saved for all characters.
 
 ## Chores it ticks for you
 

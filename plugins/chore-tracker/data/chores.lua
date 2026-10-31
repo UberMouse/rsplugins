@@ -36,6 +36,12 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
+-- Both periods of each Dream of Iaia chore share one tooltip.
+local IAIA_RESOURCE_DESC =
+    "Turn stored resources into skilling station XP, 2 resources to 1 XP<br>How often depends on how you split your workers"
+local IAIA_XP_DESC =
+    "Use up the XP stored in your skilling stations<br>How often depends on how you split your workers"
+
 ---@type Chore[]
 return {
     -- Daily: activities
@@ -187,7 +193,7 @@ return {
         period = "daily",
         category = "upkeep",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
-        desc = "Turn stored resources into skilling station XP, 2 resources to 1 XP<br>How often depends on your worker split: 70 workers on one resource fill its 150k cap in about 36 hours",
+        desc = IAIA_RESOURCE_DESC,
         links = {},
     },
     {
@@ -403,7 +409,7 @@ return {
         period = "weekly",
         category = "upkeep",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
-        desc = "Turn stored resources into skilling station XP, 2 resources to 1 XP<br>How often depends on your worker split: 70 workers on one resource fill its 150k cap in about 36 hours",
+        desc = IAIA_RESOURCE_DESC,
         links = {},
     },
     {
@@ -412,7 +418,7 @@ return {
         period = "weekly",
         category = "upkeep",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
-        desc = "Use up the XP stored in your skilling stations<br>How often depends on your worker split: all workers on one resource fill a station's 350k cap in about a week",
+        desc = IAIA_XP_DESC,
         links = {},
     },
     {
@@ -636,7 +642,7 @@ return {
         name = "Dream of Iaia XP",
         period = "monthly",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
-        desc = "Use up the XP stored in your skilling stations<br>How often depends on your worker split: all workers on one resource fill a station's 350k cap in about a week",
+        desc = IAIA_XP_DESC,
         links = {},
     },
     {

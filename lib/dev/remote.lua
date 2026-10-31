@@ -26,6 +26,11 @@
 --               testing and event order (rsdev.py click does those).
 -- The scratch env is a convenience, not a sandbox: the snippet is trusted as `exec` is.
 --
+-- Snippets must not subscribe to events: neither a reset nor remote.shutdown knows about a
+-- subscription made through the plugin's Event, so its callback would keep firing after them,
+-- even after the plugin is disabled (a left-over subscription is suspected of a crash on
+-- `prl`, docs/api-concepts.md). Use the dev bridge's eval probes for that.
+--
 -- A snippet runs inside the tee's Logic callback. One that runs past the client's 1000 ms
 -- per-call limit is killed by the client, which can take the plugin down with it; reload it
 -- (`prl <name>`). Keep snippets short.
@@ -41,6 +46,8 @@ remote.limits = {
     valueBytes = 64 * 1024,
     outputLines = 200,
     lineBytes = 2 * 1024,
+    -- At most tee.limits.resultBytes, which caps a POST's results: a bigger one still goes
+    -- alone, and could take the POST past the daemon's cap.
     resultBytes = 1024 * 1024,
 }
 
@@ -166,10 +173,9 @@ local function newScratch()
     return env
 end
 
--- Run one command for the tee and return its encoded result.
 ---@param cmd { id: string, kind: string, arg: string }
 ---@return string
-local function run(cmd)
+local function runCommand(cmd)
     if cmd.kind == "reset" then
         scratch = newScratch()
         return command.resultEntry({ id = cmd.id, ok = true }, remote.limits)
@@ -202,6 +208,19 @@ local function run(cmd)
         nvalues = result.n - 1,
         output = printed,
     }, remote.limits)
+end
+
+-- Run one command for the tee and return its encoded result. A failure of remote's own (the
+-- snippet's are caught in runCommand) still answers, so the CLI isn't left waiting for a result
+-- that never comes.
+---@param cmd { id: string, kind: string, arg: string }
+---@return string
+local function run(cmd)
+    local ok, entry = pcall(runCommand, cmd)
+    if ok then return entry end
+    output = nil
+    local why = "dev/remote failed: " .. batch.text(entry)
+    return command.resultEntry({ id = cmd.id, ok = false, error = why }, remote.limits)
 end
 
 -- Start taking commands for the plugin whose environment is `env` (main.lua's `_ENV`), over

@@ -269,9 +269,11 @@ contains it; several matches need `--nth N`. Before touching the pointer, each c
 2. refuses an interface scale other than 100, the only one where plugin units are window pixels;
 3. refuses a point outside the window, or one not on a shown, non-clickthrough plugin component
    other than the plugin layer itself (that component stops the click reaching the game; `enabled`
-   doesn't count, since clickable rows read false). For `drag`, both ends;
-4. waits up to `--idle-wait` (30 s) until you've left mouse and keyboard alone for 3 s
-   (`xprintidle`), else refuses.
+   doesn't count, since clickable rows read false). For `drag`, every point the pointer passes
+   with the button held: the press, each step and the release;
+4. checks that you've left mouse and keyboard alone for 3 s, and since before the walk began
+   (`xprintidle`). If not, it waits up to `--idle-wait` (30 s, else refuses) and goes back to
+   step 1: what you did may have moved or closed the UI the walk found.
 
 Then it notes where the pointer and focus were and moves the pointer onto the point (i3's focus
 follows it). If the pointer isn't where it was put, or the client lost focus, it stops: someone
@@ -436,7 +438,9 @@ refuses at once (exit 2) when that plugin's remote isn't polling, naming the lik
   workspace, but it skips the client's hit testing and event order: use `rsdev.py click` when
   those matter. Several matches raise an error naming them; pass `nth`.
 
-Caps are the bridge eval's (values 64 KB, 200 output lines of 2 KB). A snippet runs inside the
+Caps are the bridge eval's: each string value is cut at 4096 bytes (it then ends in
+`<+N bytes>`), all of a result's values are dropped once they pass 64 KB encoded (the result
+says `truncated`), and 200 output lines of 2 KB are kept. A snippet runs inside the
 tee's Logic callback, so one past the client's 1000 ms limit can take the plugin down; `prl` it.
 
 **Opting a plugin in**, after the tee:

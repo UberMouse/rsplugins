@@ -53,6 +53,8 @@ if [[ -e "$dir/dev" || -L "$dir/dev" ]]; then
     report "dev entry at plugins/$plugin/dev"
 fi
 
+# The require is the backstop. The call sites are matched by the names the README's opt-in
+# uses (tee, remote), so a module under another local name only fails on its require.
 lua_pattern="require *\(? *([\"']|\[=*\[)dev[./]|tee\.(install|shutdown)|remote\.(install|shutdown|expose)"
 while IFS= read -r hit; do
     report "${hit#"$root"/}"

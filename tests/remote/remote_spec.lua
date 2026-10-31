@@ -95,6 +95,16 @@ describe("dev remote", function()
         assert.is_not_nil(r.error:find("boom", 1, true))
     end)
 
+    it("answers a command its own code fails on, so eval isn't left waiting", function()
+        -- Shut down while the tee still polls: the scratch env is gone, so the eval's assert fails.
+        local h = loaded("function stopRemote() remote.shutdown() end")
+        untilPosts(h, 1)
+        h.env.stopRemote()
+        local r = eval(h, "1")
+        assert.are.same({ "c1", false }, { r.id, r.ok })
+        assert.is_not_nil(r.error:find("dev/remote failed", 1, true))
+    end)
+
     it("keeps snippet globals in a scratch env, cleared by reset", function()
         local h = loaded("x = 'plugin'")
         untilPosts(h, 1)

@@ -1734,6 +1734,11 @@ def tree_line(parent, kind, x, y, w, h, flags, text=""):
     return f"{parent}\t{kind}\t{x}\t{y}\t{w}\t{h}\t{flags}\t{text}"
 
 
+def tree_nodes(*lines):
+    """The parsed nodes of a ui-tree reply holding `lines`."""
+    return rsdev.parse_ui_tree([100, False, "\n".join(lines)])[2]
+
+
 # A plugin layer holding a 300x200 window (not clickthrough) at 100,100, with a row whose
 # enabled flag is false (as chore-tracker's read) and a clickthrough label on it, a row scrolled
 # below the window's bottom, and a hidden layer.
@@ -1784,6 +1789,15 @@ class UiTreeTests(unittest.TestCase):
         lines = TREE[2].split("\n")
         _, _, nodes = rsdev.parse_ui_tree([100, True, "\n".join(lines[:3]), "\n".join(lines[3:])])
         self.assertEqual(len(nodes), 7)
+
+    def test_fetch_refuses_a_reply_cut_short(self):
+        # Eval drops all the values once they pass its cap, and says truncated.
+        reply = {"ok": True, "values": [], "nvalues": 3, "truncated": True}
+        with mock.patch.object(rsdev, "send_command", return_value=(0, reply)):
+            with self.assertRaises(rsdev.InputError) as caught:
+                rsdev.fetch_ui_tree(SimpleNamespace())
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("cut the ui-tree reply short", str(caught.exception))
 
     def test_blocking_node(self):
         # A clickthrough label passes the click to the row under it; a disabled row still counts.
@@ -1840,13 +1854,13 @@ GEOMETRY = (1922, 18, 1000, 800)
 class FakeDesk:
     """A stand-in for rsdev.run_tool on the input side: one client window at GEOMETRY, a pointer
     that xdotool moves, and i3's focus following it. Records argvs. `idle` is xprintidle's
-    answer; `nudge` moves the pointer elsewhere right after the first move into the window, as
-    a user grabbing the mouse would."""
+    answer, or a list of answers in turn (the last repeats); `nudge` moves the pointer elsewhere
+    right after the first move into the window, as a user grabbing the mouse would."""
 
     def __init__(self, idle=5000, nudge=False):
         self.calls = []
         self.pointer = (50, 60)
-        self.idle = idle
+        self.idle = idle if isinstance(idle, list) else [idle]
         self.nudge = nudge
         self.focus = 777  # the terminal
 
@@ -1864,7 +1878,7 @@ class FakeDesk:
                 f"  Width: {w}\n  Height: {h}\n  Map State: IsViewable\n"
             )
         elif argv[0] == "xprintidle":
-            out = f"{self.idle}\n"
+            out = f"{self.idle.pop(0) if len(self.idle) > 1 else self.idle[0]}\n"
         elif argv[1] == "getmouselocation":
             out = f"X={self.pointer[0]}\nY={self.pointer[1]}\nSCREEN=0\nWINDOW=1\n"
         elif argv[1] == "getactivewindow":
@@ -1893,12 +1907,16 @@ class InputCommandTests(unittest.TestCase):
         _, _, nodes = rsdev.parse_ui_tree(TREE)
         self.nodes = nodes
 
-    def run_cli(self, desk, *argv, sleep=None):
-        """rsdev.main(argv) against `desk`, the bridge's tree replaced by TREE; (code, stderr)."""
+    def run_cli(self, desk, *argv, sleep=None, trees=None):
+        """rsdev.main(argv) against `desk`, the bridge's tree replaced by TREE, or by each of
+        `trees` (node lists) on successive walks; (code, stderr)."""
         err = StringIO()
+        walks = [(100, nodes) for nodes in trees] if trees else None
         with (
             mock.patch.object(rsdev, "run_tool", desk),
-            mock.patch.object(rsdev, "fetch_ui_tree", return_value=(100, self.nodes)),
+            mock.patch.object(
+                rsdev, "fetch_ui_tree", return_value=(100, self.nodes), side_effect=walks
+            ),
             mock.patch("shutil.which", return_value="/bin/x"),
             mock.patch("time.sleep", sleep or (lambda s: None)),
             mock.patch("sys.stderr", err),
@@ -1957,6 +1975,41 @@ class InputCommandTests(unittest.TestCase):
                 ["mouseup", "1"],
             ],
         )
+
+    def test_drag_path_off_plugin_ui_is_refused(self):
+        # Two windows with game world between them: both ends are plugin UI, the middle isn't.
+        two = tree_nodes(
+            tree_line(0, 20, 0, 0, 1000, 800, "cv"),
+            tree_line(1, 20, 100, 100, 100, 100, "v"),
+            tree_line(1, 20, 300, 100, 100, 100, "v"),
+        )
+        desk = FakeDesk()
+        code, err = self.run_cli(
+            desk, "drag", "150", "150", "350", "150", "--steps", "2", trees=[two]
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("250,150 (on the drag's path) is not on plugin UI", err)
+        self.assertEqual(desk.xdotool(), [])
+
+    def test_ui_closed_while_waiting_for_the_user_is_refused(self):
+        # Active at the first walk, idle after: the second walk finds the window gone.
+        closed = tree_nodes(tree_line(0, 20, 0, 0, 1000, 800, "cv"))
+        desk = FakeDesk(idle=[100, 5000])
+        code, err = self.run_cli(desk, "click", "200", "130", trees=[self.nodes, closed])
+        self.assertEqual(code, 2)
+        self.assertIn("would reach the game", err)
+        self.assertEqual(desk.xdotool(), [])
+
+    def test_target_found_again_after_waiting_for_the_user(self):
+        moved = tree_nodes(
+            tree_line(0, 20, 0, 0, 1000, 800, "cv"),
+            tree_line(1, 20, 500, 400, 300, 200, "v"),
+            tree_line(2, 2, 520, 420, 200, 30, "cv", "Rune Shop Run (0/5)"),
+        )
+        desk = FakeDesk(idle=[100, 5000])
+        code, _ = self.run_cli(desk, "click", "--text", "rune shop", trees=[self.nodes, moved])
+        self.assertEqual(code, 0)
+        self.assertEqual(desk.xdotool()[0], ["mousemove", "--window", WIN, "620", "435"])
 
     def test_user_active_is_waited_for_then_refused(self):
         desk = FakeDesk(idle=100)

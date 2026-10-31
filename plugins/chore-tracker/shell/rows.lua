@@ -82,7 +82,9 @@ local reported = {} ---@type table<string, boolean>
 ---@field content ui.Layer the layer that owns the tooltip: the row layer's parent
 ---@field baseTooltip ChoreTooltip? the tooltip as given to setTooltip
 ---@field ticked boolean? whether the box is ticked
----@field onClick fun() what a press on the row does, kept so a test or dev tool can press it
+-- Only dev/remote's press() reads onClick back (a dev tool). It stays in the submitted plugin,
+-- unread there, so what ships is the code that was tested.
+---@field onClick fun() what a press on the row does
 ---@field dimmed boolean? whether the icon and text are dimmed
 ---@field hovered boolean whether the mouse is over the row
 ---@field tooltipText string?

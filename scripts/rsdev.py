@@ -1323,6 +1323,8 @@ def fetch_ui_tree(args):
     code, reply = send_command(args, "eval", source)
     if code:
         raise InputError(2, "could not walk the plugin layer through the bridge (above)")
+    if reply.get("truncated"):
+        raise InputError(2, "the bridge cut the ui-tree reply short: over eval's size caps?")
     try:
         scale, truncated, nodes = parse_ui_tree(reply.get("values", []))
     except ValueError as err:
@@ -1357,12 +1359,17 @@ def active_window():
     return int(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip().isdigit() else None
 
 
-def wait_for_idle(timeout):
+def idle_ms():
+    """Milliseconds since the user last touched mouse or keyboard. Our own events reset it too,
+    so it only means the user before the first of them."""
+    return int(tool_text(["xprintidle"]).strip())
+
+
+def wait_for_idle(deadline, timeout):
     """Wait until the user has left mouse and keyboard alone for IDLE_MS; InputError(2) if they
-    haven't within `timeout` seconds. Only before the first event: ours reset the idle time too."""
-    deadline = time.monotonic() + timeout
+    haven't by `deadline` (time.monotonic()), `timeout` seconds after the command began."""
     while True:
-        idle = int(tool_text(["xprintidle"]).strip())
+        idle = idle_ms()
         if idle >= IDLE_MS:
             return
         if time.monotonic() >= deadline:
@@ -1382,17 +1389,16 @@ def audit(args, text):
 
 
 class PointerSession:
-    """The pointer, borrowed for one command: entering waits for the user to be idle and notes
-    where the pointer and focus were; leaving releases any held button and puts both back."""
+    """The pointer, borrowed for one command (checked_input has seen the user idle): entering
+    notes where the pointer and focus were; leaving releases any held button and puts both back."""
 
-    def __init__(self, win, geometry, idle_wait):
-        self.win, self.geometry, self.idle_wait = win, geometry, idle_wait
+    def __init__(self, win, geometry):
+        self.win, self.geometry = win, geometry
         self.held = None
         self.home = None
         self.focus = None
 
     def __enter__(self):
-        wait_for_idle(self.idle_wait)
         self.home = pointer_location()
         self.focus = active_window()
         return self
@@ -1434,17 +1440,19 @@ class PointerSession:
         self.held = None
 
 
-def input_target(args, nodes, geometry, x, y, text, nth):
-    """The window point to act on: (x, y), or the centre of the node showing `text`. Refused
-    with InputError(2) unless it is inside the window and on a plugin component that takes it."""
+def input_target(nodes, geometry, x, y, text=None, nth=None, where=""):
+    """The window point to act on, with its node: (x, y), or the centre of the node showing
+    `text`. Refused with InputError(2) unless it is inside the window and on a plugin component
+    that takes it. `where` says which point it is in the refusal."""
     if text is not None:
         x, y = centre(find_text(nodes, text, nth))
     if not (0 <= x < geometry[2] and 0 <= y < geometry[3]):
-        raise InputError(2, f"{x},{y} is outside the {geometry[2]}x{geometry[3]} window")
+        raise InputError(2, f"{x},{y}{where} is outside the {geometry[2]}x{geometry[3]} window")
     node = blocking_node(nodes, x, y)
     if node is None:
         raise InputError(
-            2, f"{x},{y} is not on plugin UI that takes clicks; refused (it would reach the game)"
+            2,
+            f"{x},{y}{where} is not on plugin UI that takes clicks; refused (it would reach the game)",
         )
     return x, y, node
 
@@ -1467,17 +1475,39 @@ def prepare_input(args):
     return win, geometry, nodes
 
 
+def checked_input(args, plan):
+    """The command's points, checked on a walk of the plugin layer that the user left alone:
+    (window, geometry, points). `plan(geometry, nodes)` returns the points, raising InputError(2)
+    for one it refuses, so a bad target is refused at once. If the user was active, what they did
+    may have moved or closed the UI the walk found, so wait for them (up to --idle-wait) and walk
+    again."""
+    deadline = time.monotonic() + args.idle_wait
+    while True:
+        started = time.monotonic()
+        win, geometry, nodes = prepare_input(args)
+        points = plan(geometry, nodes)
+        walked_ms = (time.monotonic() - started) * 1000
+        # Idle for IDLE_MS, and since before the walk began.
+        if idle_ms() >= max(IDLE_MS, walked_ms):
+            return win, geometry, points
+        wait_for_idle(deadline, args.idle_wait)
+
+
 def shoot_now(args):
     """A shot of the client while the pointer is still where the command left it."""
     take_shots(SimpleNamespace(**{**vars(args), "count": 1, "every": 1, "delay": args.shot_delay}))
 
 
-def run_input(args, action):
-    """Run an input command's `action(win, geometry, nodes)` and turn its errors into exit codes;
-    each outcome is audited."""
+def run_input(args, plan, perform):
+    """Run an input command: its points from `plan` (checked_input), then `perform(session,
+    points)` with the pointer borrowed, which returns what it did. With --shot, a shot follows
+    while the pointer is still there. Errors become exit codes; each outcome is audited."""
     try:
-        win, geometry, nodes = prepare_input(args)
-        what = action(win, geometry, nodes)
+        win, geometry, points = checked_input(args, plan)
+        with PointerSession(win, geometry) as s:
+            what = perform(s, points)
+            if args.shot:
+                shoot_now(args)
     except ShotError as err:  # InputError included
         audit(args, f"{args.cmd} refused/stopped ({err.code}): {err}")
         print(f"rsdev: {err}", file=sys.stderr)
@@ -1491,55 +1521,69 @@ def run_input(args, action):
 
 
 def cmd_click(args):
-    def action(win, geometry, nodes):
-        x, y, node = input_target(args, nodes, geometry, args.x, args.y, args.text, args.nth)
-        button = 3 if args.right else 1
-        with PointerSession(win, geometry, args.idle_wait) as s:
-            s.move(x, y)
-            s.press(button)
-            time.sleep(args.hold)  # a press and release in one tick arrive release-first
-            s.release(button)
-            if args.shot:
-                shoot_now(args)
+    button = 3 if args.right else 1
+
+    def plan(geometry, nodes):
+        return input_target(nodes, geometry, args.x, args.y, args.text, args.nth)
+
+    def perform(s, target):
+        x, y, node = target
+        s.move(x, y)
+        s.press(button)
+        time.sleep(args.hold)  # a press and release in one tick arrive release-first
+        s.release(button)
         side = "right-" if args.right else ""
         return f"{side}clicked {x},{y} on #{node['index']} {type_name(node['type'])}"
 
-    return run_input(args, action)
+    return run_input(args, plan, perform)
 
 
 def cmd_move(args):
-    def action(win, geometry, nodes):
-        x, y, node = input_target(args, nodes, geometry, args.x, args.y, args.text, args.nth)
-        with PointerSession(win, geometry, args.idle_wait) as s:
-            s.move(x, y)
-            time.sleep(args.stay)
-            if args.shot:
-                shoot_now(args)
+    def plan(geometry, nodes):
+        return input_target(nodes, geometry, args.x, args.y, args.text, args.nth)
+
+    def perform(s, target):
+        x, y, node = target
+        s.move(x, y)
+        time.sleep(args.stay)
         return f"hovered {x},{y} on #{node['index']} {type_name(node['type'])} for {args.stay:g} s"
 
-    return run_input(args, action)
+    return run_input(args, plan, perform)
+
+
+def drag_path(x1, y1, x2, y2, steps):
+    """The points a drag moves through after the press at (x1, y1), ending at (x2, y2)."""
+    return [(x1 + (x2 - x1) * i // steps, y1 + (y2 - y1) * i // steps) for i in range(1, steps + 1)]
 
 
 def cmd_drag(args):
-    def action(win, geometry, nodes):
-        x1, y1, start = input_target(args, nodes, geometry, args.x, args.y, None, None)
-        x2, y2, _ = input_target(args, nodes, geometry, args.x2, args.y2, None, None)
-        with PointerSession(win, geometry, args.idle_wait) as s:
-            s.move(x1, y1)
-            s.press(1)
-            time.sleep(args.hold)
-            # In steps a Logic tick or more apart, so the plugin's ONHOLD sees the pointer travel.
-            for i in range(1, args.steps + 1):
-                s.move(x1 + (x2 - x1) * i // args.steps, y1 + (y2 - y1) * i // args.steps, False)
-                time.sleep(args.duration / args.steps)
-            time.sleep(SETTLE)
-            s.check(x2, y2)
-            s.release(1)
-            if args.shot:
-                shoot_now(args)
-        return f"dragged {x1},{y1} -> {x2},{y2} from #{start['index']} {type_name(start['type'])}"
+    def plan(geometry, nodes):
+        # Every point the pointer passes with the button held, not just the ends. The release
+        # lands where this walk found plugin UI; a drag that reflows the UI can't be rechecked
+        # mid-drag, as the button must come up somewhere.
+        start = input_target(nodes, geometry, args.x, args.y)
+        path = [
+            input_target(nodes, geometry, x, y, where=" (on the drag's path)")
+            for x, y in drag_path(args.x, args.y, args.x2, args.y2, args.steps)
+        ]
+        return start, path
 
-    return run_input(args, action)
+    def perform(s, points):
+        (x1, y1, node), path = points
+        s.move(x1, y1)
+        s.press(1)
+        time.sleep(args.hold)
+        # In steps a Logic tick or more apart, so the plugin's ONHOLD sees the pointer travel.
+        for x, y, _ in path:
+            s.move(x, y, False)
+            time.sleep(args.duration / args.steps)
+        x2, y2, _ = path[-1]
+        time.sleep(SETTLE)
+        s.check(x2, y2)
+        s.release(1)
+        return f"dragged {x1},{y1} -> {x2},{y2} from #{node['index']} {type_name(node['type'])}"
+
+    return run_input(args, plan, perform)
 
 
 def cmd_ui(args):

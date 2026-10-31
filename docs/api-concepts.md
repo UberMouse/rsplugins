@@ -708,6 +708,11 @@ example, `InventoryProxy` has `GetCategoryTotal`, `GetSlot`, `GetSlots`, `GetTot
     that was reloaded mid-upload.
   - `Get` or `AddHeader` on a request that hasn't finished raises
     `This request is already being executed`. (dev-bridge eval, 2026-10-26)
+  - **A 200's body reaches `data` unchanged**, tabs and newlines included: the log tee's
+    `/tee` replies carry `rsdev.py eval --plugin` commands as `<id>\t<kind>\t<arg>\n` lines,
+    and `parseReply` refuses one without its final newline. Every command of the in-client
+    check (state reads, presses, an ambiguous press's error) came back, so each reply arrived
+    whole. Only short replies (under 1 KB) were seen. (chore-tracker, 2026-10-31)
 
 ## Chat
 
@@ -757,7 +762,9 @@ Found in the beta client (2026-10-20), not in the official docs:
   copied into `plugins/`, as the flake shellHook does for the third-party dev plugins.
 - **Each Lua call can run for at most 1000 ms.** The client then aborts it with
   `Maximum function execution time of 1000 ms exceeded`. Spread big jobs across `Logic` ticks
-  (see `plugins/var-dump`).
+  (see `plugins/var-dump`). Walking 1596 components in one call fit: the dev bridge's
+  `probes/ui-tree.lua` run 12 times over chore-tracker's 133 (about 8 reads and a string each),
+  in one eval (2026-10-31). The client has no `os.clock` to time it closer.
 - **Starting a POST from inside another request's completion callback crashed the client**
   (freeze, then SIGABRT) twice, once from a coroutine and once without one. After the first
   response, the next request either arrived with an empty body or never arrived. The cause isn't

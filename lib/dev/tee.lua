@@ -194,15 +194,19 @@ local function backOff()
     nextPost = tick + teelog.backoff(failures, tee.limits.retryTicks, tee.limits.maxRetryTicks)
 end
 
--- Put lines that were not delivered back in front of anything queued since; the cap still
--- applies, and what it drops is counted.
+-- Put a batch's lines and results that were not delivered back in front of anything queued
+-- since. The line cap still applies, and what it drops is counted.
 ---@param lines string[]
-local function giveBack(lines)
+---@param results string[]
+local function giveBack(lines, results)
     dropped = dropped + batch.requeue(queue, lines, tee.limits.bufferBytes, tee.limits.bufferLines)
+    table.move(outbox, 1, #outbox, #results + 1, results)
+    outbox = results
 end
 
 -- Queue the commands in a reply for dev/remote. A reply cut short is dropped whole: its
--- commands count as delivered at the daemon, so their eval calls time out ("unknown").
+-- commands count as delivered at the daemon, so `rsdev.py eval --plugin` waits them out and
+-- reports no result.
 ---@param data any the reply body
 local function takeCommands(data)
     if not runner or type(data) ~= "string" then return end
@@ -241,9 +245,7 @@ local function onPosted(finished)
         warnOnce(string.format("daemon refused a batch (400), dropped %d lines", #sent.lines))
         return
     end
-    giveBack(sent.lines)
-    table.move(outbox, 1, #outbox, #sent.results + 1, sent.results)
-    outbox = sent.results
+    giveBack(sent.lines, sent.results)
     warnOnce("POST failed: " .. batch.failureText(finished))
 end
 
@@ -281,9 +283,7 @@ local function flush()
     end
     -- The request never started, so no completion callback will come: free the slot, keep the
     -- lines and results for a later tick and wait out a retry.
-    giveBack(lines)
-    table.move(outbox, 1, #outbox, #sending + 1, sending)
-    outbox = sending
+    giveBack(lines, sending)
     backOff()
     warnOnce("could not start a POST: " .. tostring(err))
 end
@@ -297,6 +297,8 @@ local function runCommand()
     if ok and type(entry) == "string" then
         outbox[#outbox + 1] = entry
     else
+        -- dev/remote answers its own failures with an error result, so only a broken runner
+        -- gets here, and the CLI waits out this command.
         say("remote command " .. cmd.id .. " failed: " .. tostring(entry))
     end
 end
@@ -366,8 +368,9 @@ function tee.attach(run)
     return true
 end
 
--- Stop teeing: unsubscribe the tee's own Logic subscription and cancel a request in flight.
--- Safe to call twice, and a no-op if install() didn't finish. Call it from the plugin's
+-- Stop teeing: unsubscribe the tee's own Logic subscription, cancel a request in flight, and
+-- drop dev/remote's runner, queued commands and unsent results (their eval calls get no
+-- result). Safe to call twice, and a no-op if install() didn't finish. Call it from the plugin's
 -- PluginShutdown, after its own Unsubscribes.
 function tee.shutdown()
     if not active then return end

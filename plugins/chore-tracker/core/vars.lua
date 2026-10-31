@@ -37,6 +37,15 @@ local M = {}
 ---@field falls string[]? vars of which a fall, in a change that makes the conditions hold, ticks the chore
 ---@field proven boolean
 
+-- A condition's comparisons, any one of which satisfies it: a group's members, or a plain
+-- comparison as a group of one.
+---@param condition ChoreVarCondition
+---@return ChoreVarComparison[]
+local function members(condition)
+    if condition.any then return condition.any end
+    return { condition }
+end
+
 -- The var names a rule reads, each once, in the order its conditions name them, then its
 -- `rises` var, then its `falls` vars.
 ---@param rule ChoreVarRule
@@ -57,12 +66,8 @@ function M.names(rule)
         end
     end
     for _, condition in ipairs(rule.done) do
-        if condition.any then
-            for _, member in ipairs(condition.any) do
-                addOperands(member)
-            end
-        else
-            addOperands(condition)
+        for _, member in ipairs(members(condition)) do
+            addOperands(member)
         end
     end
     if rule.rises then add(rule.rises) end
@@ -105,6 +110,18 @@ local function comparisonHolds(condition, values, day)
     return a ~= nil and b ~= nil and compares(a, condition[2], b)
 end
 
+-- Whether one condition holds: at least one of its members does.
+---@param condition ChoreVarCondition
+---@param values table<string, integer>
+---@param day integer?
+---@return boolean
+local function conditionHolds(condition, values, day)
+    for _, member in ipairs(members(condition)) do
+        if comparisonHolds(member, values, day) then return true end
+    end
+    return false
+end
+
 -- Whether every condition of `rule` holds, given var name -> value and today's RuneDay
 -- (nil without a clock).
 ---@param rule ChoreVarRule
@@ -113,18 +130,7 @@ end
 ---@return boolean
 function M.holds(rule, values, day)
     for _, condition in ipairs(rule.done) do
-        if condition.any then
-            local any = false
-            for _, member in ipairs(condition.any) do
-                if comparisonHolds(member, values, day) then
-                    any = true
-                    break
-                end
-            end
-            if not any then return false end
-        elseif not comparisonHolds(condition, values, day) then
-            return false
-        end
+        if not conditionHolds(condition, values, day) then return false end
     end
     return true
 end

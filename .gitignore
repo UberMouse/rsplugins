@@ -1,5 +1,7 @@
 .claude/worktrees/
 dumps/
+# Mod.io upload zips, made by scripts/package-plugin.py
+/*.zip
 # Nix dev environment: direnv cache
 .direnv/
 __pycache__/

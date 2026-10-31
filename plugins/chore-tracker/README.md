@@ -264,26 +264,23 @@ show no icon` (or `id.Sprite.<name>`), and its rows show no icon. Grep regex:
 The development checkout opts into the dev log tee (`lib/dev/tee.lua`, docs/dev-environment.md),
 which forwards the plugin's console lines and callback errors to `scripts/rsdev.py` on the
 same machine, and into remote eval (`lib/dev/remote.lua`), which runs Lua that script sends
-inside the plugin. None of it ships. The generic pieces to strip are listed in
-[Preparing the zip from this repo](../../docs/submission.md#preparing-the-zip-from-this-repo).
-In this plugin they are:
+inside the plugin. None of it ships: `scripts/package-plugin.py chore-tracker` builds the upload
+zip without it, as
+[Preparing the zip from this repo](../../docs/submission.md#preparing-the-zip-from-this-repo)
+describes. In this plugin it strips:
 
-- the four dev lines at the top of `main.lua` (`local tee = require("dev/tee")`,
-  `local remote = require("dev/remote")`, `if tee then tee.install(...) end` and
-  `if remote then remote.install(...) end`, with the comment above them),
-- the `if remote then remote.expose(...) end` block after the state locals in `main.lua` (with
-  its comment),
-- the `if remote then remote.shutdown() end` and `if tee then tee.shutdown() end` lines in
-  `PluginShutdown` (with their comments),
-- the "Dev checkout only" comment block in the header of `main.lua`, which says the tee asks for
-  `httpAccess` and that `check-submission.sh` fails until it is stripped (that script does not
-  flag it, so delete it by hand), and
+- the `dev/` link,
+- in `main.lua`, the four `-- dev-only:begin`/`-- dev-only:end` spans: the "Dev checkout only"
+  paragraph in the header, the four dev lines that require and install the tee and remote, and
+  the `remote.expose(...)` block after the state locals, each with its comment,
+- the `remote.shutdown()` and `tee.shutdown()` lines in `PluginShutdown`, each ending in
+  `-- dev-only`, and
 - `"httpAccess"` and `urls.rsdev` in `plugin.json`, leaving no `urls` and no
   `optionalPermissions`.
 
-Do it on a copy and check it as that section describes;
-`check-submission.sh` must pass before upload. The Mod.io text below ("This plugin requests no
-permissions") is true only after that check passes.
+A new dev line goes inside a marked span or carries the trailing marker; one left unmarked
+fails the build at `check-submission.sh`. The Mod.io text below ("This plugin requests no
+permissions") is true only of the packaged zip.
 
 ## Files
 

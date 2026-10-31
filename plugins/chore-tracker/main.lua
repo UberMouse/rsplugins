@@ -32,18 +32,23 @@
 -- count set in settings logs "[CHORES] shops needed <chore id> <n>"; README.md's "Console
 -- lines" section lists the others.
 --
+-- dev-only:begin
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
--- local daemon, and dev/remote runs Lua the daemon sends; scripts/check-submission.sh fails
--- until both are stripped (README, "Before submitting").
+-- local daemon, and dev/remote runs Lua the daemon sends. scripts/package-plugin.py strips
+-- every dev-only span and line from the upload, and check-submission.sh fails on any it missed
+-- (README, "Before submitting").
 --
+-- dev-only:end
 -- README.md describes everything the plugin does for the player in full.
 
--- Dev only (remove before submitting, see the README): forwards console output to rsdev.py, and
--- runs `rsdev.py eval --plugin chore-tracker` snippets in this plugin.
+-- dev-only:begin
+-- Forwards console output to rsdev.py, and runs `rsdev.py eval --plugin chore-tracker` snippets
+-- in this plugin.
 local tee = require("dev/tee") -- nil when dev/ isn't there; see PluginShutdown
 local remote = require("dev/remote")
 if tee then tee.install(_ENV, "chore-tracker") end
 if remote then remote.install(_ENV, tee) end
+-- dev-only:end
 
 local chores = require("data/chores")
 local collections = require("data/collections")
@@ -113,8 +118,9 @@ local pendingMode = nil ---@type ChoreMode?
 -- The celebration settings, for all characters.
 local celebrations = settings.default()
 
--- Dev only (remove before submitting): the state above, for `rsdev.py eval --plugin` snippets
--- and press(). A getter, since tracker, mode and phase are replaced as the plugin runs.
+-- dev-only:begin
+-- The state above, for `rsdev.py eval --plugin` snippets and press(). A getter, since tracker,
+-- mode and phase are replaced as the plugin runs.
 if remote then
     remote.expose("main", function()
         return {
@@ -128,6 +134,7 @@ if remote then
         }
     end)
 end
+-- dev-only:end
 
 ---------------------------------------------------------------------------
 -- Reading the game
@@ -685,6 +692,6 @@ function PluginShutdown()
     Event.InventoryRemoved.Unsubscribe("chore-tracker")
     window.shutdown()
     popups.clear()
-    if remote then remote.shutdown() end -- dev only, before the tee it rides on
-    if tee then tee.shutdown() end -- dev only: the tee's own Logic subscription
+    if remote then remote.shutdown() end -- dev-only: before the tee it rides on
+    if tee then tee.shutdown() end -- dev-only: the tee's own Logic subscription
 end

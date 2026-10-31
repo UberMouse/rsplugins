@@ -366,14 +366,17 @@ level.
 never for submission. A plugin opts in like the recorder does:
 
 1. `ln -s ../../lib/dev plugins/<name>/dev` (commit the link).
-2. First lines of `main.lua`:
+2. First lines of `main.lua`, marked so `scripts/package-plugin.py` strips them from the upload:
 
    ```lua
+   -- dev-only:begin
    local tee = require("dev/tee") -- nil when dev/ isn't there
    if tee then tee.install(_ENV, "<name>") end
+   -- dev-only:end
    ```
 
-3. In `PluginShutdown`, after the plugin's own `Unsubscribe`s: `if tee then tee.shutdown() end`.
+3. In `PluginShutdown`, after the plugin's own `Unsubscribe`s:
+   `if tee then tee.shutdown() end -- dev-only`.
    It unsubscribes the tee's own `devTeeFlush` Logic subscription and cancels a request in
    flight. Skipping it leaves a subscription registered at unload, the suspected cause of a
    client segfault on `prl` (docs/api-concepts.md, crash 8).
@@ -381,10 +384,10 @@ never for submission. A plugin opts in like the recorder does:
    `"urls": { "rsdev": "http://127.0.0.1:8766" }` (the dev bridge's url name, so one entry
    serves both).
 
-Before uploading, strip the opt-in from a copy of the plugin:
-[Preparing the zip from this repo](submission.md#preparing-the-zip-from-this-repo).
-`scripts/check-submission.sh` fails while any piece of it is left, and on any `urls` entry
-pointing at 127.0.0.1 or localhost.
+Build the upload with `scripts/package-plugin.py <name>`, which strips the opt-in from a copy
+([Preparing the zip from this repo](submission.md#preparing-the-zip-from-this-repo)).
+`scripts/check-submission.sh` fails that build while any piece of it is left, and on any `urls`
+entry pointing at 127.0.0.1 or localhost.
 
 Then `scripts/rsdev.py exec "prl <name>"` and `scripts/rsdev.py logs --plugin <name>` shows what
 the plugin printed, as `n [<name>] print|log|error: text`. An `error` line reads
@@ -448,15 +451,18 @@ tee's Logic callback, so one past the client's 1000 ms limit can take the plugin
 **Opting a plugin in**, after the tee:
 
 ```lua
+-- dev-only:begin
 local tee = require("dev/tee") -- nil when dev/ isn't there
 local remote = require("dev/remote")
 if tee then tee.install(_ENV, "<name>") end
 if remote then remote.install(_ENV, tee) end
+-- dev-only:end
 ```
 
-then `if remote then remote.expose("main", function() return { ... } end) end` once the state
-it should show exists, and in `PluginShutdown`, before the tee's,
-`if remote then remote.shutdown() end`. `check-submission.sh` flags each of these lines. The
+then `if remote then remote.expose("main", function() return { ... } end) end` inside its own
+`-- dev-only:begin`/`end` span once the state it should show exists, and in `PluginShutdown`,
+before the tee's, `if remote then remote.shutdown() end -- dev-only`. `package-plugin.py`
+strips the marked lines and `check-submission.sh` flags any it missed. The
 plugin's UI helpers keep their click handler on the view table they return (`onClick`) for
 `press` to find; that field ships, and is harmless.
 

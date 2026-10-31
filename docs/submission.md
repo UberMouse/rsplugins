@@ -82,34 +82,32 @@ The EULA paragraph is Jagex's required wording (including its typos). Copy it ve
 ## Preparing the zip from this repo
 
 A plugin in `plugins/` may carry dev opt-ins (the `dev/` link to `lib/dev/`, the recorder and tee
-lines, `urls.rsdev`, `httpAccess`). Build the upload from a copy, never from the dev tree:
+lines, `urls.rsdev`, `httpAccess`). Build the upload with
 
-1. Copy the plugin without `dev/`, inside the repo so the lint configs apply. `dumps/` is
-   gitignored:
+```sh
+scripts/package-plugin.py <name>
+```
 
-   ```sh
-   mkdir -p dumps/submission/plugins
-   rsync -a --exclude dev plugins/<name> dumps/submission/plugins/
-   ```
+which writes `<name>-<version>.zip` to the repo root (gitignored), with `main.lua` and
+`plugin.json` at the zip root. It never touches the dev tree:
 
-   The dev shell has neither `rsync` nor `zip`. Without rsync, use
-   `cp -rP plugins/<name> dumps/submission/plugins/` (`-P` copies the `dev` symlink as a link,
-   not its target) and then `rm dumps/submission/plugins/<name>/dev`.
-2. Strip the rest of the opt-in from the copy's `main.lua` and `plugin.json`: the
-   `require("dev/...")` lines, `tee.install`/`tee.shutdown`, `remote.install`/`expose`/`shutdown`
-   and `recorder.install`/`shutdown` calls with their comments, `"httpAccess"` from `optionalPermissions` (unless a feature of the
-   plugin needs it), and `urls.rsdev`. The plugin's README lists its own pieces (Chore Tracker:
-   "Before submitting").
-3. Run `scripts/check-submission.sh <name> --root dumps/submission`. It must exit 0; it names
-   every dev piece left. Then run `scripts/check.sh dumps/submission/plugins/<name>`: it runs
-   luac, the manifest, selene and stylua checks on the copy (then the whole suite). LuaLS ignores
-   `dumps/`, so type checking only happens on the dev tree.
-4. Zip from inside the plugin folder, so `main.lua` and `plugin.json` sit at the zip root. Any
-   zip tool works if the plugin's files are at the archive root; with Info-ZIP:
+1. It copies the plugin without `dev/` to `dumps/submission/plugins/<name>/` (inside the repo so
+   the lint configs apply; `dumps/` is gitignored), and refuses any other symlink in it.
+2. It strips the copy's marked Lua: every span from a line `-- dev-only:begin` to a line
+   `-- dev-only:end`, and every line ending in `-- dev-only` (or `-- dev-only: <why>`). From
+   `plugin.json` it drops `"httpAccess"` (keep it with `--keep-http-access` when a feature of the
+   plugin needs it) and every url pointing at this machine, `urls.rsdev` included.
+3. It runs `scripts/check-submission.sh <name> --root dumps/submission`, which names every dev
+   piece left: a dev line nobody marked stops the build. Then `scripts/check.sh` on the copy
+   (`--skip-lint` skips it): luac, the manifest, selene and stylua on the copy, then the whole
+   suite. LuaLS ignores `dumps/`, so type checking only happens on the dev tree.
+4. It zips the copy, and warns while `contactEmailAddress` is still the `you@example.com`
+   placeholder.
 
-   ```sh
-   cd dumps/submission/plugins/<name> && zip -r ../<name>.zip .
-   ```
+So every dev opt-in in a plugin's Lua must sit inside a marked span or carry the trailing marker,
+comments about it included (`check-submission.sh` catches code only). The plugin's README lists
+its own pieces (Chore Tracker: "Before submitting"). A plugin that needs `dev/` to work (the dev
+bridge, var-dump) can't be packaged. Read the staged copy before uploading it.
 
 ## Moderation
 

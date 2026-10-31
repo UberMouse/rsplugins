@@ -39,6 +39,7 @@ RuneScape 3 client plugins (Lua 5.4.8, using Jagex's official Client Plugin API)
 |---|---|---|
 | `scripts/check.sh` | The gate: lint, format, type-check and test everything. `scripts/check-lua.sh` is its old name | [its header](scripts/check.sh) |
 | `scripts/test-lua.sh` | Runs the plugin tests (busted) | [docs/testing.md](docs/testing.md) |
+| `scripts/package-plugin.py` | Builds a plugin's Mod.io upload zip in the repo root: a copy without `dev/`, `-- dev-only` marked Lua, `httpAccess` or local urls, checked | [docs/submission.md](docs/submission.md#preparing-the-zip-from-this-repo) |
 | `scripts/check-submission.sh` | Fails while a plugin copy still carries a dev opt-in; `check-submission.selftest.sh` tests it | [docs/submission.md](docs/submission.md#preparing-the-zip-from-this-repo) |
 | `scripts/link-dev-plugins.sh` | Symlinks the beta client's `dev_plugins/` to `plugins/` | [docs/dev-environment.md](docs/dev-environment.md) |
 | `scripts/rsdev.py` | The dev daemon and CLI: recorder receiver, dev bridge (`exec`, `events`, `logs`), `shot` | [docs/dev-environment.md](docs/dev-environment.md#dev-bridge) |

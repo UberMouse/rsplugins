@@ -348,8 +348,8 @@ it with location or a var. There is no interface-opened event.
 
 - `plugin.json`'s `contactEmailAddress` is the placeholder `you@example.com`.
 - Prove or drop the unproven rows: shop entries and var rules with `proven = false`.
-- Ship without dev tooling: no `dev/` symlink and no `urls.rsdev` (Chore Tracker has neither
-  today). There is no packaging check for this yet.
+- Ship without dev tooling: build the zip with `scripts/package-plugin.py chore-tracker`, which
+  strips the `dev/` link, the `-- dev-only` marked Lua, `httpAccess` and `urls.rsdev`.
 - Check the README's Mod.io sections against `docs/submission.md`.
 
 ## Known gaps

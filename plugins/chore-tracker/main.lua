@@ -11,9 +11,9 @@
 -- Saved per character, by display name: picks, their order, ticks, parts done and counts. Saved
 -- for all characters: the window's layout and the celebration settings.
 --
--- A picked chore the plugin sees done in the game gets a celebration popup; a tick by hand, or
--- one from lowering a chore's count, gets none. A period whose picked chores are now all done
--- gets one however the last was ticked. Settings turn the popups or their sound off.
+-- A picked chore that gets ticked, however (seen done in the game, ticked by hand, or ticked by
+-- lowering its count), gets a celebration popup, and so does a period whose picked chores are
+-- now all done. Settings turn the popups or their sound off.
 --
 -- Every console line carries [CHORES] (grep: \[CHORES\]); the display name is never logged.
 -- README.md's "Console lines" section lists them.
@@ -187,14 +187,12 @@ end
 
 -- Every change to the tracker goes through here, so none goes unsaved. Returns false, writing
 -- nothing, when `changed` is `tracker` itself. A change at the clock's minute `now` can tick or
--- untick chores: it refreshes the list if showing and queues its celebrations (`manual`, the
--- player's own change, earns only a cleared period's). Without `now` (a pick, a count, a new
--- order), neither.
+-- untick chores: it refreshes the list if showing and queues its celebrations. Without `now`
+-- (a pick, a count, a new order), neither.
 ---@param changed ChoreState
 ---@param now integer?
----@param manual boolean?
 ---@return boolean
-local function keep(changed, now, manual)
+local function keep(changed, now)
     assert(character, "the tracker only changes while logged in")
     if changed == tracker then return false end
     local before = tracker
@@ -202,7 +200,7 @@ local function keep(changed, now, manual)
     store.saveState(character, tracker)
     if now then
         if phase == "ready" and mode == "list" then refreshList() end
-        popups.enqueue(celebrate.decide(before, tracker, chores, now, manual == true))
+        popups.enqueue(celebrate.decide(before, tracker, chores, now))
     end
     return true
 end
@@ -216,9 +214,9 @@ local function onTick(id)
     local chore = state.find(chores, id)
     assert(chore, "a row is only made for a chore in the list")
     if state.isDone(tracker, chore, now) then
-        keep(state.unmark(tracker, id), now, true)
+        keep(state.unmark(tracker, id), now)
     else
-        keep(state.mark(tracker, id, now), now, true)
+        keep(state.mark(tracker, id, now), now)
     end
 end
 
@@ -381,9 +379,8 @@ local function onPartsNeeded(chore, delta, shown)
     local needed = state.partsNeeded(changed, chore, own)
     stepper.show(shown, view.neededText(needed, #own.list))
     say("needed", chore.id, needed)
-    -- The player's own change, so like a hand tick it earns no popup of its own, but the
-    -- one that clears a period does.
-    keep(changed, now, true)
+    -- A count lowered far enough ticks the chore, which celebrates like any other tick.
+    keep(changed, now)
 end
 
 -- The "How many to do" block: its title next in PrettyUI's flow, then a stepper per picked
@@ -594,7 +591,7 @@ end
 local function apply(change)
     local now = clockNow()
     if character == nil or now == nil then return end
-    keep(change(tracker, now), now, false)
+    keep(change(tracker, now), now)
 end
 
 ---------------------------------------------------------------------------

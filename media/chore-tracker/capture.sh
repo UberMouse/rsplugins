@@ -57,10 +57,13 @@ rsdev click "$menu_x" "$menu_y" && sleep 1 # back to the list
 rsdev click "$menu_x" "$menu_y" && sleep 1 # fold into the strip
 gallery grab "$media/raw/strip.png" --text 'Daily:' --inset 0,0,1,0
 
-# Ticking the last two dailies from the strip shows the period popup, for about 4 s.
+# Ticking the last two dailies from the strip queues a CHORE COMPLETE popup for each, then
+# DAILIES COMPLETE, shown one at a time for about 4 s each. The second click lands about 1.5 s
+# into the first popup, so the period's popup runs from about 6.5 s to 10.5 s after it; the
+# 7.5 s wait plus the grab's own time lands inside that window.
 rsdev click --text 'Daily:' && sleep 1.5
-rsdev click --text 'Daily:' && sleep 0.5
-gallery grab "$media/raw/popup.png" --text COMPLETE --inset 1,0,1,1
+rsdev click --text 'Daily:' && sleep 7.5
+gallery grab "$media/raw/popup.png" --text 'DAILIES COMPLETE' --inset 1,0,1,1
 
 # Back as found: open the window and untick those two dailies.
 rsdev click "$menu_x" "$menu_y" && sleep 1

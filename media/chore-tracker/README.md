@@ -42,8 +42,8 @@ changing your picks.
   345x574). The crops follow the window wherever it is; the backdrop is the game scene at
   window pixels 0-1120 x 140-770, so keep game interfaces out of that area.
 
-The script ticks the last two dailies from the strip to show the popup (and its jingle), then
-unticks them. The full screenshots it takes show chat and names, so they stay in gitignored
+The script ticks the last two dailies from the strip, waits out their two CHORE COMPLETE popups
+to show the DAILIES COMPLETE popup (and its jingle), then unticks them. The full screenshots it takes show chat and names, so they stay in gitignored
 `dumps/`; only the crops of plugin UI and the blurred backdrop are kept here.
 
 The insets in `capture.sh` trim the game pixels round each frame. If a PrettyUI update changes

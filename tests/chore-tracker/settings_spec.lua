@@ -336,11 +336,11 @@ describe("chore-tracker count settings", function()
         helpers.togglePicks(h, { "feather-shop-run" })
         helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         assert.is_false(helpers.ticked(h, "Feather Shop Run"))
-        -- Lowered to the one shop bought: ticked as the player's own change, so the chore gets
-        -- no popup of its own, but the period it clears does.
+        -- Lowered to the one shop bought: the chore ticks and celebrates like any other tick.
         helpers.setNeeded(h, "feather-shop-run", 1)
         assert.is_true(helpers.ticked(h, "Feather Shop Run"))
-        assert.is_nil(h:output():find("[CHORES] celebrate feather-shop-run", 1, true))
+        assert.matches("%[CHORES%] celebrate feather%-shop%-run", h:output())
+        h:advance(4020) -- the chore's popup ends and the period it clears follows
         assert.matches("%[CHORES%] celebrate weekly cleared", h:output())
         -- Raised above it: the tick stays.
         helpers.setNeeded(h, "feather-shop-run", 3)

@@ -52,7 +52,7 @@ Many chores tick themselves: shop runs when you buy from their shops, Dell Monti
 
 The plugin never displays a game var's value or a machine's contents. It ticks a chore only when one of your own vars or inventories changes the way doing the chore changes it (for example you spotted a penguin, bought the Black Marketeer's offer, or collected from an Invention machine). The only number it shows from these reads is how many parts of a chore you have done this period, which you did yourself. It reads your position only to tell a collection or bonus XP claim made beside Dell Monti, the Weird Old Man or Aster from one made elsewhere.
 
-The menu button at the window's top-right corner folds it into a small strip showing your next chore, which a click ticks. When the plugin ticks a chore, or you finish a period's chores, a short popup celebrates it; settings turn the popups or their sound off.
+The menu button at the window's top-right corner folds it into a small strip showing your next chore, which a click ticks. When a chore gets ticked, or you finish a period's chores, a short popup celebrates it; settings turn the popups or their sound off.
 
 Your chores are saved per character, so each character has its own list.
 

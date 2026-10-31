@@ -1,5 +1,4 @@
--- Which celebrations a change to the tracker earns, as plain data: a chore the plugin ticked
--- by itself, and a period whose picked chores are now all done. Pure: the shell passes the
+-- Which celebrations a change to the tracker earns, as plain data: a chore that got ticked, and a period whose picked chores are now all done. Pure: the shell passes the
 -- tracker before and after a change and shows what comes back.
 
 local period = require("core/period")
@@ -40,31 +39,28 @@ local function periodStatus(s, chores, p, now)
     return picked, picked > 0 and done == picked
 end
 
--- Celebrations for the tracker going from `old` to `new` at `now`: picked chores the plugin
--- ticked (skipped when `manual`), in chore-list order, then periods whose picked chores went
--- from not all done to all done, however the last was ticked.
+-- Celebrations for the tracker going from `old` to `new` at `now`: picked chores that went
+-- from not done to done, however they were ticked, in chore-list order, then periods whose
+-- picked chores went from not all done to all done.
 ---@param old ChoreState
 ---@param new ChoreState
 ---@param chores Chore[]
 ---@param now integer
----@param manual boolean true when the player ticked by hand
 ---@return ChoreCelebration[]
-function M.decide(old, new, chores, now, manual)
+function M.decide(old, new, chores, now)
     local out = {}
-    if not manual then
-        for _, chore in ipairs(chores) do
-            if
-                state.isSelected(new, chore.id)
-                and not state.isDone(old, chore, now)
-                and state.isDone(new, chore, now)
-            then
-                out[#out + 1] = {
-                    kind = "chore",
-                    title = CHORE_TITLE,
-                    text = chore.name,
-                    label = chore.id,
-                }
-            end
+    for _, chore in ipairs(chores) do
+        if
+            state.isSelected(new, chore.id)
+            and not state.isDone(old, chore, now)
+            and state.isDone(new, chore, now)
+        then
+            out[#out + 1] = {
+                kind = "chore",
+                title = CHORE_TITLE,
+                text = chore.name,
+                label = chore.id,
+            }
         end
     end
     for _, p in ipairs(period.PERIODS) do

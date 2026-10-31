@@ -443,7 +443,8 @@ describe("chore-tracker window", function()
         assert.are.equal("Daily: Player-Owned Farm (0/1)", shown.text)
         assert.is_true(h.ui:click(shown.label))
         assert.are.same({ text = view.ALL_DONE }, strip(h))
-        h:advance(20)
+        -- Each of the three ticks shows its chore popup (about 4 s each) before the period's.
+        h:advance(3 * 4020)
         assert.matches("%[CHORES%] celebrate daily cleared", h:output())
 
         helpers.expand(h)

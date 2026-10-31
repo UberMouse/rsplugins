@@ -64,16 +64,15 @@ game already gives your client, never does anything in game for you, and sends n
 - **Moving it.** Drag the window by its title bar, and resize it from its edges or corners,
   which show a resize cursor when you hover them. While it is collapsed, hold **Alt** and drag
   the strip to move it. Alt-dragging only works with the console closed.
-- **Celebrations.** When the plugin ticks a chore you picked, a small popup, "CHORE COMPLETE"
-  with the chore's name, shows upper-middle of the screen with a short jingle. When your picked
-  chores of a period are all done, however the last one was ticked, a bigger one follows with a
-  grander jingle: "DAILIES COMPLETE", "WEEKLIES COMPLETE" or "MONTHLIES COMPLETE". It shows
-  again whenever they become all done. A chore ticked by hand, or by lowering its count under
-  **How many to do**, gets no chore popup of its own. Unticking, picking or unpicking chores,
-  and logging in, show nothing. Popups appear one at a time and last about four seconds,
-  whether the window is open, collapsed or in settings. In the settings view, under
-  **Celebrations**, untick "Celebration popups" to turn them off, or "Popup sound" to keep them
-  quiet. Both are saved for all characters.
+- **Celebrations.** When a chore you picked gets ticked, whether by you (by hand, or by lowering
+  its count under **How many to do**) or by the plugin, a small popup, "CHORE COMPLETE" with the
+  chore's name, shows upper-middle of the screen with a short jingle. When your picked chores
+  of a period are all done, a bigger one follows with a grander jingle: "DAILIES COMPLETE",
+  "WEEKLIES COMPLETE" or "MONTHLIES COMPLETE". It shows again whenever they become all done.
+  Unticking, picking or unpicking chores, and logging in, show nothing. Popups appear one at a
+  time and last about four seconds, whether the window is open, collapsed or in settings. In
+  the settings view, under **Celebrations**, untick "Celebration popups" to turn them off, or
+  "Popup sound" to keep them quiet. Both are saved for all characters.
 
 ## Chores it ticks for you
 
@@ -108,8 +107,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   bloodwood trees, 1 of the 7 farm troughs and 10 of the 13 penguins (the polar bear counts as
   one). The Player-Owned Port has no line: it always needs all 4 voyages. A count saves
   straight away and is kept per character, as characters reach different places. Lowering it
-  to what you have already done this period ticks the chore (with no chore popup, as for a tick
-  by hand); raising it above that never unticks it.
+  to what you have already done this period ticks the chore (and shows its popup); raising it above that never unticks it.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or

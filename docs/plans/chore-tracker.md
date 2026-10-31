@@ -38,7 +38,7 @@ These are the user's calls. They aren't all visible in the code.
   beta, where logging out disables plugins.
 - **Keep dailyscape's period** even where the game's flag is daily (Bert, Geoffrey, Cromperty,
   Coeden, Lupe are weekly chores): the first claim in the week ticks it. Dream of Iaia is the
-  exception (see "Round 2").
+  exception (offered in two periods each, see "Round 2").
 - **Shop runs:** a multi-shop chore shows a per-shop count, shop stock is per character, and any
   stock drop counts (decay left as is). Superseded 2026-10-29: "any purchase at any listed shop
   ticks it" becomes "every shop the user chose for that chore" (see "Round 2").
@@ -128,20 +128,16 @@ Staged order, with a check-in in the beta client after each:
 4. **Per-chore settings.**
    - **Shop runs:** the user picks which of a chore's shops they visit, and it ticks once every
      chosen shop has been bought from this period. The default is all listed shops.
-   - **Dream of Iaia:** merge dailyscape's two rows (resources weekly, XP monthly) into one chore
-     with a manual cadence setting (every 1/2/3 days, weekly, fortnightly). The wiki
-     (Dream_of_Iaia, read 2026-10-29) gives no fixed reset. Stations cap at 350k stored XP and
-     resources at 150k (with a level 3 Town Hall), and the cadence follows the worker split via
-     Giles: all workers on one resource is about every 36 h for resources and 7 days for XP, and
-     a two-way split is about 72 h and 14 days. Later, "due when near the cap" from game data:
-     candidates are `DINO_BASE_CAMP_WORKER_ASSIGNED_*`, `DINO_BASE_CAMP_RESOURCE_*`,
-     `DINO_BASE_CAMP_BUILDING_TIER_TOWNHALL`, `QUEST_EGW_FINALE_REWARD_STATION_XP_*`,
-     `_REWARD_STATION_STATE_*` and `_POST_QUEST_REWARD_SETUP` (3 bits, meaning unknown). Probe:
-     whether these are sent away from Anachronia, and what they hold. A "stockpile" chore class
-     like this might later fit the Invention machine and the Miscellania coffers too.
+   - **Dream of Iaia:** replaced (2026-10-31) by per-period entries with drain detection, not a
+     cadence setting. The cadence follows the worker split (all workers on one resource: about
+     36 h for resources, 7 days for XP; a two-way split about 72 h and 14 days), so resources are
+     offered daily and weekly and XP weekly and monthly (`dream-of-iaia-resource-daily`,
+     `dream-of-iaia-xp-weekly`). Both tick when every worked resource or station has been
+     drained to 0 (`any` groups and a `falls` field in the rule language). "Due when near the
+     cap" is not built.
 5. **More auto-detection**, from the table below, batched to the chores the user actually does.
 
-## Chores still ticked by hand (32)
+## Chores still ticked by hand (30)
 
 Each is grouped by the most promising route. "Candidates" are var names from `docs/vars/vars.csv`
 or API signals. "Probe" is what a probe in the beta client must show before building. Notes are
@@ -195,8 +191,6 @@ Likely but not seen moving (read at login and on the day, no chore done):
 | Rush of Blood | weekly | `ELFCITY_SLAYER_WEEKLY_RESET`, `_WEEKLY_CHALLENGE_LEVEL`, `_WAVES_COMPLETED` | which marks the weekly run complete |
 | Water Filtration | weekly | `DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME`, `_PREVIOUS_LOOT_TIME` | LOOT_TIME after a clean-out, and its unit |
 | Arc Supplies Crate | weekly | `ELR2_FREE_SUPPLIES`, `ELR1_DAILY_SUPPLIES_TAKEN` | which moves when Rosie's crate is claimed |
-| Dream of Iaia Resources | weekly | `QUEST_EGW_FINALE_REWARD_STATION_XP_*` (stored XP per station) | a weekly-limit var, if any |
-| Dream of Iaia XP | monthly | the same station vars; done = all stored XP spent | stored XP falling to 0 |
 | GWD2 Bounties | weekly | `GWD2_REP_TASKS_AVAILABLE`, `_TASK_PROGRESS`, `_TASK_LAST_DAY_GIVEN` | AVAILABLE counting stored bounties; done = none left? |
 | Giant Oyster | monthly | `TUTISLAND_REWARD_STATE`, `_HARVEST_COUNT_*`, `_OYSTER_FED_*` | which marks this month's chest claimed |
 | Troll Invasion | monthly | `DNDTRACKER_TROLL_INVASION_LIMIT` (its base var is sent) | LIMIT -> 1 after all waves |

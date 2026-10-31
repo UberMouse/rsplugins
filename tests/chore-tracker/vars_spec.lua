@@ -117,6 +117,165 @@ describe("chore-tracker vars core", function()
         end
     end)
 
+    it("holds an any group when a member does, never when it is empty or unreadable", function()
+        local rule = {
+            chore = "x",
+            done = { { any = { { "A", "==", 1 }, { "B", "==", 1 } } } },
+            proven = true,
+        }
+        assert.is_true(varsCore.holds(rule, { A = 0, B = 1 }, nil))
+        assert.is_false(varsCore.holds(rule, { A = 0, B = 0 }, nil))
+        -- A member with no value doesn't hold, but another can.
+        assert.is_true(varsCore.holds(rule, { B = 1 }, nil))
+        assert.is_false(varsCore.holds(rule, {}, nil))
+        local clock = {
+            chore = "x",
+            done = { { any = { { "A", "==", { runeDay = true } } } } },
+            proven = true,
+        }
+        assert.is_false(varsCore.holds(clock, { A = 5 }, nil))
+        assert.is_false(
+            varsCore.holds({ chore = "x", done = { { any = {} } }, proven = true }, {}, nil)
+        )
+    end)
+
+    it("names the vars in any groups and falls once, in order", function()
+        local rule = {
+            chore = "x",
+            done = { { "A", ">", 0 }, { any = { { "B", "==", 0 }, { "A", "==", "C" } } } },
+            falls = { "D", "B" },
+            proven = true,
+        }
+        assert.are.same({ "A", "B", "C", "D" }, varsCore.names(rule))
+    end)
+
+    it("ticks a falls rule only when it turns true and a listed var went down", function()
+        local rule = {
+            chore = "x",
+            done = { { "W", ">", 0 }, { "S", "==", 0 } },
+            falls = { "S" },
+            proven = true,
+        }
+        assert.is_true(varsCore.ticks(rule, { W = 1, S = 5 }, { W = 1, S = 0 }, nil))
+        -- The conditions turned true without a fall (workers moved).
+        assert.is_false(varsCore.ticks(rule, { W = 1, S = 0 }, { W = 1, S = 0 }, nil))
+        assert.is_false(varsCore.ticks(rule, { W = 0, S = 0 }, { W = 1, S = 0 }, nil))
+        -- A rise, or a first read, never ticks.
+        assert.is_false(varsCore.ticks(rule, { W = 1, S = 0 }, { W = 1, S = 4 }, nil))
+        assert.is_false(varsCore.ticks(rule, { W = 1 }, { W = 1, S = 0 }, nil))
+    end)
+
+    it("gives no rule both rises and falls", function()
+        for _, rule in ipairs(varRules) do
+            assert(not (rule.rises and rule.falls), rule.chore)
+        end
+    end)
+
+    for _, kind in ipairs({ "resource", "xp" }) do
+        describe("Dream of Iaia " .. kind, function()
+            local stations = {
+                WOOD = "FLETCHING",
+                VINES = "HUNTER",
+                LEAVES = "HERBLORE",
+                PELTS = "CRAFTING",
+                STONE = "CONSTRUCTION",
+                CLAY = "FISHING",
+            }
+            local order = { "WOOD", "VINES", "LEAVES", "PELTS", "STONE", "CLAY" }
+            local rule = ruleFor("dream-of-iaia-" .. kind)
+
+            -- The stock var drained for resource R.
+            local function stockName(r)
+                if kind == "resource" then return "DINO_BASE_CAMP_RESOURCE_" .. r end
+                return "QUEST_EGW_FINALE_REWARD_STATION_XP_" .. stations[r]
+            end
+
+            -- Values with `workers` (resource -> count) set and every stock at 100.
+            local function world(workers)
+                local v = {}
+                for _, r in ipairs(order) do
+                    v["DINO_BASE_CAMP_WORKER_ASSIGNED_" .. r] = workers[r] or 0
+                    v[stockName(r)] = 100
+                end
+                return v
+            end
+
+            local function with(v, changes)
+                local out = {}
+                for k, x in pairs(v) do
+                    out[k] = x
+                end
+                for k, x in pairs(changes) do
+                    out[k] = x
+                end
+                return out
+            end
+
+            it("is shared by the chore's other period", function()
+                local other = ruleFor(
+                    kind == "resource" and "dream-of-iaia-resource-daily"
+                        or "dream-of-iaia-xp-weekly"
+                )
+                assert.are.equal(rule.done, other.done)
+                assert.are.equal(rule.falls, other.falls)
+            end)
+
+            it("never holds with no workers", function()
+                local v = world({})
+                for _, r in ipairs(order) do
+                    v[stockName(r)] = 0
+                end
+                assert.is_false(varsCore.holds(rule, v, nil))
+            end)
+
+            it("doesn't tick while one worked station is still above 0", function()
+                local before = world({ STONE = 40, WOOD = 30 })
+                local after = with(before, { [stockName("STONE")] = 0 })
+                assert.is_false(varsCore.ticks(rule, before, after, nil))
+            end)
+
+            it("ticks when the last worked station is drained, ignoring unworked ones", function()
+                local before = world({ STONE = 40, WOOD = 30 })
+                before[stockName("WOOD")] = 0
+                local after = with(before, { [stockName("STONE")] = 0 })
+                assert.is_true(varsCore.ticks(rule, before, after, nil))
+            end)
+
+            it("doesn't tick when workers move so every worked station reads 0", function()
+                local before = world({ STONE = 70 })
+                before[stockName("CLAY")] = 0
+                local after = with(before, {
+                    DINO_BASE_CAMP_WORKER_ASSIGNED_STONE = 0,
+                    DINO_BASE_CAMP_WORKER_ASSIGNED_CLAY = 70,
+                })
+                assert.is_true(varsCore.holds(rule, after, nil))
+                assert.is_false(varsCore.ticks(rule, before, after, nil))
+            end)
+
+            it("doesn't tick on draining an unworked station once the worked ones are 0", function()
+                local before = world({ STONE = 70 })
+                before[stockName("STONE")] = 0
+                local after = with(before, { [stockName("WOOD")] = 0 })
+                assert.is_false(varsCore.ticks(rule, before, after, nil))
+            end)
+
+            it("doesn't tick when a worked station rises", function()
+                local before = world({ STONE = 70 })
+                before[stockName("STONE")] = 0
+                local after = with(before, { [stockName("STONE")] = 50 })
+                assert.is_false(varsCore.ticks(rule, before, after, nil))
+            end)
+
+            it("treats a var's first read as a baseline", function()
+                local after = world({ STONE = 70 })
+                after[stockName("STONE")] = 0
+                local before = with(world({ STONE = 70 }), {})
+                before[stockName("STONE")] = nil
+                assert.is_false(varsCore.ticks(rule, before, after, nil))
+            end)
+        end)
+    end
+
     it("ticks the Daily Challenge when the claimed count rises", function()
         local rule = ruleFor("daily-challenge")
         assert.are.same({ "CHALLENGE_TOTAL_COMPLETED" }, varsCore.names(rule))
@@ -190,6 +349,10 @@ describe("chore-tracker var list", function()
             "daily-challenge",
             "advance-time (unproven)",
             "divine-locations (unproven)",
+            "dream-of-iaia-resource-daily",
+            "dream-of-iaia-resource",
+            "dream-of-iaia-xp-weekly",
+            "dream-of-iaia-xp",
             "crystal-tree-blossom (unproven)",
             "sinkholes (unproven)",
             "big-chinchompa (unproven)",

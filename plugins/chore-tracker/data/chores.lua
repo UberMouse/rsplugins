@@ -182,6 +182,15 @@ return {
         links = {},
     },
     {
+        id = "dream-of-iaia-resource-daily",
+        name = "Dream of Iaia Resources",
+        period = "daily",
+        category = "upkeep",
+        url = "https://runescape.wiki/w/Dream_of_Iaia",
+        desc = "Turn stored resources into skilling station XP, 2 resources to 1 XP<br>How often depends on your worker split: 70 workers on one resource fill its 150k cap in about 36 hours",
+        links = {},
+    },
+    {
         id = "herb-run",
         name = "Herb Run",
         period = "daily",
@@ -394,7 +403,16 @@ return {
         period = "weekly",
         category = "upkeep",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
-        desc = "Turn stored resources into skilling station XP, 2 resources to 1 XP",
+        desc = "Turn stored resources into skilling station XP, 2 resources to 1 XP<br>How often depends on your worker split: 70 workers on one resource fill its 150k cap in about 36 hours",
+        links = {},
+    },
+    {
+        id = "dream-of-iaia-xp-weekly",
+        name = "Dream of Iaia XP",
+        period = "weekly",
+        category = "upkeep",
+        url = "https://runescape.wiki/w/Dream_of_Iaia",
+        desc = "Use up the XP stored in your skilling stations<br>How often depends on your worker split: all workers on one resource fill a station's 350k cap in about a week",
         links = {},
     },
     {
@@ -618,7 +636,7 @@ return {
         name = "Dream of Iaia XP",
         period = "monthly",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
-        desc = "Use up the XP stored in your skilling stations",
+        desc = "Use up the XP stored in your skilling stations<br>How often depends on your worker split: all workers on one resource fill a station's 350k cap in about a week",
         links = {},
     },
     {

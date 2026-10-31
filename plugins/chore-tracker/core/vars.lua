@@ -6,8 +6,12 @@
 -- condition compares two operands with "==", ">" or ">=". An operand is a var's name (its
 -- value), a number, or `{ runeDay = true }` (today's RuneDay, the game's day number). A
 -- condition with an operand it can't work out (a var with no value, or the RuneDay without a
--- clock) doesn't hold. A rule may also name, as `rises`, a var whose going up is what ticks
--- its chore.
+-- clock) doesn't hold. A condition may instead be `{ any = { <condition>, ... } }`, which
+-- holds when at least one of its member conditions does (an OR; members are plain
+-- conditions, not further groups, and an empty group never holds). A rule may also name, as
+-- `rises`, a var whose going up is what ticks its chore, or, as `falls`, a list of vars whose
+-- going down does: it ticks only on a change where its conditions turned from false to true
+-- and at least one of those vars went down. A rule has `rises` or `falls`, not both.
 --
 -- data/vars.lua is typed `---@type ChoreVarRule[]`, so LuaLS checks its operators and
 -- operands against the class below.
@@ -19,16 +23,22 @@ local M = {}
 
 ---@alias ChoreVarOperand string|integer|ChoreVarToday
 ---@alias ChoreVarCompare "=="|">"|">="
----@alias ChoreVarCondition { [1]: ChoreVarOperand, [2]: ChoreVarCompare, [3]: ChoreVarOperand }
+---@alias ChoreVarComparison { [1]: ChoreVarOperand, [2]: ChoreVarCompare, [3]: ChoreVarOperand }
+
+---@class ChoreVarAny
+---@field any ChoreVarComparison[] at least one must hold
+
+---@alias ChoreVarCondition ChoreVarComparison|ChoreVarAny
 
 ---@class ChoreVarRule
 ---@field chore string the chore id
 ---@field done ChoreVarCondition[] all must hold for the chore to be done
 ---@field rises string? a var whose rise in a change ticks the chore
+---@field falls string[]? vars of which a fall, in a change that makes the conditions hold, ticks the chore
 ---@field proven boolean
 
 -- The var names a rule reads, each once, in the order its conditions name them, then its
--- `rises` var.
+-- `rises` var, then its `falls` vars.
 ---@param rule ChoreVarRule
 ---@return string[]
 function M.names(rule)
@@ -40,12 +50,25 @@ function M.names(rule)
             out[#out + 1] = name
         end
     end
-    for _, condition in ipairs(rule.done) do
+    ---@param condition ChoreVarComparison
+    local function addOperands(condition)
         for _, operand in ipairs({ condition[1], condition[3] }) do
             if type(operand) == "string" then add(operand) end
         end
     end
+    for _, condition in ipairs(rule.done) do
+        if condition.any then
+            for _, member in ipairs(condition.any) do
+                addOperands(member)
+            end
+        else
+            addOperands(condition)
+        end
+    end
     if rule.rises then add(rule.rises) end
+    for _, name in ipairs(rule.falls or {}) do
+        add(name)
+    end
     return out
 end
 
@@ -72,6 +95,16 @@ local function compares(a, compare, b)
     error("unknown comparison " .. tostring(compare), 2)
 end
 
+-- Whether one comparison holds; false if an operand can't be worked out.
+---@param condition ChoreVarComparison
+---@param values table<string, integer>
+---@param day integer?
+---@return boolean
+local function comparisonHolds(condition, values, day)
+    local a, b = valueOf(condition[1], values, day), valueOf(condition[3], values, day)
+    return a ~= nil and b ~= nil and compares(a, condition[2], b)
+end
+
 -- Whether every condition of `rule` holds, given var name -> value and today's RuneDay
 -- (nil without a clock).
 ---@param rule ChoreVarRule
@@ -80,8 +113,18 @@ end
 ---@return boolean
 function M.holds(rule, values, day)
     for _, condition in ipairs(rule.done) do
-        local a, b = valueOf(condition[1], values, day), valueOf(condition[3], values, day)
-        if a == nil or b == nil or not compares(a, condition[2], b) then return false end
+        if condition.any then
+            local any = false
+            for _, member in ipairs(condition.any) do
+                if comparisonHolds(member, values, day) then
+                    any = true
+                    break
+                end
+            end
+            if not any then return false end
+        elseif not comparisonHolds(condition, values, day) then
+            return false
+        end
     end
     return true
 end
@@ -90,7 +133,8 @@ end
 -- with a `rises` var ticks when that var went up and its conditions hold on `after`; one
 -- without ticks when its conditions turned from false to true. Either way every var it reads
 -- must have had a value before: a var with none is read for the first time, which is a
--- baseline, not a change.
+-- baseline, not a change. A rule with `falls` ticks when its conditions turned from false to
+-- true and one of its `falls` vars went down.
 ---@param rule ChoreVarRule
 ---@param before table<string, integer>
 ---@param after table<string, integer>
@@ -104,7 +148,12 @@ function M.ticks(rule, before, after, day)
         local new = after[rule.rises]
         return new ~= nil and new > before[rule.rises] and M.holds(rule, after, day)
     end
-    return not M.holds(rule, before, day) and M.holds(rule, after, day)
+    if not M.holds(rule, after, day) or M.holds(rule, before, day) then return false end
+    if not rule.falls then return true end
+    for _, name in ipairs(rule.falls) do
+        if after[name] ~= nil and after[name] < before[name] then return true end
+    end
+    return false
 end
 
 return M

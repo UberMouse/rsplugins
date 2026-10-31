@@ -117,6 +117,11 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Broken Home Replay (*unproven*) | the game marks the week's Broken Home replay completed |
   | Soul Supplies from Lupe (*unproven*) | the game marks Lupe's supplies claimed |
   | Effigy Incubator (*unproven*) | the game marks the month's Effigy Incubator completed |
+  | Dream of Iaia Resources (daily and weekly) | every base-camp resource you have workers on has been used down to 0, and one of them just fell (sending the workers elsewhere doesn't tick it) |
+  | Dream of Iaia XP (weekly and monthly) | every skilling station you have workers for holds 0 stored XP, and one just fell (sending the workers elsewhere doesn't tick it) |
+
+  How often the two Dream of Iaia chores are due depends on how you split your workers, so
+  each is offered in two periods: pick the one that fits.
 
   *Unproven* ones haven't been checked in game yet. The four free collections keep the
   weekly reset the list gives them, although the game lets you claim each daily.

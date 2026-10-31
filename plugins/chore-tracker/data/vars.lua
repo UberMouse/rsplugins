@@ -2,12 +2,54 @@
 -- and its done rule over named VarPlayer vars (the rule language is in core/vars.lua); the
 -- names, base vars and bits are in docs/vars/vars.csv. shell/vars.lua ticks a chore when a
 -- watched var changes and its rule goes from false to true (or, for a rule naming a `rises`
--- var, that var goes up), never on a var's first read.
+-- var, that var goes up; for one naming `falls` vars, the rule turns true as one of them
+-- goes down), never on a var's first read.
 --
 -- `proven` marks a rule whose var was seen to move as the chore was done in the beta client
 -- (the var-dump session of 2026-10-25, docs/api-concepts.md); an unproven one ticks the same
 -- way. The four free collections keep their weekly period (data/chores.lua), so a claim
 -- ticks one until Wednesday's reset, although the game's flag is daily.
+
+-- Dream of Iaia. Each of the six base-camp resources has workers on it
+-- (DINO_BASE_CAMP_WORKER_ASSIGNED_<R>), a stock (DINO_BASE_CAMP_RESOURCE_<R>) and, once
+-- converted, XP stored at a skilling station (QUEST_EGW_FINALE_REWARD_STATION_XP_<SKILL>);
+-- the stations are from runescape.wiki/w/Dream_of_Iaia.
+local IAIA = {
+    { "WOOD", "FLETCHING" },
+    { "VINES", "HUNTER" },
+    { "LEAVES", "HERBLORE" },
+    { "PELTS", "CRAFTING" }, -- the wiki's "hides"
+    { "STONE", "CONSTRUCTION" },
+    { "CLAY", "FISHING" },
+}
+
+-- Both rules are done when every resource with workers on it has hit 0 (the stock, or the
+-- station's XP), and tick only when a stock or station went down, so moving workers off a
+-- full one never ticks. The `> 0` guard keeps a player with no workers from reading as done.
+-- The rules are shared by the chore's daily and weekly (resources) or weekly and monthly
+-- (XP) rows: the player's worker split sets how often each is due.
+---@param stockOf fun(pair: string[]): string
+---@return ChoreVarCondition[] done
+---@return string[] falls
+local function iaiaRule(stockOf)
+    local workers, done, falls = {}, {}, {}
+    for _, pair in ipairs(IAIA) do
+        local worker = "DINO_BASE_CAMP_WORKER_ASSIGNED_" .. pair[1]
+        local stock = stockOf(pair)
+        workers[#workers + 1] = { worker, ">", 0 }
+        done[#done + 1] = { any = { { worker, "==", 0 }, { stock, "==", 0 } } }
+        falls[#falls + 1] = stock
+    end
+    table.insert(done, 1, { any = workers })
+    return done, falls
+end
+
+local resourceDone, resourceFalls = iaiaRule(function(pair)
+    return "DINO_BASE_CAMP_RESOURCE_" .. pair[1]
+end)
+local xpDone, xpFalls = iaiaRule(function(pair)
+    return "QUEST_EGW_FINALE_REWARD_STATION_XP_" .. pair[2]
+end)
 
 ---@type ChoreVarRule[]
 return {
@@ -53,6 +95,19 @@ return {
         },
         proven = false,
     },
+    -- Dream of Iaia, validated by the user on 2026-10-31 (docs/api-concepts.md): 70 workers
+    -- on STONE and 0 elsewhere; resources wood 14400, vines 20400, leaves 19600, pelts
+    -- 12000, stone 93800, clay 14000; station XP Construction 150000, the other five
+    -- 75000. All were sent away from the activity.
+    {
+        chore = "dream-of-iaia-resource-daily",
+        done = resourceDone,
+        falls = resourceFalls,
+        proven = true,
+    },
+    { chore = "dream-of-iaia-resource", done = resourceDone, falls = resourceFalls, proven = true },
+    { chore = "dream-of-iaia-xp-weekly", done = xpDone, falls = xpFalls, proven = true },
+    { chore = "dream-of-iaia-xp", done = xpDone, falls = xpFalls, proven = true },
 
     -- The rules below are inferred from each var's name, unproven.
 

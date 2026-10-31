@@ -55,6 +55,8 @@ return {
     ["invention-machine-weekly"] = { obj = "INVENT_DIVINE_CHARGE" },
     ["arc-supplies"] = { obj = "ELR1_BAMBOO_LOW" },
     ["dream-of-iaia-resource"] = { sprite = "XP_TOKEN_0" },
+    ["dream-of-iaia-resource-daily"] = { sprite = "XP_TOKEN_0" },
+    ["dream-of-iaia-xp-weekly"] = { sprite = "XP_TOKEN_0" },
     ["gwd2-bounties"] = { obj = "GWD2_REP_TROPHY_ZAMORAK" },
     ["fort-forinthry-bonus-xp"] = { obj = "WOF_SMALL_FALLING_STAR_PRISMATIC" },
     ["advance-time"] = { sprite = "SPELL_ICON_STANDARD_SKILLING_ADVANCE_TIME_MOBILE" },

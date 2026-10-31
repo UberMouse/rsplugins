@@ -183,6 +183,64 @@ describe("chore-tracker popups", function()
         assert.are.equal(3, #h.ui:popups())
     end)
 
+    it("drops a celebration identical to the popup on screen", function()
+        local h = settled()
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
+        toggleTick(h, BERT.name) -- unticking
+        toggleTick(h, BERT.name)
+        h:advance(POPUP_MS * 2) -- a queued duplicate would surface by now
+        assert.are.same({ "CHORE COMPLETE" }, titles(h))
+        assert.are.equal(0, showing(h))
+    end)
+
+    it("drops a celebration identical to one already waiting", function()
+        local h = settled()
+        togglePicks(h, { BERT.id, GEOFF.id })
+        claim(h, BERT.flag)
+        toggleTick(h, GEOFF.name) -- Geoffrey's chore and the week's wait behind Bert's popup
+        toggleTick(h, GEOFF.name)
+        toggleTick(h, GEOFF.name)
+        h:advance(POPUP_MS * 4)
+        assert.are.same({ "CHORE COMPLETE", "CHORE COMPLETE", "WEEKLIES COMPLETE" }, titles(h))
+    end)
+
+    it("shows the same chore again once its popup has ended", function()
+        local h = settled()
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
+        h:advance(POPUP_MS)
+        toggleTick(h, BERT.name) -- unticking
+        toggleTick(h, BERT.name)
+        assert.are.same({ "CHORE COMPLETE", "CHORE COMPLETE" }, titles(h))
+        assert.are.equal(1, showing(h))
+    end)
+
+    it("still queues a different chore behind the popup on screen", function()
+        local h = settled()
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
+        toggleTick(h, BERT.name) -- unticking
+        toggleTick(h, GEOFF.name)
+        toggleTick(h, BERT.name) -- Bert's popup is still on screen: dropped
+        h:advance(POPUP_MS * 3)
+        assert.are.equal("Sand from Bert", h.ui:popups()[1].text)
+        assert.are.equal("Flax from Geoffrey", h.ui:popups()[2].text)
+        assert.are.equal(3, #h.ui:popups()) -- and the week they clear
+    end)
+
+    it("shows the same celebration again after the popups are cleared", function()
+        local h = settled()
+        togglePicks(h, { BERT.id, GEOFF.id })
+        toggleTick(h, BERT.name)
+        toggle(h, "popups") -- off clears the popup on screen
+        toggle(h, "popups")
+        toggleTick(h, BERT.name) -- unticking
+        toggleTick(h, BERT.name)
+        assert.are.same({ "CHORE COMPLETE", "CHORE COMPLETE" }, titles(h))
+        assert.are.equal(1, showing(h))
+    end)
+
     it("shows one at a time, first in first out, each ending on its own", function()
         local h = settled()
         togglePicks(h, { BERT.id, GEOFF.id })

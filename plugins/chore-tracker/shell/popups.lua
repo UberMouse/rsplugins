@@ -1,6 +1,8 @@
 -- Shows the celebrations core/celebrate.lua decides on, one at a time, as PrettyUI
 -- AchievementPopups in the plugin layer. A popup lasts about four seconds and calls
--- `onComplete` as it ends, which starts the next one in the queue.
+-- `onComplete` as it ends, which starts the next one in the queue. A celebration identical to the
+-- popup on screen or to one already waiting is dropped, so ticking, unticking and re-ticking a
+-- chore doesn't stack the same popup and jingle; once it has ended the chore shows again.
 
 local say = require("shell/say").say
 
@@ -21,6 +23,7 @@ local sound = true
 local enabled = true
 local queue = {} ---@type ChoreCelebration[]
 local showing = nil ---@type prettyui.AchievementPopup? the popup on screen
+local showingLabel = nil ---@type string? the label of the celebration `showing` shows
 
 -- Where the popups go. Call once, before anything else.
 ---@param opts { parent: ui.Component }
@@ -52,6 +55,7 @@ local function show(c)
             -- A popup cleared or replaced meanwhile never calls this (it has been destroyed).
             if showing == done then
                 showing = nil
+                showingLabel = nil
                 showNext()
             end
         end,
@@ -63,16 +67,31 @@ showNext = function()
     while showing == nil and #queue > 0 do
         local c = table.remove(queue, 1)
         showing = show(c)
-        if showing then say("celebrate", c.label) end
+        if showing then
+            showingLabel = c.label
+            say("celebrate", c.label)
+        end
     end
 end
 
--- Queue celebrations (none when popups are off) and start one if none is showing.
+-- Whether a celebration with this label is on screen or waiting in the queue.
+---@param label string
+---@return boolean
+local function isPending(label)
+    if showingLabel == label then return true end
+    for _, c in ipairs(queue) do
+        if c.label == label then return true end
+    end
+    return false
+end
+
+-- Queue celebrations (none when popups are off) and start one if none is showing. One whose
+-- label is already showing or queued is dropped.
 ---@param celebrations ChoreCelebration[]
 function M.enqueue(celebrations)
     if not enabled then return end
     for _, c in ipairs(celebrations) do
-        queue[#queue + 1] = c
+        if not isPending(c.label) then queue[#queue + 1] = c end
     end
     showNext()
 end
@@ -82,7 +101,7 @@ function M.clear()
     queue = {}
     if showing then
         local popup = showing
-        showing = nil
+        showing, showingLabel = nil, nil
         popup:Destroy()
     end
 end

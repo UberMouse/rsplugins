@@ -70,9 +70,11 @@ game already gives your client, never does anything in game for you, and sends n
   of a period are all done, a bigger one follows with a grander jingle: "DAILIES COMPLETE",
   "WEEKLIES COMPLETE" or "MONTHLIES COMPLETE". It shows again whenever they become all done.
   Unticking, picking or unpicking chores, and logging in, show nothing. Popups appear one at a
-  time and last about four seconds, whether the window is open, collapsed or in settings. In
-  the settings view, under **Celebrations**, untick "Celebration popups" to turn them off, or
-  "Popup sound" to keep them quiet. Both are saved for all characters.
+  time and last about four seconds, whether the window is open, collapsed or in settings. A
+  popup already showing or waiting isn't queued again, so ticking, unticking and re-ticking a
+  chore within those four seconds shows it once. In the settings view, under **Celebrations**,
+  untick "Celebration popups" to turn them off, or "Popup sound" to keep them quiet. Both are
+  saved for all characters.
 
 ## Chores it ticks for you
 

@@ -59,6 +59,12 @@ Each slice ends with a check-in with the user.
    session is gone), screenshot Bolt, click Play, get through the lobby, then
    `pon dev-bridge` from the console. After a crash, the "diff before another test" rule
    still applies.
+   Tried by hand after an idle logout (2026-10-31), with one-off scripts on rsdev's
+   `PointerSession` (idle wait, pointer and focus checked and put back, audited): a click on the
+   lobby's Play Now at a point read off a shot logged back in. Then, in one pointer session
+   hovering empty canvas, Alt+\` opened the console, the script waited while Claude checked a
+   shot (option (a) below), and `pon dev-bridge` was typed and the console closed. Both worked.
+   A logout turns plugins off (api-concepts), so recovering from one is this slice minus Bolt.
 
 ## Open questions
 
@@ -67,7 +73,8 @@ Each slice ends with a check-in with the user.
   `KeyDown` either way). Options: (a) Claude checks a shot between Alt+\` and typing; (b) a
   pixel test on the console's band in a shot, compared with one taken just before the toggle;
   (c) type only while the bridge is down (after a relaunch), when no plugin is running but the
-  game still takes keys, so this doesn't remove the risk by itself.
+  game still takes keys, so this doesn't remove the risk by itself. (a) worked once by hand
+  (slice 4 above): the console's purple band and empty `>` prompt are plain in a shot.
 - The login and lobby screens run no plugins, so the bridge can't vouch for a click target
   there. Raw coordinates are allowed only while the bridge is disconnected?
 - Other interface scales than 100.

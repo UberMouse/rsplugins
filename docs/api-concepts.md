@@ -657,6 +657,11 @@ example, `InventoryProxy` has `GetCategoryTotal`, `GetSlot`, `GetSlots`, `GetTot
   deliveries, both `enabled` true and none false; why is unknown.
   The dev recorder used to record a permission by `tostring`, which gave the pointer text; it
   now records the name. (dev-bridge eval, 2026-10-26)
+- **Logging out to the lobby turns enabled plugins off, and logging back in leaves them off.**
+  After an idle logout, dev-bridge and chore-tracker (both on) stopped polling; back in game
+  neither came back until `pon dev-bridge`, which logged "enabled", as from off. Plugins don't
+  run in the lobby. Whether the user's non-dev plugins behave the same is unchecked.
+  (dev-bridge, 2026-10-31)
 - **`Plugin` holds more than the page lists**: `HasPermission`, `urls`, `resources` (an empty
   table for a plugin without resources), and the undocumented `Name` and `Version` (the
   manifest's `name` and `version`) and `RemoteID` (-7 for dev-bridge loaded from `dev_plugins`).

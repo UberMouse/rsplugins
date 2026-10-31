@@ -292,7 +292,9 @@ CLI does the input itself, so `daemon.log` doesn't see it).
 In-client check (2026-10-31, chore-tracker): `ui` listed the window and rows with their text;
 `move --text 'Dream of Iaia XP' --shot` showed the row's tooltip; two `click --text` on it
 unticked then re-ticked it; `click 500 500` (the game world) was refused with exit 2 and the
-pointer untouched; `drag` on a row's grip moved the row and a second drag moved it back.
+pointer untouched; `drag` on a row's grip moved the row and a second drag moved it back. After
+the walk-after-idle change (c888dbd) the same checks passed again, and a drag from a grip to
+outside the window was refused at the first path point off plugin UI, with the pointer untouched.
 
 ### Protocol (schema 1)
 

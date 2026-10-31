@@ -875,6 +875,13 @@ Found in the beta client (2026-10-20), not in the official docs:
   makes var-dump's `start()` an unlikely cause of crash 9. Unconfirmed. Until it is: don't
   `prl` a plugin that has `httpAccess` through the bridge while another `httpAccess` plugin is
   running; ask the user to type it, or restart the client.
+- **Crash 11 (SIGSEGV, pid 2307643, 2026-11-01 12:57:39)**: crash 10 again, breaking its rule:
+  `prl chore-tracker` sent through the bridge (`rsdev.py exec`), chore-tracker's tee and remote
+  eval polling, the dev bridge polling. Same five frames. The reloaded code differed from what
+  the user's login had just loaded only in `shell/popups.lua` (no load-time API calls), and
+  nothing had run in between but the bridge connecting, so the reload itself, not the plugin's
+  code, is the common factor across crashes 9 to 11. Two out of two now for `prl chore-tracker`
+  from the bridge with its tee on: to load new plugin code, restart the client and log in.
 - **Closing the client segfaults** (2026-10-26, beta client 951-1): closing it gave a SIGSEGV
   three times out of three, at 15:09:17 (pid 2637620), 15:12:49 (pid 2649914) and 15:15:07 (pid
   2656263). `coredumpctl` shows the same stack each time, frame #4 jumping into a heap address.

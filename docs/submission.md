@@ -17,7 +17,8 @@ RuneScape's language rules.
    - **Visibility**: visible as soon as you create it (even before files) unless you set it
      hidden. Approval makes it visible.
 2. **Media**: up to 10 images per upload (jpg/png or a zip), YouTube links. Sketchfab doesn't
-   apply.
+   apply. A plugin's gallery images live in `media/<plugin>/` (made by `scripts/gallery.py`;
+   that folder's README says how to change the text or retake the screenshots).
 3. **Dependencies**: declare every manifest `requiredDependencies` entry as a Mod.io dependency.
    Don't declare optional ones. Only approved plugins that allow dependents are listed.
 4. **Files**: one zip (max 20 GB) with `main.lua` + `plugin.json` **at the zip root**, plus

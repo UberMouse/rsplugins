@@ -1,0 +1,241 @@
+{
+  "plugin": "Chore Tracker",
+  "pages": [
+    {
+      "name": "01-overview",
+      "layout": "hero",
+      "tagline": "Your daily, weekly and monthly RS3 chores in one checklist.",
+      "features": [
+        "<b>Pick</b> the chores you actually do",
+        "<b>Tick</b> them off; they clear at the game's resets",
+        "<b>Shop runs</b> and many more tick themselves",
+        "<b>Drag</b> chores into your own order"
+      ],
+      "images": [
+        {
+          "raw": "raw/list.png",
+          "scale": 1.6,
+          "x": 1246,
+          "y": 81
+        }
+      ],
+      "eyebrow": "RS3 plugin"
+    },
+    {
+      "name": "02-list",
+      "layout": "annotated",
+      "title": "Tick them off as you go",
+      "desc": "Your picked chores under Daily, Weekly and Monthly, each with its progress. Done chores dim and stay put.",
+      "descWidth": 780,
+      "images": [
+        {
+          "raw": "raw/list.png",
+          "scale": 1.6,
+          "x": 1010,
+          "y": 81,
+          "callouts": [
+            {
+              "box": [
+                311,
+                4,
+                26,
+                24
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "Fold into a strip"
+            },
+            {
+              "box": [
+                18,
+                40,
+                48,
+                25
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "Pick chores \u00b7 Info"
+            },
+            {
+              "box": [
+                8,
+                187,
+                322,
+                27
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "Click a row to tick it"
+            },
+            {
+              "box": [
+                178,
+                341,
+                39,
+                24
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "Counts the shops<br>you've bought from"
+            },
+            {
+              "box": [
+                15,
+                255,
+                98,
+                22
+              ],
+              "side": "left",
+              "x": 950,
+              "text": "Progress per period"
+            },
+            {
+              "box": [
+                17,
+                399,
+                21,
+                19
+              ],
+              "side": "left",
+              "x": 950,
+              "text": "Drag the grip to reorder"
+            }
+          ]
+        }
+      ],
+      "note": "Ticks clear themselves at the game's resets (UTC): daily at 00:00, weekly on Wednesday, monthly on the 1st."
+    },
+    {
+      "name": "03-settings",
+      "layout": "annotated",
+      "title": "Pick the chores you do",
+      "desc": "Every chore under Daily, Weekly and Monthly, grouped by kind. Click a row to pick it; changes save at once.",
+      "descWidth": 780,
+      "note": "Your picks, their order and your ticks are saved per character, so each character keeps its own list.",
+      "images": [
+        {
+          "raw": "raw/settings.png",
+          "scale": 1.6,
+          "x": 1010,
+          "y": 81,
+          "callouts": [
+            {
+              "box": [
+                309,
+                2,
+                28,
+                26
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "Back to your list"
+            },
+            {
+              "box": [
+                198,
+                180,
+                108,
+                110
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "How many shops<br>make each run"
+            },
+            {
+              "box": [
+                8,
+                411,
+                304,
+                28
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "Click a row to pick it"
+            },
+            {
+              "box": [
+                4,
+                76,
+                186,
+                48
+              ],
+              "side": "right",
+              "x": 1610,
+              "text": "Popups and their<br>sound, on or off"
+            },
+            {
+              "box": [
+                15,
+                331,
+                76,
+                22
+              ],
+              "side": "left",
+              "x": 950,
+              "text": "Grouped by kind"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04-strip-and-popup",
+      "layout": "annotated",
+      "title": "Fold it away",
+      "desc": "The menu button folds the window into a strip that shows your next chore. Finish a period's chores and a popup celebrates it.",
+      "descWidth": 1300,
+      "note": "Chores the plugin ticks for you get their own CHORE COMPLETE popup. Turn popups or their sound off in settings.",
+      "images": [
+        {
+          "raw": "raw/strip.png",
+          "scale": 2,
+          "x": 648,
+          "y": 400,
+          "callouts": [
+            {
+              "box": [
+                30,
+                7,
+                124,
+                26
+              ],
+              "side": "left",
+              "x": 600,
+              "text": "Your next chore:<br>click to tick it"
+            },
+            {
+              "box": [
+                282,
+                6,
+                27,
+                28
+              ],
+              "side": "right",
+              "x": 1330,
+              "text": "Open the window again"
+            }
+          ]
+        },
+        {
+          "raw": "raw/popup.png",
+          "scale": 1.6,
+          "x": 641,
+          "y": 620,
+          "callouts": [
+            {
+              "box": [
+                100,
+                10,
+                198,
+                22
+              ],
+              "side": "right",
+              "x": 1330,
+              "text": "Shows when a period<br>is all done, with a jingle"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

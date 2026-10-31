@@ -394,4 +394,43 @@ for _, skill in ipairs({
     }
 end
 
+-- Penguin Hide and Seek: a bit per penguin spotted this week (PENG_SPY_<0..11>, on
+-- PENG_SPY_SWITCH) and one for the polar bear; all read 0 on 2026-10-31, a week none was
+-- spotted. The first spot of the week ticks the chore: how many penguins a week has isn't in a
+-- var we know. Reading these only to tick is the user's call (docs/plans/chore-tracker.md).
+-- A !setvar of PENG_SPY_0 ticked the chore in the client (2026-10-31).
+for n = 0, 11 do
+    rules[#rules + 1] = {
+        chore = "penguin-hide-and-seek",
+        done = { { "PENG_SPY_" .. n, "==", 1 } },
+        proven = true,
+    }
+end
+rules[#rules + 1] = {
+    chore = "penguin-hide-and-seek",
+    done = { { "PENG_SPY_BEAR_FOUND", "==", 1 } },
+    proven = true,
+}
+
+-- Player-Owned Port: each voyage slot's _DONE read 1 with its voyage back, so sending a new one
+-- takes it to 0; and the Black Marketeer's offer (POP_MARKET_QUANTITY, 133 that day) taken to
+-- fall to 0 when bought. Only a fall ticks, so an unsent var's 0 never does. A !setvar of
+-- POP_VOYAGE_1_DONE to 0 ticked the chore in the client (2026-10-31); the market rule was
+-- never seen ticking, as the voyage had already ticked the day.
+for n = 1, 4 do
+    local name = "POP_VOYAGE_" .. n .. "_DONE"
+    rules[#rules + 1] = {
+        chore = "player-owned-ports",
+        done = { { name, "==", 0 } },
+        falls = { name },
+        proven = true,
+    }
+end
+rules[#rules + 1] = {
+    chore = "player-owned-ports",
+    done = { { "POP_MARKET_QUANTITY", "==", 0 } },
+    falls = { "POP_MARKET_QUANTITY" },
+    proven = false,
+}
+
 return rules

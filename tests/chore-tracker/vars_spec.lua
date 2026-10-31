@@ -479,6 +479,9 @@ describe("chore-tracker var list", function()
             "player-owned-farm x7",
             "herb-run x11",
             "fort-forinthry-bonus-xp x29",
+            "penguin-hide-and-seek x13",
+            "player-owned-ports x4",
+            "player-owned-ports (unproven)",
         }, ids)
     end)
 
@@ -487,7 +490,6 @@ describe("chore-tracker var list", function()
             for _, name in ipairs(varsCore.names(rule)) do
                 assert(catalog.var("VarPlayer", name), name .. " is not in docs/vars/vars.csv")
                 assert(name ~= "GODSS_PLAYER", "GODSS_PLAYER is another player's id")
-                assert(not name:find("PENG"), name .. ": penguins are out of scope")
             end
         end
     end)

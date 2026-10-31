@@ -56,7 +56,7 @@ describe("chore-tracker info groups", function()
             { "automatic", "unproven", "manual" },
             { groups[1].status, groups[2].status, groups[3].status }
         )
-        assert.are.same({ 39, 21, 8 }, { #groups[1].chores, #groups[2].chores, #groups[3].chores })
+        assert.are.same({ 41, 21, 6 }, { #groups[1].chores, #groups[2].chores, #groups[3].chores })
         local place = {}
         for i, chore in ipairs(chores) do
             place[chore] = i

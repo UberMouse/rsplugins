@@ -21,9 +21,9 @@ that dumps what a plugin sees to a local server (`lib/dev/`).
 | B | The plugin with manual ticking: chore data, resets, selection, per-character state, the window | `5581386..c0c94b0` |
 | C | Shop runs tick on a purchase; Dell Monti and the Weird Old Man tick on notes gained nearby | `22f67e4..6125dd2` |
 | C2 | Chores tick from the player's own game vars: 7 proven or user-accepted, 16 unproven | `6125dd2..69d3f6f` |
-| D | The 30 manual chores audited: 22 now tick themselves, all seen ticking in the client; 8 confirmed manual (see below) | 2026-10-31 |
+| D | The 30 manual chores audited: 24 now tick themselves, all seen ticking in the client; 6 confirmed manual (see below) | 2026-10-31 |
 
-60 of the 68 chores tick themselves (39 checked in game, 21 unproven). The plugin README's "Chores it ticks for you" is the list,
+62 of the 68 chores tick themselves (41 checked in game, 21 unproven). The plugin README's "Chores it ticks for you" is the list,
 and `data/shops.lua`, `data/collections.lua` and `data/vars.lua` are the source.
 
 ## Decisions that bind later work
@@ -59,11 +59,10 @@ These are the user's calls. They aren't all visible in the code.
   plugin in the extra-review tier, so the Mod.io listing must justify it.
 - **Never show a var's value**; vars only tick chores. The README's Data Protection section names
   what the plugin reads without counting the vars.
-- **Off limits:**
+- **Reading a var only to tick a chore is fine, hidden or not** (the user, 2026-10-31,
+  superseding the earlier "off limits" list for the Black Marketeer and penguin vars): the
+  plugin shows the user nothing from it. A var may still never be shown, and:
   - `GODSS_PLAYER` is another player's id. Never read it.
-  - Black Marketeer `POP_MARKET_RESOURCE_ROLLS` may encode upcoming offers. Never read it.
-  - The penguin vars (`PENG_SPY_*`) may encode this week's locations. Don't use them without
-    the user's go-ahead.
 - **PrettyUI has no licence:** read its source locally, never copy or vendor it. The window's
   scroll keep and the drag grips read PrettyUI 1.2.0's internal `_scroll.scrollY`, each list
   row is handed the window's internal `_onScrollWheel` so the wheel scrolls over it, and the
@@ -150,10 +149,10 @@ Staged order, with a check-in in the beta client after each:
 
 The user's call: every chore that was ticked by hand is suspect. Each must get a detector,
 unproven until checked, or be confirmed manual with the reason, and a detector that rsdev can
-validate in the client (`!setvar`, `!getvar`, `!tele`) is automatic. Of the 30, 22 tick
-themselves and each was seen ticking in the client: 19 var rules, the 2 Invention machine
-chores (a new output detector, `data/machines.lua`) and Bandit Duty Free (a shop row). 8 stay
-manual, each for a reason below. Status counts now: 39 automatic, 21 unproven, 8 manual.
+validate in the client (`!setvar`, `!getvar`, `!tele`) is automatic. Of the 30, 24 tick
+themselves and each was seen ticking in the client: 21 var rules, the 2 Invention machine
+chores (a new output detector, `data/machines.lua`) and Bandit Duty Free (a shop row). 6 stay
+manual, each for a reason below. Status counts now: 41 automatic, 21 unproven, 6 manual.
 
 **How each rule was validated** (session `a3abc00dce`): `!getvar` read each var's value, then
 `!setvar` moved it to a done value, the console showed `[CHORES] seen <id> done (<var>)`, and
@@ -196,6 +195,8 @@ day in brackets.
 | Water Filtration | `DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME` rises [0 in client and on the server] | whether it is the clean-out time; it is sent away from the oasis |
 | Arc Supplies from Rosie | `ELR1_DAILY_SUPPLIES_TAKEN == 1` [0] | `ELR2_FREE_SUPPLIES` (4 bits) unused |
 | Giant Oyster | `TUTISLAND_REWARD_OYSTER_FED_SEACUCMBER == 1` and `_SEAWEED == 1` [0, 0; `TUTISLAND_REWARD_STATE` 1] | ticks on feeding, the month's last step; looting last month's chest isn't seen |
+| Penguin Hide and Seek | any `PENG_SPY_<0..11> == 1` or `PENG_SPY_BEAR_FOUND == 1` [all 0, none spotted this week]: the first spot ticks the week | the week's penguin count isn't in a known var, so "all found" isn't built; `PENG_SPY_POINTS` (35) and `_TOTAL_PENG` (311) look lifelong |
+| Player-Owned Port | any `POP_VOYAGE_<1..4>_DONE` falls to 0 (sending a voyage) [all 1, voyages back]; or `POP_MARKET_QUANTITY` falls to 0 (buying the Black Marketeer's offer) [133] | the market rule is unproven: its `!setvar` came after the voyage had ticked the day |
 
 ### Automatic: seen ticking on the real activity (2026-10-31)
 
@@ -205,18 +206,16 @@ day in brackets.
 | Fort Forinthry Bonus XP | any `BONUSXP_<skill>` rises while the player is within 10 tiles of Aster (3302, 3571): a new `near` field in the rule language (`core/vars.lua`), the tile read only when such a rule's var changes. A lamp or star used beside Aster ticks it too | the user's claim raised `BONUSXP_AGILITY` 0 -> 1596975 beside Aster; then a `!setvar` of it there logged `seen fort-forinthry-bonus-xp done (BONUSXP_AGILITY)`. The Town Hall's own `PLAYER_FORT_GLE_TOTAL_XP_GAINED` never reaches the client |
 | Bandit Duty Free | a shop row: Noterazzo's shop is the inventory `TAXFREE` (not `DT_BANDIT_SHOP`) | a purchase moved `TAXFREE`; after a reload a second purchase logged `purchase bandit-duty-free at Noterazzo, Bandit Duty Free`. The camp's bandits kill an unskulled player: get skulled by Mr Ex first (Edgeville, 3088, 3507).
 
-### Confirmed manual (8)
+### Confirmed manual (6)
 
 | Chore | Why | What would move it |
 |---|---|---|
 | Nemi Forest | the map comes from outside the game; no var in the catalog | nothing in reach |
 | Book of Char | its vars are `FMC_*` (the item is `FMC_FIREMAKERS_HANDBOOK`). Unleashing set `FMC_REWARD_BOOK_USE` to today's RuneDay (9012) on the server, but the client still read 0: it isn't sent. The client saw only the chat line "You unleash the power of the book of Char. You feel like you could burn any logs you touch!" (2026-10-31) | a chat detector (`chatAccess`) on that line |
 | Rapid Growth | the cast moved only the patch's region-relative stage var (2026-10-30); `POF_RAPIDGROWTH_*` are the farm's patches | a chat line at the cap (`chatAccess`) |
-| Player-Owned Port | the Black Marketeer's `POP_MARKET_QUANTITY` is borderline (`POP_MARKET_RESOURCE_ROLLS` may encode future offers); "manage port" has no single signal | the user's go-ahead on the market var |
 | Big Top Bonanza | no var found (the `FMC_CIRCUS_*` vars are the quest's) | a change log during a show |
 | Familiarisation | `DNDTRACKER_FAMILIARIZATION_*` is only the schedule | a chat line (`chatAccess`) |
-| Penguin Hide and Seek | the `PENG_SPY_*` vars may encode this week's locations: off limits without the user's go-ahead | a chat line, or the go-ahead |
-| Skeletal Horror | only an NPC removal nearby shows the kill (NPC tracking is the extra-review tier); `CHEEVO_MINIGAME_CLUES_SKELETAL_HORROR` is a one-bit achievement | the user's call on NPC tracking |
+| Skeletal Horror | only an NPC removal nearby shows the kill (NPC tracking is the extra-review tier); `CHEEVO_MINIGAME_CLUES_SKELETAL_HORROR` is a one-bit achievement | an `NPCEntityRemoved` detector near the boss: a new class |
 
 ## Evidence: the 2026-10-30 probe and earlier candidate notes
 

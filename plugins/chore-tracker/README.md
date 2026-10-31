@@ -159,6 +159,8 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Arc Supplies from Rosie | the game marks Rosie's free supplies taken |
   | Giant Oyster | the oyster has been fed both its sea cucumber and its seaweed |
   | Arc Contracts | you complete the day's last contract: 3, plus one for each "contracts per day" upgrade bought |
+  | Penguin Hide and Seek | you spot one of the week's penguins or the polar bear: the first spot ticks the week |
+  | Player-Owned Port | you send a ship on a voyage, or buy the Black Marketeer's offer (the market part is *unproven*) |
   | Fort Forinthry Bonus XP | any skill's bonus XP goes up while you stand within 10 tiles of Aster, in the Town Hall: claiming from Aster does that (so does a lamp or star used beside her) |
   | Dream of Iaia Resources (daily and weekly) | every base-camp resource you have workers on has been used down to 0, and one of them just fell (sending the workers elsewhere doesn't tick it) |
   | Dream of Iaia XP (weekly and monthly) | every skilling station you have workers for holds 0 stored XP, and one just fell (sending the workers elsewhere doesn't tick it) |

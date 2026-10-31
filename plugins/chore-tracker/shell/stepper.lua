@@ -1,7 +1,8 @@
 -- A settings line that sets a number: a name at the left, cut with "..." to stop short of the
 -- buttons, and "[-] N of M [+]" at the right edge (the How many to do block: how many of a
--- chore's parts tick it), with a tooltip over the name saying what the number counts. PrettyUI 1.2.0's SpriteButton has a PLUS sprite but no minus
--- (tests/harness/api/prettyui/internal.lua), so both buttons are hand-built as a matched pair.
+-- chore's parts tick it), with a tooltip over the name saying what the number counts.
+-- PrettyUI 1.2.0's SpriteButton has a PLUS sprite but no minus, so both buttons are hand-built
+-- as a matched pair.
 -- The texts sit straight in the content, not in a layer, so the line is never taken for a
 -- chore row; the tooltip hangs on an empty layer under the name.
 
@@ -20,8 +21,7 @@ local STEPPER_WIDTH = BUTTON_SIZE + VALUE_WIDTH + BUTTON_SIZE
 -- The content width that is not the name's: both side paddings, the stepper and a gap.
 local NAME_INSET = PADDING * 2 + STEPPER_WIDTH + rows.LABEL_GAP
 
--- The client's own RS3 minus and plus pair, picked from the sprite list
--- (docs/api/consts/Sprite.lua); seen drawing in the client (docs/api-concepts.md).
+-- The client's own RS3 minus and plus pair (id.Sprite), seen drawing in the client.
 local MINUS_SPRITE = id.Sprite.RS3_CONTEXTUAL_INPUT_MINUS
 local PLUS_SPRITE = id.Sprite.RS3_CONTEXTUAL_INPUT_PLUS
 
@@ -34,7 +34,7 @@ local PLUS_SPRITE = id.Sprite.RS3_CONTEXTUAL_INPUT_PLUS
 
 -- A button at `x` from the content's right edge (negative: leftwards) on the line at `y`,
 -- showing `sprite`, that runs `onClick` on a press. ONCLICK, as for the rows: a quick click
--- can arrive release-first in the client (docs/api-concepts.md).
+-- can arrive release-first in the client.
 ---@param content ui.Layer
 ---@param x integer
 ---@param y integer

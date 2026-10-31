@@ -1,19 +1,11 @@
--- One chore's row in the list or settings view, hand-built from plain components inside the
--- window's content, or in the collapsed strip (shell/strip.lua, whose row changes its icon as it
--- moves to the next chore): the chore's icon at the left, its text, and a tick box at the right edge.
--- A list row also has a drag grip left of the icon (shell/grips.lua takes the presses on it).
--- The info view's rows are display-only: icon and text, with no tick box, no click and no
--- hyperlink hand, but the same name fitting and tooltip.
--- The row layer takes the clicks; the icon, text and box let them through to it. While the
--- mouse is over the row it shows the hyperlink hand, and its box shows a hovered sprite. A
--- row is changed in place (colour, dimming, tick, text, tooltip) and goes when its window is
--- destroyed. A name too long for its row is cut short with "..." (ui.Text can't
--- clip), and its tooltip then leads with the full text.
--- PrettyUI 1.2.0's CheckboxButton can neither show an icon nor be recoloured or retexted, so
--- neither view uses it for chore rows (only the settings view's Celebrations switches do).
--- Instead both views place these rows at the spots core/listlayout.lua works out, and change
--- them in place, so the window is rebuilt only for a view switch, a login change or the clock
--- starting or stopping.
+-- One chore's row in a view or the collapsed strip, hand-built from plain components: the
+-- chore's icon at the left, its text, and a tick box at the right edge. A list row also has a
+-- drag grip (shell/grips.lua takes its presses); an info row is display-only, with no box and
+-- no click. The row layer takes the clicks and its children let them through. A name too long
+-- for the row is cut with "..." (ui.Text can't clip), and its tooltip then leads with it.
+-- PrettyUI 1.2.0's CheckboxButton can't show an icon or be recoloured, so rows don't use it.
+-- Rows sit at the spots core/listlayout.lua works out and are changed in place (colour,
+-- dimming, tick, text, tooltip); they go when their window is destroyed.
 
 local fit = require("core/fit")
 local listlayout = require("core/listlayout")
@@ -52,11 +44,10 @@ local BOX_EMPTY = id.Sprite.RS3_BTN_CHECKBOX_0
 local BOX_EMPTY_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_1
 local BOX_TICKED = id.Sprite.RS3_BTN_CHECKBOX_2
 local BOX_TICKED_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_3
--- The grip's sprite, the user's pick from a sprite probe (docs/api-concepts.md).
+-- The grip's sprite: the client's hamburger menu icon.
 local GRIP_SPRITE = id.Sprite.HAMBURGER_MENU_ICON
 
--- The cursor over a row. The user chose it among eight in a probe (docs/api-concepts.md).
--- Shared with shell/stepper.lua's buttons.
+-- The cursor over a clickable row, and over shell/stepper.lua's buttons.
 M.ROW_CURSOR = id.Cursor.CURSOR_HYPERLINK_HAND
 
 local FONT_NAME = "MUSEO_SANS_15PT_REGULAR"
@@ -92,7 +83,7 @@ local reported = {} ---@type table<string, boolean>
 
 -- The id behind an icon's constant name, or nil when this client has no such name (a game
 -- update renamed it, say), which is logged once. An unknown name reads -1 in id.Sprite and
--- id.Obj, not nil, and doesn't raise (docs/api-concepts.md#configs-vs-entities).
+-- id.Obj, not nil, and doesn't raise.
 ---@param icon ChoreIcon
 ---@return integer?
 local function resolve(icon)
@@ -175,8 +166,8 @@ function M.setIcon(row, icon)
     row.icon = sprite
 end
 
--- Show `cursor` while the mouse is over `layer`. Both settings are made: whether
--- mouseOverCursor alone is enough is unsettled (docs/api-concepts.md).
+-- Show `cursor` while the mouse is over `layer`. Both settings are made, as it isn't known
+-- whether mouseOverCursor alone is enough.
 ---@param layer ui.Layer
 ---@param cursor integer an id.Cursor member
 function M.setCursor(layer, cursor)
@@ -185,14 +176,14 @@ function M.setCursor(layer, cursor)
 end
 
 -- Make a row at content height `y` under `content`, showing `icon` (nothing if it is nil or its
--- name doesn't resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick
--- click can arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
--- `ui.Layer`"). Without `onClick` the row is display-only: no tick box, no hover state, no
--- hyperlink hand, and its name may run to the row's right edge. `opts.wheel` takes the mouse
--- wheel over the row, which the row would otherwise swallow; the collapsed strip's row, with no
--- window to scroll, has none. With `opts.grip`, the row gets a drag grip at its left and the
--- rest moves right to make room. `opts.margins` sets the space left free at the content's sides
--- (PrettyUI's flow padding by default). Call M.show to give it its text and state.
+-- name doesn't resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a
+-- quick click can arrive release-first in the client. Without `onClick` the row is
+-- display-only: no tick box, no hover state, no hyperlink hand, and its name may run to the
+-- row's right edge. `opts.wheel` takes the mouse wheel over the row, which the row would
+-- otherwise swallow; the collapsed strip's row, with no window to scroll, has none. With
+-- `opts.grip`, the row gets a drag grip at its left and the rest moves right to make room.
+-- `opts.margins` sets the space left free at the content's sides (PrettyUI's flow padding by
+-- default). Call M.show to give it its text and state.
 ---@param content ui.Layer
 ---@param y integer
 ---@param icon ChoreIcon?
@@ -250,7 +241,7 @@ function M.new(content, y, icon, onClick, opts)
         -- Under the default id: Tooltip.attach subscribes the same hooks under its own id
         -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other. Both return
         -- true: in the client a listener that returns nothing stops the ones after it, the
-        -- tooltip's included (docs/api-concepts.md).
+        -- tooltip's included.
         layer:Subscribe(ui.Hook.ONMOUSEOVER, function()
             row.hovered = true
             drawBox(row)
@@ -266,7 +257,7 @@ function M.new(content, y, icon, onClick, opts)
 end
 
 -- The client font's pixel width of `text`, tags parsed (ignoreTags false: only the text
--- between them counts, as measured in the beta client). Raises when the font can't measure.
+-- between them counts, as measured in the client). Raises when the font can't measure.
 ---@param text string
 ---@return number
 local function measure(text)

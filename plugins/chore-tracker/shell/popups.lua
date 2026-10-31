@@ -6,8 +6,8 @@ local say = require("shell/say").say
 
 local M = {}
 
--- Size in pixels and built-in sound (id.Sound, docs/api/consts/Sound.lua) per kind of popup:
--- PrettyUI's default size for a chore, bigger and a grander sound for a cleared period.
+-- Size in pixels and built-in sound (id.Sound) per kind of popup: PrettyUI's default size for a
+-- chore, bigger and a grander sound for a cleared period.
 local STYLES = {
     chore = { width = 300, height = 92, sound = id.Sound.ARCH_INFO_POPUP },
     period = { width = 400, height = 120, sound = id.Sound.LEAGUE2_HARD_TASK_COMPLETE },

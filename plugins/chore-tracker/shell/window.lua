@@ -74,10 +74,10 @@ function M.isCollapsed()
     return collapsed ~= nil
 end
 
--- A wheel handler for `w`'s hand-built rows, which would otherwise swallow the wheel
--- (docs/api-concepts.md). It scrolls `w` by SCROLL_STEP per wheel delta (positive is down) and
--- returns false if that moved it, else true, so at either end the wheel passes on, as with
--- PrettyUI 1.2.0's own handler on the window's content.
+-- A wheel handler for `w`'s hand-built rows, which would otherwise swallow the wheel. It scrolls
+-- `w` by SCROLL_STEP per wheel delta (positive is down) and returns false if that moved it, else
+-- true, so at either end the wheel passes on, as with PrettyUI 1.2.0's own handler on the
+-- window's content.
 ---@param w prettyui.Window
 ---@return ChoreWheelHandler
 function M.wheelHandler(w)

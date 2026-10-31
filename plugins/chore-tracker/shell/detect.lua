@@ -39,9 +39,8 @@ local options = nil ---@type ChoreDetectOptions?
 local shopIndex = {} ---@type table<string, ChoreShopHit[]>
 -- Machine output inventory name -> the chores it serves.
 local machineChores = {} ---@type table<string, Chore[]>
--- Every watched shop and machine output inventory's config (no name is both, data_spec.lua
--- checks), and the slot counts of each one the client holds now (a shop's only while it is
--- open).
+-- Every watched shop and machine output inventory's config (no name is both), and the slot
+-- counts of each one the client holds now (a shop's only while it is open).
 local invTypes = {} ---@type table<string, InvType>
 local invCounts = {} ---@type table<string, integer[]>
 -- Every collection with its chore, in data order.
@@ -52,10 +51,10 @@ local noteNames = {} ---@type string[]
 local objTypes = {} ---@type table<string, ObjType>
 local noteCounts = nil ---@type table<string, integer>?
 
--- A listed name the client's config lacks (a game update renamed it, say) is said once and
--- left unwatched, so a nil config never reaches Inventory.Find or GetTotal. The client reads
--- nil for an unknown name, without raising (docs/api-concepts.md#configs-vs-entities). The
--- casts drop config.Inv's and config.Obj's FromID member from the type.
+-- A listed name the client's config lacks (a game update renamed it, say) is said once and left
+-- unwatched, so a nil config never reaches Inventory.Find or GetTotal. The client reads nil for
+-- an unknown name, without raising. The casts drop config.Inv's and config.Obj's FromID member
+-- from the type.
 
 -- Watch inventory `name` if the client's config has it; say so and return false if not.
 ---@param name string
@@ -278,10 +277,8 @@ function M.onInventoryAdded(ev)
     end
 end
 
--- In the backpack, a rise in notes may be a collection. In a listed shop, any line lower
--- than before is a purchase; in a machine output, a lower total is a collect. The new counts
--- become the baseline either way, so a restock, a sale or a machine working (counts rising)
--- only moves it.
+-- Compare the new counts with the last (core/detect.lua says what each change means). The new
+-- counts become the baseline either way.
 ---@param ev InventoryUpdatedEventPayload
 function M.onInventoryUpdated(ev)
     local name = ev.inv.configName

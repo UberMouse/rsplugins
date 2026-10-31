@@ -2,7 +2,7 @@
 -- (a shell/rows.lua row, so it looks and ticks like a list row) or, when there is no chore to
 -- show, a message in its place. Both are made with the panel on a collapse and changed in place
 -- after, so ticking the row only retexts it to the next chore. The row has no tooltip: the
--- panel clips one to its own bounds (docs/api-concepts.md, "PrettyUI in the client").
+-- panel clips one to its own bounds.
 
 local layout = require("core/layout")
 local rows = require("shell/rows")

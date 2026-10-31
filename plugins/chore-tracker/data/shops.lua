@@ -1,16 +1,14 @@
--- The shops each shop-run chore can be done at, hand-written.
--- A purchase at one of a chore's shops records that shop as bought from this period (see
--- shell/detect.lua). A chore with one shop then ticks; one with several ticks once as many of
--- them as it needs were bought from: all of them, or fewer if the player set a count in
--- settings (each shop is a part, core/parts.lua; core/state.lua, partsNeeded).
+-- The shops each shop-run chore can be done at, hand-written. A purchase (core/detect.lua says
+-- how one is seen) records that shop as bought from this period. A chore with one shop then
+-- ticks; one with several ticks once as many of them as it needs were bought from: all of them,
+-- or fewer if the player set a count in settings (each shop is a part, core/parts.lua).
 --
 -- `invs` are the shop's inventory config names (config.Inv.<name>), which is how the client
--- tells one shop from another: every shop has its own inventory, even shops selling the
--- same thing. A shop with two, one before a quest and one after, counts as bought on a
--- purchase in either. `proven` marks a shop where a purchase was seen in the beta client
--- (docs/api-concepts.md, "Shops in the client"). An unproven one (`proven = false`) is a
--- shop from the wiki matched by name to inventories in the client's own list (`pan Inv`);
--- it counts the same way, but no purchase there has been seen yet.
+-- tells one shop from another: every shop has its own inventory, even shops selling the same
+-- thing. A shop with two, one before a quest and one after, counts as bought on a purchase in
+-- either. `proven` marks a shop where a purchase was seen in the client. An unproven one is a
+-- shop from the wiki matched by name to inventories in the client's inventory config list; it
+-- counts the same way, but no purchase there has been seen yet.
 
 ---@class ChoreShop
 ---@field name string shown in the chore's tooltip
@@ -64,7 +62,6 @@ return {
         },
     },
     ["seaweed-and-pineapples"] = {
-        -- Seen in the client: SHOP read 47 (ARHEINSTORE) as the user bought there.
         { name = "Arhein, Catherby", invs = { "ARHEINSTORE" }, proven = true },
     },
     ["rune-shop-run"] = {
@@ -98,8 +95,8 @@ return {
             proven = false,
         },
     },
-    -- Noterazzo's shop in the Wilderness bandit camp: a purchase there on 2026-10-31 moved
-    -- TAXFREE (DT_BANDIT_SHOP, the only inventory named for bandits, is another shop's).
+    -- Noterazzo's shop in the Wilderness bandit camp is the TAXFREE inventory (DT_BANDIT_SHOP,
+    -- despite its name, is another shop's).
     ["bandit-duty-free"] = {
         { name = "Noterazzo, Bandit Duty Free", invs = { "TAXFREE" }, proven = true },
     },

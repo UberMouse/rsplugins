@@ -30,8 +30,8 @@ local DEFAULT_X, DEFAULT_Y, DEFAULT_WIDTH, DEFAULT_HEIGHT = 600, 300, 320, 420
 -- The smallest the window can be resized to.
 M.MIN_WIDTH, M.MIN_HEIGHT = 240, 160
 
--- PrettyUI 1.2.0's frame each side and scrollbar (docs/testing.md's fidelity ledger), and slack
--- in case the client's line-breaking measures wider than GetStringWidth.
+-- PrettyUI 1.2.0's frame each side and its scrollbar width, plus slack in case the client's
+-- line-breaking measures wider than GetStringWidth.
 local FRAME, SCROLLBAR, WRAP_SPARE = 8, 18, 8
 
 -- A view's help is the info view's paragraphs, or settings' text for an empty How many to do
@@ -45,10 +45,9 @@ end
 
 -- Whether to rebuild a view for its help to fit the window's width: the help was wrapped for a
 -- window `builtWidth` wide, and the window was `polledWidth` wide at the previous poll and is
--- `width` wide now. A text row keeps the height it was built with (docs/api-concepts.md,
--- "PrettyUI in the client"), so a narrowed window would overlap rows and a widened one leaves
--- space unused.
--- Only once the width has stopped changing between polls, so a resize isn't cut short.
+-- `width` wide now. A text row keeps the height it was built with, so a narrowed window would
+-- overlap rows and a widened one leaves space unused. Only once the width has stopped changing
+-- between polls, so a resize isn't cut short.
 ---@param builtWidth integer
 ---@param polledWidth integer
 ---@param width integer

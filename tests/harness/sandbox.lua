@@ -258,7 +258,7 @@ local function makeRequire(h, env)
                 path
                     .. " returned a "
                     .. type(result)
-                    .. ": the client's require only returns tables (a function came back nil)"
+                    .. ": the client's require only returns tables (never a function)"
             )
         end
         cache[file] = result == nil and NIL or result

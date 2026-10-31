@@ -1,12 +1,10 @@
--- The icon each chore's list row shows, hand-written. Each entry
--- names one built-in client graphic by its constant name: `obj`, an item (id.Obj.<name>, from
--- docs/api/consts/Obj.lua), or `sprite`, an interface sprite (id.Sprite.<name>, from
--- docs/api/consts/Sprite.lua). Names, not ids, so this stays plain data (the specs read it
--- outside the plugin, where `id` doesn't exist) and the shell looks each one up as it builds a
--- row. An item pictures the chore's reward or the thing it handles; the round gold sprites
--- (XP_TOKEN_0 and the SKILL_* ones) mark chores whose reward is XP, and MAPFUNCTION_SEP_0, the
--- General Store map icon, marks the general shops. All are graphics the client already has: the
--- plugin ships no images of its own.
+-- The icon each chore's rows show, hand-written. Each entry names one built-in client graphic by
+-- its constant name: `obj`, an item (id.Obj.<name>), or `sprite`, an interface sprite
+-- (id.Sprite.<name>). Names, not ids, so this stays plain data that needs no client globals, and
+-- the shell looks each one up as it builds a row. An item pictures the chore's reward or the
+-- thing it handles; the round gold sprites (XP_TOKEN_0 and the SKILL_* ones) mark chores whose
+-- reward is XP, and MAPFUNCTION_SEP_0, the General Store map icon, marks the general shops. All
+-- are graphics the client already has: the plugin ships no images of its own.
 
 ---@class ChoreIcon
 ---@field obj string? an id.Obj constant name

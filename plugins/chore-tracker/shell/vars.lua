@@ -1,9 +1,8 @@
 -- Ticks chores from the player's own VarPlayer vars: the rules are in data/vars.lua, their
--- logic in core/vars.lua. A var's first value only sets its baseline. main.lua calls scan on
--- each character switch, and for SETTLE_TICKS after it every read only replaces the
--- baseline, so a chore done while the plugin was off is never ticked. main.lua forwards
--- every VarTransmit and calls tick each Logic tick; this module keeps only the last values
--- read, no chore state.
+-- logic in core/vars.lua. main.lua calls scan on each character switch, and for SETTLE_TICKS
+-- after it every read only replaces the baseline, so a chore done while the plugin was off is
+-- never ticked. main.lua forwards every VarTransmit and calls tick each Logic tick; this module
+-- keeps only the last values read, no chore state.
 
 local state = require("core/state")
 local varsCore = require("core/vars")
@@ -11,14 +10,14 @@ local say = require("shell/say").say
 
 local M = {}
 
--- 10 s of Logic ticks (50 a second, docs/api-concepts.md "Tick rates"): the window in which
--- the login's burst of var updates arrives, so they aren't taken for the player doing a chore.
+-- 10 s of Logic ticks (50 a second, seen in the client): the window in which the login's burst of
+-- var updates arrives, so they aren't taken for the player doing a chore.
 local SETTLE_TICKS = 500
 
 ---@class ChoreVarOptions
 ---@field chores Chore[]
 ---@field rules ChoreVarRule[]
----@field parts table<string, ChoreParts> chore id -> its parts (core/parts.lua), for rules naming one
+---@field parts table<string, ChoreParts> chore id -> its parts, for rules naming one
 ---@field apply fun(change: ChoreChange) as ChoreDetectOptions.apply
 ---@field where fun(): ChoreTile? the player's tile, for rules that must be seen near one
 
@@ -57,8 +56,7 @@ function M.init(o)
         local names, complete = varsCore.names(rule), true
         for _, name in ipairs(names) do
             if not varTypes[name] and not missing[name] then
-                -- The client reads nil for an unknown name, without raising
-                -- (docs/api-concepts.md#configs-vs-entities).
+                -- The client reads nil for an unknown name, without raising.
                 local v = var.VarPlayer[name] --[[@as VarType?]]
                 if v then
                     -- Registered before the rule is known complete, so a var read only by a
@@ -116,10 +114,9 @@ local function firstChanged(names, changed)
 end
 
 -- Watched vars changed from `before` to `after`: for each rule that reads one of them and
--- whose change ticks it (core/vars.lua's ticks), mark its part done (the chore ticks once
--- enough are, state.recordPart), or for a rule without a part tick its chore if it isn't done
--- this period. Each change to the tracker is logged, "done" when it ticked the chore, "part"
--- when it only counted towards it.
+-- whose change ticks it (core/vars.lua), mark its part done (the chore ticks once enough are),
+-- or for a rule without a part tick its chore if it isn't done this period. Each change to the
+-- tracker is logged, "done" when it ticked the chore, "part" when it only counted towards it.
 ---@param before table<string, integer>
 ---@param after table<string, integer>
 ---@param changed table<string, true>
@@ -150,9 +147,9 @@ local function onChanged(before, after, changed)
     end)
 end
 
--- A var update names either its base var or the one VarBit that changed
--- (docs/api-concepts.md), so either way re-read the watched vars of that base. A var of any
--- other base returns after one table lookup.
+-- A var update names either its base var or the one VarBit that changed (both seen in the
+-- client), so either way re-read the watched vars of that base. A var of any other base returns
+-- after one table lookup.
 ---@param ev VarTransmitEventPayload
 function M.onVarTransmit(ev)
     local base = baseOf(ev.var)

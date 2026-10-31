@@ -1,9 +1,9 @@
 -- A chore's parts: the things it can be done at (shops, herb patches, bloodwood trees,
 -- penguins...) when it has several, and how many of them tick it. Built once at load from the
 -- data files: a shop run's parts are its shops (data/shops.lua), and a var chore's the `part`
--- keys its rules name (data/vars.lua). The Invention machines have none: a collect from any
--- one ticks them (the user's call, 2026-10-31). core/state.lua records each part done this
--- period, by any of its keys, and ticks the chore once the player's count of them is done.
+-- keys its rules name (data/vars.lua). The Invention machines have none: a collect from any one
+-- ticks them. core/state.lua records each part done this period, by any of its keys, and ticks
+-- the chore once the player's count of them is done.
 --
 -- data/counts.lua gives every chore whose parts aren't shops a noun, a default count and the
 -- help for its settings line; a shop run needs all its shops until the player sets fewer.

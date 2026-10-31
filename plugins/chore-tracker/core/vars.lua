@@ -1,22 +1,20 @@
--- Whether a chore's done rule (data/vars.lua) holds on a set of var values, as plain data.
--- shell/vars.lua reads the vars and asks `ticks` whether a change ticks a chore; nothing
--- here touches the game.
+-- Whether a chore's done rule (data/vars.lua) holds on a set of var values, and whether a change
+-- of them ticks its chore. Pure: shell/vars.lua reads the vars and asks `ticks`.
 --
--- A rule's `done` is a list of conditions that must all hold (a rule without one always
--- holds). Each condition compares two operands with "==", ">" or ">=". An operand is a var's
--- name (its value) or a number; a condition naming a var with no value doesn't hold. A
--- condition may instead be `{ any = { <condition>, ... } }`, which holds when at least one of
--- its member conditions does (an OR; members are plain conditions, not further groups, and an
--- empty group never holds). A rule may also name, as `rises`, a var whose going up is what
--- ticks its chore, or, as `falls`, a list of vars whose going down does: it ticks only on a
--- change where its conditions turned from false to true and at least one of those vars went
--- down. A rule has `rises` or `falls`, not both. A rule may also name a tile it must be seen
--- `near` (core/detect.lua's near): it ticks only while the player stands within range of it,
--- for a var that other places move too. A rule naming a `part` marks that part done rather
--- than the chore (shell/vars.lua).
+-- The rule shapes, by example:
+--   { chore = "x", done = { { "A", "==", 1 } } }      ticks when A becomes 1
+--   { chore = "x", done = { { "A", ">=", "B" } } }    an operand is a var's name or a number
+--   { chore = "x", rises = "A" }                      ticks when A goes up (and `done` holds)
+--   { chore = "x", done = { ... }, falls = { "A" } }  ticks when `done` turns true as A falls
+--   done = { { any = { <comparison>, ... } } }        a condition that is an OR of comparisons
+--   near = { x = .., z = .., level = .., range = .. } ticks only with the player that close
+--   part = "KEY"                                      marks that part of the chore done instead
 --
--- data/vars.lua is typed `---@type ChoreVarRule[]`, so LuaLS checks its operators and
--- operands against the class below.
+-- Every condition in `done` must hold (no `done` always holds); a comparison naming a var with
+-- no value fails, and an empty `any` never holds. A rule has `rises` or `falls`, not both. A
+-- rule without either ticks only when its conditions go from false to true. Every var a rule
+-- reads must have had a value before the change: a var's first read is a baseline, never a
+-- change.
 
 local detect = require("core/detect")
 
@@ -33,13 +31,12 @@ local M = {}
 
 ---@class ChoreVarRule
 ---@field chore string the chore id
----@field done ChoreVarCondition[]? all must hold for the chore to be done; none always holds
----@field rises string? a var whose rise in a change ticks the chore
----@field falls string[]? vars of which a fall, in a change that makes the conditions hold, ticks the chore
+---@field done ChoreVarCondition[]? all must hold; none always holds
+---@field rises string? a var whose rise ticks the chore
+---@field falls string[]? vars of which one falling, as `done` turns true, ticks the chore
 ---@field near ChoreVarNear? where the player must stand for a change to tick the chore
----@field part string? for a chore done at several parts (core/parts.lua): the part this rule
----sees done, so a change counts towards the chore's count instead of ticking it
----@field proven boolean
+---@field part string? the part (core/parts.lua) this rule marks done, instead of the chore
+---@field proven boolean checked in game (data/vars.lua's header says how)
 
 ---@class ChoreVarNear: ChoreTile
 ---@field range integer tiles from it in each direction
@@ -135,13 +132,8 @@ function M.holds(rule, values)
     return true
 end
 
--- Whether a change of var values from `before` to `after` ticks the rule's chore. A rule
--- with a `rises` var ticks when that var went up and its conditions hold on `after`; one
--- without ticks when its conditions turned from false to true. Either way every var it reads
--- must have had a value before: a var with none is read for the first time, which is a
--- baseline, not a change. A rule with `falls` ticks when its conditions turned from false to
--- true and one of its `falls` vars went down. A rule with `near` ticks only with the player's
--- `tile` within its range (never without a tile).
+-- Whether a change of var values from `before` to `after` ticks the rule's chore, as the
+-- header describes. A rule with `near` never ticks without the player's `tile`.
 ---@param rule ChoreVarRule
 ---@param names string[] the vars the rule reads, as `names` gives them
 ---@param before table<string, integer>

@@ -1,16 +1,11 @@
--- Chores done by collecting what a machine made, hand-written. Each machine keeps its product
--- in an output inventory the client holds wherever the player is (once they have been to the
--- machines since logging in), and only collecting takes from it, so shell/detect.lua ticks a
--- chore when the total in any of its output inventories falls (core/detect.lua, fell): one
--- machine collected is enough, with no count to set (the user's call, 2026-10-31). `proven`
--- marks a chore seen ticking in the beta client.
+-- Chores done by collecting what a machine made, hand-written: `invs` are the machines' output
+-- inventories, and a collect from any one of them ticks the chore (core/detect.lua says how
+-- one is seen), with no count to set. `proven` marks a chore seen ticking in the client.
 --
--- The Invention Guild's six machines: collecting 7500 eternal planks emptied one's output, and
--- the outputs updated as the machines worked while the user was at the Player-Owned Farm (chore
--- probe, 2026-10-30, docs/api-concepts.md "Inventories"). Filling a machine (its _INPUT) isn't
--- counted: the chore is done once you collect. A collect from machine 3 ticked both chores in
--- the beta client (2026-10-31). After a client restart the outputs weren't held until the
--- player reached the machines, but collecting needs that anyway.
+-- The Invention Guild's six machines. Their outputs update as the machines work wherever the
+-- player is, but after the client starts they aren't held until the player has been to the
+-- machines, which collecting needs anyway. Filling a machine (its _INPUT) doesn't count: the
+-- chore is done once you collect.
 
 ---@class ChoreMachine
 ---@field chore string the chore id

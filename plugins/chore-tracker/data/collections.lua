@@ -1,8 +1,7 @@
--- Chores done by collecting from someone who is no shop, hand-written. The goods arrive as
--- banknotes with no shop open, so shell/detect.lua ticks one when its notes rise near `tile`
--- (core/detect.lua, near). Tiles are the wiki's NPC map pins. `proven` marks notes seen
--- arriving in the beta client (docs/api-concepts.md, "Shops in the client"); an unproven
--- one's note name is from docs/api/consts/Obj.lua.
+-- Chores done by collecting banknotes from someone who is no shop, hand-written: the player
+-- collects `notes` standing near `tile` (core/detect.lua says how that is seen). Tiles are the
+-- wiki's NPC map pins. `proven` marks notes seen arriving in the client; an unproven one's
+-- note name is taken from the client's item names (id.Obj).
 
 ---@class ChoreTile
 ---@field x integer world tile x
@@ -20,7 +19,7 @@
 ---@type ChoreCollection[]
 return {
     {
-        -- runescape.wiki/w/Dell_Monti; !tele 0,43,49,11,50.
+        -- runescape.wiki/w/Dell_Monti
         chore = "dellmonti-pineapples",
         npc = "Dell Monti",
         notes = { "CERT_COOKING_APPLE", "CERT_PINEAPPLE" },
@@ -29,7 +28,7 @@ return {
         proven = true,
     },
     {
-        -- Outside the Kalphite Lair: runescape.wiki/w/Weird_Old_Man; !tele 0,50,48,32,36.
+        -- Outside the Kalphite Lair: runescape.wiki/w/Weird_Old_Man
         chore = "oldman-potato-cactus",
         npc = "the Weird Old Man",
         notes = { "CERT_CACTUS_POTATO" },

@@ -1,7 +1,7 @@
 -- The tracker's state: which chores the player picked, and when each was last marked done.
 -- The functions are pure: those that change the state return a new one and leave the one
--- they were given untouched.
--- The chore list is passed in (not required here), so tests can use small hand-made lists.
+-- they were given untouched. The chore list is passed in, not required, so this module holds
+-- no data.
 --
 -- A completion is stored as the epoch minute it was marked. It counts as done while that
 -- minute is inside the chore's current period, so a reset needs no timer or explicit step:

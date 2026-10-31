@@ -1,37 +1,22 @@
 -- Chore Tracker: a checklist of RuneScape's daily, weekly and monthly chores (the list comes
--- from dailyscape, MIT; see data/chores.lua), in a PrettyUI window.
+-- from dailyscape, MIT; see data/chores.lua), in a PrettyUI window. You pick the chores you do
+-- and tick them off; ticks clear at each period's reset, and some chores tick themselves from
+-- what the game shows. README.md describes everything it does for the player.
 --
--- In the settings view you pick the chores you do; the list then shows them under Daily,
--- Weekly and Monthly headings, and you tick one off by clicking its row, or drag it by its grip
--- to reorder it within its period. Ticks clear themselves when the game clock passes the
--- period's reset (UTC: daily at 00:00, weekly on Wednesday 00:00, monthly on the 1st). Some
--- chores also tick themselves, picked or not: a shop run when you buy from its shops, a
--- collection when its notes rise in your backpack near the giver, Invention machines when you
--- collect from them (shell/detect.lua), and others when one of your own game vars changes to
--- show them done (shell/vars.lua). A chore done at several parts (shops, herb patches,
--- penguins...; core/parts.lua) ticks once as many of them are done this period as it needs,
--- a count set in the settings' "How many to do" block. A chore
--- already done at login or while the plugin was off is left to tick by hand. When the plugin
--- ticks a picked chore, or a period's picked chores are all done, a popup celebrates it
--- (shell/popups.lua); settings turn the popups or their sound off. Picks, their order, ticks
--- and counts are saved per character, by display name; the window's place, size and
--- collapsed state (shell/window.lua) and the celebration settings are saved for all characters.
--- Collapsed, the window becomes a strip showing the next chore not done, Daily first, then
--- Weekly, then Monthly, in the player's order, which a click ticks (shell/strip.lua). The info
--- button beside the settings button opens the info view: a little help, then every chore
--- under Automatic, Unproven or Manual, by whether it ticks itself (core/info.lua).
+-- It reads only what the game already gives your client: the game clock, your own display name
+-- and position, your backpack, an open shop's stock, your Invention machines' output and your
+-- own game vars. It asks for no permissions, sends nothing to the game or anywhere else, and
+-- reads nothing about other players.
 --
--- It reads only what the game already gives your client: the game clock, your own display
--- name and position, your backpack, an open shop's stock, your Invention machines' output and
--- your own game vars. It asks for
--- no permissions, sends nothing to the game or anywhere else, and reads nothing about other
--- players.
+-- Saved per character, by display name: picks, their order, ticks, parts done and counts. Saved
+-- for all characters: the window's layout and the celebration settings.
+--
+-- A picked chore the plugin sees done in the game gets a celebration popup; a tick by hand, or
+-- one from lowering a chore's count, gets none. A period whose picked chores are now all done
+-- gets one however the last was ticked. Settings turn the popups or their sound off.
 --
 -- Every console line carries [CHORES] (grep: \[CHORES\]); the display name is never logged.
--- Chores ticked by the plugin and celebrations log "[CHORES] purchase", "collected", "seen" or
--- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)), and a count set
--- in settings logs "[CHORES] needed <chore id> <n>"; README.md's "Console lines" section
--- lists the others.
+-- README.md's "Console lines" section lists them.
 --
 -- dev-only:begin
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
@@ -40,7 +25,6 @@
 -- (README, "Before submitting").
 --
 -- dev-only:end
--- README.md describes everything the plugin does for the player in full.
 
 -- dev-only:begin
 -- Forwards console output to rsdev.py, and runs `rsdev.py eval --plugin chore-tracker` snippets
@@ -297,8 +281,8 @@ local function buildList(w)
     refreshList()
     -- The grips' press targets sit over the window, placed from its viewport (see grips.lua).
     grips.build({
-        -- The plugin layer takes children (docs/api-concepts.md, "UI"); GetComponent's
-        -- stub types it as a plain component.
+        -- The plugin layer takes children in the client; GetComponent's stub types it as a
+        -- plain component.
         parent = parent --[[@as ui.ComponentCollection]],
         viewport = w.viewport,
         rows = views.rows,

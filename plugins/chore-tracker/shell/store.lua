@@ -1,6 +1,6 @@
--- PersistentDB for the tracker: one entry per character for picks and ticks, keyed by the
--- character's display name, and one global entry each for the window's layout and the
--- celebration settings. Each write happens only when the caller has a change to save.
+-- PersistentDB for the tracker: one entry per character (picks in order, ticks, parts done and
+-- counts), keyed by the character's display name, and one global entry each for the window's
+-- layout and the celebration settings. Each write happens only when the caller has a change.
 
 local layout = require("core/layout")
 local settings = require("core/settings")

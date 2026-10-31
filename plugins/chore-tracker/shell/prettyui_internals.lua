@@ -55,10 +55,10 @@ function M.overlaySync(w, parent)
     end
 end
 
--- The cursor over each of the window's resize handles (PrettyUI 1.2.0 sets none): diagonal
--- arrows on the corners and the four-way arrow on the edges. In the client the vertical and
--- horizontal scale cursors show nothing on these handles (docs/api-concepts.md), so the edges
--- use the move cursor, which the title bar shows too.
+-- The cursor over each of the window's resize handles (PrettyUI 1.2.0 sets none): diagonal arrows
+-- on the corners and the four-way arrow on the edges. In the client the vertical and horizontal
+-- scale cursors show nothing on these handles, so the edges use the move cursor, which the title
+-- bar shows too.
 local RESIZE_CURSORS = {
     nw = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_1,
     se = id.Cursor.TOPLEVEL_V2_SCALE_DIAG_1,
@@ -70,10 +70,9 @@ local RESIZE_CURSORS = {
     w = id.Cursor.TOPLEVEL_V2_MOVE,
 }
 
--- Workaround for PrettyUI 1.2.0: a quick title-bar click reaches it release-first
--- (docs/api-concepts.md), so the release turns resize on and the press then turns it off for
--- good. Resize off with the title bar not held is that stuck state; turn it back on. A
--- collapsed (or missing) window is left alone.
+-- Workaround for PrettyUI 1.2.0: a quick title-bar click reaches it release-first, so the release
+-- turns resize on and the press then turns it off for good. Resize off with the title bar not
+-- held is that stuck state; turn it back on. A collapsed (or missing) window is left alone.
 ---@param w prettyui.Window? the window, nil before it is built
 ---@param isCollapsed boolean whether the window is collapsed to its strip
 function M.reviveResize(w, isCollapsed)
@@ -81,7 +80,7 @@ function M.reviveResize(w, isCollapsed)
     if isCollapsed or not win then return end
     local resize, titleDrag = win.resize, win.titleDrag
     if type(resize) ~= "table" then return end
-    -- Client components are userdata; the harness's fakes are tables.
+    -- The title bar must be a component (a table or userdata) to read its isClicked.
     if type(titleDrag) ~= "userdata" and type(titleDrag) ~= "table" then return end
     if resize.enabled ~= false or titleDrag.isClicked == true then return end
     if type(resize.SetEnabled) ~= "function" then return end

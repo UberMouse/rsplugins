@@ -1,39 +1,37 @@
 -- Dragging a list row by its grip to a new place in its period.
 --
--- A press that leaves the layer it started on ends at once, even with the button still held,
--- and a layer can't take the pointer outside its ancestors' rects (docs/api-concepts.md,
--- "Pressing and dragging a plain `ui.Layer`"). So the presses aren't taken by the rows, which
--- sit inside the window: each grip has an invisible press target, a layer on the plugin layer
--- itself, docked over the grip. On the first ONHOLD of a press the target stretches over the
--- whole plugin layer and comes to the front, so it keeps the press wherever the pointer goes
--- until the real release, when it docks back. While a drag lasts, the dragged row follows the
--- pointer within its period and the period's other rows slide apart to show where it would
--- drop (core/reorder.lua works out where); past the list's top or bottom edge the window
--- scrolls. The release drops the row there and hands the move to the caller to save.
+-- In the client a press that leaves the layer it started on ends at once, even with the button
+-- still held, and a layer can't take the pointer outside its ancestors' rects. So the presses
+-- aren't taken by the rows, which sit inside the window: each grip has an invisible press target,
+-- a layer on the plugin layer itself, docked over the grip. On the first ONHOLD of a press the
+-- target stretches over the whole plugin layer and comes to the front, so it keeps the press
+-- wherever the pointer goes until the real release, when it docks back. While a drag lasts, the
+-- dragged row follows the pointer within its period and the period's other rows slide apart to
+-- show where it would drop (core/reorder.lua works out where); past the list's top or bottom edge
+-- the window scrolls. The release drops the row there and hands the move to the caller to save.
 --
 -- follow() re-docks the targets every Logic tick so they track the window being moved, resized
 -- or scrolled. shell/window.lua also calls it right after a build, collapse or expand; by then
 -- a build has cleared the grips and a collapse or expand came from a click elsewhere, so at
 -- most a just-ended press ages a tick early.
 --
--- PrettyUI raises the window over the targets when it is shown, when its title bar is pressed
--- and when a resize begins. A MoveToFront on a hidden layer is lost and one on a layer under
--- the pointer resets its hover (docs/api-concepts.md), so a target is raised as it is shown,
--- and the shown ones again once the window stops syncing its overlays (watchSync): a resize or
--- wheel spin syncs every tick, so the raise waits for the first Logic tick with no sync.
+-- PrettyUI raises the window over the targets when it is shown, when its title bar is pressed and
+-- when a resize begins. A MoveToFront on a hidden layer is lost and one on a layer under the
+-- pointer resets its hover, so a target is raised as it is shown, and the shown ones again once
+-- the window stops syncing its overlays (watchSync): a resize or wheel spin syncs every tick, so
+-- the raise waits for the first Logic tick with no sync.
 --
--- A held press gets ONHOLD every Logic tick, even with the pointer still (docs/api-concepts.md).
--- A drag that goes DRAG_LOST_TICKS without one has lost its release (the pointer leaving the
--- client window ends a drag, docs/api-concepts.md) and is dropped as a release would be: left
--- stretched in front, its target would take the next click anywhere and move the row.
+-- A held press gets ONHOLD every Logic tick, even with the pointer still. A drag that goes
+-- DRAG_LOST_TICKS without one has lost its release (the pointer leaving the client window ends
+-- a drag) and is dropped as a release would be: left stretched in front, its target would take
+-- the next click anywhere and move the row.
 
 local reorder = require("core/reorder")
 local rows = require("shell/rows")
 
 local M = {}
 
--- The cursor over a grip and for the whole drag; the user's pick from a cursor probe
--- (docs/api-concepts.md).
+-- The cursor over a grip and for the whole drag.
 local GRIP_CURSOR = id.Cursor.CURSOR_PUSH
 local GRIP_SIZE, GRIP_Y = rows.GRIP_SIZE, rows.GRIP_Y
 -- About 200 ms: well clear of the every-tick ONHOLD of a held press.
@@ -76,9 +74,8 @@ local grips = {} ---@type ChoreGrip[]
 local sections = {} ---@type ChoreSectionIds[]
 local drag = nil ---@type ChoreGripDrag?
 -- A grip pressed whose drag hasn't started, and how many Logic ticks ago. A quick click can
--- arrive release-first (docs/api-concepts.md), leaving a press with no ONHOLD or release to
--- follow; it is forgotten on the second Logic tick after, since a held press gets its first
--- ONHOLD on its own tick (docs/api-concepts.md).
+-- arrive release-first, leaving a press with no ONHOLD or release to follow; it is forgotten on
+-- the second Logic tick after, since a held press gets its first ONHOLD on its own tick.
 local pressed = nil ---@type { grip: ChoreGrip, ticks: integer }?
 -- Whether the window was open at the last follow.
 local shown = false
@@ -94,8 +91,7 @@ local synced = false
 local syncedSinceFollow = false
 
 -- The viewport's spot and size in plugin-layer coordinates, and the scroll position. Rows are
--- placed from these, not from their own xyGlobal, which leaves out the scroll in the client
--- (docs/api-concepts.md).
+-- placed from these, not from their own xyGlobal, which leaves out the scroll in the client.
 ---@return { x: number, y: number, width: number, height: number, scroll: number }
 local function view()
     assert(ctx, "grips are only followed once built")

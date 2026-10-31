@@ -1,10 +1,10 @@
--- The chores done at several parts that aren't shops (core/parts.lua), hand-written: the word
--- for their parts in a row's tooltip, how many of them tick the chore until the player sets a
--- count in settings, and the settings line's tooltip, saying what the count counts (the period
--- is added to it). The defaults are the user's (2026-10-31): most players do only some of
--- each, so all of them would leave the chore unticked. Thalmund's Wares and Shattered Worlds
--- have none, so they need every slot and challenge, as before they had counts. A `fixed` count
--- has no settings line: the Player-Owned Port needs all four voyages (the user's call).
+-- The chores done at several parts that aren't shops (core/parts.lua), hand-written: the word for
+-- their parts in a row's tooltip, how many of them tick the chore until the player sets a count
+-- in settings, and the settings line's tooltip, saying what the count counts (the period is added
+-- to it). Defaults are where most players are, so a chore isn't left unticked for parts they
+-- never do. Thalmund's Wares and Shattered Worlds have no default, so they need every slot and
+-- challenge. A `fixed` count has no settings line: the Player-Owned Port always needs all four
+-- voyages.
 --
 -- The maximums are the parts' own numbers: 11 herb patches, 8 bloodwood trees, 7 farm troughs
 -- (6 pens and the breeding pen), 12 penguins and the polar bear (runescape.wiki/w/

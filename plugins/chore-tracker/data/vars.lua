@@ -1,15 +1,9 @@
--- Chores seen done from the player's own game vars, hand-written. Each entry is a chore id
--- and its done rule over named VarPlayer vars (the rule language is in core/vars.lua); the
--- names, base vars and bits are in docs/vars/vars.csv. shell/vars.lua ticks a chore when a
--- watched var changes and its rule goes from false to true (or, for a rule naming a `rises`
--- var, that var goes up; for one naming `falls` vars, the rule turns true as one of them
--- goes down), never on a var's first read.
+-- Chores seen done from the player's own game vars, hand-written. Each entry ticks a chore, or
+-- marks one of its parts done, when a change to the VarPlayer vars it names makes its rule fire
+-- (core/vars.lua shows the rule shapes). The names are the client's own VarPlayer list's.
 --
--- `proven` marks a rule checked in the beta client: its vars seen moving as the chore was done
--- (recorded in docs/api-concepts.md), or the rule seen ticking its chore when its vars were set
--- with the !setvar cheat; the comments say which. An unproven one ticks the same way. The four free collections keep
--- their weekly period (data/chores.lua), so a claim ticks one until Wednesday's reset,
--- although the game's flag is daily.
+-- `proven` marks a rule checked in game: its vars seen changing as the chore was done, or the
+-- rule seen ticking its chore with its var set directly. An unproven rule ticks the same way.
 
 -- Dream of Iaia. Each of the six base-camp resources has workers on it
 -- (DINO_BASE_CAMP_WORKER_ASSIGNED_<R>), a stock (DINO_BASE_CAMP_RESOURCE_<R>) and, once
@@ -51,6 +45,9 @@ local xpDone, xpFalls = iaiaRule("QUEST_EGW_FINALE_REWARD_STATION_XP_", 2)
 
 ---@type ChoreVarRule[]
 local rules = {
+    -- The free-supplies chores (bert-sand, geoffrey-flax, cromperty-pure-essence, coeden-logs,
+    -- lupe and arc-supplies) stay weekly though the game's flag is daily: one claim ticks each
+    -- until Wednesday's reset.
     -- Bit 1 of HANDSAND_BUCKETS: 0 -> 1 on the claim, still 1 after a relog.
     {
         chore = "bert-sand",
@@ -92,8 +89,7 @@ local rules = {
         },
         proven = false,
     },
-    -- Dream of Iaia: checked in the beta client and validated against the chore on 2026-10-31;
-    -- values and station mapping in docs/api-concepts.md.
+    -- Dream of Iaia (iaiaRule above).
     {
         chore = "dream-of-iaia-resource-daily",
         done = resourceDone,
@@ -104,8 +100,6 @@ local rules = {
     { chore = "dream-of-iaia-xp-weekly", done = xpDone, falls = xpFalls, proven = true },
     { chore = "dream-of-iaia-xp", done = xpDone, falls = xpFalls, proven = true },
 
-    -- Seen moving as the user did each chore (chore probe, 2026-10-30, docs/api-concepts.md),
-    -- and each ticked its chore in the client when set with !setvar (2026-10-31).
     -- Bits 0-1 of ARCH_RESEARCH_CONTRACT_1_1: 0 idle, 1 team out, 2 back to claim. Only
     -- sending a team moves it into 1.
     {
@@ -119,8 +113,8 @@ local rules = {
 
     -- The rules below are inferred from each var's name, unproven.
 
-    -- The date blossoms were last taken (bits 5-20 of ELFCITY_PERM36): taking them raises it,
-    -- whatever unit the date is in.
+    -- Taken to be the date blossoms were last taken (bits 5-20 of ELFCITY_PERM36), which
+    -- taking them would raise, whatever unit the date is in.
     {
         chore = "crystal-tree-blossom",
         rises = "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE",
@@ -153,8 +147,8 @@ local rules = {
         done = { { "BSLAY_REACHED_WEEKLY_CAP", "==", 1 } },
         proven = false,
     },
-    -- Its base var, SHOP_MULTIPURPOSE, wasn't sent during an Arhein purchase
-    -- (docs/api-concepts.md), so this may never fire.
+    -- Its base var, SHOP_MULTIPURPOSE, wasn't seen reaching the client (it stayed unsent
+    -- through a purchase at Arhein's), so this may never fire.
     { chore = "tears-of-guthix", done = { { "TOG_TEARS_COMPLETE", "==", 1 } }, proven = false },
     {
         chore = "herby-werby",
@@ -185,10 +179,9 @@ local rules = {
         done = { { "KERAPAC_DND_MONTHLY_COMPLETE", "==", 1 } },
         proven = false,
     },
-    -- The rules below each ticked their chore in the client when their vars were set with
-    -- !setvar (2026-10-31), so each var reaches the client and the rule fires. What each var
-    -- means follows its name and the wiki's account of the activity (runescape.wiki, read
-    -- 2026-10-31); none was seen moving with the chore done in play.
+    -- The rules below were each seen ticking their chore with the var set directly, so each var
+    -- reaches the client. What each var means is taken from its name and the wiki's account of
+    -- the activity: none was seen changing as the chore was done in play.
 
     -- Months since the statues were last built: it read 3 at login, and building should take
     -- it to 0. Only a fall ticks, so a var that reads 0 because it isn't sent never does.
@@ -239,16 +232,15 @@ local rules = {
     -- Meg leaves on her mission after the week's third answer: it read 0 with her at home, and
     -- her return takes it back down, so only her leaving can tick.
     { chore = "meg", done = { { "POP_MEG_ONMISSION", ">", 0 } }, proven = true },
-    -- Taken as the time of the last clean-out. It read 0 in the client and on the server (never
-    -- cleaned out), and a !setvar reached the client away from the oasis, so it is sent
-    -- anywhere and arriving there can't tick it.
+    -- Taken as the time of the last clean-out. It read 0 for a player who never cleaned it out,
+    -- and set directly it reached the client away from the oasis, so it is sent anywhere and
+    -- arriving there can't tick it.
     {
         chore = "water-filtration",
         rises = "DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME",
         proven = true,
     },
-    -- Bit 16 of ELR1_BASEVAR2: Rosie's free supplies taken. Daily in the game, weekly here, as
-    -- for the freebies above.
+    -- Bit 16 of ELR1_BASEVAR2: Rosie's free supplies taken (weekly here, as for Bert's sand).
     { chore = "arc-supplies", done = { { "ELR1_DAILY_SUPPLIES_TAKEN", "==", 1 } }, proven = true },
     -- The oyster fed both its sea cucumber and its seaweed, which closes it for the month.
     {
@@ -297,10 +289,9 @@ for bought = 0, 4 do
 end
 
 -- Chores with one var per tree, trough or patch: a rule each, marking its part done; the
--- chore ticks once the player's count of them is (data/counts.lua). Seen moving in the chore
--- probe of 2026-10-30. One var of each (tree 8, trough 1, patch 1)
--- ticked its chore in the client when set with !setvar (2026-10-31); the rest share its
--- layout.
+-- chore ticks once the player's count of them is (data/counts.lua). Each set was seen changing
+-- as its chore was done, and one var of each (tree 8, trough 1, patch 1) seen ticking its
+-- chore when set directly; the others share its layout.
 
 -- A bloodwood tree reads 1 standing and 2 felled; felling tree 8 took it 1 -> 2.
 for n = 1, 8 do
@@ -338,11 +329,9 @@ for _, patch in ipairs({
     rules[#rules + 1] = { chore = "herb-run", rises = name, part = name, proven = true }
 end
 
--- Fort Forinthry: the Town Hall's own record of bonus XP taken never reaches the client
--- (docs/api-concepts.md), so the chore ticks when any skill's bonus XP pool rises while the
--- player stands by Aster, who trades rested XP in. A claim of 2026-10-31 took
--- BONUSXP_AGILITY 0 -> 1596975 there, and a !setvar of it beside Aster ticked the chore in the
--- client (2026-10-31). A lamp or star used beside Aster ticks it too.
+-- Fort Forinthry: the Town Hall's record of bonus XP taken never reaches the client, so the
+-- chore ticks when any skill's bonus XP pool rises while the player stands by Aster, who trades
+-- rested XP in (a lamp or star used beside her ticks it too).
 local ASTER = { x = 3302, z = 3571, level = 0, range = 10 } -- runescape.wiki/w/Aster
 for _, skill in ipairs({
     "AGILITY",
@@ -383,11 +372,10 @@ for _, skill in ipairs({
     }
 end
 
--- Penguin Hide and Seek: a bit per penguin spotted this week (PENG_SPY_<0..11>, on
--- PENG_SPY_SWITCH) and one for the polar bear; all read 0 on 2026-10-31, a week none was
--- spotted. Each is a part (data/counts.lua): the wiki's week has 12 penguins and the bear.
--- Reading these only to tick is the user's call (docs/plans/chore-tracker.md).
--- A !setvar of PENG_SPY_0 ticked the chore in the client (2026-10-31).
+-- Penguin Hide and Seek: a bit per penguin the player has spotted this week (PENG_SPY_0..11,
+-- on PENG_SPY_SWITCH) and one for the polar bear; each is a part (data/counts.lua). They record
+-- only what the player already did: the plugin shows a count of them, never which penguin it
+-- is or where any is.
 local PENGUINS = {}
 for n = 0, 11 do
     PENGUINS[#PENGUINS + 1] = "PENG_SPY_" .. n
@@ -402,13 +390,10 @@ for _, name in ipairs(PENGUINS) do
     }
 end
 
--- Player-Owned Port: each voyage slot's _DONE read 1 with its voyage back, so sending a new one
--- takes it to 0; and the Black Marketeer's offer (POP_MARKET_QUANTITY, 133 that day) taken to
--- fall to 0 when bought. Only a fall ticks, so an unsent var's 0 never does. Each voyage is a
--- part, all four needed (data/counts.lua); the market buy ticks the chore by itself (the
--- user's call, 2026-10-31). A !setvar of POP_VOYAGE_1_DONE to 0 ticked the chore in the client
--- (2026-10-31); the market rule was never seen ticking, as the voyage had already ticked the
--- day.
+-- Player-Owned Port: a voyage slot's _DONE reads 1 with its voyage back, and sending a new one
+-- takes it to 0; each slot is a part, all four needed (data/counts.lua). The Black Marketeer's
+-- offer (POP_MARKET_QUANTITY) is taken to fall to 0 when bought, which ticks the chore by
+-- itself. Only a fall ticks, so a var the game hasn't sent (0) never does.
 for n = 1, 4 do
     local name = "POP_VOYAGE_" .. n .. "_DONE"
     rules[#rules + 1] = {

@@ -61,6 +61,9 @@ function M.init(o)
                 -- (docs/api-concepts.md#configs-vs-entities).
                 local v = var.VarPlayer[name] --[[@as VarType?]]
                 if v then
+                    -- Registered before the rule is known complete, so a var read only by a
+                    -- rule dropped below is still read on its base's updates; nothing ticks
+                    -- from it.
                     varTypes[name] = v
                     local id = baseOf(v).id
                     byBase[id] = byBase[id] or {}
@@ -112,18 +115,6 @@ local function firstChanged(names, changed)
     return nil
 end
 
--- The player's tile if a rule that must be seen near one reads a var in `changed`, else nil,
--- so a change no such rule reads never reads the player's position.
----@param changed table<string, true>
----@return ChoreTile?
-local function tileFor(changed)
-    assert(options, "init runs before any var event")
-    for _, entry in ipairs(watched) do
-        if entry.rule.near and firstChanged(entry.names, changed) then return options.where() end
-    end
-    return nil
-end
-
 -- Watched vars changed from `before` to `after`: for each rule that reads one of them and
 -- whose change ticks it (core/vars.lua's ticks), mark its part done (the chore ticks once
 -- enough are, state.recordPart), or for a rule without a part tick its chore if it isn't done
@@ -135,7 +126,7 @@ end
 local function onChanged(before, after, changed)
     assert(options, "init runs before any var event")
     local say, parts = options.say, options.parts
-    local tile = tileFor(changed)
+    local tile = options.where()
     options.apply(function(tracker, now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)

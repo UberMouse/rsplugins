@@ -60,6 +60,10 @@ M.NEXT_MONTH = support.MINUTES["2026-11-01"] -- 00:00, a monthly reset
 M.POLL_MS = 500
 M.SETTLE_MS = 10000
 
+-- Where M.loaded stands the player: Lumbridge, away from every tile a chore rule must be seen
+-- near.
+M.TILE = { x = 3222, z = 3218, level = 0 }
+
 -- Set the game clock (epoch minutes).
 ---@param h table
 ---@param minutes integer
@@ -131,7 +135,9 @@ end
 -- harness's: names that read as the client reads an unknown one.
 -- Every var data/vars.lua watches starts at 0, because the harness faults on reading an
 -- unset one (detect_spec.lua covers a var with no value, with stand-in globals); set one
--- before loading to start it elsewhere.
+-- before loading to start it elsewhere. The player stands at M.TILE, since in the client a
+-- logged-in player always has a tile and the harness faults on reading an unset one; call
+-- h.world:setPosition to move them.
 ---@param opts table?
 ---@return table h
 function M.loaded(opts)
@@ -143,6 +149,7 @@ function M.loaded(opts)
             h.world:setVar("VarPlayer", name, 0)
         end
     end
+    h.world:setPosition(M.TILE.x, M.TILE.z, M.TILE.level)
     if opts.login ~= false then h.world:login(opts.login or "Zezima") end
     if opts.load ~= false then h:load() end
     return h

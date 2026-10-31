@@ -107,6 +107,24 @@ describe("chore-tracker data", function()
         end
     end)
 
+    -- shell/detect.lua keeps one inventory table for both, telling a shop from a machine by
+    -- its name.
+    it("names no shop inventory that is also a machine output", function()
+        local outputs = {}
+        for _, machine in ipairs(require("data/machines")) do
+            for _, inv in ipairs(machine.invs) do
+                outputs[inv] = true
+            end
+        end
+        for id, shops in pairs(require("data/shops")) do
+            for _, shop in ipairs(shops) do
+                for _, inv in ipairs(shop.invs) do
+                    assert(not outputs[inv], id .. " " .. inv)
+                end
+            end
+        end
+    end)
+
     it("links only to https urls", function()
         for _, c in ipairs(chores) do
             assert(c.url:find("^https://"), c.id .. " " .. c.url)

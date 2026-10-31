@@ -39,8 +39,9 @@ local options = nil ---@type ChoreDetectOptions?
 local shopIndex = {} ---@type table<string, ChoreShopHit[]>
 -- Machine output inventory name -> the chores it serves.
 local machineChores = {} ---@type table<string, Chore[]>
--- Every watched shop and machine output inventory's config (their names don't overlap), and
--- the slot counts of each one the client holds now (a shop's only while it is open).
+-- Every watched shop and machine output inventory's config (no name is both, data_spec.lua
+-- checks), and the slot counts of each one the client holds now (a shop's only while it is
+-- open).
 local invTypes = {} ---@type table<string, InvType>
 local invCounts = {} ---@type table<string, integer[]>
 -- Every collection with its chore, in data order.
@@ -296,8 +297,8 @@ function M.onInventoryUpdated(ev)
     if not (before and after) then return end
     if shopIndex[name] then
         if detectCore.dropped(before, after) then onPurchase(name) end
-    elseif detectCore.fell(before, after) then
-        onCollected(name)
+    elseif machineChores[name] then
+        if detectCore.fell(before, after) then onCollected(name) end
     end
 end
 

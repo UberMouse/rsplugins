@@ -9,15 +9,18 @@
 -- ("every 6 hours", "twice a day") keep a daily period.
 --
 -- Shop runs also keep, per shop, the epoch minute of the last purchase there, so the window
--- can show how many of a chore's shops were bought from this period, by the same rule.
+-- can show how many of a chore's shops were bought from this period, by the same rule. A chore
+-- with several listed shops ticks once a set number of them were bought from this period: by
+-- default all of them, or fewer if the player set a count in settings (they may visit only
+-- some). A chore's listed shops come from data/shops.lua, passed in like the chore list.
 
 local period = require("core/period")
 
 local M = {}
 
--- The persisted shape's version. Version 1 had no shop progress; fromStored reads both and
--- ignores any other.
-local VERSION = 2
+-- The persisted shape's version. Version 1 had no shop progress and version 2 no shops-needed
+-- counts; fromStored reads all three and ignores any other.
+local VERSION = 3
 
 ---@alias ChoreCategory "activities"|"combat"|"skilling"|"upkeep"|"supplies"|"shops"
 
@@ -35,11 +38,14 @@ local VERSION = 2
 ---@field done table<string, integer> chore id -> epoch minute it was marked done
 ---chore id -> shop inventory name -> epoch minute of the last purchase there
 ---@field shops table<string, table<string, integer>>
+---chore id -> how many of its listed shops tick it, held only when the player set one other
+---than all of them; read it through shopsNeeded, which clamps it to the current list
+---@field needed table<string, integer>
 
 -- An empty state: nothing selected, nothing done, nothing bought.
 ---@return ChoreState
 function M.new()
-    return { selected = {}, done = {}, shops = {} }
+    return { selected = {}, done = {}, shops = {}, needed = {} }
 end
 
 ---@param selected string[]
@@ -48,7 +54,7 @@ local function copySelected(selected)
     return table.move(selected, 1, #selected, 1, {})
 end
 
--- A copy of a key -> epoch minute map (`done`, or one chore's shops), each minute passed
+-- A copy of a key -> integer map (`done`, one chore's shops, or `needed`), each value passed
 -- through `convert` if given; a nil from it leaves that key out.
 ---@param minutes table<string, integer>
 ---@param convert (fun(minute: integer): integer?)?
@@ -82,6 +88,7 @@ local function copy(state)
         selected = copySelected(state.selected),
         done = copyMinutes(state.done),
         shops = copyShops(state.shops),
+        needed = copyMinutes(state.needed),
     }
 end
 
@@ -249,23 +256,6 @@ function M.autoMark(state, chore, now)
     return M.mark(state, chore.id, now)
 end
 
--- `state` after a purchase at shop inventory `inv` for `chore` at `now`: the inventory
--- recorded as bought at `now`, and the chore auto-marked. When both already hold this
--- period it gives back `state` itself: only period membership is ever read, so a later
--- minute would change nothing shown, and the caller then writes nothing.
----@param state ChoreState
----@param chore Chore
----@param inv string the shop inventory's config name
----@param now integer
----@return ChoreState
-function M.recordPurchase(state, chore, inv, now)
-    if M.isDone(state, chore, now) and M.shopBought(state, chore, inv, now) then return state end
-    local out = copy(M.autoMark(state, chore, now))
-    out.shops[chore.id] = out.shops[chore.id] or {}
-    out.shops[chore.id][inv] = now
-    return out
-end
-
 -- Whether shop inventory `inv` was bought from for `chore` in its current period at `now`.
 ---@param state ChoreState
 ---@param chore Chore
@@ -291,6 +281,78 @@ function M.shopBoughtAny(state, chore, invs, now)
     return false
 end
 
+-- How many of `listed` (a chore's shops, as data/shops.lua lists them) were bought from for
+-- `chore` in its current period at `now`. A shop counts once, whichever of its inventories
+-- was bought from.
+---@param state ChoreState
+---@param chore Chore
+---@param listed ChoreShop[]
+---@param now integer
+---@return integer
+function M.shopsBought(state, chore, listed, now)
+    local bought = 0
+    for _, shop in ipairs(listed) do
+        if M.shopBoughtAny(state, chore, shop.invs, now) then bought = bought + 1 end
+    end
+    return bought
+end
+
+-- How many of `listed` must be bought from in a period to tick `chore`: the player's count,
+-- clamped to 1..#listed (the list may have shrunk since it was set), or all of them.
+---@param state ChoreState
+---@param chore Chore
+---@param listed ChoreShop[]
+---@return integer
+function M.shopsNeeded(state, chore, listed)
+    local set = state.needed[chore.id]
+    if set == nil then return #listed end
+    return math.max(1, math.min(set, #listed))
+end
+
+-- `state` with `chore` needing `count` of `listed` shops, clamped to 1..#listed. Gives back
+-- `state` itself when that is already its count, so the caller can tell nothing changed.
+-- It never ticks or unticks: only a purchase the plugin sees does that (recordPurchase).
+---@param state ChoreState
+---@param chore Chore
+---@param listed ChoreShop[]
+---@param count integer
+---@return ChoreState
+function M.setShopsNeeded(state, chore, listed, count)
+    local clamped = math.max(1, math.min(count, #listed))
+    if clamped == M.shopsNeeded(state, chore, listed) then return state end
+    local out = copy(state)
+    -- All of them is the default, so it isn't held: a shop added to the list later then
+    -- counts towards it.
+    out.needed[chore.id] = clamped ~= #listed and clamped or nil
+    return out
+end
+
+-- `state` after a purchase at shop inventory `inv` (one of `listed`, the chore's shops) for
+-- `chore` at `now`: the inventory recorded as bought, and the chore auto-marked if it isn't
+-- done and enough of its shops were now bought from this period (shopsNeeded). Picked or not,
+-- it is recorded, so picking the chore later shows the period's truth. When nothing changes
+-- (the inventory already bought from this period, and the chore done or still short) it
+-- gives back `state` itself: only period membership is ever read, so a later minute would
+-- change nothing shown, and the caller then writes nothing.
+---@param state ChoreState
+---@param chore Chore
+---@param listed ChoreShop[]
+---@param inv string the shop inventory's config name
+---@param now integer
+---@return ChoreState
+function M.recordPurchase(state, chore, listed, inv, now)
+    local out = state
+    if not M.shopBought(state, chore, inv, now) then
+        out = copy(state)
+        out.shops[chore.id] = out.shops[chore.id] or {}
+        out.shops[chore.id][inv] = now
+    end
+    if M.shopsBought(out, chore, listed, now) >= M.shopsNeeded(out, chore, listed) then
+        out = M.autoMark(out, chore, now)
+    end
+    return out
+end
+
 -- The table to store in PersistentDB. It holds only strings, integers and tables, all types
 -- PersistentDB stores (it drops table fields of other types). A minute that isn't a whole
 -- number is left out rather than stored as a float.
@@ -302,27 +364,33 @@ function M.serialise(state)
         selected = copySelected(state.selected),
         done = copyMinutes(state.done, math.tointeger),
         shops = copyShops(state.shops, math.tointeger),
+        needed = copyMinutes(state.needed),
     }
 end
 
--- A whole-number minute, or nil. A whole-number float is accepted too, in case the store
--- hands integers back as floats.
----@param minute any
+-- A whole number (a minute or a count), or nil. A whole-number float is accepted too, in case
+-- the store hands integers back as floats.
+---@param value any
 ---@return integer?
-local function asMinute(minute)
-    return type(minute) == "number" and math.tointeger(minute) or nil
+local function asWhole(value)
+    return type(value) == "number" and math.tointeger(value) or nil
 end
 
 -- A state from a stored value. Anything malformed (not a table, a missing or unknown
 -- version, entries of the wrong type, ids not in `chores`) is left out, so this never
 -- errors: a damaged store costs the bad entries, not the plugin. An unknown version's shape
--- can't be trusted, so it gives an empty state. Version 1 has no shop progress.
+-- can't be trusted, so it gives an empty state. Version 1 has no shop progress, and versions
+-- 1 and 2 no shops-needed counts, so every chore gets its default. A count below 1 is left
+-- out (the default); one above its chore's shop count is clamped where it is read.
 ---@param value any
 ---@param chores Chore[]
 ---@return ChoreState
 function M.fromStored(value, chores)
     local state = M.new()
-    if type(value) ~= "table" or (value.version ~= 1 and value.version ~= VERSION) then
+    if
+        type(value) ~= "table"
+        or not (value.version == 1 or value.version == 2 or value.version == VERSION)
+    then
         return state
     end
 
@@ -340,21 +408,28 @@ function M.fromStored(value, chores)
 
     if type(value.done) == "table" then
         for id, minute in pairs(value.done) do
-            local whole = asMinute(minute)
+            local whole = asWhole(minute)
             if whole and M.find(chores, id) then state.done[id] = whole end
         end
     end
 
-    if value.version == VERSION and type(value.shops) == "table" then
+    if value.version ~= 1 and type(value.shops) == "table" then
         for id, minutes in pairs(value.shops) do
             if type(minutes) == "table" and M.find(chores, id) then
                 local kept = {}
                 for inv, minute in pairs(minutes) do
-                    local whole = asMinute(minute)
+                    local whole = asWhole(minute)
                     if type(inv) == "string" and whole then kept[inv] = whole end
                 end
                 if next(kept) then state.shops[id] = kept end
             end
+        end
+    end
+
+    if value.version == VERSION and type(value.needed) == "table" then
+        for id, count in pairs(value.needed) do
+            local whole = asWhole(count)
+            if whole and whole >= 1 and M.find(chores, id) then state.needed[id] = whole end
         end
     end
     return state

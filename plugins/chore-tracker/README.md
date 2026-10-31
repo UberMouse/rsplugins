@@ -3,7 +3,8 @@
 A checklist for RuneScape's repeatable chores, the daily, weekly and monthly tasks such as the
 Daily Challenge, Soul Reaper or the Giant Oyster. Pick the ones you do, tick them off as you go,
 and they clear themselves when the game's reset comes round. A few chores also tick themselves:
-the shop runs, when you buy from one of their shops, Dell Monti's and the Weird Old Man's,
+the shop runs, when you have bought from their shops (all of them, or as many as you set),
+Dell Monti's and the Weird Old Man's,
 when their notes arrive, and a few more, such as the Daily Challenge and Bert's sand, when the
 game's own record of your progress shows them done. It only reads what the game already gives
 your client, never does anything in game for you, and sends nothing anywhere.
@@ -13,7 +14,7 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Opening it.** Enable the plugin and a window titled **Chores** opens. On the first run it
   says no chores are picked yet.
 - **Picking chores.** Click the settings button at the top left of the window. Above the chores
-  is a Celebrations section (see below). Every chore is listed under Daily, Weekly and Monthly,
+  are a Celebrations section and a Shop runs section (see below). Every chore is listed under Daily, Weekly and Monthly,
   and within Daily and Weekly under a gold subheading for its kind: Activities, Combat,
   Skilling, Upkeep, Free supplies (handed out by someone who is no shop) and Shops, each in
   alphabetical order. Monthly has too few chores to need them. Each is a row with its icon, its
@@ -74,14 +75,24 @@ your client, never does anything in game for you, and sends nothing anywhere.
 Ticking by hand still works for every chore, these included: a chore ticked either way stays
 ticked until its reset, and unticking one by hand changes nothing below.
 
-- **Shop runs.** Buy anything at any of a chore's shops and the chore ticks itself for the
-  period, whether or not you picked it, so picking it later shows it done. The plugin can tell
-  because the game only sends a shop's stock while that shop is open, and the stock is yours
-  alone: a line that goes down is you buying. A restock or something you sell to the shop
-  doesn't count. A chore with more than one shop shows how many you have bought from this
-  period, as "Feather Shop Run (1/4)", and its tooltip lists each shop as "bought" or "not
-  yet". A shop the game has in two versions, before and after a quest, counts once, bought
-  from either. A count changes in its row as you buy, without moving the list.
+- **Shop runs.** Buy anything at one of a chore's shops and the plugin records that shop as
+  bought from this period, whether or not you picked the chore, so picking it later shows the
+  period's truth. The plugin can tell because the game only sends a shop's stock while that
+  shop is open, and the stock is yours alone: a line that goes down is you buying. A restock or
+  something you sell to the shop doesn't count. A chore with one shop ticks itself on a
+  purchase there. A chore with more than one ticks once you have bought from as many of its
+  shops as it needs this period: all of them unless you set fewer under **Shop runs** in the
+  settings view (you may skip a shop you can't reach yet, say). Its row shows how many of
+  those it needs you have bought from, as "Feather Shop Run (1/4)" (never more than it needs),
+  and its tooltip gives the same count and lists every shop as "bought" or "not yet". A shop
+  the game has in two versions, before and after a quest, counts once, bought from either. A
+  count changes in its row as you buy, without moving the list.
+- **Shops needed.** In the settings view, under **Shop runs** (below Celebrations), each chore
+  with more than one shop has a line with its name and "[-] 4 of 4 [+]": click the minus or
+  plus to set how many of its shops tick it, from 1 to all of them. It starts at all of them,
+  saves straight away, and is kept per character, as characters reach different shops.
+  Changing it never ticks or unticks the chore: lowered to what you have already bought, the
+  chore ticks on your next purchase at one of its shops; raised above it, a tick stays.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or
@@ -132,7 +143,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   never shows a var's value.
 
 The shops each chore watches. Those marked *unproven* were matched by name to the game's own
-list of shop inventories but no purchase there has been checked yet; they tick the same way.
+list of shop inventories but no purchase there has been checked yet; they count the same way.
 
 | Chore | Shops |
 |---|---|
@@ -161,7 +172,7 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 ## What it remembers
 
-- **Your picks, their order and your ticks, per character.** They are saved each time you change
+- **Your picks, their order, your ticks and your shop-run counts, per character.** They are saved each time you change
   them, under your character's display name, so each character on the same computer has its own
   list. While you are logged out the window says "Log in to see your chores".
 - **Where the window is**, for all characters: its position, its size, whether it is collapsed,
@@ -193,10 +204,12 @@ Everything the plugin logs carries the tag `[CHORES]`: loading, collapsing and e
 character changes, waiting for the clock, each celebration popup shown
 (`[CHORES] celebrate <chore id>`, or `[CHORES] celebrate <period> cleared`) and each chore
 dragged to a new place (`[CHORES] moved <chore id> to <n> in <period>`, `<n>` its place in
-the period from 1). It never logs your display name. Grep regex:
+the period from 1), and each change to a shop run's count in settings
+(`[CHORES] shops needed <chore id> <n>`). It never logs your display name. Grep regex:
 `\[CHORES\]`.
 
-A purchase that ticks a chore, or is the period's first at that shop, logs
+A purchase that ticks a chore, or is the period's first at that shop (ticking the chore or
+not), logs
 `[CHORES] purchase <chore id> at <shop>` (such as
 `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`), and a collection that ticks its
 chore logs `[CHORES] collected <chore id> near <giver>` (such as
@@ -248,11 +261,12 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
 | `shell/rows.lua` | One chore's row in the list or settings: its icon, text and tick box (and a list row's grip), changed in place |
+| `shell/stepper.lua` | A Shop runs line in settings: the chore's name and its "[-] N of M [+]" buttons |
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/prettyui_internals.lua` | Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI versions |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began, and the RuneDay (pure arithmetic on epoch minutes) |
-| `core/state.lua` | Picks, ticks and shop purchases, and whether a chore is done now |
+| `core/state.lua` | Picks, ticks, shop purchases and shops-needed counts, and whether a chore is done now |
 | `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
 | `core/view.lua` | What the list, the collapsed strip and the settings groups show, as plain data |
@@ -286,5 +300,5 @@ This plugin requests no permissions.
 ## Data Protection
 This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites, and each chore with one of the game's own item icons or sprites.
 This information is not transmitted outside of the plugin under any circumstances.
-Your picked chores in your order, the ones you ticked, and when you last bought from each watched shop, are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
+Your picked chores in your order, the ones you ticked, and when you last bought from each watched shop, and how many shops each shop run needs (when you set fewer than all), are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
 ```

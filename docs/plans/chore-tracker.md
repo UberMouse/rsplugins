@@ -41,7 +41,12 @@ These are the user's calls. They aren't all visible in the code.
   exception (offered in two periods each, see "Round 2").
 - **Shop runs:** a multi-shop chore shows a per-shop count, shop stock is per character, and any
   stock drop counts (decay left as is). Superseded 2026-10-29: "any purchase at any listed shop
-  ticks it" becomes "every shop the user chose for that chore" (see "Round 2").
+  ticks it" becomes "every shop the user chose for that chore" (see "Round 2"). That in turn was
+  superseded 2026-10-31: the setting is a count, not a choice of which shops. Each chore with
+  more than one listed shop ticks once that many distinct listed shops were bought from this
+  period; the default is all listed shops, it is set with a stepper in settings and saved per
+  character (shop access differs per character). A count change never ticks or unticks; the
+  next purchase is judged by it.
 - **Unproven rules ship, marked.** A rule whose signal was never seen moving in the client has
   `proven = false` and the README says so. Flip it when a `[CHORES] seen <id>` line shows it
   working.
@@ -126,8 +131,11 @@ Staged order, with a check-in in the beta client after each:
    spots; the drop calls `state.move` and saves once. The settings view has no grips. If the
    drag proves unreliable in the client, the fallback is up/down buttons in settings.
 4. **Per-chore settings.**
-   - **Shop runs:** the user picks which of a chore's shops they visit, and it ticks once every
-     chosen shop has been bought from this period. The default is all listed shops.
+   - **Shop runs:** built (2026-10-31) as a count, superseding "which shops": each chore with more
+     than one listed shop has a "shops needed" count, 1 to its number of listed shops, default
+     all of them, set with a `[-] N of M [+]` stepper under "Shop runs" in settings and saved per
+     character (`ChoreState.needed`, state version 3). It ticks once that many distinct listed
+     shops were bought from this period.
    - **Dream of Iaia:** replaced (2026-10-31) by per-period entries with drain detection, not a
      cadence setting. The cadence follows the worker split (all workers on one resource: about
      36 h for resources, 7 days for XP; a two-way split about 72 h and 14 days), so resources are

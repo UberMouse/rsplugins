@@ -130,8 +130,110 @@ describe("chore-tracker settings rows", function()
         local h = loaded()
         openSettings(h)
         local r = helpers.settingsRow(h, "daily-challenge")
+        window(h):SetScrollPosition(r.layer.y - 40)
+        local before = window(h)._scroll.scrollY
         assert.are.same({ true, 1 }, { h.ui:wheel(r.label, 1) })
-        assert.are.equal(32, window(h)._scroll.scrollY)
+        assert.are.equal(before + 32, window(h)._scroll.scrollY)
+    end)
+end)
+
+describe("chore-tracker shop runs settings", function()
+    -- In data/chores.lua's order.
+    local SHOP_RUNS = {
+        { id = "broad-arrowheads", total = 2 },
+        { id = "feather-shop-run", total = 4 },
+        { id = "rune-shop-run", total = 11 },
+        { id = "vial-of-water-packs", total = 5 },
+    }
+
+    it(
+        "shows a stepper per multi-shop chore, in list order, at all shops, above the list",
+        function()
+            local h = loaded()
+            openSettings(h)
+            local title = h.ui:get("Title", { text = "Shop runs" })
+            local switches = h.ui:find("CheckboxButton")[1]
+            assert.is_true(switches.root.y + switches.root.height <= title.y)
+            local lastY = title.y
+            for _, run in ipairs(SHOP_RUNS) do
+                local line = helpers.stepper(h, run.id)
+                assert.is_true(line.label.y > lastY)
+                lastY = line.label.y
+                assert.are.equal(
+                    string.format("%d of %d", run.total, run.total),
+                    line.value.content
+                )
+                assert.are.equal(HAND, line.minus.cursorConfig.mouseOverCursor)
+            end
+            -- The lists' layout starts below the block.
+            assert.is_true(lastY + listlayout.ROW_HEIGHT <= h.ui:get("Title", { text = "Daily" }).y)
+            -- A single-shop chore has no stepper.
+            assert.has_error(function()
+                helpers.stepper(h, "yak-hide")
+            end)
+        end
+    )
+
+    it("steps a count in place, saving and logging, with no-ops at either end", function()
+        local h = loaded()
+        openSettings(h)
+        local win, line = window(h), helpers.stepper(h, "broad-arrowheads")
+        local writes = h.dbWrites
+        -- At 2 of 2, plus changes nothing.
+        assert.is_true(h.ui:click(line.plus))
+        assert.are.equal(writes, h.dbWrites)
+        assert.is_true(h.ui:click(line.minus))
+        assert.are.equal("1 of 2", line.value.content)
+        assert.are.equal(writes + 1, h.dbWrites)
+        assert.are.same({ ["broad-arrowheads"] = 1 }, helpers.stored(h).needed)
+        assert.matches("%[CHORES%] shops needed broad%-arrowheads 1", h:output())
+        -- At 1, minus changes nothing.
+        assert.is_true(h.ui:click(line.minus))
+        assert.are.equal(writes + 1, h.dbWrites)
+        local _, lines = h:output():gsub("shops needed", "")
+        assert.are.equal(1, lines)
+        assert.are.equal(win, window(h))
+        -- Back to all shops, the default, nothing is held for it.
+        assert.is_true(h.ui:click(line.plus))
+        assert.are.equal("2 of 2", line.value.content)
+        assert.are.same({}, helpers.stored(h).needed)
+    end)
+
+    it("keeps a count per character, across reloads", function()
+        local h = loaded()
+        helpers.setShopsNeeded(h, "feather-shop-run", 2)
+        h:reload()
+        openSettings(h)
+        assert.are.equal("2 of 4", helpers.stepper(h, "feather-shop-run").value.content)
+        helpers.back(h)
+        h.world:logout()
+        h.world:login("Lynx Titan")
+        h:advance(helpers.POLL_MS)
+        openSettings(h)
+        assert.are.equal("4 of 4", helpers.stepper(h, "feather-shop-run").value.content)
+    end)
+
+    it("never ticks or unticks on a count change", function()
+        local h = loaded()
+        helpers.togglePicks(h, { "feather-shop-run" })
+        helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
+        -- Lowered to the one shop bought: still unticked, until the next purchase.
+        helpers.setShopsNeeded(h, "feather-shop-run", 1)
+        assert.is_false(helpers.ticked(h, "Feather Shop Run"))
+        helpers.stock(h, "FISHINGSHOP", "FEATHER_PACK", 15)
+        assert.is_true(helpers.ticked(h, "Feather Shop Run"))
+        -- Raised above it: the tick stays.
+        helpers.setShopsNeeded(h, "feather-shop-run", 3)
+        assert.is_true(helpers.ticked(h, "Feather Shop Run"))
+        assert.are.equal("Feather Shop Run (1/3)", (helpers.rowShown(h, "Feather Shop Run")))
+    end)
+
+    it("loads a version 2 state with every chore at its default count", function()
+        local h = loaded({ load = false })
+        helpers.seed(h, "state:Zezima", { version = 2, selected = {}, done = {}, shops = {} })
+        h:load()
+        openSettings(h)
+        assert.are.equal("11 of 11", helpers.stepper(h, "rune-shop-run").value.content)
     end)
 end)
 
@@ -238,6 +340,7 @@ describe("chore-tracker row hover", function()
         assert.are.equal(0, #h.ui:tooltips())
         openSettings(h)
         local s = helpers.settingsRow(h, "daily-challenge")
+        window(h):SetScrollPosition(s.layer.y - 40)
         assert.is_true(h.ui:hover(s.layer))
         assert.are.equal(1, #h.ui:tooltips())
         h.ui:leave()

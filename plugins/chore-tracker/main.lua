@@ -5,14 +5,16 @@
 -- Weekly and Monthly headings, and you tick one off by clicking its row, or drag it by its grip
 -- to reorder it within its period. Ticks clear themselves when the game clock passes the
 -- period's reset (UTC: daily at 00:00, weekly on Wednesday 00:00, monthly on the 1st). Some
--- chores also tick themselves, picked or not: a shop run when you buy at one of its shops and
--- a collection when its notes rise in your backpack near the giver (shell/detect.lua), and
--- others when one of your own game vars changes to show them done (shell/vars.lua; a chore
--- already done at login or while the plugin was off is left to tick by hand). When the plugin
--- ticks a picked chore, or a period's picked chores are all done, a popup celebrates it
--- (shell/popups.lua); settings turn the popups or their sound off. Picks, their order and
--- ticks are saved per character, by display name; the window's place, size and collapsed
--- state (shell/window.lua) and the celebration settings are saved for all characters.
+-- chores also tick themselves, picked or not: a shop run once you have bought at as many of its
+-- shops as it needs this period (all of them, or fewer set with the settings view's Shop runs
+-- steppers) and a collection when its notes rise in your backpack near the giver
+-- (shell/detect.lua), and others when one of your own game vars changes to show them done
+-- (shell/vars.lua; a chore already done at login or while the plugin was off is left to tick
+-- by hand). When the plugin ticks a picked chore, or a period's picked chores are all done, a
+-- popup celebrates it (shell/popups.lua); settings turn the popups or their sound off. Picks,
+-- their order, ticks and shop-run counts are saved per character, by display name; the
+-- window's place, size and collapsed state (shell/window.lua) and the celebration settings are
+-- saved for all characters.
 -- Collapsed, the window becomes a strip showing the next chore not done, Daily first, then
 -- Weekly, then Monthly, in the player's order, which a click ticks (shell/strip.lua).
 --
@@ -23,8 +25,9 @@
 --
 -- Every console line carries [CHORES] (grep: \[CHORES\]); the display name is never logged.
 -- Chores ticked by the plugin and celebrations log "[CHORES] purchase", "collected", "seen" or
--- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)); README.md's
--- "Console lines" section lists the others.
+-- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)), and a shop run's
+-- count set in settings logs "[CHORES] shops needed <chore id> <n>"; README.md's "Console
+-- lines" section lists the others.
 --
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
 -- local daemon; scripts/check-submission.sh fails until it is stripped (README, "Before
@@ -52,6 +55,7 @@ local grips = require("shell/grips")
 local popups = require("shell/popups")
 local prettyuiInternals = require("shell/prettyui_internals")
 local rows = require("shell/rows")
+local stepper = require("shell/stepper")
 local store = require("shell/store")
 local vars = require("shell/vars")
 local window = require("shell/window")
@@ -284,6 +288,51 @@ local function onCelebrationSetting(_, _values, setting, on)
     store.saveSettings(celebrations)
 end
 
+-- A shop-run stepper was clicked: change how many of the chore's shops tick it by `delta`,
+-- save it straight away and show the new count. At either end of its range it changes
+-- nothing. It never ticks or unticks the chore: the next purchase is judged by the new count.
+---@param chore Chore
+---@param delta integer
+---@param shown ChoreStepperView
+local function onShopsNeeded(chore, delta, shown)
+    assert(character, "settings are only built for a logged-in character")
+    local listed = shops[chore.id]
+    local count = state.shopsNeeded(tracker, chore, listed) + delta
+    local changed = state.setShopsNeeded(tracker, chore, listed, count)
+    if changed == tracker then return end
+    tracker = changed
+    store.saveState(character, tracker)
+    local needed = state.shopsNeeded(tracker, chore, listed)
+    stepper.show(shown, needed)
+    say("shops needed", chore.id, needed)
+end
+
+-- The Shop runs block: its title next in PrettyUI's flow, then a stepper per chore with more
+-- than one listed shop, picked or not. Gives back the block's bottom.
+---@param w prettyui.Window
+---@param wheel ChoreWheelHandler?
+---@return integer
+local function buildShopRuns(w, wheel)
+    local title = w:AddTitle("Shop runs")
+    local settingsLines = view.shopsSettings(tracker, chores, shops)
+    local ys, bottom = listlayout.stack(#settingsLines, title.y + title.height)
+    for i, line in ipairs(settingsLines) do
+        local shown ---@type ChoreStepperView
+        shown = stepper.new(
+            w.content,
+            ys[i],
+            line.chore.name,
+            line.needed,
+            line.total,
+            function(delta)
+                onShopsNeeded(line.chore, delta, shown)
+            end,
+            wheel
+        )
+    end
+    return bottom
+end
+
 -- A settings subheading's key in the layout, unique across periods.
 ---@param p ChorePeriod
 ---@param category ChoreCategory
@@ -292,15 +341,18 @@ local function subheadingKey(p, category)
     return p .. "/" .. category
 end
 
--- The settings view: the Celebrations switches in PrettyUI's flow, then a heading per period,
--- a subheading per category within it, and a hand-built row per chore below them.
+-- The settings view: the Celebrations switches and the Shop runs title in PrettyUI's flow,
+-- the Shop runs steppers, then a heading per period, a subheading per category within it, and
+-- a hand-built row per chore below them.
 ---@param w prettyui.Window
 local function buildSettings(w)
     w:AddTitle("Celebrations")
-    local switches = w:AddCheckboxButton({
+    w:AddCheckboxButton({
         { text = "Celebration popups", value = "popups", selected = celebrations.popups },
         { text = "Popup sound", value = "sound", selected = celebrations.sound },
     }, { onChange = onCelebrationSetting })
+    local wheel = prettyuiInternals.wheelHandler(w)
+    local top = buildShopRuns(w, wheel)
     local groups = view.byPeriod(chores)
     local sections = {} ---@type ChoreSectionIds[]
     for i, group in ipairs(groups) do
@@ -315,8 +367,7 @@ local function buildSettings(w)
         end
         sections[i] = { period = group.period, ids = ids, subheads = subheads }
     end
-    local spots = listlayout.place(sections, switches.root.y + switches.root.height)
-    local wheel = prettyuiInternals.wheelHandler(w)
+    local spots = listlayout.place(sections, top)
     for _, group in ipairs(groups) do
         w:AddTitle({ text = group.title, y = spots.headings[group.period] })
         for _, subgroup in ipairs(group.subgroups) do

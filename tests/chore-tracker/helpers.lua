@@ -12,6 +12,7 @@ local varRules = require("data/vars")
 local chores = require("data/chores")
 local view = require("core/view")
 local state = require("core/state")
+local listlayout = require("core/listlayout")
 
 local M = {}
 
@@ -369,6 +370,61 @@ M.expand = M.collapse
 function M.back(h)
     click(h, h.ui:get("SpriteButton", { sprite = "BACK" }))
     h:advance(20)
+end
+
+M.MINUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_MINUS")
+M.PLUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_PLUS")
+
+-- The settings view's Shop runs line for chore `id`: its name and value texts and its minus
+-- and plus button layers. They sit straight in the content: the name is the content's own
+-- text with the chore's name (a settings row's label is inside its row layer), and the value
+-- and buttons share its row.
+---@param h table
+---@param id string
+---@return { label: table, value: table, minus: table, plus: table }
+function M.stepper(h, id)
+    local name = M.name(id)
+    local children = h.ui:children(M.window(h).content)
+    local label
+    for _, proxy in ipairs(children) do
+        local part = assert(uiFake.stateOf(proxy))
+        if part.class == "ui.Text" and part.content == name then label = proxy end
+    end
+    assert(label, "no Shop runs line for " .. id)
+    local out = { label = label }
+    for _, proxy in ipairs(children) do
+        local part = assert(uiFake.stateOf(proxy))
+        local inRow = proxy.y >= label.y and proxy.y < label.y + listlayout.ROW_HEIGHT
+        if inRow and part.class == "ui.Text" and part.content:match("^%d+ of %d+$") then
+            out.value = proxy
+        elseif inRow and part.class == "ui.Layer" then
+            for _, inner in ipairs(h.ui:children(proxy)) do
+                local sprite = assert(uiFake.stateOf(inner)).spriteID
+                if sprite == M.MINUS then out.minus = proxy end
+                if sprite == M.PLUS then out.plus = proxy end
+            end
+        end
+    end
+    assert(out.value and out.minus and out.plus, "an incomplete Shop runs line for " .. id)
+    return out
+end
+
+-- Open settings, step chore `id`'s shops-needed count to `n` with its stepper, and go back
+-- to the list.
+---@param h table
+---@param id string
+---@param n integer
+function M.setShopsNeeded(h, id, n)
+    M.openSettings(h)
+    local line = M.stepper(h, id)
+    M.window(h):SetScrollPosition(line.label.y - 40)
+    for _ = 1, 20 do
+        local shown = tonumber(line.value.content:match("^(%d+)"))
+        if shown == n then break end
+        click(h, shown > n and line.minus or line.plus)
+    end
+    assert(line.value.content:match("^(%d+)") == tostring(n), "cannot step " .. id .. " to " .. n)
+    M.back(h)
 end
 
 -- Open settings, toggle the picked state of the chores whose ids are given (picks an unpicked

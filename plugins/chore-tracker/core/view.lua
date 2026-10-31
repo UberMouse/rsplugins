@@ -30,6 +30,7 @@ M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 ---@field done boolean
 ---@field shops ChoreShopLine[] the chore's listed shops, in list order; empty if it has none
 ---@field bought integer how many of `shops` were bought from this period
+---@field needed integer how many of `shops` tick the chore (state.shopsNeeded); 0 without shops
 
 ---@class ChoreSection
 ---@field period ChorePeriod
@@ -128,7 +129,8 @@ function M.view(s, chores, now, shops)
         for _, id in ipairs((state.selectedIn(s, chores, p))) do
             local chore = byId[id]
             local done = now ~= nil and state.isDone(s, chore, now)
-            local lines, bought = shopLines(s, chore, shops and shops[id] or {}, now)
+            local listed = shops and shops[id] or {}
+            local lines, bought = shopLines(s, chore, listed, now)
             section.rows[#section.rows + 1] = {
                 id = id,
                 name = chore.name,
@@ -138,6 +140,7 @@ function M.view(s, chores, now, shops)
                 done = done,
                 shops = lines,
                 bought = bought,
+                needed = #listed > 0 and state.shopsNeeded(s, chore, listed) or 0,
             }
             if done then section.done = section.done + 1 end
         end
@@ -147,29 +150,68 @@ function M.view(s, chores, now, shops)
     return sections
 end
 
--- A list row's text: the chore's name, and for a chore with more than one shop, how many
--- were bought from this period, as "Feather Shop Run (1/4)".
+-- A row's shops bought from this period out of those it needs, as "1/4". Bought is capped at
+-- needed: shops past the count add nothing to the tick.
+---@param row ChoreRow
+---@return string
+local function shopCount(row)
+    return string.format("%d/%d", math.min(row.bought, row.needed), row.needed)
+end
+
+-- A list row's text: the chore's name, and for a chore with more than one shop, how many of
+-- the shops it needs were bought from this period, as "Feather Shop Run (1/4)".
 ---@param row ChoreRow
 ---@return string
 function M.rowText(row)
     if #row.shops <= 1 then return row.name end
-    return string.format("%s (%d/%d)", row.name, row.bought, #row.shops)
+    return string.format("%s (%s)", row.name, shopCount(row))
 end
 
--- The tooltip lines for a row's shops: a heading, then each shop as bought or not yet. None
--- for a chore without shops.
+-- The tooltip lines for a row's shops: a heading with the count of rowText, then every listed
+-- shop as bought or not yet. None for a chore without shops.
 ---@param row ChoreRow
 ---@param p ChorePeriod the row's period
 ---@return string[]
 function M.shopTooltip(row, p)
     if #row.shops == 0 then return {} end
     local lines = {
-        string.format("Shops this %s (%d/%d):", M.PERIOD_WORDS[p], row.bought, #row.shops),
+        string.format("Shops this %s (%s):", M.PERIOD_WORDS[p], shopCount(row)),
     }
     for _, shop in ipairs(row.shops) do
         lines[#lines + 1] = (shop.bought and "bought  " or "not yet  ") .. shop.name
     end
     return lines
+end
+
+---@class ChoreShopsSetting
+---@field chore Chore
+---@field needed integer its current count (state.shopsNeeded)
+---@field total integer how many shops it lists
+
+-- The settings view's shop-run lines: each chore with more than one listed shop, picked or
+-- not, in chore-list order, with how many of its shops tick it.
+---@param s ChoreState
+---@param chores Chore[]
+---@param shops table<string, ChoreShop[]> chore id -> its listed shops
+---@return ChoreShopsSetting[]
+function M.shopsSettings(s, chores, shops)
+    local out = {}
+    for _, chore in ipairs(chores) do
+        local listed = shops[chore.id]
+        if listed and #listed > 1 then
+            out[#out + 1] =
+                { chore = chore, needed = state.shopsNeeded(s, chore, listed), total = #listed }
+        end
+    end
+    return out
+end
+
+-- A shop-run stepper's value, as "2 of 4".
+---@param needed integer
+---@param total integer
+---@return string
+function M.neededText(needed, total)
+    return string.format("%d of %d", needed, total)
 end
 
 -- A chore's tooltip: its description, then `extra` lines (a list row's shops), then its wiki

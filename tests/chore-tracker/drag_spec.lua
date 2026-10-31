@@ -28,7 +28,8 @@ for _, ids in ipairs({ DAILY, WEEKLY, MONTHLY }) do
     end
 end
 
--- `who`'s stored picks: the lists given, concatenated in order.
+-- `who`'s stored picks: the lists given, concatenated in order. Feather Shop Run needs one
+-- shop, so a single purchase ticks it.
 ---@param h table
 ---@param who string
 ---@param ... string[]
@@ -39,7 +40,13 @@ local function seed(h, who, ...)
             selected[#selected + 1] = id
         end
     end
-    helpers.seed(h, "state:" .. who, { version = 2, selected = selected, done = {}, shops = {} })
+    helpers.seed(h, "state:" .. who, {
+        version = 3,
+        selected = selected,
+        done = {},
+        shops = {},
+        needed = { ["feather-shop-run"] = 1 },
+    })
 end
 
 -- A loaded tracker for Zezima with DAILY, WEEKLY and MONTHLY picked.
@@ -866,7 +873,8 @@ describe("chore-tracker drag and other events", function()
         assert.is_true(h.ui:moveTo(x, y + 2 * ROW))
         helpers.setClock(h, helpers.NOW + 1)
         h:advance(20)
-        -- A purchase at the feather shop ticks Feather Shop Run and celebrates it.
+        -- A purchase at the feather shop ticks Feather Shop Run (one shop needed, as seeded) and
+        -- celebrates it.
         helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         h:advance(20)
         assert.is_true(helpers.ticked(h, "Feather Shop Run"))

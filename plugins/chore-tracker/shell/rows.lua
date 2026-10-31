@@ -52,7 +52,8 @@ local BOX_TICKED_HOVERED = id.Sprite.RS3_BTN_CHECKBOX_3
 local GRIP_SPRITE = id.Sprite.HAMBURGER_MENU_ICON
 
 -- The cursor over a row. The user chose it among eight in a probe (docs/api-concepts.md).
-local ROW_CURSOR = id.Cursor.CURSOR_HYPERLINK_HAND
+-- Shared with shell/stepper.lua's buttons.
+M.ROW_CURSOR = id.Cursor.CURSOR_HYPERLINK_HAND
 
 local FONT_NAME = "MUSEO_SANS_15PT_REGULAR"
 
@@ -212,7 +213,7 @@ function M.new(content, y, icon, onClick, opts)
     layer:SetPos(margins.left, y)
     layer:SetSize(-(margins.left + margins.right), ROW_HEIGHT, 1.0, 0)
     layer.clickthrough = false
-    M.setCursor(layer, ROW_CURSOR)
+    M.setCursor(layer, M.ROW_CURSOR)
     layer:Subscribe(ui.Hook.ONCLICK, function()
         onClick()
     end)

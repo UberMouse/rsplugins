@@ -100,6 +100,7 @@ describe("chore-tracker view", function()
             done = true,
             shops = {},
             bought = 0,
+            needed = 0,
         }, section.rows[1])
         assert.is_false(section.rows[2].done)
         assert.are.equal(1, section.done)
@@ -128,6 +129,7 @@ describe("chore-tracker view", function()
             local s = state.recordPurchase(
                 support.stateWith(chores, { "wshop" }),
                 byId.wshop,
+                listed.wshop,
                 "SHOP_B",
                 now
             )
@@ -137,19 +139,22 @@ describe("chore-tracker view", function()
                 row.shops
             )
             assert.are.equal(1, row.bought)
-            assert.is_true(row.done)
+            assert.are.equal(2, row.needed)
+            -- One of the two shops it needs by default: recorded, not ticked.
+            assert.is_false(row.done)
         end)
 
         it("counts a shop bought from in any of its inventories once", function()
             local s = state.recordPurchase(
                 support.stateWith(chores, { "wshop" }),
                 byId.wshop,
+                listed.wshop,
                 "SHOP_B2",
                 now
             )
             local row = view.view(s, chores, now, listed)[1].rows[1]
             assert.are.equal(1, row.bought)
-            s = state.recordPurchase(s, byId.wshop, "SHOP_B", now)
+            s = state.recordPurchase(s, byId.wshop, listed.wshop, "SHOP_B", now)
             assert.are.equal(1, view.view(s, chores, now, listed)[1].rows[1].bought)
         end)
 
@@ -157,6 +162,7 @@ describe("chore-tracker view", function()
             local s = state.recordPurchase(
                 support.stateWith(chores, { "wshop" }),
                 byId.wshop,
+                listed.wshop,
                 "SHOP_B",
                 now
             )
@@ -168,6 +174,7 @@ describe("chore-tracker view", function()
             local s = state.recordPurchase(
                 support.stateWith(chores, { "wshop", "dshop" }),
                 byId.wshop,
+                listed.wshop,
                 "SHOP_A",
                 now
             )
@@ -184,6 +191,7 @@ describe("chore-tracker view", function()
             local s = state.recordPurchase(
                 support.stateWith(chores, { "wshop", "dshop" }),
                 byId.wshop,
+                listed.wshop,
                 "SHOP_A",
                 now
             )
@@ -199,6 +207,36 @@ describe("chore-tracker view", function()
             local plain =
                 view.view(support.stateWith(chores, { "d1" }), chores, now, listed)[1].rows[1]
             assert.are.same({}, view.shopTooltip(plain, "daily"))
+        end)
+
+        it("counts bought out of the set count, capped at it, still listing every shop", function()
+            local s = state.setShopsNeeded(
+                support.stateWith(chores, { "wshop" }),
+                byId.wshop,
+                listed.wshop,
+                1
+            )
+            local row = view.view(s, chores, now, listed)[1].rows[1]
+            assert.are.equal("WSHOP (0/1)", view.rowText(row))
+            s = state.recordPurchase(s, byId.wshop, listed.wshop, "SHOP_A", now)
+            s = state.recordPurchase(s, byId.wshop, listed.wshop, "SHOP_B", now)
+            row = view.view(s, chores, now, listed)[1].rows[1]
+            assert.are.equal(2, row.bought)
+            assert.are.equal("WSHOP (1/1)", view.rowText(row))
+            assert.are.same(
+                { "Shops this week (1/1):", "bought  Shop A", "bought  Shop B" },
+                view.shopTooltip(row, "weekly")
+            )
+        end)
+
+        it("lists each multi-shop chore for settings, picked or not, in list order", function()
+            local s = state.setShopsNeeded(state.new(), byId.wshop, listed.wshop, 1)
+            local lines = view.shopsSettings(s, chores, listed)
+            assert.are.equal(1, #lines)
+            assert.are.equal(byId.wshop, lines[1].chore)
+            assert.are.equal(1, lines[1].needed)
+            assert.are.equal(2, lines[1].total)
+            assert.are.equal("1 of 2", view.neededText(lines[1].needed, lines[1].total))
         end)
     end)
 

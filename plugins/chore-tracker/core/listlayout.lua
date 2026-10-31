@@ -1,7 +1,7 @@
 -- Where the list and settings views' headings, subheadings and chore rows go in the window's
--- content, as plain data. Pure: the shell gives the sections and the bottom of what PrettyUI
+-- content, as plain data. Pure: the shell gives the sections and the bottom of what is
 -- already placed at the top (the settings button and any notice, or the Celebrations
--- switches), and makes the components at these spots.
+-- switches and the Shop runs lines), and makes the components at these spots.
 
 local M = {}
 
@@ -30,6 +30,21 @@ M.FLOW_PADDING = 14
 ---@field ids string[] the chore ids of its rows, top to bottom
 ---@field subheads table<integer, string>? settings only: index in `ids` -> the key of the
 ---subheading above that row
+
+-- The y of each of `count` rows stacked under a title that PrettyUI placed ending at `top`
+-- (the settings view's Shop runs lines), and the bottom of the last, where what follows starts.
+---@param count integer
+---@param top integer
+---@return integer[] ys
+---@return integer bottom
+function M.stack(count, top)
+    local ys, y = {}, top + M.AFTER_HEADING
+    for i = 1, count do
+        ys[i] = y
+        y = y + M.ROW_HEIGHT
+    end
+    return ys, y
+end
 
 -- The y of each heading, subheading and row of `sections`, top to bottom from `top` (the bottom
 -- of what is above the list), and the content height that holds them.

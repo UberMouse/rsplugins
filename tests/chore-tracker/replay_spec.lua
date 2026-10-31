@@ -73,7 +73,8 @@ end
 -- the harness after the shared setup and before the load, to put the world as it was when the
 -- recording's window opened, and `o.upTo` is the tick to stop at (the recording's last by
 -- default).
----@param o { fixture: string, open: string?, picked: string[], before: fun(h: table), upTo: integer? }
+-- `o.needed` is the character's shops-needed counts (chore id -> count; none by default).
+---@param o { fixture: string, open: string?, picked: string[], before: fun(h: table), upTo: integer?, needed: table<string, integer>? }
 ---@return table h
 local function replayed(o)
     -- No scripted login or clock: the recording's reads are both.
@@ -91,10 +92,11 @@ local function replayed(o)
     helpers.seed(h, "layout", {})
     helpers.seed(h, "celebrations", {})
     helpers.seed(h, "state:" .. WHO, {
-        version = 2,
+        version = 3,
         selected = o.picked,
         done = {},
         shops = {},
+        needed = o.needed or {},
     })
     o.before(h)
     h:useRecording(entries(o.fixture, o.open))
@@ -110,13 +112,16 @@ local function replayed(o)
     return h
 end
 
--- The feather recording: the Lumbridge shop open, the Feather Shop Run picked.
+-- The feather recording: the Lumbridge shop open, the Feather Shop Run picked, needing
+-- `needed` shops (all four by default).
+---@param needed integer?
 ---@return table h
-local function feathersBought()
+local function feathersBought(needed)
     return replayed({
         fixture = FEATHER_FIXTURE,
         open = "FISHINGSHOP_LUM",
         picked = { FEATHERS.id },
+        needed = needed and { [FEATHERS.id] = needed },
         before = function(h)
             local before = {}
             for i, line in ipairs(STOCK) do
@@ -147,11 +152,19 @@ local function sandSession(upTo)
 end
 
 describe("chore-tracker replaying a recorded feather purchase", function()
-    it("ticks the Feather Shop Run, one shop of four, as the client did", function()
+    it("records the shop, not ticking a run that needs all four shops", function()
         local h = feathersBought()
+        assert.is_false(helpers.ticked(h, FEATHERS.name))
+        assert.are.equal("Feather Shop Run (1/4)", (helpers.rowShown(h, FEATHERS.name)))
+        assert.are.same({ FISHINGSHOP_LUM = CLOCK }, helpers.stored(h, WHO).shops[FEATHERS.id])
+        assert.are.same({}, helpers.stored(h, WHO).done)
+    end)
+
+    it("ticks a Feather Shop Run that needs one shop, as the client did", function()
+        local h = feathersBought(1)
         assert.is_true(helpers.ticked(h, FEATHERS.name))
         local text, tooltip = helpers.rowShown(h, FEATHERS.name)
-        assert.are.equal("Feather Shop Run (1/4)", text)
+        assert.are.equal("Feather Shop Run (1/1)", text)
         assert.is_not_nil(tooltip:find("bought  Lumbridge Fishing Supplies", 1, true))
         assert.is_not_nil(
             h:output()
@@ -162,7 +175,7 @@ describe("chore-tracker replaying a recorded feather purchase", function()
     end)
 
     it("marks nothing else done", function()
-        local h = feathersBought()
+        local h = feathersBought(1)
         assert.are.same({ [FEATHERS.id] = CLOCK }, helpers.stored(h, WHO).done)
         assert.are.same(
             { [FEATHERS.id] = { FISHINGSHOP_LUM = CLOCK } },

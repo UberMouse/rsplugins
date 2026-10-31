@@ -1,5 +1,8 @@
 -- The shops each shop-run chore can be done at, hand-written.
--- A purchase at any of a chore's shops ticks it (see shell/detect.lua).
+-- A purchase at one of a chore's shops records that shop as bought from this period (see
+-- shell/detect.lua). A chore with one shop then ticks; one with several ticks once as many of
+-- them as it needs were bought from: all of them, or fewer if the player set a count in
+-- settings (core/state.lua, shopsNeeded).
 --
 -- `invs` are the shop's inventory config names (config.Inv.<name>), which is how the client
 -- tells one shop from another: every shop has its own inventory, even shops selling the
@@ -7,7 +10,7 @@
 -- purchase in either. `proven` marks a shop where a purchase was seen in the beta client
 -- (docs/api-concepts.md, "Shops in the client"). An unproven one (`proven = false`) is a
 -- shop from the wiki matched by name to inventories in the client's own list (`pan Inv`);
--- it ticks the same way, but no purchase there has been seen yet.
+-- it counts the same way, but no purchase there has been seen yet.
 
 ---@class ChoreShop
 ---@field name string shown in the chore's tooltip

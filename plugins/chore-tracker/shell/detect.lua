@@ -163,15 +163,17 @@ end
 
 -- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
 -- not, so picking one later shows the period's truth), and tick the chore if it isn't done
--- this period. Each chore it changes is logged: a repeat purchase at a shop already bought
--- from this period changes and logs nothing, unless the chore was unticked by hand since.
+-- this period and enough of its shops were bought from (state.recordPurchase). Each chore it
+-- changes is logged: a repeat purchase at a shop already bought from this period changes and
+-- logs nothing, unless it now ticks the chore (unticked by hand, or its count lowered, since).
 ---@param name string
 local function onPurchase(name)
     assert(options, "init runs before any inventory event")
-    local say = options.say
+    local say, shops = options.say, options.shops
     options.apply(function(tracker, now)
         for _, entry in ipairs(shopIndex[name]) do
-            local recorded = state.recordPurchase(tracker, entry.chore, name, now)
+            local listed = shops[entry.chore.id]
+            local recorded = state.recordPurchase(tracker, entry.chore, listed, name, now)
             if recorded ~= tracker then say("purchase", entry.chore.id, "at", entry.shop.name) end
             tracker = recorded
         end

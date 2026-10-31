@@ -257,10 +257,17 @@ local ResizeController = strict.class("prettyui.Window resize", {
         enabled = function(s)
             return s.win.resizeEnabled
         end,
+        -- 1.2.0's `dragState`: a table from a handle's press until the drag ends, else nil.
+        -- Set only by h.ui:holdResize; a one-call h.ui:resize presses and lets go at once.
+        dragState = function(s)
+            return s.win.resizeDrag
+        end,
     },
     methods = {
+        -- 1.2.0's SetEnabled(false) also ends a resize drag in progress (`_Clear`).
         SetEnabled = function(s, enabled)
             s.win.resizeEnabled = enabled
+            if not enabled then s.win.resizeDrag = nil end
         end,
     },
 })

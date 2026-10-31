@@ -102,6 +102,10 @@ local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
 -- The settings view's Shop runs lines, refitted with the rows; they go with the window too.
 local stepperViews = {} ---@type ChoreStepperView[]
+-- While the info view is open: the window width its help was wrapped for, and the width at the
+-- last poll, to re-lay the help once a resize settles. They go with the window too.
+local helpWidth = nil ---@type integer?
+local polledWidth = nil ---@type integer?
 -- A view switch left for the next Logic tick. A button's action mustn't destroy the button
 -- while PrettyUI is still handling its click, and a view switch rebuilds the window.
 local pendingMode = nil ---@type ChoreMode?
@@ -430,13 +434,17 @@ end
 ---------------------------------------------------------------------------
 
 -- The info view: the help paragraphs in PrettyUI's flow, each broken into lines that fit the
--- narrowest window (core/layout.lua, HELP_TEXT_WIDTH), then a heading per status and a
--- display-only row per chore below them, all from the data files. Nothing here reads the game.
+-- window's width now (core/layout.lua, helpTextWidth; relayInfo below re-lays them after a
+-- resize), then a heading per status and a display-only row per chore below them, all from
+-- the data files. Nothing here reads the game.
 ---@param w prettyui.Window
 local function buildInfo(w)
+    helpWidth = w.root.width
+    polledWidth = helpWidth
+    local textWidth = layout.helpTextWidth(helpWidth)
     local top = 0
     for _, paragraph in ipairs(info.HELP) do
-        local text = w:AddText(rows.wrapText(paragraph, layout.HELP_TEXT_WIDTH))
+        local text = w:AddText(rows.wrapText(paragraph, textWidth))
         top = text.y + text.height
     end
     local groups = info.byStatus(chores, shops, collections, varRules)
@@ -457,6 +465,21 @@ local function buildInfo(w)
         end
     end
     w:SetContentHeight(spots.height)
+end
+
+-- On the poll, rebuild the info view (keeping its scroll) once the window's width differs from
+-- the one its help was wrapped for and has stopped changing (core/layout.lua, relayInfo), and
+-- no resize drag is in progress, since the rebuild would end it. Nothing in the other views or
+-- collapsed.
+local function relayInfo()
+    local w = window.current()
+    assert(w, "the info view is only re-laid while its window exists")
+    if helpWidth == nil or window.isCollapsed() then return end
+    assert(polledWidth, "buildInfo sets both widths")
+    local width = w.root.width
+    local settled = layout.relayInfo(helpWidth, polledWidth, width)
+    polledWidth = width
+    if settled and not prettyuiInternals.resizing(w) then window.rebuild(true) end
 end
 
 ---------------------------------------------------------------------------
@@ -515,9 +538,10 @@ window.init({
     backToList = function()
         pendingMode = "list"
     end,
-    -- The old window's rows, headings and Shop runs lines went with it.
+    -- The old window's rows, headings, Shop runs lines and info widths went with it.
     clearViews = function()
         rowViews, headings, stepperViews = {}, {}, {}
+        helpWidth, polledWidth = nil, nil
     end,
     build = buildContent,
     -- Close hides the rows, and the client sends no mouse-leave to a hidden layer, so a hovered
@@ -628,6 +652,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)
         window.saveLayoutIfChanged()
+        relayInfo()
         refitRows()
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.

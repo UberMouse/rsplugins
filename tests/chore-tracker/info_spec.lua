@@ -13,6 +13,23 @@ local layout = require("core/layout")
 local view = require("core/view")
 local loaded, openInfo, window = helpers.loaded, helpers.openInfo, helpers.window
 
+-- The help's lines wider than `maxWidth` in the rows' font, and the widest line's width.
+---@param h table
+---@param maxWidth integer
+---@return string[] tooWide
+---@return number widest
+local function helpLines(h, maxWidth)
+    local tooWide, widest = {}, 0
+    for _, text in ipairs(h.ui:find("Text")) do
+        for line in (text.content .. fit.BREAK):gmatch("(.-)" .. fit.BREAK) do
+            local width = fonts.width(line, false)
+            widest = math.max(widest, width)
+            if width > maxWidth then tooWide[#tooWide + 1] = line end
+        end
+    end
+    return tooWide, widest
+end
+
 -- The info view's row for chore `id`, found by position: the rows are in byStatus order.
 ---@param h table
 ---@param id string
@@ -63,32 +80,24 @@ describe("chore-tracker info view", function()
         h.ui:leave()
     end)
 
-    it(
-        "shows the help, wrapped to the narrowest window, above the three status headings",
-        function()
-            local h = loaded()
-            openInfo(h)
-            local texts = h.ui:find("Text")
-            assert.are.equal(#info.HELP, #texts)
-            local tooWide = {}
-            for _, text in ipairs(texts) do
-                for line in (text.content .. fit.BREAK):gmatch("(.-)" .. fit.BREAK) do
-                    if fonts.width(line, false) > layout.HELP_TEXT_WIDTH then
-                        tooWide[#tooWide + 1] = line
-                    end
-                end
-            end
-            assert.are.same({}, tooWide)
-            h.ui:get("Text", { text = "Drag a row by its grip" })
-            local titles = h.ui:find("Title")
-            assert.are.same(
-                { "Automatic (17)", "Unproven (21)", "Manual (30)" },
-                { titles[1].content, titles[2].content, titles[3].content }
-            )
-            local last = texts[#texts]
-            assert.is_true(titles[1].y >= last.y + last.height)
-        end
-    )
+    it("shows the help, wrapped to the window's width, above the three status headings", function()
+        local h = loaded()
+        openInfo(h)
+        local texts = h.ui:find("Text")
+        assert.are.equal(#info.HELP, #texts)
+        local tooWide, widest = helpLines(h, layout.helpTextWidth(window(h).root.width))
+        assert.are.same({}, tooWide)
+        -- The default window is wider than the narrowest, and the help uses that room.
+        assert.is_true(widest > layout.helpTextWidth(layout.MIN_WIDTH))
+        h.ui:get("Text", { text = "Drag a row by its grip" })
+        local titles = h.ui:find("Title")
+        assert.are.same(
+            { "Automatic (17)", "Unproven (21)", "Manual (30)" },
+            { titles[1].content, titles[2].content, titles[3].content }
+        )
+        local last = texts[#texts]
+        assert.is_true(titles[1].y >= last.y + last.height)
+    end)
 
     it("lists every chore as a display-only icon row, with its tooltip", function()
         local h = loaded()
@@ -128,8 +137,74 @@ describe("chore-tracker info view", function()
         assert.are.equal("...", r.label.content:sub(-3))
         assert.is_true(fonts.width(r.label.content, false) <= h.ui:layout(r.label).width)
         h.ui:resize(window(h), 400, 0)
-        h:advance(600)
+        -- One poll: the width has only just changed, so the view isn't re-laid yet.
+        h:advance(helpers.POLL_MS)
         assert.are.equal("Pineapples and Apples from Dell Monti", r.label.content)
+    end)
+
+    it("re-wraps the help for a new width once it settles, keeping the scroll", function()
+        local h = loaded()
+        openInfo(h)
+        window(h):SetScrollPosition(100)
+        local first = h.ui:find("Text")[1]
+        h.ui:resize(window(h), -80, 0)
+        h:advance(helpers.POLL_MS)
+        -- The width changed since the last poll: still settling, so nothing is rebuilt.
+        assert.are.equal(first, h.ui:find("Text")[1])
+        h:advance(helpers.POLL_MS)
+        assert.are_not.equal(first, h.ui:find("Text")[1])
+        assert.are.equal(layout.MIN_WIDTH, window(h).root.width)
+        assert.are.same({}, (helpLines(h, layout.helpTextWidth(layout.MIN_WIDTH))))
+        assert.are.equal(100, window(h)._scroll.scrollY)
+        h.ui:get("SpriteButton", { sprite = "BACK" })
+    end)
+
+    it("waits while the width keeps changing between polls", function()
+        local h = loaded()
+        openInfo(h)
+        local before = window(h)
+        h.ui:resize(before, -40, 0)
+        h:advance(helpers.POLL_MS)
+        h.ui:resize(before, -40, 0)
+        h:advance(helpers.POLL_MS)
+        assert.are.equal(before, window(h))
+        h:advance(helpers.POLL_MS)
+        assert.are_not.equal(before, window(h))
+    end)
+
+    it("waits for a held resize to be let go, even with the width settled", function()
+        local h = loaded()
+        openInfo(h)
+        local before = window(h)
+        h.ui:holdResize(before)
+        h.ui:resize(before, -80, 0, true)
+        h:advance(3 * helpers.POLL_MS)
+        assert.are.equal(before, window(h))
+        h.ui:releaseResize(before)
+        h:advance(helpers.POLL_MS)
+        assert.are_not.equal(before, window(h))
+    end)
+
+    it("rebuilds nothing on a height-only resize", function()
+        local h = loaded()
+        openInfo(h)
+        local before = window(h)
+        h.ui:resize(before, 0, 100)
+        h:advance(3 * helpers.POLL_MS)
+        assert.are.equal(before, window(h))
+    end)
+
+    it("leaves the list and settings views alone on a resize", function()
+        local h = loaded()
+        local list = window(h)
+        h.ui:resize(list, -80, 0)
+        h:advance(3 * helpers.POLL_MS)
+        assert.are.equal(list, window(h))
+        helpers.openSettings(h)
+        local settings = window(h)
+        h.ui:resize(settings, 80, 0)
+        h:advance(3 * helpers.POLL_MS)
+        assert.are.equal(settings, window(h))
     end)
 
     it("goes back to the list", function()

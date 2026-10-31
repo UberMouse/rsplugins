@@ -1064,9 +1064,12 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   `<col=ffd700>...</col>` colours text. After `SetSize` to 520 wide the text reflowed to 2
   lines but its row kept its 78 px height, and the rows below didn't move. So text built in a
   wide window and then narrowed would wrap to more lines than its row holds and overlap the next
-  row. Chore Tracker's info view breaks its help with `<br>` to fit the narrowest window it
-  allows (`core/layout.lua`, `HELP_TEXT_WIDTH`), measured with the client font, so PrettyUI
-  never wraps it further.
+  row. Chore Tracker's info view breaks its help with `<br>` to fit the window's width when the
+  view is built (`core/layout.lua`, `helpTextWidth`), measured with the client font, so PrettyUI
+  never wraps it further. Since the rows keep their height, it rebuilds the view once a resize
+  settles: the width unchanged between two half-second polls, and PrettyUI 1.2.0's internal
+  `resize.dragState` nil. That the pre-wrapped help doesn't re-wrap on resize was confirmed in
+  the client at 345 and 240 px wide; the re-lay is not yet checked there.
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

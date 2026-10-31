@@ -570,6 +570,7 @@ local function pressTitle(s, held)
     s.root:MoveToFront()
     s.titleDrag:MoveToFront()
     s.resizeEnabled = false
+    s.resizeDrag = nil -- SetEnabled(false) ends a resize drag (src/core/resize.lua, _Clear)
     s.titleDragState.isClicked = held
 end
 
@@ -638,6 +639,34 @@ function Driver:clickTitle(win)
     pressTitle(s, false)
 end
 
+-- 1.2.0's press on a resize handle (Resize:_Begin): it ends any title-bar press and shows the
+-- window (Resize onBegin, src/window.lua), which raises its root.
+---@param s table
+local function pressResize(s)
+    assert(s.resizeEnabled, "the window's resize handles are hidden: its resize is disabled")
+    stopTitleDrag(s)
+    windowShow(s)
+end
+
+-- Press a resizable Window's bottom-right corner and keep holding it: its `resize.dragState`
+-- reads non-nil until `releaseResize`. Nothing moves; `resize(win, dw, dh, true)` moves it.
+---@param win table
+function Driver:holdResize(win)
+    local s = self:record(win, "Window").s
+    assert(s.resizable, "the window isn't resizable")
+    assert(ui.visible(s.rootState), "the window is hidden")
+    pressResize(s)
+    s.resizeDrag = { edge = "se" }
+end
+
+-- Let go of a resize held with `holdResize`: `resize.dragState` reads nil again.
+---@param win table
+function Driver:releaseResize(win)
+    local s = self:record(win, "Window").s
+    assert(s.resizeDrag, "no resize is held")
+    s.resizeDrag = nil
+end
+
 -- Drag a resizable Window's bottom-right corner by (dw, dh): clamped to its min/max and to
 -- the parent's edge. The press ends any title-bar press and shows the window (1.2.0's
 -- Resize onBegin, src/window.lua), which raises its root; each move sets its size, which
@@ -651,11 +680,7 @@ function Driver:resize(win, dw, dh, held)
     local s = self:record(win, "Window").s
     assert(s.resizable, "the window isn't resizable")
     assert(ui.visible(s.rootState), "the window is hidden")
-    if not held then
-        assert(s.resizeEnabled, "the window's resize handles are hidden: its resize is disabled")
-        stopTitleDrag(s)
-        windowShow(s)
-    end
+    if not held then pressResize(s) end
     local root = s.rootState
     local function axis(pos, size, delta, extent, minimum, maximum)
         local limit = math.max(minimum, math.min(maximum or math.huge, extent))

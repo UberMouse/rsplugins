@@ -17,6 +17,8 @@
 -- - `resize.enabled` / `resize:SetEnabled` and `titleDrag` (with the client's `isClicked`):
 --   turn the window's resize back on after a quick title-bar click (reviveResize); without
 --   them the resize handles stay hidden after such a click until the title bar is dragged.
+-- - `resize.dragState`: whether a resize drag is in progress (resizing), so main.lua doesn't
+--   rebuild the info view under it; without it a rebuild waits only for the width to settle.
 
 local rows = require("shell/rows")
 
@@ -122,6 +124,17 @@ function M.reviveResize(w, isCollapsed)
     if resize.enabled ~= false or titleDrag.isClicked == true then return end
     if type(resize.SetEnabled) ~= "function" then return end
     pcall(resize.SetEnabled, resize, true)
+end
+
+-- Whether a resize of `w` is being dragged: PrettyUI 1.2.0's resize controller holds its
+-- internal `dragState` from a handle's press until its release, drag complete or the resize
+-- being turned off (src/core/resize.lua, `_Begin` and `_Clear`). False for a version without
+-- the controller.
+---@param w prettyui.Window
+---@return boolean
+function M.resizing(w)
+    local resize = w.resize
+    return type(resize) == "table" and resize.dragState ~= nil
 end
 
 -- Set the resize cursors on `w`'s eight resize handles with rows.setCursor. PrettyUI only

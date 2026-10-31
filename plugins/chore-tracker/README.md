@@ -58,10 +58,12 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Info.** The info button, beside the settings button, opens a short help on the ideas
   above, then every chore under one of three headings, each with its count: **Automatic**
   (ticks itself, checked in game), **Unproven** (should tick itself, not yet checked in game)
-  and **Manual** (tick it by hand). Each row shows the chore's icon and name, with its period after a name offered in two periods
-  ("Dream of Iaia XP (weekly)"); hover one for the same tooltip as in settings. The rows can't
-  be clicked. The back button in the window's top-right corner returns to the list. The help is
-  broken into lines that fit the narrowest window, so it never overlaps when you resize.
+  and **Manual** (tick it by hand). Each row shows the chore's icon and name, with its period
+  after a name offered in two periods ("Dream of Iaia XP (weekly)"); hover one for the same
+  tooltip as in settings. The rows can't be clicked. The back button in the window's top-right
+  corner returns to the list. The help fills the window's width. After you resize the window,
+  once its width has stayed put for about half a second, the view is laid out again for the new
+  width, at the same scroll.
 - **Moving it.** Drag the window by its title bar, and resize it from its edges or corners,
   which show a resize cursor when you hover them. While it is collapsed, hold **Alt** and drag
   the strip to move it. Alt-dragging only works with the console closed.

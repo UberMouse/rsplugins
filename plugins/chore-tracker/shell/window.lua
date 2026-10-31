@@ -64,6 +64,12 @@ function M.current()
     return win
 end
 
+-- Whether the window is collapsed to its strip (closed).
+---@return boolean
+function M.isCollapsed()
+    return collapsed ~= nil
+end
+
 -- A component's on-screen position relative to the plugin layer, in whole pixels.
 ---@param component ui.Component
 ---@return integer x

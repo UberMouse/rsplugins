@@ -211,6 +211,9 @@ describe("chore-tracker state", function()
             assert.are.equal(2, state.shopsNeeded(s, byId.wshop, TWO))
             s.needed.wshop = -3
             assert.are.equal(1, state.shopsNeeded(s, byId.wshop, TWO))
+            -- A chore without shops needs none, even with a count left over from a longer list.
+            assert.are.equal(0, state.shopsNeeded(s, byId.wshop, {}))
+            assert.are.equal(0, state.shopsNeeded(state.new(), byId.wshop, {}))
         end)
 
         it("sets a count, clamped, holding only one short of all, and never ticks", function()

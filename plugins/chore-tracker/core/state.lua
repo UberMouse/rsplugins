@@ -54,28 +54,29 @@ local function copySelected(selected)
     return table.move(selected, 1, #selected, 1, {})
 end
 
--- A copy of a key -> integer map (`done`, one chore's shops, or `needed`), each value passed
--- through `convert` if given; a nil from it leaves that key out.
----@param minutes table<string, integer>
----@param convert (fun(minute: integer): integer?)?
+-- A copy of a key -> integer map (`done` minutes, one chore's shop minutes, or the
+-- shops-needed counts), each value passed through `convert` if given; a nil from it leaves
+-- that key out.
+---@param map table<string, integer>
+---@param convert (fun(value: integer): integer?)?
 ---@return table<string, integer>
-local function copyMinutes(minutes, convert)
+local function copyIntegers(map, convert)
     local out = {}
-    for key, minute in pairs(minutes) do
-        local kept = minute ---@type integer?
-        if convert then kept = convert(minute) end
+    for key, value in pairs(map) do
+        local kept = value ---@type integer?
+        if convert then kept = convert(value) end
         out[key] = kept
     end
     return out
 end
 
 ---@param shops table<string, table<string, integer>>
----@param convert (fun(minute: integer): integer?)?
+---@param convert (fun(value: integer): integer?)?
 ---@return table<string, table<string, integer>>
 local function copyShops(shops, convert)
     local out = {}
     for id, minutes in pairs(shops) do
-        out[id] = copyMinutes(minutes, convert)
+        out[id] = copyIntegers(minutes, convert)
     end
     return out
 end
@@ -86,9 +87,9 @@ end
 local function copy(state)
     return {
         selected = copySelected(state.selected),
-        done = copyMinutes(state.done),
+        done = copyIntegers(state.done),
         shops = copyShops(state.shops),
-        needed = copyMinutes(state.needed),
+        needed = copyIntegers(state.needed),
     }
 end
 
@@ -298,7 +299,8 @@ function M.shopsBought(state, chore, listed, now)
 end
 
 -- How many of `listed` must be bought from in a period to tick `chore`: the player's count,
--- clamped to 1..#listed (the list may have shrunk since it was set), or all of them.
+-- at least 1 and at most #listed (the list may have shrunk since it was set), or all of them.
+-- 0 when `listed` is empty.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param listed ChoreShop[]
@@ -306,7 +308,7 @@ end
 function M.shopsNeeded(state, chore, listed)
     local set = state.needed[chore.id]
     if set == nil then return #listed end
-    return math.max(1, math.min(set, #listed))
+    return math.min(math.max(set, 1), #listed)
 end
 
 -- `state` with `chore` needing `count` of `listed` shops, clamped to 1..#listed. Gives back
@@ -327,13 +329,12 @@ function M.setShopsNeeded(state, chore, listed, count)
     return out
 end
 
--- `state` after a purchase at shop inventory `inv` (one of `listed`, the chore's shops) for
--- `chore` at `now`: the inventory recorded as bought, and the chore auto-marked if it isn't
--- done and enough of its shops were now bought from this period (shopsNeeded). Picked or not,
--- it is recorded, so picking the chore later shows the period's truth. When nothing changes
--- (the inventory already bought from this period, and the chore done or still short) it
--- gives back `state` itself: only period membership is ever read, so a later minute would
--- change nothing shown, and the caller then writes nothing.
+-- `state` after a purchase at shop inventory `inv` (one of `listed`) for `chore` at `now`:
+-- the inventory recorded as bought, and the chore auto-marked if it isn't done and at least
+-- shopsNeeded of its shops were bought from this period. Recorded whether or not the chore is
+-- picked. A repeat purchase keeps its first minute (only period membership is read) but is
+-- still judged for the tick. Gives back `state` itself when nothing changes, so the caller
+-- writes nothing.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param listed ChoreShop[]
@@ -362,9 +363,9 @@ function M.serialise(state)
     return {
         version = VERSION,
         selected = copySelected(state.selected),
-        done = copyMinutes(state.done, math.tointeger),
+        done = copyIntegers(state.done, math.tointeger),
         shops = copyShops(state.shops, math.tointeger),
-        needed = copyMinutes(state.needed),
+        needed = copyIntegers(state.needed),
     }
 end
 

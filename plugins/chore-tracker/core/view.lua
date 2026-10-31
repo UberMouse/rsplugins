@@ -140,7 +140,7 @@ function M.view(s, chores, now, shops)
                 done = done,
                 shops = lines,
                 bought = bought,
-                needed = #listed > 0 and state.shopsNeeded(s, chore, listed) or 0,
+                needed = state.shopsNeeded(s, chore, listed),
             }
             if done then section.done = section.done + 1 end
         end
@@ -148,6 +148,14 @@ function M.view(s, chores, now, shops)
         if section.total > 0 then sections[#sections + 1] = section end
     end
     return sections
+end
+
+-- Whether a chore with these shops (its listed shops, or a row's shop lines) gives the player
+-- a choice of how many to visit: only then does it get a count in its row and a stepper.
+---@param shops any[]
+---@return boolean
+function M.hasShopChoice(shops)
+    return #shops > 1
 end
 
 -- A row's shops bought from this period out of those it needs, as "1/4". Bought is capped at
@@ -158,12 +166,12 @@ local function shopCount(row)
     return string.format("%d/%d", math.min(row.bought, row.needed), row.needed)
 end
 
--- A list row's text: the chore's name, and for a chore with more than one shop, how many of
+-- A list row's text: the chore's name, and for a chore with a choice of shops, how many of
 -- the shops it needs were bought from this period, as "Feather Shop Run (1/4)".
 ---@param row ChoreRow
 ---@return string
 function M.rowText(row)
-    if #row.shops <= 1 then return row.name end
+    if not M.hasShopChoice(row.shops) then return row.name end
     return string.format("%s (%s)", row.name, shopCount(row))
 end
 
@@ -188,8 +196,8 @@ end
 ---@field needed integer its current count (state.shopsNeeded)
 ---@field total integer how many shops it lists
 
--- The settings view's shop-run lines: each chore with more than one listed shop, picked or
--- not, in chore-list order, with how many of its shops tick it.
+-- The settings view's shop-run lines: each chore with a choice of shops, picked or not, in
+-- chore-list order, with how many of its shops tick it.
 ---@param s ChoreState
 ---@param chores Chore[]
 ---@param shops table<string, ChoreShop[]> chore id -> its listed shops
@@ -198,7 +206,7 @@ function M.shopsSettings(s, chores, shops)
     local out = {}
     for _, chore in ipairs(chores) do
         local listed = shops[chore.id]
-        if listed and #listed > 1 then
+        if listed and M.hasShopChoice(listed) then
             out[#out + 1] =
                 { chore = chore, needed = state.shopsNeeded(s, chore, listed), total = #listed }
         end

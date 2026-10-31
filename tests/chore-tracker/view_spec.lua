@@ -238,6 +238,12 @@ describe("chore-tracker view", function()
             assert.are.equal(2, lines[1].total)
             assert.are.equal("1 of 2", view.neededText(lines[1].needed, lines[1].total))
         end)
+
+        it("gives a choice of shops only with more than one", function()
+            assert.is_false(view.hasShopChoice({}))
+            assert.is_false(view.hasShopChoice(listed.dshop))
+            assert.is_true(view.hasShopChoice(listed.wshop))
+        end)
     end)
 
     it("shows nothing done without a clock, keeping the rows", function()

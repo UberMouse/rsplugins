@@ -65,38 +65,52 @@ describe("chore-tracker vars core", function()
 
     it("ticks on a change from false to true, with every var read before", function()
         local rule = { chore = "x", done = { { "A", "==", 1 }, { "B", "==", 0 } }, proven = true }
-        assert.is_true(varsCore.ticks(rule, { A = 0, B = 0 }, { A = 1, B = 0 }))
+        assert.is_true(
+            varsCore.ticks(rule, varsCore.names(rule), { A = 0, B = 0 }, { A = 1, B = 0 })
+        )
         -- Already true before, or still false after.
-        assert.is_false(varsCore.ticks(rule, { A = 1, B = 0 }, { A = 1, B = 0 }))
-        assert.is_false(varsCore.ticks(rule, { A = 0, B = 0 }, { A = 2, B = 0 }))
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { A = 1, B = 0 }, { A = 1, B = 0 })
+        )
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { A = 0, B = 0 }, { A = 2, B = 0 })
+        )
         -- A first read (no value before) only sets the baseline.
-        assert.is_false(varsCore.ticks(rule, { B = 0 }, { A = 1, B = 0 }))
+        assert.is_false(varsCore.ticks(rule, varsCore.names(rule), { B = 0 }, { A = 1, B = 0 }))
     end)
 
     it("ticks a rule with only a rises var on a rise", function()
         local rule = { chore = "x", done = {}, rises = "N", proven = true }
         assert.are.same({ "N" }, varsCore.names(rule))
-        assert.is_true(varsCore.ticks(rule, { N = 0 }, { N = 1 }))
-        assert.is_true(varsCore.ticks(rule, { N = 500 }, { N = 501 }))
+        assert.is_true(varsCore.ticks(rule, varsCore.names(rule), { N = 0 }, { N = 1 }))
+        assert.is_true(varsCore.ticks(rule, varsCore.names(rule), { N = 500 }, { N = 501 }))
         -- Again on a later rise: whether its chore is already done is the caller's concern.
-        assert.is_true(varsCore.ticks(rule, { N = 1 }, { N = 3 }))
-        assert.is_false(varsCore.ticks(rule, { N = 3 }, { N = 3 }))
-        assert.is_false(varsCore.ticks(rule, { N = 3 }, { N = 0 }))
+        assert.is_true(varsCore.ticks(rule, varsCore.names(rule), { N = 1 }, { N = 3 }))
+        assert.is_false(varsCore.ticks(rule, varsCore.names(rule), { N = 3 }, { N = 3 }))
+        assert.is_false(varsCore.ticks(rule, varsCore.names(rule), { N = 3 }, { N = 0 }))
         -- A first read (no value before) only sets the baseline.
-        assert.is_false(varsCore.ticks(rule, {}, { N = 1 }))
+        assert.is_false(varsCore.ticks(rule, varsCore.names(rule), {}, { N = 1 }))
     end)
 
     it("ticks a rises rule with conditions on a rise while they hold after", function()
         local rule = { chore = "x", done = { { "S", ">", 0 } }, rises = "N", proven = true }
         assert.are.same({ "S", "N" }, varsCore.names(rule))
         -- The conditions needn't have been false before.
-        assert.is_true(varsCore.ticks(rule, { N = 2, S = 1 }, { N = 3, S = 1 }))
-        assert.is_true(varsCore.ticks(rule, { N = 2, S = 0 }, { N = 3, S = 1 }))
-        assert.is_false(varsCore.ticks(rule, { N = 2, S = 1 }, { N = 3, S = 0 }))
+        assert.is_true(
+            varsCore.ticks(rule, varsCore.names(rule), { N = 2, S = 1 }, { N = 3, S = 1 })
+        )
+        assert.is_true(
+            varsCore.ticks(rule, varsCore.names(rule), { N = 2, S = 0 }, { N = 3, S = 1 })
+        )
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { N = 2, S = 1 }, { N = 3, S = 0 })
+        )
         -- The conditions turning true without a rise don't tick it.
-        assert.is_false(varsCore.ticks(rule, { N = 3, S = 0 }, { N = 3, S = 1 }))
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { N = 3, S = 0 }, { N = 3, S = 1 })
+        )
         -- A condition var read for the first time only sets the baseline.
-        assert.is_false(varsCore.ticks(rule, { N = 2 }, { N = 3, S = 1 }))
+        assert.is_false(varsCore.ticks(rule, varsCore.names(rule), { N = 2 }, { N = 3, S = 1 }))
     end)
 
     -- A rule without conditions holds on any values, so it's checked to have a rises var
@@ -144,13 +158,21 @@ describe("chore-tracker vars core", function()
             falls = { "S" },
             proven = true,
         }
-        assert.is_true(varsCore.ticks(rule, { W = 1, S = 5 }, { W = 1, S = 0 }))
+        assert.is_true(
+            varsCore.ticks(rule, varsCore.names(rule), { W = 1, S = 5 }, { W = 1, S = 0 })
+        )
         -- The conditions turned true without a fall (workers moved).
-        assert.is_false(varsCore.ticks(rule, { W = 1, S = 0 }, { W = 1, S = 0 }))
-        assert.is_false(varsCore.ticks(rule, { W = 0, S = 0 }, { W = 1, S = 0 }))
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { W = 1, S = 0 }, { W = 1, S = 0 })
+        )
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { W = 0, S = 0 }, { W = 1, S = 0 })
+        )
         -- A rise, or a first read, never ticks.
-        assert.is_false(varsCore.ticks(rule, { W = 1, S = 0 }, { W = 1, S = 4 }))
-        assert.is_false(varsCore.ticks(rule, { W = 1 }, { W = 1, S = 0 }))
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { W = 1, S = 0 }, { W = 1, S = 4 })
+        )
+        assert.is_false(varsCore.ticks(rule, varsCore.names(rule), { W = 1 }, { W = 1, S = 0 }))
     end)
 
     it("gives no rule both rises and falls", function()
@@ -219,14 +241,14 @@ describe("chore-tracker vars core", function()
             it("doesn't tick while one worked station is still above 0", function()
                 local before = world({ STONE = 40, WOOD = 30 })
                 local after = with(before, { [stockName("STONE")] = 0 })
-                assert.is_false(varsCore.ticks(rule, before, after))
+                assert.is_false(varsCore.ticks(rule, varsCore.names(rule), before, after))
             end)
 
             it("ticks when the last worked station is drained, ignoring unworked ones", function()
                 local before = world({ STONE = 40, WOOD = 30 })
                 before[stockName("WOOD")] = 0
                 local after = with(before, { [stockName("STONE")] = 0 })
-                assert.is_true(varsCore.ticks(rule, before, after))
+                assert.is_true(varsCore.ticks(rule, varsCore.names(rule), before, after))
             end)
 
             it("doesn't tick when workers move so every worked station reads 0", function()
@@ -237,21 +259,21 @@ describe("chore-tracker vars core", function()
                     DINO_BASE_CAMP_WORKER_ASSIGNED_CLAY = 70,
                 })
                 assert.is_true(varsCore.holds(rule, after))
-                assert.is_false(varsCore.ticks(rule, before, after))
+                assert.is_false(varsCore.ticks(rule, varsCore.names(rule), before, after))
             end)
 
             it("doesn't tick on draining an unworked station once the worked ones are 0", function()
                 local before = world({ STONE = 70 })
                 before[stockName("STONE")] = 0
                 local after = with(before, { [stockName("WOOD")] = 0 })
-                assert.is_false(varsCore.ticks(rule, before, after))
+                assert.is_false(varsCore.ticks(rule, varsCore.names(rule), before, after))
             end)
 
             it("doesn't tick when a worked station rises", function()
                 local before = world({ STONE = 70 })
                 before[stockName("STONE")] = 0
                 local after = with(before, { [stockName("STONE")] = 50 })
-                assert.is_false(varsCore.ticks(rule, before, after))
+                assert.is_false(varsCore.ticks(rule, varsCore.names(rule), before, after))
             end)
 
             it("treats a var's first read as a baseline", function()
@@ -259,7 +281,7 @@ describe("chore-tracker vars core", function()
                 after[stockName("STONE")] = 0
                 local before = with(world({ STONE = 70 }), {})
                 before[stockName("STONE")] = nil
-                assert.is_false(varsCore.ticks(rule, before, after))
+                assert.is_false(varsCore.ticks(rule, varsCore.names(rule), before, after))
             end)
         end)
     end
@@ -268,7 +290,9 @@ describe("chore-tracker vars core", function()
         local rule = ruleFor("daily-challenge")
         assert.are.same({ "CHALLENGE_TOTAL_COMPLETED" }, varsCore.names(rule))
         local before = { CHALLENGE_TOTAL_COMPLETED = 0 }
-        assert.is_true(varsCore.ticks(rule, before, { CHALLENGE_TOTAL_COMPLETED = 2 }))
+        assert.is_true(
+            varsCore.ticks(rule, varsCore.names(rule), before, { CHALLENGE_TOTAL_COMPLETED = 2 })
+        )
     end)
 
     it("holds a freebie on its flag, and Divine Locations on a reached limit", function()
@@ -284,8 +308,12 @@ describe("chore-tracker vars core", function()
         local rule = ruleFor("crystal-tree-blossom")
         local name = "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE"
         assert.are.same({ name }, varsCore.names(rule))
-        assert.is_true(varsCore.ticks(rule, { [name] = 9004 }, { [name] = 9006 }))
-        assert.is_false(varsCore.ticks(rule, { [name] = 9006 }, { [name] = 9006 }))
+        assert.is_true(
+            varsCore.ticks(rule, varsCore.names(rule), { [name] = 9004 }, { [name] = 9006 })
+        )
+        assert.is_false(
+            varsCore.ticks(rule, varsCore.names(rule), { [name] = 9006 }, { [name] = 9006 })
+        )
     end)
 
     -- Chore `id`'s rules by the part each marks.
@@ -335,7 +363,9 @@ describe("chore-tracker vars core", function()
     ---@return boolean
     local function anyTicks(id, before, after)
         for _, rule in ipairs(varRules) do
-            if rule.chore == id and varsCore.ticks(rule, before, after) then return true end
+            if rule.chore == id and varsCore.ticks(rule, varsCore.names(rule), before, after) then
+                return true
+            end
         end
         return false
     end
@@ -383,6 +413,7 @@ describe("chore-tracker vars core", function()
                     rule.chore == "fort-forinthry-bonus-xp"
                     and varsCore.ticks(
                         rule,
+                        varsCore.names(rule),
                         { BONUSXP_AGILITY = 0 },
                         { BONUSXP_AGILITY = 1596975 },
                         tile

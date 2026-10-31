@@ -30,85 +30,77 @@ local BACKPACK = "INV"
 ---clock.
 ---@field apply fun(change: ChoreChange)
 
----@class ChoreShopHit a core/detect ChoreShopEntry with its chore resolved
----@field chore Chore
----@field shop ChoreShop
-
 ---@class ChoreCollectionHit
 ---@field chore Chore
 ---@field collection ChoreCollection
 
 local options = nil ---@type ChoreDetectOptions?
--- Shop inventory name -> the chores and shops it serves, and its config.
+-- Shop inventory name -> the chores and shops it serves.
 local shopIndex = {} ---@type table<string, ChoreShopHit[]>
+-- Machine output inventory name -> the chores it serves.
+local machineChores = {} ---@type table<string, Chore[]>
+-- Every watched shop and machine output inventory's config (their names don't overlap), and
+-- the slot counts of each one the client holds now (a shop's only while it is open).
 local invTypes = {} ---@type table<string, InvType>
--- Every collection's note names, once each, and their configs.
-local noteNames = {} ---@type string[]
+local invCounts = {} ---@type table<string, integer[]>
 -- Every collection with its chore, in data order.
 local collectionHits = {} ---@type ChoreCollectionHit[]
+-- Every collection's note names, once each, their configs, and the backpack's count of each
+-- (nil without a backpack).
+local noteNames = {} ---@type string[]
 local objTypes = {} ---@type table<string, ObjType>
--- The slot counts of each listed shop inventory the client holds now (one is held only
--- while its shop is open), and the backpack's count of each note, nil without a backpack.
-local shopCounts = {} ---@type table<string, integer[]>
 local noteCounts = nil ---@type table<string, integer>?
--- Machine output inventory name -> the chores it serves, its config, and its slot counts now
--- (nil while the client doesn't hold it).
-local machineChores = {} ---@type table<string, Chore[]>
-local machineTypes = {} ---@type table<string, InvType>
-local machineCounts = {} ---@type table<string, integer[]>
 
--- `name`'s config, or nil after saying the client's config lacks it.
+-- A listed name the client's config lacks (a game update renamed it, say) is said once and
+-- left unwatched, so a nil config never reaches Inventory.Find or GetTotal. The client reads
+-- nil for an unknown name, without raising (docs/api-concepts.md#configs-vs-entities). The
+-- casts drop config.Inv's and config.Obj's FromID member from the type.
+
+-- Watch inventory `name` if the client's config has it; say so and return false if not.
 ---@param name string
 ---@param say fun(...: any)
----@return InvType?
-local function invConfig(name, say)
+---@return boolean
+local function watchInv(name, say)
     local invType = config.Inv[name] --[[@as InvType?]]
-    if not invType then say("unknown inventory", name .. "; not watched") end
-    return invType
+    if not invType then
+        say("unknown inventory", name .. "; not watched")
+        return false
+    end
+    invTypes[name] = invType
+    return true
 end
 
 ---@param o ChoreDetectOptions
-function M.init(o)
-    options = o
-    collectionHits = {}
-    for i, collection in ipairs(o.collections) do
-        collectionHits[i] =
-            { chore = state.resolve(o.chores, collection.chore, "data"), collection = collection }
+local function indexShops(o)
+    shopIndex = {}
+    -- core/detect resolves every shop's chore, watched or not.
+    for name, hits in pairs(detectCore.index(o.shops, o.chores)) do
+        if watchInv(name, o.say) then shopIndex[name] = hits end
     end
-    -- A listed name the client's config lacks (a game update renamed it, say) is said once
-    -- and left unwatched, so a nil config never reaches Inventory.Find or GetTotal. The
-    -- casts drop config.Inv's and config.Obj's FromID member from the type. The client
-    -- reads nil for an unknown name, without raising (docs/api-concepts.md#configs-vs-entities).
-    shopIndex, invTypes = {}, {}
-    -- Chore ids resolve for every shop, watched or not.
-    for name, indexed in pairs(detectCore.index(o.shops)) do
-        local entries = {} ---@type ChoreShopHit[]
-        for i, entry in ipairs(indexed) do
-            entries[i] = { chore = state.resolve(o.chores, entry.chore, "data"), shop = entry.shop }
-        end
-        local invType = invConfig(name, o.say)
-        if invType then
-            shopIndex[name], invTypes[name] = entries, invType
-        end
-    end
-    machineChores, machineTypes, machineCounts = {}, {}, {}
-    local looked = {}
+end
+
+---@param o ChoreDetectOptions
+local function indexMachines(o)
+    machineChores = {}
     for _, machine in ipairs(o.machines) do
         local chore = state.resolve(o.chores, machine.chore, "data/machines.lua")
         for _, name in ipairs(machine.invs) do
-            if not looked[name] then
-                looked[name] = true
-                local invType = invConfig(name, o.say)
-                if invType then
-                    machineTypes[name], machineChores[name] = invType, {}
-                end
-            end
-            if machineChores[name] then table.insert(machineChores[name], chore) end
+            machineChores[name] = machineChores[name] or {}
+            table.insert(machineChores[name], chore)
         end
     end
-    noteNames, objTypes = {}, {}
+    for name in pairs(machineChores) do
+        if not watchInv(name, o.say) then machineChores[name] = nil end
+    end
+end
+
+---@param o ChoreDetectOptions
+local function indexCollections(o)
+    collectionHits, noteNames, objTypes = {}, {}, {}
     local seen = {}
-    for _, collection in ipairs(o.collections) do
+    for i, collection in ipairs(o.collections) do
+        local chore = state.resolve(o.chores, collection.chore, "data/collections.lua")
+        collectionHits[i] = { chore = chore, collection = collection }
         for _, name in ipairs(collection.notes) do
             if not seen[name] then
                 seen[name] = true
@@ -121,6 +113,15 @@ function M.init(o)
             end
         end
     end
+end
+
+---@param o ChoreDetectOptions
+function M.init(o)
+    options = o
+    invTypes, invCounts = {}, {}
+    indexShops(o)
+    indexMachines(o)
+    indexCollections(o)
 end
 
 ---------------------------------------------------------------------------
@@ -139,7 +140,7 @@ local function findInv(invType)
     return nil
 end
 
--- The slot counts of a shop inventory, or nil if the client doesn't hold it.
+-- The slot counts of a shop or machine output inventory, or nil if the client doesn't hold it.
 ---@param invType InvType
 ---@return integer[]?
 local function readCounts(invType)
@@ -181,12 +182,9 @@ end
 -- still sees the next purchase, and one character's counts are never compared with
 -- another's.
 function M.scan()
-    shopCounts, machineCounts = {}, {}
+    invCounts = {}
     for name, invType in pairs(invTypes) do
-        shopCounts[name] = readCounts(invType)
-    end
-    for name, invType in pairs(machineTypes) do
-        machineCounts[name] = readCounts(invType)
+        invCounts[name] = readCounts(invType)
     end
     noteCounts = readNotes()
 end
@@ -274,10 +272,8 @@ end
 ---@param ev InventoryAddedEventPayload
 function M.onInventoryAdded(ev)
     local name = ev.inv.configName
-    if shopIndex[name] then
-        shopCounts[name] = readCounts(ev.inv)
-    elseif machineChores[name] then
-        machineCounts[name] = readCounts(ev.inv)
+    if invTypes[name] then
+        invCounts[name] = readCounts(ev.inv)
     elseif name == BACKPACK then
         noteCounts = readNotes()
     end
@@ -292,14 +288,16 @@ function M.onInventoryUpdated(ev)
     local name = ev.inv.configName
     if name == BACKPACK then
         onBackpack()
-    elseif machineChores[name] then
-        local before, after = machineCounts[name], readCounts(ev.inv)
-        machineCounts[name] = after
-        if before and after and detectCore.fell(before, after) then onCollected(name) end
-    elseif shopIndex[name] then
-        local before, after = shopCounts[name], readCounts(ev.inv)
-        shopCounts[name] = after
-        if before and after and detectCore.dropped(before, after) then onPurchase(name) end
+        return
+    end
+    if not invTypes[name] then return end
+    local before, after = invCounts[name], readCounts(ev.inv)
+    invCounts[name] = after
+    if not (before and after) then return end
+    if shopIndex[name] then
+        if detectCore.dropped(before, after) then onPurchase(name) end
+    elseif detectCore.fell(before, after) then
+        onCollected(name)
     end
 end
 
@@ -308,10 +306,8 @@ function M.onInventoryRemoved(ev)
     local name = ev.inv.configName
     if name == BACKPACK then
         noteCounts = nil
-    elseif machineChores[name] then
-        machineCounts[name] = nil
-    elseif shopIndex[name] then
-        shopCounts[name] = nil
+    elseif invTypes[name] then
+        invCounts[name] = nil
     end
 end
 

@@ -10,18 +10,22 @@
 -- Machines (data/machines.lua) keep their product in an output inventory that only
 -- collecting takes from, so such a chore is that inventory's total falling.
 
+local state = require("core/state")
+
 local M = {}
 
----@class ChoreShopEntry
----@field chore string the chore id
+---@class ChoreShopHit
+---@field chore Chore
 ---@field shop ChoreShop
 
 -- The shop data turned round: shop inventory name -> the chores and shops it serves, so an
--- inventory event is matched by one lookup. Entries keep the chore ids' sorted order, so
--- the order a purchase is applied in doesn't depend on table iteration.
+-- inventory event is matched by one lookup. Hits keep the chore ids' sorted order, so the
+-- order a purchase is applied in doesn't depend on table iteration. Every chore id is
+-- resolved against `chores`, so one data/chores.lua lacks fails here, at load.
 ---@param shops table<string, ChoreShop[]> chore id -> its shops
----@return table<string, ChoreShopEntry[]>
-function M.index(shops)
+---@param chores Chore[]
+---@return table<string, ChoreShopHit[]>
+function M.index(shops, chores)
     local ids = {}
     for id in pairs(shops) do
         ids[#ids + 1] = id
@@ -29,10 +33,11 @@ function M.index(shops)
     table.sort(ids)
     local out = {}
     for _, id in ipairs(ids) do
+        local chore = state.resolve(chores, id, "data/shops.lua")
         for _, shop in ipairs(shops[id]) do
             for _, inv in ipairs(shop.invs) do
                 out[inv] = out[inv] or {}
-                table.insert(out[inv], { chore = id, shop = shop })
+                table.insert(out[inv], { chore = chore, shop = shop })
             end
         end
     end
@@ -53,7 +58,8 @@ function M.dropped(before, after)
 end
 
 -- Whether the counts of `after` add up to less than those of `before` (both slot -> count).
--- Totals, not slots, since collecting may leave a slot out of `after` altogether.
+-- Totals, not slots, in case collecting shrinks the inventory and leaves a slot out of
+-- `after` altogether.
 ---@param before integer[]
 ---@param after integer[]
 ---@return boolean

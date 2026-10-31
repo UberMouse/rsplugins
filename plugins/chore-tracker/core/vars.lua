@@ -143,14 +143,15 @@ end
 -- true and one of its `falls` vars went down. A rule with `near` ticks only with the player's
 -- `tile` within its range (never without a tile).
 ---@param rule ChoreVarRule
+---@param names string[] the vars the rule reads, as `names` gives them
 ---@param before table<string, integer>
 ---@param after table<string, integer>
 ---@param tile ChoreTile? the player's tile
 ---@return boolean
-function M.ticks(rule, before, after, tile)
+function M.ticks(rule, names, before, after, tile)
     local near = rule.near
     if near and not (tile and detect.near(tile, near, near.range)) then return false end
-    for _, name in ipairs(M.names(rule)) do
+    for _, name in ipairs(names) do
         if before[name] == nil then return false end
     end
     if rule.rises then

@@ -12,13 +12,24 @@ describe("chore-tracker shops core", function()
         local a = { name = "A", invs = { "INV_A" }, proven = true }
         local b = { name = "B", invs = { "INV_B" }, proven = false }
         local c = { name = "C", invs = { "INV_C1", "INV_C2" }, proven = false }
-        local index = detect.index({ two = { a, b }, one = { b }, three = { c } })
-        assert.are.same({ { chore = "two", shop = a } }, index.INV_A)
+        local one, two, three = { id = "one" }, { id = "two" }, { id = "three" }
+        local list = { three, two, one }
+        local index = detect.index({ two = { a, b }, one = { b }, three = { c } }, list)
+        assert.are.same({ { chore = two, shop = a } }, index.INV_A)
         -- Each of a shop's inventories leads to the same shop.
-        assert.are.same({ { chore = "three", shop = c } }, index.INV_C1)
-        assert.are.same({ { chore = "three", shop = c } }, index.INV_C2)
+        assert.are.same({ { chore = three, shop = c } }, index.INV_C1)
+        assert.are.same({ { chore = three, shop = c } }, index.INV_C2)
         -- Sorted by chore id, so the order purchases apply in is fixed.
-        assert.are.same({ { chore = "one", shop = b }, { chore = "two", shop = b } }, index.INV_B)
+        assert.are.same({ { chore = one, shop = b }, { chore = two, shop = b } }, index.INV_B)
+        -- Each hit holds the chore from the list itself.
+        assert.are.equal(two, index.INV_A[1].chore)
+    end)
+
+    it("fails indexing a shop whose chore the list lacks", function()
+        local shop = { name = "S", invs = { "INV_S" }, proven = true }
+        assert.has_error(function()
+            detect.index({ nochore = { shop } }, { { id = "one" } })
+        end, "data/shops.lua names a chore that data/chores.lua lacks: nochore")
     end)
 
     it("sees a purchase only in a count that drops", function()

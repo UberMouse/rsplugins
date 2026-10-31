@@ -27,7 +27,9 @@ local options = nil ---@type ChoreVarOptions?
 -- chore.
 local watched = {} ---@type { rule: ChoreVarRule, names: string[], chore: Chore }[]
 local varTypes = {} ---@type table<string, VarType>
--- Base var id -> the watched names packed in it (or the base itself, if watched).
+-- Base var id -> the names read packed in it (or the base itself, if read). Bases are matched
+-- by id: whether the client hands out the same VarType object for a base each time is
+-- unconfirmed.
 local byBase = {} ---@type table<integer, string[]>
 -- The last value read of each watched var; a var whose value isn't a whole number has none.
 local values = {} ---@type table<string, integer>
@@ -60,6 +62,9 @@ function M.init(o)
                 local v = var.VarPlayer[name] --[[@as VarType?]]
                 if v then
                     varTypes[name] = v
+                    local id = baseOf(v).id
+                    byBase[id] = byBase[id] or {}
+                    table.insert(byBase[id], name)
                 else
                     missing[name] = true
                     o.say("unknown var", name .. "; not watched")
@@ -68,19 +73,6 @@ function M.init(o)
             if missing[name] then complete = false end
         end
         if complete then watched[#watched + 1] = { rule = rule, names = names, chore = chore } end
-    end
-    -- Bases are matched by id, resolved once here: whether the client hands out the same
-    -- VarType object for a base each time is unconfirmed.
-    local listed = {}
-    for _, entry in ipairs(watched) do
-        for _, name in ipairs(entry.names) do
-            if not listed[name] then
-                listed[name] = true
-                local id = baseOf(varTypes[name]).id
-                byBase[id] = byBase[id] or {}
-                table.insert(byBase[id], name)
-            end
-        end
     end
 end
 
@@ -120,6 +112,18 @@ local function firstChanged(names, changed)
     return nil
 end
 
+-- The player's tile if a rule that must be seen near one reads a var in `changed`, else nil,
+-- so a change no such rule reads never reads the player's position.
+---@param changed table<string, true>
+---@return ChoreTile?
+local function tileFor(changed)
+    assert(options, "init runs before any var event")
+    for _, entry in ipairs(watched) do
+        if entry.rule.near and firstChanged(entry.names, changed) then return options.where() end
+    end
+    return nil
+end
+
 -- Watched vars changed from `before` to `after`: for each rule that reads one of them and
 -- whose change ticks it (core/vars.lua's ticks), mark its part done (the chore ticks once
 -- enough are, state.recordPart), or for a rule without a part tick its chore if it isn't done
@@ -130,20 +134,19 @@ end
 ---@param changed table<string, true>
 local function onChanged(before, after, changed)
     assert(options, "init runs before any var event")
-    local say, where, parts = options.say, options.where, options.parts
-    -- The tile is read only for a rule that must be seen near one, once per change.
-    local tile, located = nil, false ---@type ChoreTile?, boolean
+    local say, parts = options.say, options.parts
+    local tile = tileFor(changed)
     options.apply(function(tracker, now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)
-            if cause and entry.rule.near and not located then
-                tile, located = where(), true
-            end
             local rule, chore = entry.rule, entry.chore
-            if cause and varsCore.ticks(rule, before, after, tile) then
-                local seen = rule.part
-                        and state.recordPart(tracker, chore, parts[chore.id], rule.part, now)
-                    or state.autoMark(tracker, chore, now)
+            if cause and varsCore.ticks(rule, entry.names, before, after, tile) then
+                local seen ---@type ChoreState
+                if rule.part then
+                    seen = state.recordPart(tracker, chore, parts[chore.id], rule.part, now)
+                else
+                    seen = state.autoMark(tracker, chore, now)
+                end
                 if seen ~= tracker then
                     local ticked = state.isDone(seen, chore, now)
                         and not state.isDone(tracker, chore, now)

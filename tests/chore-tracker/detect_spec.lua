@@ -98,7 +98,7 @@ describe("chore-tracker detect", function()
                 say = say,
                 apply = apply,
             })
-        end, "data names a chore that data/chores.lua lacks: nochore")
+        end, "data/shops.lua names a chore that data/chores.lua lacks: nochore")
         assert.has_error(function()
             detect.init({
                 chores = support.chores(),
@@ -118,7 +118,7 @@ describe("chore-tracker detect", function()
                 say = say,
                 apply = apply,
             })
-        end, "data names a chore that data/chores.lua lacks: nochore")
+        end, "data/collections.lua names a chore that data/chores.lua lacks: nochore")
     end)
 
     -- removeInventory fires only InventoryRemoved; the harness sends InventoryAdded when the

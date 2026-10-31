@@ -22,21 +22,24 @@ local VERSION = 1
 -- down; the hamburger takes that slot, so an open window's button is there.
 M.BUTTON_SIZE = 20
 M.SLOT_X, M.SLOT_Y = -28, 7
+-- The space between the list's settings and info buttons.
+M.BUTTON_GAP = 6
 
 local DEFAULT_X, DEFAULT_Y, DEFAULT_WIDTH, DEFAULT_HEIGHT = 600, 300, 320, 420
 
 -- The smallest the window can be resized to.
 M.MIN_WIDTH, M.MIN_HEIGHT = 240, 160
 
+-- PrettyUI 1.2.0's frame each side and scrollbar (docs/testing.md's fidelity ledger), and slack
+-- in case the client's line-breaking measures wider than GetStringWidth.
+local FRAME, SCROLLBAR, WRAP_SPARE = 8, 18, 8
+
 -- The widest line of the info view's help in a window `windowWidth` wide, so the client
--- never wraps it further. It is a text row's width: PrettyUI 1.2.0's 8 px frame each side,
--- the 18 px its scrollbar takes and its 14 px flow padding each side come off (docs/testing.md's
--- fidelity ledger), and 8 px more are kept spare in case the client's line-breaking measures a
--- little wider than GetStringWidth.
+-- never wraps it further: a text row's width, less WRAP_SPARE.
 ---@param windowWidth integer
 ---@return integer
 function M.helpTextWidth(windowWidth)
-    return windowWidth - 2 * 8 - 18 - 2 * 14 - 8
+    return windowWidth - 2 * FRAME - SCROLLBAR - 2 * listlayout.FLOW_PADDING - WRAP_SPARE
 end
 
 -- Whether to rebuild the info view for the window's width: its help was wrapped for a window

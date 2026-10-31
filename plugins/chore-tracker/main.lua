@@ -71,8 +71,6 @@ local function say(...)
 end
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
--- The space between the list's settings and info buttons.
-local BUTTON_GAP = 6
 
 -- How often, in Logic ticks (50 a second), to look for a login change and a moved or
 -- resized window.
@@ -242,7 +240,7 @@ local function buildList(w, openSettings, openInfo)
         w:AddSpriteButton("SETTINGS", openSettings, { size = BUTTON_SIZE, tooltip = "Pick chores" })
     -- At an explicit x and y, so it sits on the settings button's row and the flow doesn't move.
     w:AddSpriteButton("INFO", openInfo, {
-        x = button.root.x + BUTTON_SIZE + BUTTON_GAP,
+        x = button.root.x + BUTTON_SIZE + layout.BUTTON_GAP,
         y = button.root.y,
         size = BUTTON_SIZE,
         tooltip = "About Chore Tracker",
@@ -434,9 +432,9 @@ end
 ---------------------------------------------------------------------------
 
 -- The info view: the help paragraphs in PrettyUI's flow, each broken into lines that fit the
--- window's width now (core/layout.lua, helpTextWidth; relayInfo below re-lays them after a
--- resize), then a heading per status and a display-only row per chore below them, all from
--- the data files. Nothing here reads the game.
+-- window's width now (core/layout.lua, helpTextWidth; relayInfoOnPoll below re-lays them
+-- after a resize), then a heading per status and a display-only row per chore below them, all
+-- from the data files. Nothing here reads the game.
 ---@param w prettyui.Window
 local function buildInfo(w)
     helpWidth = w.root.width
@@ -468,13 +466,13 @@ local function buildInfo(w)
 end
 
 -- On the poll, rebuild the info view (keeping its scroll) once the window's width differs from
--- the one its help was wrapped for and has stopped changing (core/layout.lua, relayInfo), and
--- no resize drag is in progress, since the rebuild would end it. Nothing in the other views or
--- collapsed.
-local function relayInfo()
+-- the one its help was wrapped for and has stopped changing (layout.relayInfo), unless a resize
+-- drag is in progress, since the rebuild would end it. Does nothing outside the info view or
+-- while collapsed.
+local function relayInfoOnPoll()
+    if helpWidth == nil or window.isCollapsed() then return end
     local w = window.current()
     assert(w, "the info view is only re-laid while its window exists")
-    if helpWidth == nil or window.isCollapsed() then return end
     assert(polledWidth, "buildInfo sets both widths")
     local width = w.root.width
     local settled = layout.relayInfo(helpWidth, polledWidth, width)
@@ -652,7 +650,7 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)
         window.saveLayoutIfChanged()
-        relayInfo()
+        relayInfoOnPoll()
         refitRows()
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.

@@ -1069,7 +1069,11 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   never wraps it further. Since the rows keep their height, it rebuilds the view once a resize
   settles: the width unchanged between two half-second polls, and PrettyUI 1.2.0's internal
   `resize.dragState` nil. That the pre-wrapped help doesn't re-wrap on resize was confirmed in
-  the client at 345 and 240 px wide; the re-lay is not yet checked there.
+  the client at 345 and 240 px wide. The re-lay was checked there too (rsdev drag and `eval
+  --plugin chore-tracker`, 2026-10-31): dragging the right resize edge from 345 to 245 px in
+  three steps over 4 s, still for over a second between steps, kept the same window while held,
+  and the view was rebuilt once just after release, at 245 with no overlapping help, and not
+  again; a `SetSize` back to 345 re-laid it once.
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

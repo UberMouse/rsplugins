@@ -23,10 +23,9 @@ M.HELP = {
 M.STATUSES = { "automatic", "unproven", "manual" } ---@type ChoreStatus[]
 M.STATUS_TITLES = { automatic = "Automatic", unproven = "Unproven", manual = "Manual" }
 
--- Whether chore `id` ticks itself: "automatic" when any source the plugin watches for it is
--- proven in the client (a shop, a collection or a var rule), "unproven" when it has sources
--- but none is proven, "manual" when it has none. The data files' `proven` flags decide it, so
--- proving a source moves its chore with no other change.
+-- Whether chore `id` ticks itself: "automatic" when any source the plugin watches for it (a
+-- shop, a collection or a var rule) has `proven` set, "unproven" when it has sources but none
+-- is proven, "manual" when it has none.
 ---@param id string
 ---@param shops table<string, ChoreShop[]> chore id -> its listed shops
 ---@param collections ChoreCollection[]

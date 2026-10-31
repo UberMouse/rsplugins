@@ -223,12 +223,6 @@ function M.new(content, y, icon, onClick, opts)
     layer:SetSize(-(margins.left + margins.right), ROW_HEIGHT, 1.0, 0)
     -- A display-only row still takes the mouse, for its tooltip and the wheel.
     layer.clickthrough = false
-    if onClick then
-        M.setCursor(layer, M.ROW_CURSOR)
-        layer:Subscribe(ui.Hook.ONCLICK, function()
-            onClick()
-        end)
-    end
     if opts.wheel then layer:Subscribe(ui.Hook.ONSCROLLWHEEL, opts.wheel) end
 
     local left = 0
@@ -248,14 +242,6 @@ function M.new(content, y, icon, onClick, opts)
     label:SetPos(textX, 0)
     label:SetSize(-(textX + rightGap), ROW_HEIGHT, 1.0, 0)
 
-    local box = nil ---@type ui.Sprite?
-    if onClick then
-        box = ui.Sprite.new(layer)
-        box:SetPos(-BOX_SIZE, (ROW_HEIGHT - BOX_SIZE) // 2, 1.0, 0)
-        box:SetSize(BOX_SIZE, BOX_SIZE)
-        box.clickthrough = true
-    end
-
     local row = ---@type ChoreRowView
         {
             layer = layer,
@@ -263,28 +249,37 @@ function M.new(content, y, icon, onClick, opts)
             iconX = left,
             iconSprites = {},
             label = label,
-            box = box,
             textX = textX,
             rightGap = rightGap,
             shortened = false,
             hovered = false,
             onClick = onClick,
         }
+    if onClick then
+        M.setCursor(layer, M.ROW_CURSOR)
+        layer:Subscribe(ui.Hook.ONCLICK, function()
+            onClick()
+        end)
+        local box = ui.Sprite.new(layer)
+        box:SetPos(-BOX_SIZE, (ROW_HEIGHT - BOX_SIZE) // 2, 1.0, 0)
+        box:SetSize(BOX_SIZE, BOX_SIZE)
+        box.clickthrough = true
+        row.box = box
+        -- Under the default id: Tooltip.attach subscribes the same hooks under its own id
+        -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other. Both return
+        -- true: in the client a listener that returns nothing stops the ones after it, the
+        -- tooltip's included (docs/api-concepts.md).
+        layer:Subscribe(ui.Hook.ONMOUSEOVER, function()
+            row.hovered = true
+            drawBox(row)
+            return true
+        end)
+        layer:Subscribe(ui.Hook.ONMOUSELEAVE, function()
+            M.unhover(row)
+            return true
+        end)
+    end
     M.setIcon(row, icon)
-    if not onClick then return row end
-    -- Under the default id: Tooltip.attach subscribes the same hooks under its own id
-    -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other. Both return
-    -- true: in the client a listener that returns nothing stops the ones after it, the
-    -- tooltip's included (docs/api-concepts.md).
-    layer:Subscribe(ui.Hook.ONMOUSEOVER, function()
-        row.hovered = true
-        drawBox(row)
-        return true
-    end)
-    layer:Subscribe(ui.Hook.ONMOUSELEAVE, function()
-        M.unhover(row)
-        return true
-    end)
     return row
 end
 

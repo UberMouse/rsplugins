@@ -134,7 +134,9 @@ The official reference annotates Lua with pseudo-types:
   `QUEST_EGW_FINALE_REWARD_STATION_XP_*` Construction 150000, the other five 75000. Resource ->
   station (runescape.wiki Dream_of_Iaia): WOOD -> FLETCHING, VINES -> HUNTER, LEAVES -> HERBLORE,
   PELTS -> CRAFTING, STONE -> CONSTRUCTION, CLAY -> FISHING. Chore Tracker ticks the chores when
-  every worked resource or station has fallen to 0.
+  every worked resource or station has fallen to 0. Confirmed in the beta client the same day:
+  converting all the stone ticked Resources, and training the Construction station's XP to 0
+  ticked XP.
 - **`SHOP_MULTIPURPOSE` wasn't sent during a purchase at Arhein's shop** (2026-10-25, with
   `SHOP` = 47, `ARHEINSTORE`), so its `SHOP_SEAWEED_BOUGHT` / `SHOP_PINEAPPLES_BOUGHT` counters
   can't be seen to move on a purchase; the shop's inventory can.

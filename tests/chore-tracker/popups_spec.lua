@@ -369,6 +369,21 @@ describe("chore-tracker popups", function()
         assert.are.same({ "CHORE COMPLETE", "CHORE COMPLETE", "WEEKLIES COMPLETE" }, titles(h))
     end)
 
+    it(
+        "doesn't count a popup PrettyUI couldn't show as showing, so that chore celebrates again",
+        function()
+            local h = settled()
+            togglePicks(h, { BERT.id, GEOFF.id })
+            h.ui:popupsFail(true)
+            claim(h, BERT.flag)
+            assert.are.equal(0, showing(h))
+            h.ui:popupsFail(false)
+            toggleTick(h, BERT.name)
+            toggleTick(h, BERT.name)
+            assert.are.equal(1, showing(h))
+        end
+    )
+
     describe("settings", function()
         it("lists Celebrations above the chores, both on by default", function()
             local h = loaded()

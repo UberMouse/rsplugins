@@ -8,13 +8,13 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 failed=0
 
-# Usage: run_case <name> <expected exit code> <plugin.json text> [dev-link]
+# Usage: run_case <name> <expected exit code> <plugin.json text> [dev-link] [main.lua text]
 run_case() {
-    local name=$1 want=$2 manifest=$3 link=${4:-}
+    local name=$1 want=$2 manifest=$3 link=${4:-} main=${5:-'print("hi")'}
     local root="$tmp/$name"
     mkdir -p "$root/plugins/p"
     printf '%s\n' "$manifest" >"$root/plugins/p/plugin.json"
-    echo 'print("hi")' >"$root/plugins/p/main.lua"
+    printf '%s\n' "$main" >"$root/plugins/p/main.lua"
     [[ -z "$link" ]] || ln -s ../../lib/dev "$root/plugins/p/dev"
     "$here/check-submission.sh" p --root "$root" >/dev/null 2>&1
     local got=$?
@@ -39,5 +39,8 @@ run_case loopback-upper 1 '{"name":"P","urls":{"api":"HTTP://LOCALHOST"}}'
 run_case rsdev-key 1 '{"name":"P","urls":{"rsdev":"https://example.com"}}'
 run_case http-access 1 '{"name":"P","optionalPermissions":["httpAccess"]}'
 run_case dev-symlink 1 '{"name":"P"}' link
+run_case tee-call 1 '{"name":"P"}' '' 'if tee then tee.shutdown() end'
+run_case remote-expose 1 '{"name":"P"}' '' 'if remote then remote.expose("main", f) end'
+run_case remote-shutdown 1 '{"name":"P"}' '' 'if remote then remote.shutdown() end'
 
 exit "$failed"

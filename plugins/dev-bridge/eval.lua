@@ -37,6 +37,7 @@
 local protocol = require("protocol")
 local recording = assert(require("dev/recording"), "dev/ (a link to lib/dev) is missing")
 local batch = assert(require("dev/batch"), "dev/ (a link to lib/dev) is missing")
+local devCommand = assert(require("dev/command"), "dev/ (a link to lib/dev) is missing")
 
 -- The client has load, and honours its mode and env arguments (docs/api-concepts.md, "Plugin
 -- environment and globals"). Without it eval reports an error.
@@ -266,13 +267,7 @@ function eval.new(host)
     ---@param source string
     ---@return table
     function self.run(source)
-        if type(compile) ~= "function" then
-            return { ok = false, error = "this client has no load(), so eval can't run Lua" }
-        end
-        local chunk, err = compile("return " .. source, "=eval", "t", scratch)
-        if not chunk then
-            chunk, err = compile(source, "=eval", "t", scratch)
-        end
+        local chunk, err = devCommand.compile(compile, source, scratch)
         if not chunk then return { ok = false, error = err } end
         output = protocol.newOutput()
         local result = table.pack(pcall(chunk))

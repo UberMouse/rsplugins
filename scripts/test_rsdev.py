@@ -577,6 +577,94 @@ def tee_body(**over):
     }
 
 
+class RemoteTests(DaemonCase):
+    """Commands for a plugin's dev/remote, delivered and answered over /tee."""
+
+    def tee(self, **over):
+        status, text = post(self.port, "/tee", tee_body(lines=[], remote=True, **over))
+        self.assertEqual(status, 200)
+        return parse_lines(text)
+
+    def eval_async(self, source, plugin="demo", timeout=5, kind="eval"):
+        result = {}
+        body = {"kind": kind, "command": source, "timeout": timeout, "plugin": plugin}
+
+        def run():
+            result.update(json.loads(post(self.port, "/cli/exec", body)[1]))
+
+        t = threading.Thread(target=run)
+        t.start()
+        return t, result
+
+    def test_plugin_command_goes_to_that_plugins_tee_only(self):
+        t, result = self.eval_async("return 1")
+        self.wait_queued()
+        self.assertEqual(self.sync(), [])  # the bridge never gets it
+        self.assertEqual(self.tee(plugin="other"), [])
+        status, text = post(self.port, "/tee", tee_body())  # a tee without remote
+        self.assertEqual(text, "")
+        (line,) = self.tee()
+        self.assertEqual(tuple(line[1:]), ("eval", "return 1"))
+        self.tee(seq=2, results=[{"id": line[0], "ok": True, "values": [1], "nvalues": 1}])
+        t.join()
+        self.assertEqual((result["outcome"], result["values"]), ("ok", [1]))
+        self.assertIn(f"queued command {line[0]} for demo: eval", self.log.getvalue())
+
+    def test_bridge_command_never_goes_to_a_tee(self):
+        t, result = self.exec_async("cmd", timeout=0.3)
+        self.wait_queued()
+        self.assertEqual(self.tee(), [])
+        t.join()
+        self.assertEqual(result["outcome"], "withdrawn")
+
+    def test_a_result_from_another_sender_is_ignored(self):
+        t, result = self.eval_async("x", timeout=0.5)
+        self.wait_queued()
+        (line,) = self.tee()
+        self.sync(results=[{"id": line[0], "ok": True}])
+        self.tee(plugin="other", results=[{"id": line[0], "ok": True}])
+        t.join()
+        self.assertEqual(result["outcome"], "unknown")
+
+    def test_a_reload_fails_what_the_old_session_was_sent(self):
+        t, result = self.eval_async("x")
+        self.wait_queued()
+        self.tee()
+        self.tee(session="t2")
+        t.join()
+        self.assertEqual(result["outcome"], "error")
+        self.assertEqual(result["error"], "demo reloaded before reporting")
+
+    def test_status_lists_polling_remotes(self):
+        self.tee()
+        st = self.server.state.status()
+        self.assertEqual(st["remote_kinds"], ["eval", "reset"])
+        self.assertEqual(st["remotes"]["demo"]["session"], "t1")
+        self.assertTrue(st["remotes"]["demo"]["connected"])
+
+    def test_bad_plugin_requests_and_bodies_are_400(self):
+        for body in (
+            {"kind": "exec", "command": "prf", "timeout": 1, "plugin": "demo"},
+            {"kind": "eval", "command": "x", "timeout": 1, "plugin": "a/b"},
+            {"kind": "eval", "command": "x", "timeout": 1, "plugin": 3},
+        ):
+            self.assertEqual(post(self.port, "/cli/exec", body)[0], 400, body)
+        for bad in (
+            tee_body(remote="yes"),
+            tee_body(results="x"),
+            tee_body(results=[{"id": "a", "ok": "yes"}]),
+        ):
+            self.assertEqual(post(self.port, "/tee", bad)[0], 400, bad)
+
+    def test_cli_refuses_a_plugin_whose_remote_is_not_polling(self):
+        args = SimpleNamespace(port=self.port, timeout=1, plugin="demo")
+        with mock.patch("sys.stderr", StringIO()) as err:
+            code, reply = rsdev.send_command(args, "eval", "1")
+        self.assertEqual((code, reply), (2, None))
+        self.assertIn("demo's dev/remote is not polling (never seen)", err.getvalue())
+        self.assertEqual(self.server.state.status()["queued"], 0)
+
+
 class ResultFieldTests(DaemonCase):
     def test_bad_field_types_are_400_and_apply_nothing(self):
         for bad in (

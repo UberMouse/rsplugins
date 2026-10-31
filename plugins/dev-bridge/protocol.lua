@@ -9,6 +9,7 @@
 
 local json = require("dev/json")
 local batch = require("dev/batch")
+local devCommand = require("dev/command")
 
 local protocol = {}
 
@@ -251,23 +252,8 @@ function protocol.syncBody(fields, events, results)
     return batch.withField(body, "results", "[" .. table.concat(results, ",") .. "]")
 end
 
--- The oldest results whose bytes fit in `maxBytes` (at least one, however big), and the rest.
----@param results string[]
----@param maxBytes integer
----@return string[] taken
----@return string[] rest
-function protocol.takeResults(results, maxBytes)
-    local taken, rest, bytes = {}, {}, 0
-    for _, result in ipairs(results) do
-        if #rest == 0 and (#taken == 0 or bytes + #result <= maxBytes) then
-            taken[#taken + 1] = result
-            bytes = bytes + #result
-        else
-            rest[#rest + 1] = result
-        end
-    end
-    return taken, rest
-end
+-- The oldest results whose bytes fit in `maxBytes` (dev/command.lua).
+protocol.takeResults = devCommand.takeResults
 
 ---------------------------------------------------------------------------
 -- Eval results and the Log and Emit events
@@ -281,67 +267,21 @@ local function capText(text)
     return batch.cap(text, protocol.limits.lineBytes)
 end
 
--- What one eval has printed so far: at most outputLines lines of at most lineBytes each.
----@return { lines: string[], truncated: boolean }
-function protocol.newOutput()
-    return { lines = {}, truncated = false }
-end
+-- What one eval has printed so far, and adding a line to it under protocol.limits
+-- (dev/command.lua).
+protocol.newOutput = devCommand.newOutput
 
 ---@param output { lines: string[], truncated: boolean }
 ---@param text string
 function protocol.addOutput(output, text)
-    if #output.lines >= protocol.limits.outputLines then
-        output.truncated = true
-        return
-    end
-    local max = protocol.limits.lineBytes
-    if #text > max then
-        text, output.truncated = text:sub(1, max), true
-    end
-    output.lines[#output.lines + 1] = text
+    devCommand.addOutput(output, text, protocol.limits)
 end
 
--- One command's result, encoded for syncBody. `r.error` (any value) is set when `r.ok` is
--- false. An eval adds `output`, and on success `values` (each already serialised, with
--- `nvalues` of them, nils included). The values go as a JSON array of exactly nvalues
--- elements, nils as null (dev/json would write a table with a nil hole as an object). Past
--- valueBytes they are dropped; a result still over resultBytes loses its output; either sets
--- truncated, as does a cut error or output line.
+-- One command's result, encoded for syncBody under protocol.limits (dev/command.lua).
 ---@param r { id: string, ok: boolean, error: any, values: any[]?, nvalues: integer?, output: { lines: string[], truncated: boolean }? }
 ---@return string
 function protocol.resultEntry(r)
-    local meta = { id = r.id, ok = r.ok }
-    local truncated = r.output ~= nil and r.output.truncated
-    if not r.ok then
-        local cut
-        meta.error, cut = capText(batch.text(r.error))
-        truncated = truncated or cut
-    end
-    meta.output = r.output and r.output.lines
-    local values = nil ---@type string[]?
-    if r.nvalues then
-        meta.nvalues = r.nvalues
-        local parts, bytes = {}, 0
-        for i = 1, r.nvalues do
-            parts[i] = json.encode((r.values or {})[i])
-            bytes = bytes + #parts[i] + 1
-        end
-        if bytes > protocol.limits.valueBytes then
-            parts, truncated = {}, true
-        end
-        values = parts
-    end
-    local function encode()
-        meta.truncated = truncated or nil
-        if not values then return json.encode(meta) end
-        return batch.batchBody(meta, values, "values")
-    end
-    local entry = encode()
-    if #entry > protocol.limits.resultBytes and meta.output then
-        meta.output, truncated = {}, true
-        entry = encode()
-    end
-    return entry
+    return devCommand.resultEntry(r, protocol.limits)
 end
 
 -- A Log event: a line the bridge logged, or (source "eval") one a probe printed or an error
@@ -496,39 +436,9 @@ function protocol.probeErrorText(event, name, err)
     )
 end
 
--- The daemon escapes `\`, tab, newline and CR in an arg (rsdev.py escape_arg). Any other
--- escape is left as written, as test_rsdev.py's unescape_arg does.
-local UNESCAPES = { ["\\"] = "\\", t = "\t", n = "\n", r = "\r" }
-
----@param text string
----@return string
-function protocol.unescape(text)
-    return (text:gsub("\\(.)", function(c)
-        return UNESCAPES[c] or ("\\" .. c)
-    end))
-end
-
--- The commands in a sync reply: zero or more `<id>\t<kind>\t<arg>` lines, each ending in a
--- newline. Returns the commands ({ id, kind, arg }, arg unescaped) and the malformed lines,
--- which can't be answered because they have no usable id. A non-empty body that doesn't end
--- in a newline was cut short, so the whole reply is refused: returns nil and why.
----@param body string
----@return { id: string, kind: string, arg: string }[]?
----@return string[] | string
-function protocol.parseReply(body)
-    if body ~= "" and body:sub(-1) ~= "\n" then return nil, "reply does not end in a newline" end
-    local commands, malformed = {}, {}
-    for line in body:gmatch("([^\n]*)\n") do
-        local id, kind, arg = line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)$")
-        local idOk = id ~= nil and #id <= 32 and id:match("^[%w_-]+$") ~= nil
-        if idOk and kind ~= "" then
-            commands[#commands + 1] = { id = id, kind = kind, arg = protocol.unescape(arg) }
-        else
-            malformed[#malformed + 1] = line
-        end
-    end
-    return commands, malformed
-end
+-- Parsing the daemon's reply into commands (dev/command.lua).
+protocol.unescape = devCommand.unescape
+protocol.parseReply = devCommand.parseReply
 
 -- Console commands that disable the plugin named as their first argument, or revoke one of its
 -- permissions, short and long forms. plugins_setenabled is refused whatever its true/false

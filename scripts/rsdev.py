@@ -5,7 +5,7 @@ Usage: scripts/rsdev.py daemon [--port 8766] [--out dumps]     run the daemon in
        scripts/rsdev.py start | stop | status                  manage a detached daemon
        scripts/rsdev.py exec <console command...> [--timeout 10]
        scripts/rsdev.py events [--since N] [--follow] [--name X]
-       scripts/rsdev.py eval <lua code...> | --file F | --reset [--timeout 10]
+       scripts/rsdev.py eval <lua code...> | --file F | --reset [--plugin NAME] [--timeout 10]
        scripts/rsdev.py logs [--since N] [--follow] [--plugin X] [--json]
        scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S]
        scripts/rsdev.py exec <console command...> --shot [--shot-delay 1.0]
@@ -32,7 +32,8 @@ recorder, tee and bridge).
     "session": "...", "seq": n, "dropped": n, "lines": [{"t": n, "level": "...", "text": "..."}]}.
     Each line becomes a `Log` event in the same numbered stream as the bridge's, written to
     <out>/rsdev/events/tee/<plugin>/<session>.jsonl. A malformed body gets a 400 and nothing is
-    applied.
+    applied. With "remote": true (lib/dev/remote) the body may carry "results", and the reply is
+    the commands queued for that plugin (`eval --plugin`), as /bridge/sync replies.
 
   /cli/...           what the subcommands above talk to. Nothing else needs these.
 
@@ -70,11 +71,14 @@ CMD_ID = re.compile(r"[A-Za-z0-9_-]{1,32}")  # used with fullmatch
 MAX_BODY = 2 * 1024 * 1024
 # Command kinds the bridge understands. The daemon only queues them; the plugin runs them.
 KINDS = ("exec", "eval", "reset")
+# The kinds a plugin's dev/remote runs (eval --plugin); it has no console commands.
+REMOTE_KINDS = ("eval", "reset")
 LOG_LEVELS = ("print", "log", "error")
 AUDIT_SOURCE_CHARS = 200  # how much of an eval's source the daemon log keeps
 RESULT_FIELDS = ("values", "nvalues", "output", "truncated")  # what an eval result may carry
 MAX_EVENTS = 10_000  # events kept in memory; every one is also on disk
 CONNECTED_WITHIN = 2.0  # seconds since the last sync that still counts as connected
+REMOTE_CONNECTED_WITHIN = 3.0  # the same for a dev/remote tee, which polls every half second
 MAX_WAIT = 120.0  # cap on how long one /cli request may block a thread
 # The game window's WM_CLASS (instance, class). The title is never matched: a browser tab called
 # "RuneScape - Vivaldi" has the same words in it.
@@ -109,8 +113,10 @@ class RecSession:
 
 
 class Command:
-    def __init__(self, cmd_id, kind, arg):
+    def __init__(self, cmd_id, kind, arg, target=None):
         self.id, self.kind, self.arg = cmd_id, kind, arg
+        # None for the bridge, else the plugin whose dev/remote runs it (over /tee).
+        self.target = target
         # queued -> delivered -> done, or queued -> withdrawn. Every move happens under State.cond.
         self.state = "queued"
         self.ok, self.error = None, None
@@ -128,6 +134,8 @@ class State:
         self.bridge = None  # the last bridge session seen: dict, see sync()
         self.queue = deque()  # Commands not yet delivered, FIFO
         self.commands = {}  # id -> Command, for delivered ones awaiting a result
+        # plugin -> {"session", "seen"}: plugins whose tee said it runs dev/remote
+        self.remotes = {}
         self.cmd_count = 0
         self.events = deque(maxlen=MAX_EVENTS)
         self.last_n = 0  # n of the newest event
@@ -203,37 +211,52 @@ class State:
                 print(f"bridge: new session {body['session']} (plugin {body['plugin']})")
                 # The old session can't report any more; don't leave its exec calls waiting.
                 for cmd in list(self.commands.values()):
-                    self._finish(cmd, False, "bridge restarted before reporting")
+                    if cmd.target is None:
+                        self._finish(cmd, False, "bridge restarted before reporting")
                 bridge = self.bridge = {"session": body["session"], "dropped": 0, "hello": None}
             bridge.update(seq=body["seq"], seen=now)
             if body.get("hello") is not None:  # the plugin sends it every sync; keep the last
                 bridge["hello"] = body["hello"]
 
-            for result in body.get("results", []):
-                cmd = self.commands.get(result["id"])
-                if cmd is not None:
-                    extra = {k: result[k] for k in RESULT_FIELDS if k in result}
-                    self._finish(cmd, result["ok"], result.get("error", ""), extra)
-                else:  # e.g. the late result of an exec that already gave up on it
-                    print(f"ignored result for unknown command id {result['id']!r}")
-
+            self._apply_results(body.get("results", []), None)
             lost = _lost(bridge, "dropped", body.get("dropped", 0))
             events = self._with_drop_marker(body.get("events", []), lost)
             self._add_events(f"{body['session']}.jsonl", body["session"], events)
+            return self._deliver(None)
 
-            lines = []
-            while self.queue:
-                cmd = self.queue.popleft()
-                cmd.state = "delivered"
-                self.commands[cmd.id] = cmd
-                lines.append(f"{cmd.id}\t{cmd.kind}\t{escape_arg(cmd.arg)}\n")
-                print(f"delivered command {cmd.id}")
-            return "".join(lines)
+    def _apply_results(self, results, target):
+        """Resolve the commands these results answer. Only `target`'s own commands count, so one
+        plugin can't answer another's (or the bridge's). Caller holds the lock."""
+        for result in results:
+            cmd = self.commands.get(result["id"])
+            if cmd is not None and cmd.target == target:
+                extra = {k: result[k] for k in RESULT_FIELDS if k in result}
+                self._finish(cmd, result["ok"], result.get("error", ""), extra)
+            else:  # e.g. the late result of an exec that already gave up on it
+                print(f"ignored result for unknown command id {result['id']!r}")
+
+    def _deliver(self, target):
+        """The reply lines for `target`'s queued commands (None: the bridge's), now delivered.
+        Caller holds the lock."""
+        lines, kept = [], deque()
+        for cmd in self.queue:
+            if cmd.target != target:
+                kept.append(cmd)
+                continue
+            cmd.state = "delivered"
+            self.commands[cmd.id] = cmd
+            lines.append(f"{cmd.id}\t{cmd.kind}\t{escape_arg(cmd.arg)}\n")
+            print(f"delivered command {cmd.id}" + (f" to {target}" if target else ""))
+        self.queue = kept
+        return "".join(lines)
 
     def tee(self, body):
-        """Apply one validated tee batch: each line becomes a Log event. Returns nothing."""
+        """Apply one validated tee batch: each line becomes a Log event. When the batch says the
+        plugin runs dev/remote, its results resolve its commands, and the reply is its queued
+        commands (else empty)."""
         with self.cond:
             key = (body["plugin"], body["session"])
+            reply = self._remote(body) if body.get("remote") else ""
             lost = _lost(self.tee_dropped, key, body.get("dropped", 0))
             events = [
                 {
@@ -262,6 +285,22 @@ class State:
             self._add_events(
                 Path("tee") / body["plugin"] / f"{body['session']}.jsonl", body["session"], events
             )
+            return reply
+
+    def _remote(self, body):
+        """The dev/remote half of a tee batch: note the plugin's session, resolve the results and
+        deliver its commands. A new session (a reload) can't report what the old one was sent.
+        Caller holds the lock."""
+        plugin = body["plugin"]
+        known = self.remotes.get(plugin)
+        if known is None or known["session"] != body["session"]:
+            print(f"remote: {plugin} session {body['session']}")
+            for cmd in list(self.commands.values()):
+                if cmd.target == plugin:
+                    self._finish(cmd, False, f"{plugin} reloaded before reporting")
+        self.remotes[plugin] = {"session": body["session"], "seen": time.time()}
+        self._apply_results(body.get("results", []), plugin)
+        return self._deliver(plugin)
 
     def _with_drop_marker(self, events, lost):
         """`events`, led by a dropped marker if `lost` events never arrived. Caller holds the lock."""
@@ -301,8 +340,9 @@ class State:
 
     # --- CLI ---------------------------------------------------------------------------------
 
-    def exec(self, text, timeout, kind="exec"):
-        """Queue a command (`kind`: exec, eval or reset) and wait for its result.
+    def exec(self, text, timeout, kind="exec", plugin=None):
+        """Queue a command (`kind`: exec, eval or reset) for the bridge, or for `plugin`'s
+        dev/remote, and wait for its result.
 
         Returns {"outcome": ...}.
 
@@ -311,12 +351,13 @@ class State:
         """
         with self.cond:
             self.cmd_count += 1
-            cmd = Command(f"c{self.cmd_count}-{secrets.token_hex(3)}", kind, text)
+            cmd = Command(f"c{self.cmd_count}-{secrets.token_hex(3)}", kind, text, plugin)
             self.queue.append(cmd)
             # Console commands are short and logged whole; Lua source is cut to keep the log readable.
             shown = text if kind == "exec" else text[:AUDIT_SOURCE_CHARS]
             more = f" (+{len(text) - len(shown)} more characters)" if len(shown) < len(text) else ""
-            print(f"queued command {cmd.id}: {kind} {shown!r}{more}")
+            to = f" for {plugin}" if plugin else ""
+            print(f"queued command {cmd.id}{to}: {kind} {shown!r}{more}")
             deadline = time.monotonic() + timeout
             while cmd.state in ("queued", "delivered"):
                 left = deadline - time.monotonic()
@@ -366,6 +407,16 @@ class State:
                 "pid": os.getpid(),  # lets `stop` confirm which process answers on the port
                 # Lets the CLI refuse a kind an older daemon would queue as a console command.
                 "kinds": list(KINDS),
+                # What `eval --plugin` may send; an older daemon would queue it for the bridge.
+                "remote_kinds": list(REMOTE_KINDS),
+                "remotes": {
+                    plugin: {
+                        "session": r["session"],
+                        "seen_ago": round(time.time() - r["seen"], 3),
+                        "connected": time.time() - r["seen"] <= REMOTE_CONNECTED_WITHIN,
+                    }
+                    for plugin, r in sorted(self.remotes.items())
+                },
                 "bridge": None
                 if b is None
                 else {
@@ -436,6 +487,12 @@ def sync_error(body):
             return "an event is not an object with a string name"
         if "t" in e and e["t"] is not None and not isinstance(e["t"], (int, float)):
             return "an event's t is not a number"
+    return results_error(body)
+
+
+def results_error(body):
+    """Why a body's `results` (command results, from the bridge or a plugin's dev/remote) are
+    bad, or None."""
     results = body.get("results", [])
     if not isinstance(results, list):
         return "results is not a list"
@@ -476,7 +533,9 @@ def tee_error(body):
             return f"a line's level is not one of {', '.join(LOG_LEVELS)}"
         if not isinstance(line.get("text"), str):
             return "a line's text is not a string"
-    return None
+    if not isinstance(body.get("remote", False), bool):
+        return "remote is not a boolean"
+    return results_error(body)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -551,19 +610,24 @@ class Handler(BaseHTTPRequestHandler):
             if error:
                 print(f"bad tee batch: {error}")
                 return self.reply(400)
-            state.tee(body)
-            return self.reply(200)
+            return self.reply(200, state.tee(body).encode(), "text/plain; charset=utf-8")
         # /cli/exec: `command` is the console command or Lua source; a reset takes none.
+        # `plugin` sends it to that plugin's dev/remote instead of the bridge.
         timeout = body.get("timeout") if isinstance(body, dict) else None
         kind = body.get("kind", "exec") if isinstance(body, dict) else None
         text = body.get("command", "") if isinstance(body, dict) else None
+        plugin = body.get("plugin") if isinstance(body, dict) else None
         if kind not in KINDS or not isinstance(text, str) or (text == "") != (kind == "reset"):
+            return self.reply(400)
+        if plugin is not None and not (
+            isinstance(plugin, str) and SAFE_NAME.fullmatch(plugin) and kind in REMOTE_KINDS
+        ):
             return self.reply(400)
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             return self.reply(400)
         if not 0 <= timeout <= MAX_WAIT:
             return self.reply(400)
-        self.reply_json(state.exec(text, timeout, kind))
+        self.reply_json(state.exec(text, timeout, kind, plugin))
 
     def do_GET(self):
         parts = urllib.parse.urlsplit(self.path)
@@ -742,17 +806,23 @@ def cmd_status(args):
         print(f"version: {hello.get('version')}")
         env = hello.get("env") or {}
         print("env: " + (", ".join(f"{k}={v}" for k, v in sorted(env.items())) or "(none)"))
+    for plugin, remote in (st.get("remotes") or {}).items():
+        polling = "polling" if remote["connected"] else "not polling"
+        print(f"remote: {plugin} {polling} (last {remote['seen_ago']:.1f}s ago)")
     print(f"commands: {st['queued']} queued, {st['awaiting_result']} awaiting a result")
     print(f"events: {st['events']}, dropped: {st['dropped']}")
     return 0
 
 
-def daemon_lacks(args, kind):
+def daemon_lacks(args, kind, plugin=None):
     """Exit code 2 (printed why) if the daemon is unreachable or doesn't list `kind` in its
     status, else None. A daemon from before eval ignores `kind` and queues the source as an
-    exec, so the bridge would run Lua as console input."""
+    exec, so the bridge would run Lua as console input; one from before `eval --plugin` ignores
+    `plugin` and would send it to the bridge. With `plugin`, its dev/remote must also be polling,
+    or the command could only time out."""
     try:
-        kinds = call(args, "/cli/status").get("kinds", [])
+        status = call(args, "/cli/status")
+        kinds = status.get("remote_kinds" if plugin else "kinds", [])
     except DaemonRefused as err:
         print(f"rsdev: {err}", file=sys.stderr)
         return 2
@@ -761,8 +831,21 @@ def daemon_lacks(args, kind):
         return 2
     # A status whose kinds isn't a list (null, or text that `in` would search) can't vouch.
     if isinstance(kinds, list) and kind in kinds:
-        return None
+        if not plugin:
+            return None
+        remote = (status.get("remotes") or {}).get(plugin)
+        if isinstance(remote, dict) and remote.get("connected"):
+            return None
+        why = "never seen" if remote is None else f"last seen {remote.get('seen_ago')}s ago"
+        print(
+            f"rsdev: {plugin}'s dev/remote is not polling ({why}). Is it opted in "
+            f'(docs/dev-environment.md, "Remote eval"), granted httpAccess and reloaded '
+            f"(rsdev.py exec 'prl {plugin}')?",
+            file=sys.stderr,
+        )
+        return 2
     what = "eval --reset" if kind == "reset" else kind
+    what += " --plugin" if plugin else ""
     print(
         f"rsdev: the daemon on port {args.port} predates `rsdev.py {what}` (no {kind!r} in its "
         "status kinds); restart it: scripts/rsdev.py stop && scripts/rsdev.py start",
@@ -774,13 +857,16 @@ def daemon_lacks(args, kind):
 def send_command(args, kind, text):
     """Queue a command and wait for its result. Returns (exit code, reply); the reply is the
     daemon's result dict when the code is 0, else None. Failures are already printed."""
+    plugin = getattr(args, "plugin", None)  # eval --plugin: that plugin's dev/remote
     # exec is the one kind every daemon queues as itself, so only the others are checked.
     if kind != "exec":
-        code = daemon_lacks(args, kind)
+        code = daemon_lacks(args, kind, plugin)
         if code is not None:
             return code, None
     # The daemon waits `timeout` itself; the extra seconds are for the reply to arrive.
     payload = {"kind": kind, "command": text, "timeout": args.timeout}
+    if plugin:
+        payload["plugin"] = plugin
     try:
         reply = call(args, "/cli/exec", payload, args.timeout + 10)
     except DaemonRefused as err:
@@ -872,6 +958,13 @@ def region_arg(text):
     m = re.fullmatch(r"([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)", text)
     if not m or int(m[1]) == 0 or int(m[2]) == 0:
         raise argparse.ArgumentTypeError(f"{text!r} is not WxH+X+Y with W and H above 0")
+    return text
+
+
+def plugin_arg(text):
+    """argparse type for --plugin: a plugin folder name, as the tee sends it."""
+    if not SAFE_NAME.fullmatch(text):
+        raise argparse.ArgumentTypeError(f"{text!r} is not a plugin name")
     return text
 
 
@@ -1576,6 +1669,11 @@ def main(argv=None):
     p.add_argument("code", nargs="*")
     p.add_argument("--file", type=Path, help="read the Lua source from this file instead")
     p.add_argument("--reset", action="store_true", help="clear the plugin's eval state")
+    p.add_argument(
+        "--plugin",
+        type=plugin_arg,
+        help="run it inside this plugin (its dev/remote), not in the dev bridge",
+    )
     p.add_argument(
         "--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0
     )

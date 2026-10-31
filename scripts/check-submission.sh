@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Fails while a plugin still carries any lib/dev opt-in (the recorder and the log tee, or any
-# dev/ user such as the dev bridge): the dev/ link, the require and tee.install/tee.shutdown
-# calls, the httpAccess permission, the urls.rsdev key and any url in plugin.json's urls that
-# points at this machine (127.x.x.x, localhost, [::1] or 0.0.0.0), whatever its name. Its own
-# test is scripts/check-submission.selftest.sh, which scripts/check.sh runs.
+# Fails while a plugin still carries any lib/dev opt-in (the recorder, the log tee and remote
+# eval, or any dev/ user such as the dev bridge): the dev/ link, the require, the
+# tee.install/shutdown and remote.install/shutdown/expose calls, the httpAccess permission, the
+# urls.rsdev key and any url in plugin.json's urls that points at this machine (127.x.x.x,
+# localhost, [::1] or 0.0.0.0), whatever its name. Its own test is
+# scripts/check-submission.selftest.sh, which scripts/check.sh runs.
 # Run it on a copy of the plugin prepared for upload, not on the dev tree, where it is expected
 # to fail.
 #
@@ -52,7 +53,7 @@ if [[ -e "$dir/dev" || -L "$dir/dev" ]]; then
     report "dev entry at plugins/$plugin/dev"
 fi
 
-lua_pattern="require *\(? *([\"']|\[=*\[)dev[./]|tee\.(install|shutdown)"
+lua_pattern="require *\(? *([\"']|\[=*\[)dev[./]|tee\.(install|shutdown)|remote\.(install|shutdown|expose)"
 while IFS= read -r hit; do
     report "${hit#"$root"/}"
 done < <(grep -rnE --include='*.lua' "$lua_pattern" "$dir" || true)

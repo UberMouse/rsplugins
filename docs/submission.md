@@ -95,8 +95,8 @@ lines, `urls.rsdev`, `httpAccess`). Build the upload from a copy, never from the
    `cp -rP plugins/<name> dumps/submission/plugins/` (`-P` copies the `dev` symlink as a link,
    not its target) and then `rm dumps/submission/plugins/<name>/dev`.
 2. Strip the rest of the opt-in from the copy's `main.lua` and `plugin.json`: the
-   `require("dev/...")` lines, `tee.install`/`tee.shutdown` and `recorder.install`/`shutdown`
-   calls with their comments, `"httpAccess"` from `optionalPermissions` (unless a feature of the
+   `require("dev/...")` lines, `tee.install`/`tee.shutdown`, `remote.install`/`expose`/`shutdown`
+   and `recorder.install`/`shutdown` calls with their comments, `"httpAccess"` from `optionalPermissions` (unless a feature of the
    plugin needs it), and `urls.rsdev`. The plugin's README lists its own pieces (Chore Tracker:
    "Before submitting").
 3. Run `scripts/check-submission.sh <name> --root dumps/submission`. It must exit 0; it names

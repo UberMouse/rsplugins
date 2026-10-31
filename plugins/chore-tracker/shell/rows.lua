@@ -82,6 +82,7 @@ local reported = {} ---@type table<string, boolean>
 ---@field content ui.Layer the layer that owns the tooltip: the row layer's parent
 ---@field baseTooltip ChoreTooltip? the tooltip as given to setTooltip
 ---@field ticked boolean? whether the box is ticked
+---@field onClick fun() what a press on the row does, kept so a test or dev tool can press it
 ---@field dimmed boolean? whether the icon and text are dimmed
 ---@field hovered boolean whether the mouse is over the row
 ---@field tooltipText string?
@@ -252,6 +253,7 @@ function M.new(content, y, icon, onClick, opts)
             textX = textX,
             shortened = false,
             hovered = false,
+            onClick = onClick,
         }
     M.setIcon(row, icon)
     -- Under the default id: Tooltip.attach subscribes the same hooks under its own id

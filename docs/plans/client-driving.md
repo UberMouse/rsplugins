@@ -48,10 +48,13 @@ Each slice ends with a check-in with the user.
    Keyboard input was left out: a probe showed a plugin can't tell whether the console is open
    (api-concepts), and a key sent with it closed could hit an ability keybind. It moves to slice 4,
    where `pon dev-bridge` is the only thing typed.
-3. **In-plugin eval and the handler registry:** `lib/dev/eval.lua`, commands over the tee's
-   channel (the tee's post becomes a sync that returns commands),
-   `rsdev.py eval --plugin <name>`. Then named handles in chore-tracker's `rows`, `stepper` and
-   `grips`. `check-submission.sh` has to catch what's left of it in a copy for upload.
+3. **In-plugin eval and press** (done 2026-10-31): `rsdev.py eval --plugin <name>` runs Lua in an
+   opted-in plugin through `lib/dev/remote.lua`, over the tee's channel, and `press(text)` calls
+   a row's own click handler with no pointer. The "registry" is a convention, not dev code in
+   shipped modules: UI helpers keep `onClick` on their view tables, and `main.lua` exposes a
+   getter for its state (dev-only lines, flagged by `check-submission.sh`). Chore Tracker is
+   opted in. Documented in [dev-environment.md](../dev-environment.md#remote-eval-eval---plugin).
+   The command and result code is shared with the bridge in `lib/dev/command.lua`.
 4. **Crash recovery through Bolt:** notice the crash (the `rs2client` process or the bridge
    session is gone), screenshot Bolt, click Play, get through the lobby, then
    `pon dev-bridge` from the console. After a crash, the "diff before another test" rule

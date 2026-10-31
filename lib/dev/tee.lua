@@ -26,6 +26,10 @@
 -- Without urls.rsdev or httpAccess it logs one [TEE] line and changes nothing. A permission
 -- granted later does nothing until the plugin is reloaded (`prl <name>`).
 --
+-- dev/remote (in-plugin eval) rides on the tee: tee.attach(run) makes it post every
+-- remoteEveryTicks even with no lines, say `remote: true`, carry command results, and hand the
+-- commands in the daemon's reply to `run`, one per Logic tick.
+--
 -- With the dev recorder too, require both modules first, then call tee.install, then
 -- recorder.install: the tee wraps the real API and the recorder wraps the tee's stand-ins, so
 -- the recorder still records every delivery and the tee still catches callback errors. The
@@ -34,6 +38,7 @@
 local teelog = require("dev/teelog")
 local batch = require("dev/batch")
 local post = require("dev/post")
+local command = require("dev/command")
 
 local tee = {}
 
@@ -46,6 +51,8 @@ tee.limits = {
     batchBytes = 256 * 1024, -- encoded lines per POST (the daemon accepts 2 MB)
     bufferLines = 500, -- lines kept while they can't be sent
     bufferBytes = 256 * 1024, -- encoded lines kept while they can't be sent
+    remoteEveryTicks = 25, -- Logic ticks between posts while dev/remote is attached
+    resultBytes = 1024 * 1024, -- encoded results per POST; with batchBytes, under the 2 MB cap
 }
 
 -- The manifest url the batches go to: urls.rsdev in plugin.json.
@@ -78,7 +85,11 @@ local seq = 0 -- POSTs so far
 local nextPost = 0
 local failures = 0 -- POSTs in a row that failed
 local warned = false -- whether this failure streak has had its console line
-local inFlight = nil ---@type { post: { request: HTTPRequest, body: string }, lines: string[] }?
+local inFlight = nil ---@type { post: { request: HTTPRequest, body: string }, lines: string[], results: string[] }?
+-- dev/remote, when attached: runs one command, returning its encoded result.
+local runner = nil ---@type (fun(cmd: { id: string, kind: string, arg: string }): string)?
+local commands = {} ---@type { id: string, kind: string, arg: string }[] received, not yet run
+local outbox = {} ---@type string[] encoded results not yet sent
 
 ---@param level string
 ---@param text string
@@ -190,6 +201,25 @@ local function giveBack(lines)
     dropped = dropped + batch.requeue(queue, lines, tee.limits.bufferBytes, tee.limits.bufferLines)
 end
 
+-- Queue the commands in a reply for dev/remote. A reply cut short is dropped whole: its
+-- commands count as delivered at the daemon, so their eval calls time out ("unknown").
+---@param data any the reply body
+local function takeCommands(data)
+    if not runner or type(data) ~= "string" then return end
+    local parsed, problem = command.parseReply(data)
+    if not parsed then
+        say("bad reply from the daemon: " .. tostring(problem))
+        return
+    end
+    for _, cmd in ipairs(parsed) do
+        commands[#commands + 1] = cmd
+    end
+    local malformed = problem --[[@as string[] ]]
+    if #malformed > 0 then
+        say(string.format("skipped %d malformed command line(s)", #malformed))
+    end
+end
+
 -- The completion callback for a batch. It must not start a request (that crashed the client),
 -- so it only settles the books; the next Logic tick posts again.
 ---@param finished HTTPRequest
@@ -199,27 +229,37 @@ local function onPosted(finished)
     inFlight = nil -- the request has finished, so its body may go
     if finished.successful and finished.responseCode == 200 then
         failures, warned = 0, false
+        takeCommands(finished.data)
         return
     end
     backOff()
     -- A 400 arrives failed, with responseCode 400 (live, docs/api-concepts.md).
     if finished.responseCode == 400 then
-        -- The daemon applied nothing and would refuse the same lines again, so they go.
+        -- The daemon applied nothing and would refuse the same lines again, so they go, and the
+        -- results with them (their eval calls time out).
         dropped = dropped + #sent.lines
         warnOnce(string.format("daemon refused a batch (400), dropped %d lines", #sent.lines))
         return
     end
     giveBack(sent.lines)
+    table.move(outbox, 1, #outbox, #sent.results + 1, sent.results)
+    outbox = sent.results
     warnOnce("POST failed: " .. batch.failureText(finished))
 end
 
 -- Send the next batch when one is due and none is in flight.
 local function flush()
     assert(url and http, "install() found urls.rsdev and took HTTPRequest")
-    if not active or inFlight or tick < nextPost or batch.count(queue) == 0 then return end
-    nextPost = tick + tee.limits.postEveryTicks
+    if not active or inFlight or tick < nextPost then return end
+    -- With dev/remote attached, post even with nothing to say: the reply carries its commands.
+    if batch.count(queue) == 0 and not runner then return end
+    nextPost = tick + (runner and tee.limits.remoteEveryTicks or tee.limits.postEveryTicks)
     if not Plugin.HasPermission(PluginPermissions.httpAccess) then return end
     local lines = batch.take(queue, tee.limits.batchBytes, tee.limits.batchLines)
+    local sending = {} ---@type string[]
+    if runner then
+        sending, outbox = command.takeResults(outbox, tee.limits.resultBytes)
+    end
     seq = seq + 1
     local body = teelog.body({
         schema = teelog.SCHEMA,
@@ -228,23 +268,43 @@ local function flush()
         seq = seq,
         dropped = dropped,
     }, lines)
+    if runner then
+        body = batch.withField(body, "remote", "true")
+        body = batch.withField(body, "results", "[" .. table.concat(sending, ",") .. "]")
+    end
     -- Starting is the one step that can fail without the tee being broken; the request and body
     -- stay referenced in inFlight until it finishes (dev/post.lua).
     local pending, err = post.startPost(http, url, PATH, body, onPosted)
     if pending then
-        inFlight = { post = pending, lines = lines }
+        inFlight = { post = pending, lines = lines, results = sending }
         return
     end
     -- The request never started, so no completion callback will come: free the slot, keep the
-    -- lines for a later tick and wait out a retry.
+    -- lines and results for a later tick and wait out a retry.
     giveBack(lines)
+    table.move(outbox, 1, #outbox, #sending + 1, sending)
+    outbox = sending
     backOff()
     warnOnce("could not start a POST: " .. tostring(err))
+end
+
+-- Run the oldest command dev/remote was sent, if any: one per tick, so a burst can't stack up
+-- against the client's per-call time limit.
+local function runCommand()
+    local cmd = table.remove(commands, 1)
+    if not (cmd and runner) then return end
+    local ok, entry = pcall(runner, cmd)
+    if ok and type(entry) == "string" then
+        outbox[#outbox + 1] = entry
+    else
+        say("remote command " .. cmd.id .. " failed: " .. tostring(entry))
+    end
 end
 
 local function onLogic()
     tick = tick + 1
     if not active then return end -- after shutdown() nothing may start
+    runCommand()
     -- A failure here must not break the plugin's Logic event (and it would repeat every tick),
     -- so it waits out a retry. (A failed request start puts its own lines back, in flush.)
     local ok, err = pcall(flush)
@@ -294,12 +354,25 @@ function tee.install(env, plugin)
     say("sending this plugin's console output to urls." .. URL_NAME .. " as session " .. session)
 end
 
+-- Let dev/remote run commands over the tee's channel: `run(cmd)` runs one command
+-- ({ id, kind, arg }) and returns its encoded result (dev/command.lua's resultEntry). Returns
+-- false, changing nothing, when the tee isn't sending (no urls.rsdev or no httpAccess).
+---@param run fun(cmd: { id: string, kind: string, arg: string }): string
+---@return boolean
+function tee.attach(run)
+    if not active then return false end
+    runner = run
+    nextPost = tick -- start polling now, not after the current wait
+    return true
+end
+
 -- Stop teeing: unsubscribe the tee's own Logic subscription and cancel a request in flight.
 -- Safe to call twice, and a no-op if install() didn't finish. Call it from the plugin's
 -- PluginShutdown, after its own Unsubscribes.
 function tee.shutdown()
     if not active then return end
     active = false
+    runner, commands, outbox = nil, {}, {}
     assert(realEvent, "install() took the real Event")
     -- A plain call statement: not passed to pcall and not a tail call (docs/api-concepts.md).
     realEvent.Logic.Unsubscribe(FLUSH_NAME)

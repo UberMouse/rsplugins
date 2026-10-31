@@ -7,7 +7,18 @@ local specSupport = require("tests.harness.spec_support")
 
 local M = {}
 
-M.MODULES = { "batch", "json", "payloads", "post", "recorder", "recording", "tee", "teelog" }
+M.MODULES = {
+    "batch",
+    "command",
+    "json",
+    "payloads",
+    "post",
+    "recorder",
+    "recording",
+    "remote",
+    "tee",
+    "teelog",
+}
 
 -- The files table for harness.new: main.lua, plugin.json and lib/dev/ as dev/.
 ---@param main string

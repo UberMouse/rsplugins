@@ -140,7 +140,7 @@ scripts/rsdev.py start                       # detached; log dumps/rsdev/daemon.
 scripts/rsdev.py status                      # daemon up?, bridge connected?, session, seq, env facts, queue, events, dropped
 scripts/rsdev.py exec <console command...> [--timeout 10]
 scripts/rsdev.py events [--since N] [--follow] [--name X]
-scripts/rsdev.py eval <lua code...> | --file F | --reset [--timeout 10]
+scripts/rsdev.py eval <lua code...> | --file F | --reset [--plugin NAME] [--timeout 10]
 scripts/rsdev.py logs [--since N] [--follow] [--plugin X] [--json]
 scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S] [--window 0x...]
 scripts/rsdev.py ui [--all]                  # the plugin layer's components: type, centre, size, flags, text
@@ -346,7 +346,9 @@ A plugin can forward its log lines to the daemon with `POST <urls.rsdev>/tee`:
 `plugin`, `session`, `seq` and `dropped` follow the rules of a sync above; `t` is an integer,
 `level` is `print`, `log` or `error` (anything else, `dropped` included, is a 400), and `text` a
 string. The reply is `200` with an empty body, or `400` with nothing applied. The body cap,
-`Content-Length` rules and `Host`/`Origin` refusals are those of `/bridge/sync`. Each line becomes a
+`Content-Length` rules and `Host`/`Origin` refusals are those of `/bridge/sync`. A body may also
+carry `"remote": true` and `"results": [...]` (results as in a sync); then the reply body is that
+plugin's queued commands, in the sync reply's line format (see "Remote eval" below). Each line becomes a
 `Log` event with payload `{plugin, level, text}`, the line's `t` and the tee's `session`, numbered
 in the same stream `events` and `logs` read, and appended to
 `dumps/rsdev/events/tee/<plugin>/<session>.jsonl` (a directory per plugin, so different plugin and
@@ -401,3 +403,58 @@ both modules first, then call `tee.install`, then `recorder.install` (spec in
 plugin for submission ships without `dev/`, the lines above (install and shutdown), httpAccess
 (unless a feature of its own needs it) and `urls.rsdev`. Chore Tracker is the first plugin opted
 in; its README lists what to strip.
+
+### Remote eval (`eval --plugin`)
+
+```
+scripts/rsdev.py eval --plugin <name> <lua code...> | --file F | --reset [--timeout 10]
+```
+
+runs Lua **inside a plugin**, where the dev bridge's eval can't reach: its own globals, its
+modules (`__PACKAGES_LOADED`), and the state `main.lua` keeps in locals once it exposes it. It
+prints and exits like `eval`. `lib/dev/remote.lua` is the plugin side; it rides on the log tee,
+so the plugin must be opted into the tee first, with httpAccess granted.
+
+**How it travels.** While remote is installed the tee posts every 25 ticks (half a second) even
+with no lines, with `"remote": true`; the daemon answers with the commands queued for that
+plugin (`/cli/exec` with `"plugin": "<name>"`, kinds `eval` and `reset` only), and the next
+post carries their results. The tee runs one command per Logic tick. A command is only ever
+delivered to its own plugin's tee, and only that plugin's results resolve it. A new tee session
+(a reload) fails what the old one was sent ("<name> reloaded before reporting"). `rsdev.py
+status` lists each plugin's remote as `remote: <name> polling|not polling`, and `eval --plugin`
+refuses at once (exit 2) when that plugin's remote isn't polling, naming the likely cause.
+
+**In a snippet** (the scratch env lives for the plugin's session; `--reset` clears it):
+- reads fall through to the plugin's globals; writes stay in the scratch env;
+- `print`/`log` go to the result's output, and to the console and the tee as before;
+- `exposed.<name>`: what the plugin registered with `remote.expose(name, value)`; a function is
+  a getter, called with no arguments;
+- `press(text, nth)` calls the `onClick` of the pressable whose text is `text` (ignoring case),
+  or else contains it, and returns that text. A pressable is any table reachable from the
+  exposed values with an `onClick` function and a `text` string or a `label` `ui.Text`. It runs
+  the plugin's own handler, so it needs no pointer and works with the client on another
+  workspace, but it skips the client's hit testing and event order: use `rsdev.py click` when
+  those matter. Several matches raise an error naming them; pass `nth`.
+
+Caps are the bridge eval's (values 64 KB, 200 output lines of 2 KB). A snippet runs inside the
+tee's Logic callback, so one past the client's 1000 ms limit can take the plugin down; `prl` it.
+
+**Opting a plugin in**, after the tee:
+
+```lua
+local tee = require("dev/tee") -- nil when dev/ isn't there
+local remote = require("dev/remote")
+if tee then tee.install(_ENV, "<name>") end
+if remote then remote.install(_ENV, tee) end
+```
+
+then `if remote then remote.expose("main", function() return { ... } end) end` once the state
+it should show exists, and in `PluginShutdown`, before the tee's,
+`if remote then remote.shutdown() end`. `check-submission.sh` flags each of these lines. The
+plugin's UI helpers keep their click handler on the view table they return (`onClick`) for
+`press` to find; that field ships, and is harmless.
+
+In-client check (2026-10-31, chore-tracker): `eval --plugin chore-tracker` returned the mode, the
+phase and each row's ticked state from `main.lua`'s locals in 0.74 s; two
+`press("Dream of Iaia XP")` unticked and re-ticked that chore; `press("Shop Run")` was refused
+naming both shop runs.

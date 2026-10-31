@@ -377,8 +377,8 @@ M.PLUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_PLUS")
 
 -- The settings view's Shop runs line for chore `id`: its name and value texts and its minus
 -- and plus button layers. They sit straight in the content: the name is the content's own
--- text with the chore's name (a settings row's label is inside its row layer), and the value
--- and buttons share its row.
+-- text with the chore's name, whole or cut with "..." (a settings row's label is inside its row
+-- layer), and the value and buttons share its row.
 ---@param h table
 ---@param id string
 ---@return { label: table, value: table, minus: table, plus: table }
@@ -388,7 +388,9 @@ function M.stepper(h, id)
     local label
     for _, proxy in ipairs(children) do
         local part = assert(uiFake.stateOf(proxy))
-        if part.class == "ui.Text" and part.content == name then label = proxy end
+        local text = part.class == "ui.Text" and part.content
+        local cut = text and text:match("^(.*)%.%.%.$")
+        if text == name or (cut and name:sub(1, #cut) == cut) then label = proxy end
     end
     assert(label, "no Shop runs line for " .. id)
     local out = { label = label }

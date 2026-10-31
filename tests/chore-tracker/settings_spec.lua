@@ -199,6 +199,24 @@ describe("chore-tracker shop runs settings", function()
         assert.are.same({}, helpers.stored(h).needed)
     end)
 
+    it(
+        "cuts a long name with dots short of the minus button, and re-fits it on a resize",
+        function()
+            local h = loaded()
+            openSettings(h)
+            -- Down to the window's least width.
+            h.ui:resize(window(h), -1000, 0)
+            h:advance(helpers.POLL_MS)
+            local line = helpers.stepper(h, "broad-arrowheads")
+            local shown = line.label.content
+            assert.are.equal("...", shown:sub(-3))
+            assert.is_true(line.label.x + fonts.width(shown, false) < line.minus.x)
+            h.ui:resize(window(h), 400, 0)
+            h:advance(helpers.POLL_MS)
+            assert.are.equal("Broad Arrowhead Shop Run", line.label.content)
+        end
+    )
+
     it("keeps a count per character, across reloads", function()
         local h = loaded()
         helpers.setShopsNeeded(h, "feather-shop-run", 2)

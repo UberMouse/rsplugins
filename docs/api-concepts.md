@@ -993,6 +993,15 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
     ticked-hovered sprite (its selectedHovered is the plain ticked one), so the rows use the
     full 0-3 set so a ticked box also reacts to hover. `RS3_BTN_CHECKBOX_4` looks like an empty box (role not
     established).
+  - **Stepper sprites** (Chore Tracker's Shop runs lines, plugin reloaded in the beta client and
+    screenshotted, 2026-10-31): `id.Sprite.RS3_CONTEXTUAL_INPUT_MINUS` and `_PLUS` draw as a
+    recognisable − and + at 20 px, each in a hand-built button (a `clickthrough = false` layer
+    holding the sprite). A value `ui.Text` between them with
+    `AlignTo(ui.AlignMode.CENTRE, ui.AlignMode.CENTRE)` drew centred horizontally, and clicks
+    changed it in place, at either end of the range too. PrettyUI 1.2.0's `SpriteButton` has a
+    PLUS sprite but no MINUS (`tests/harness/api/prettyui/internal.lua`), hence the hand-built
+    pair. A name `ui.Text` sized to end before the minus button still drew over it when too long
+    (it can't clip), so the name is cut to fit like a row's.
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

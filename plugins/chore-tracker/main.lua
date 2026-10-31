@@ -5,16 +5,15 @@
 -- Weekly and Monthly headings, and you tick one off by clicking its row, or drag it by its grip
 -- to reorder it within its period. Ticks clear themselves when the game clock passes the
 -- period's reset (UTC: daily at 00:00, weekly on Wednesday 00:00, monthly on the 1st). Some
--- chores also tick themselves, picked or not: a shop run once you have bought at as many of its
--- shops as it needs this period (all of them, or fewer set with the settings view's Shop runs
--- steppers) and a collection when its notes rise in your backpack near the giver
--- (shell/detect.lua), and others when one of your own game vars changes to show them done
--- (shell/vars.lua; a chore already done at login or while the plugin was off is left to tick
--- by hand). When the plugin ticks a picked chore, or a period's picked chores are all done, a
--- popup celebrates it (shell/popups.lua); settings turn the popups or their sound off. Picks,
--- their order, ticks and shop-run counts are saved per character, by display name; the
--- window's place, size and collapsed state (shell/window.lua) and the celebration settings are
--- saved for all characters.
+-- chores also tick themselves, picked or not. A shop run ticks once you have bought from as
+-- many of its shops as it needs this period (all of them, or fewer set in the Shop runs
+-- block); a collection when its notes rise in your backpack near the giver (shell/detect.lua);
+-- others when one of your own game vars changes to show them done (shell/vars.lua). A chore
+-- already done at login or while the plugin was off is left to tick by hand. When the plugin
+-- ticks a picked chore, or a period's picked chores are all done, a popup celebrates it
+-- (shell/popups.lua); settings turn the popups or their sound off. Picks, their order, ticks
+-- and shop-run counts are saved per character, by display name; the window's place, size and
+-- collapsed state (shell/window.lua) and the celebration settings are saved for all characters.
 -- Collapsed, the window becomes a strip showing the next chore not done, Daily first, then
 -- Weekly, then Monthly, in the player's order, which a click ticks (shell/strip.lua).
 --
@@ -93,6 +92,8 @@ local mode = "list" ---@type ChoreMode
 -- go with the window.
 local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
+-- The settings view's Shop runs lines, refitted with the rows; they go with the window too.
+local stepperViews = {} ---@type ChoreStepperView[]
 -- A view switch left for the next Logic tick. A button's action mustn't destroy the button
 -- while PrettyUI is still handling its click, and a view switch rebuilds the window.
 local pendingMode = nil ---@type ChoreMode?
@@ -143,12 +144,16 @@ local function refreshList()
 end
 
 -- Re-fit the rows' names to their widths (ui.Text can't clip, so a name is cut with "..." to
--- stop before the tick box). rows.fit returns at once for a row whose width is unchanged, so
--- fitting every row on each poll costs nothing while the window is idle.
+-- stop before the tick box), and the Shop runs lines' names likewise. rows.fit and
+-- stepper.fit return at once when the width is unchanged, so fitting them all on each poll
+-- costs nothing while the window is idle.
 local function refitRows()
     assert(window.current(), "rows are only refitted while the window exists")
     for _, rowView in pairs(rowViews) do
         rows.fit(rowView)
+    end
+    for _, stepperView in ipairs(stepperViews) do
+        stepper.fit(stepperView)
     end
 end
 
@@ -303,7 +308,7 @@ local function onShopsNeeded(chore, delta, shown)
     tracker = changed
     store.saveState(character, tracker)
     local needed = state.shopsNeeded(tracker, chore, listed)
-    stepper.show(shown, needed)
+    stepper.show(shown, view.neededText(needed, #listed))
     say("shops needed", chore.id, needed)
 end
 
@@ -317,14 +322,12 @@ local function buildShopRuns(w, wheel)
     local settingsLines = view.shopsSettings(tracker, chores, shops)
     local ys, bottom = listlayout.stack(#settingsLines, title.y + title.height)
     for i, line in ipairs(settingsLines) do
-        local shown ---@type ChoreStepperView
-        shown = stepper.new(
+        stepperViews[#stepperViews + 1] = stepper.new(
             w.content,
             ys[i],
             line.chore.name,
-            line.needed,
-            line.total,
-            function(delta)
+            view.neededText(line.needed, line.total),
+            function(delta, shown)
                 onShopsNeeded(line.chore, delta, shown)
             end,
             wheel
@@ -435,9 +438,9 @@ window.init({
     backToList = function()
         pendingMode = "list"
     end,
-    -- The old window's rows and headings went with it.
+    -- The old window's rows, headings and Shop runs lines went with it.
     clearViews = function()
-        rowViews, headings = {}, {}
+        rowViews, headings, stepperViews = {}, {}, {}
     end,
     build = buildContent,
     -- Close hides the rows, and the client sends no mouse-leave to a hidden layer, so a hovered

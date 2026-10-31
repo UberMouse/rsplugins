@@ -31,8 +31,9 @@ local TEXT_X = ICON_SIZE + 6
 M.GRIP_SIZE = 16
 M.GRIP_Y = (ROW_HEIGHT - M.GRIP_SIZE) // 2
 local GRIP_WIDTH = M.GRIP_SIZE + 4
--- Space kept between the end of a label and the tick box.
-local LABEL_GAP = 6
+-- Space kept between the end of a label and the tick box (or a stepper's minus button).
+M.LABEL_GAP = 6
+local LABEL_GAP = M.LABEL_GAP
 
 -- Text colours (0xRRGGBBAA): PrettyUI 1.2.0's default text colour, and a dimmed one for done
 -- rows. A done row's icon is drawn at half opacity.
@@ -330,6 +331,21 @@ function M.widthFor(texts)
     return TEXT_X + math.ceil(widest) + LABEL_GAP + BOX_SIZE
 end
 
+-- `text` cut with "..." to `avail` pixels in the rows' font (core/fit.lua), and whether it was
+-- cut. A font that can't measure leaves the full text, logged once.
+---@param text string
+---@param avail number
+---@return string shown
+---@return boolean shortened
+function M.fitText(text, avail)
+    local ok, shown, shortened = pcall(fit.fit, text, avail, measure)
+    if not ok then
+        reportMeasure(shown)
+        return text, false
+    end
+    return shown, shortened
+end
+
 -- Show the row's text cut to the label's width, leaving the tooltip to the caller. Does
 -- nothing when that width hasn't changed since the text was last fitted, so it is cheap to
 -- call for every row. Until the row has a width the full text shows, and the next call tries
@@ -342,11 +358,7 @@ local function fitLabel(row)
     if row.layer.width <= 0 then return end
     local avail = row.layer.width - row.textX - BOX_SIZE - LABEL_GAP
     if avail == row.availWidth then return end
-    local ok, shown, shortened = pcall(fit.fit, text, avail, measure)
-    if not ok then
-        reportMeasure(shown)
-        shown, shortened = text, false
-    end
+    local shown, shortened = M.fitText(text, avail)
     row.availWidth = avail
     row.label.content = shown
     row.shortened = shortened

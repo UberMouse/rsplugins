@@ -1,16 +1,12 @@
--- A settings line that sets a number: a name at the left, and "[-] N of M [+]" at the right
--- edge, hand-built from plain components inside the window's content (the Shop runs block:
--- how many of a chore's shops tick it). PrettyUI 1.2.0's SpriteButton has a PLUS sprite but
--- no minus (its sprite names, as the test harness's PrettyUI copies them in
--- tests/harness/api/prettyui/internal.lua), so both buttons are built here as a matched pair,
--- like the rows of shell/rows.lua: a layer that takes the click and shows the rows' hand
--- cursor, holding a sprite that lets it through. The texts sit straight in the content rather
--- than in a layer of their own, so the line is never taken for a chore row. The value changes
--- in place; the line goes when its window is destroyed.
+-- A settings line that sets a number: a name at the left, cut with "..." to stop short of the
+-- buttons, and "[-] N of M [+]" at the right edge (the Shop runs block: how many of a chore's
+-- shops tick it). PrettyUI 1.2.0's SpriteButton has a PLUS sprite but no minus
+-- (tests/harness/api/prettyui/internal.lua), so both buttons are hand-built as a matched pair.
+-- The texts sit straight in the content, not in a layer, so the line is never taken for a
+-- chore row.
 
 local listlayout = require("core/listlayout")
 local rows = require("shell/rows")
-local view = require("core/view")
 
 local M = {}
 
@@ -21,15 +17,20 @@ local ROW_HEIGHT = listlayout.ROW_HEIGHT
 local BUTTON_SIZE = 20
 local VALUE_WIDTH = 64
 local STEPPER_WIDTH = BUTTON_SIZE + VALUE_WIDTH + BUTTON_SIZE
+-- The content width that is not the name's: both side paddings, the stepper and a gap.
+local NAME_INSET = PADDING * 2 + STEPPER_WIDTH + rows.LABEL_GAP
 
--- The buttons' sprites: the client's own RS3 minus and plus pair, picked by name from the
--- sprite list (docs/api/consts/Sprite.lua); how they draw is not yet seen in the client.
+-- The client's own RS3 minus and plus pair, picked from the sprite list
+-- (docs/api/consts/Sprite.lua); seen drawing in the client (docs/api-concepts.md).
 local MINUS_SPRITE = id.Sprite.RS3_CONTEXTUAL_INPUT_MINUS
 local PLUS_SPRITE = id.Sprite.RS3_CONTEXTUAL_INPUT_PLUS
 
 ---@class ChoreStepperView
+---@field content ui.Layer
+---@field label ui.Text
+---@field name string the full name, which the label shows cut to fit
+---@field nameWidth number? the width the name was last fitted to
 ---@field value ui.Text
----@field total integer
 
 -- A button at `x` from the content's right edge (negative: leftwards) on the line at `y`,
 -- showing `sprite`, that runs `onClick` on a press. ONCLICK, as for the rows: a quick click
@@ -57,46 +58,60 @@ local function newButton(content, x, y, sprite, onClick, wheel)
     icon.spriteID = sprite
 end
 
+-- Show the name cut to the room left of the minus button, which ui.Text can't clip. Does
+-- nothing when that room hasn't changed since the last fit, so it is cheap to call on each
+-- poll; until the content has a width the full name shows.
+---@param stepper ChoreStepperView
+function M.fit(stepper)
+    local width = stepper.content.width
+    if width <= 0 then return end
+    local avail = width - NAME_INSET
+    if avail == stepper.nameWidth then return end
+    stepper.nameWidth = avail
+    stepper.label.content = (rows.fitText(stepper.name, avail))
+end
+
 -- Make a line at content height `y` under `content`: `name`, then the stepper showing
--- `needed` of `total`. `onStep` gets -1 or +1 on a click of the minus or plus button; the
--- caller decides what that changes and calls M.show with the result. `wheel`, when given,
+-- `valueText`. `onStep` gets -1 or +1 on a click of the minus or plus button, and this line;
+-- the caller decides what that changes and calls M.show with the result. `wheel`, when given,
 -- takes the mouse wheel over the buttons; the texts let it through to the window.
 ---@param content ui.Layer
 ---@param y integer
 ---@param name string
----@param needed integer
----@param total integer
----@param onStep fun(delta: integer)
+---@param valueText string
+---@param onStep fun(delta: integer, stepper: ChoreStepperView)
 ---@param wheel ChoreWheelHandler?
 ---@return ChoreStepperView
-function M.new(content, y, name, needed, total, onStep, wheel)
+function M.new(content, y, name, valueText, onStep, wheel)
     local label = rows.newText(content)
     label:SetPos(PADDING, y)
-    label:SetSize(-(PADDING * 2 + STEPPER_WIDTH), ROW_HEIGHT, 1.0, 0)
+    label:SetSize(-NAME_INSET, ROW_HEIGHT, 1.0, 0)
     label.content = name
 
     local right = -(PADDING + STEPPER_WIDTH)
-    newButton(content, right, y, MINUS_SPRITE, function()
-        onStep(-1)
-    end, wheel)
     local value = rows.newText(content)
     value:AlignTo(ui.AlignMode.CENTRE, ui.AlignMode.CENTRE)
     value:SetPos(right + BUTTON_SIZE, y, 1.0, 0)
     value:SetSize(VALUE_WIDTH, ROW_HEIGHT)
-    newButton(content, -(PADDING + BUTTON_SIZE), y, PLUS_SPRITE, function()
-        onStep(1)
-    end, wheel)
 
-    local stepper = { value = value, total = total } ---@type ChoreStepperView
-    M.show(stepper, needed)
+    ---@type ChoreStepperView
+    local stepper = { content = content, label = label, name = name, value = value }
+    newButton(content, right, y, MINUS_SPRITE, function()
+        onStep(-1, stepper)
+    end, wheel)
+    newButton(content, -(PADDING + BUTTON_SIZE), y, PLUS_SPRITE, function()
+        onStep(1, stepper)
+    end, wheel)
+    M.show(stepper, valueText)
+    M.fit(stepper)
     return stepper
 end
 
--- Show `needed` as the stepper's value.
+-- Show `valueText` as the stepper's value.
 ---@param stepper ChoreStepperView
----@param needed integer
-function M.show(stepper, needed)
-    stepper.value.content = view.neededText(needed, stepper.total)
+---@param valueText string
+function M.show(stepper, valueText)
+    stepper.value.content = valueText
 end
 
 return M

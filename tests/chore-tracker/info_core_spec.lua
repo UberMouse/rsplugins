@@ -6,13 +6,14 @@ local info = require("core/info")
 local chores = require("data/chores")
 local shops = require("data/shops")
 local collections = require("data/collections")
+local machines = require("data/machines")
 local varRules = require("data/vars")
 
 -- A chore's status from the real data files.
 ---@param id string
 ---@return string
 local function statusOf(id)
-    return info.status(id, shops, collections, varRules)
+    return info.status(id, shops, collections, varRules, machines)
 end
 
 describe("chore-tracker info status", function()
@@ -26,7 +27,7 @@ describe("chore-tracker info status", function()
         assert.are.equal("automatic", statusOf("rune-shop-run"))
         assert.are.equal("automatic", statusOf("vial-of-water-packs"))
         local mixed = { x = { { proven = false }, { proven = true } } }
-        assert.are.equal("automatic", info.status("x", mixed, {}, {}))
+        assert.are.equal("automatic", info.status("x", mixed, {}, {}, {}))
     end)
 
     it("calls a chore whose sources are all unproven unproven", function()
@@ -36,26 +37,26 @@ describe("chore-tracker info status", function()
     end)
 
     it("calls a chore with no sources manual", function()
-        assert.are.equal("manual", statusOf("arc-contracts"))
-        assert.are.equal("manual", info.status("x", {}, {}, {}))
+        assert.are.equal("manual", statusOf("nemi-forest"))
+        assert.are.equal("manual", info.status("x", {}, {}, {}, {}))
     end)
 
     it("follows the proven flags, so proving a source moves its chore", function()
         local rules = { { chore = "x", done = {}, proven = false } }
-        assert.are.equal("unproven", info.status("x", {}, {}, rules))
+        assert.are.equal("unproven", info.status("x", {}, {}, rules, {}))
         rules[1].proven = true
-        assert.are.equal("automatic", info.status("x", {}, {}, rules))
+        assert.are.equal("automatic", info.status("x", {}, {}, rules, {}))
     end)
 end)
 
 describe("chore-tracker info groups", function()
     it("puts every chore in one group, in status order and chore-list order", function()
-        local groups = info.byStatus(chores, shops, collections, varRules)
+        local groups = info.byStatus(chores, shops, collections, varRules, machines)
         assert.are.same(
             { "automatic", "unproven", "manual" },
             { groups[1].status, groups[2].status, groups[3].status }
         )
-        assert.are.same({ 17, 21, 30 }, { #groups[1].chores, #groups[2].chores, #groups[3].chores })
+        assert.are.same({ 35, 23, 10 }, { #groups[1].chores, #groups[2].chores, #groups[3].chores })
         local place = {}
         for i, chore in ipairs(chores) do
             place[chore] = i
@@ -72,7 +73,7 @@ describe("chore-tracker info groups", function()
     end)
 
     it("keeps an empty status's group, and heads each with its count", function()
-        local groups = info.byStatus({ chores[1] }, {}, {}, {})
+        local groups = info.byStatus({ chores[1] }, {}, {}, {}, {})
         assert.are.same({ "Automatic (0)", "Unproven (0)", "Manual (1)" }, {
             info.headingText(groups[1]),
             info.headingText(groups[2]),

@@ -5,6 +5,7 @@ local helpers = require("tests.chore-tracker.helpers")
 local chores = require("data/chores")
 local shops = require("data/shops")
 local collections = require("data/collections")
+local machines = require("data/machines")
 local varRules = require("data/vars")
 local fonts = require("tests.harness.api.fonts")
 local fit = require("core/fit")
@@ -36,7 +37,7 @@ end
 ---@return table
 local function infoRow(h, id)
     local list, n = helpers.rows(h), 0
-    for _, group in ipairs(info.byStatus(chores, shops, collections, varRules)) do
+    for _, group in ipairs(info.byStatus(chores, shops, collections, varRules, machines)) do
         for _, chore in ipairs(group.chores) do
             n = n + 1
             if chore.id == id then return assert(list[n], "no info row " .. id) end
@@ -92,7 +93,7 @@ describe("chore-tracker info view", function()
         h.ui:get("Text", { text = "Drag a row by its grip" })
         local titles = h.ui:find("Title")
         assert.are.same(
-            { "Automatic (17)", "Unproven (21)", "Manual (30)" },
+            { "Automatic (35)", "Unproven (23)", "Manual (10)" },
             { titles[1].content, titles[2].content, titles[3].content }
         )
         local last = texts[#texts]

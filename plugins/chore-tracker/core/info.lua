@@ -24,14 +24,15 @@ M.STATUSES = { "automatic", "unproven", "manual" } ---@type ChoreStatus[]
 M.STATUS_TITLES = { automatic = "Automatic", unproven = "Unproven", manual = "Manual" }
 
 -- Whether chore `id` ticks itself: "automatic" when any source the plugin watches for it (a
--- shop, a collection or a var rule) has `proven` set, "unproven" when it has sources but none
--- is proven, "manual" when it has none.
+-- shop, a collection, a machine or a var rule) has `proven` set, "unproven" when it has
+-- sources but none is proven, "manual" when it has none.
 ---@param id string
 ---@param shops table<string, ChoreShop[]> chore id -> its listed shops
 ---@param collections ChoreCollection[]
 ---@param rules ChoreVarRule[]
+---@param machines ChoreMachine[]
 ---@return ChoreStatus
-function M.status(id, shops, collections, rules)
+function M.status(id, shops, collections, rules, machines)
     local sources = {} ---@type { proven: boolean }[]
     for _, shop in ipairs(shops[id] or {}) do
         sources[#sources + 1] = shop
@@ -41,6 +42,9 @@ function M.status(id, shops, collections, rules)
     end
     for _, rule in ipairs(rules) do
         if rule.chore == id then sources[#sources + 1] = rule end
+    end
+    for _, machine in ipairs(machines) do
+        if machine.chore == id then sources[#sources + 1] = machine end
     end
     if #sources == 0 then return "manual" end
     for _, source in ipairs(sources) do
@@ -59,15 +63,16 @@ end
 ---@param shops table<string, ChoreShop[]>
 ---@param collections ChoreCollection[]
 ---@param rules ChoreVarRule[]
+---@param machines ChoreMachine[]
 ---@return ChoreStatusGroup[]
-function M.byStatus(chores, shops, collections, rules)
+function M.byStatus(chores, shops, collections, rules, machines)
     local groups, byStatus = {}, {} ---@type ChoreStatusGroup[], table<ChoreStatus, Chore[]>
     for i, s in ipairs(M.STATUSES) do
         groups[i] = { status = s, chores = {} }
         byStatus[s] = groups[i].chores
     end
     for _, chore in ipairs(chores) do
-        local into = byStatus[M.status(chore.id, shops, collections, rules)]
+        local into = byStatus[M.status(chore.id, shops, collections, rules, machines)]
         into[#into + 1] = chore
     end
     return groups

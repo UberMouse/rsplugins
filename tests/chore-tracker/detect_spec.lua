@@ -58,6 +58,10 @@ describe("chore-tracker detect", function()
                     proven = true,
                 },
             },
+            machines = {
+                { chore = "d1", invs = { "GONE_OUTPUT" }, proven = true },
+                { chore = "wshop", invs = { "GONE_OUTPUT" }, proven = true },
+            },
             say = function(...)
                 said[#said + 1] = table.concat({ ... }, " ")
             end,
@@ -69,8 +73,10 @@ describe("chore-tracker detect", function()
         detect.scan()
         detect.onInventoryUpdated({ inv = { configName = "GONE_SHOP" } })
         detect.onInventoryRemoved({ inv = { configName = "GONE_SHOP" } })
+        detect.onInventoryUpdated({ inv = { configName = "GONE_OUTPUT" } })
         assert.are.same({
             "unknown inventory GONE_SHOP; not watched",
+            "unknown inventory GONE_OUTPUT; not watched",
             "unknown obj CERT_GONE; not watched",
         }, said)
         table.sort(found)
@@ -87,6 +93,7 @@ describe("chore-tracker detect", function()
                 chores = support.chores(),
                 shops = { nochore = { { name = "S", invs = { "KNOWN_SHOP" }, proven = true } } },
                 collections = {},
+                machines = {},
                 say = say,
                 apply = apply,
             })
@@ -105,6 +112,7 @@ describe("chore-tracker detect", function()
                         proven = true,
                     },
                 },
+                machines = {},
                 say = say,
                 apply = apply,
             })
@@ -145,6 +153,7 @@ describe("chore-tracker detect", function()
                     proven = true,
                 },
             },
+            machines = {},
             say = function() end,
             apply = function()
                 applied = applied + 1
@@ -208,6 +217,7 @@ describe("chore-tracker var detect", function()
                 },
                 { chore = "w1", done = { { "GONE", ">", 0 } }, proven = true },
             },
+            machines = {},
             say = function(...)
                 said[#said + 1] = table.concat({ ... }, " ")
             end,
@@ -244,6 +254,7 @@ describe("chore-tracker var detect", function()
             vars.init({
                 chores = support.chores(),
                 rules = { { chore = "nochore", done = { { "FLAG", "==", 1 } }, proven = true } },
+                machines = {},
                 say = function() end,
                 apply = function() end,
             })

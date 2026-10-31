@@ -7,8 +7,9 @@
 -- period's reset (UTC: daily at 00:00, weekly on Wednesday 00:00, monthly on the 1st). Some
 -- chores also tick themselves, picked or not. A shop run ticks once you have bought from as
 -- many of its shops as it needs this period (all of them, or fewer set in the Shop runs
--- block); a collection when its notes rise in your backpack near the giver (shell/detect.lua);
--- others when one of your own game vars changes to show them done (shell/vars.lua). A chore
+-- block); a collection when its notes rise in your backpack near the giver, Invention
+-- machines when you collect from one (shell/detect.lua); others when one of your own game vars
+-- changes to show them done (shell/vars.lua). A chore
 -- already done at login or while the plugin was off is left to tick by hand. When the plugin
 -- ticks a picked chore, or a period's picked chores are all done, a popup celebrates it
 -- (shell/popups.lua); settings turn the popups or their sound off. Picks, their order, ticks
@@ -20,7 +21,8 @@
 -- under Automatic, Unproven or Manual, by whether it ticks itself (core/info.lua).
 --
 -- It reads only what the game already gives your client: the game clock, your own display
--- name and position, your backpack, an open shop's stock and your own game vars. It asks for
+-- name and position, your backpack, an open shop's stock, your Invention machines' output and
+-- your own game vars. It asks for
 -- no permissions, sends nothing to the game or anywhere else, and reads nothing about other
 -- players.
 --
@@ -45,6 +47,7 @@ if remote then remote.install(_ENV, tee) end
 
 local chores = require("data/chores")
 local collections = require("data/collections")
+local machines = require("data/machines")
 local icons = require("data/icons")
 local shops = require("data/shops")
 local varRules = require("data/vars")
@@ -445,7 +448,7 @@ local function buildInfo(w)
         local text = w:AddText(rows.wrapText(paragraph, textWidth))
         top = text.y + text.height
     end
-    local groups = info.byStatus(chores, shops, collections, varRules)
+    local groups = info.byStatus(chores, shops, collections, varRules, machines)
     local sections = {} ---@type ChoreSectionIds[]
     for i, group in ipairs(groups) do
         sections[i] = sectionIds(group.status, group.chores)
@@ -588,6 +591,7 @@ detect.init({
     chores = chores,
     shops = shops,
     collections = collections,
+    machines = machines,
     say = say,
     apply = apply,
 })

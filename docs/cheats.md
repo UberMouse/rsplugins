@@ -17,7 +17,7 @@ config names (`config.Obj.LOGS`, `config.Inv.BANK`). Find them with `pan Obj`, `
 | `!tele <coord>` | Full `0,50,50,9,56` or `0_50_50_9_56`, or map-square shorthand `0,50,50` (centre of square) |
 | `!tele <named>` | Named destination, e.g. `grandexchange` (`0,49,54,29,40`) |
 | `!getcoord` | Print your coordinate. In an instance it also prints the region source coordinate |
-| `!coordsave` / `!coordtele` | Save your current coordinate / teleport back to it |
+| `!coordsave` / `!coordtele` | Listed by the developer site, but missing from beta client 951-1: "Could not find debugproc coord_save" (2026-10-31). Note the tile yourself before a `!tele` (`!getcoord`, or `Player.GetEntity().coordGrid` in a bridge eval) |
 | Ctrl+Shift+click | Teleport to the clicked point (world, minimap, world map) |
 
 ## Items and inventories
@@ -51,7 +51,7 @@ To reach a level with level-up effects, set it to one below, then add one.
 
 | Command | Notes |
 |---|---|
-| `!getvar <name>` / `!setvar <name> <value>` | VarPlayer (or a VarBit on one). Values are int, long or string |
+| `!getvar <name>` / `!setvar <name> <value>` | VarPlayer (or a VarBit on one). Values are int, long or string. Two `!setvar`s of one var sent back to back can land in one server tick, so the client gets only the last value: wait about 3 s before setting it back (2026-10-31). A var the game doesn't transmit changes on the server only (`!getvar` shows it; the client still reads the old value) |
 | `!getvarc <name>` / `!setvarc <name> <value>` | VarClient |
 
 ## Account state

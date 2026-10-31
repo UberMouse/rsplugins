@@ -109,6 +109,10 @@ ticked until its reset, and unticking one by hand changes nothing below.
   pineapple notes, or the Weird Old Man's potato cactus notes (outside the Kalphite Lair;
   *unproven*, as nobody has checked his yet). Any rise counts, wherever the notes came from:
   taking some out of the bank, a trade or picking them up near the giver ticks the chore too.
+- **Collecting from your Invention machines** (daily and weekly, *unproven*). Each Invention
+  Guild machine keeps what it made in a store the game sends your client wherever you are, and
+  only collecting takes from it, so the chore ticks when any machine's store goes down. Filling
+  a machine doesn't count.
 - **Seen from game vars.** The game keeps a record of your character's progress in numbered
   values called vars, and sends your client yours as they change. A chore below ticks when
   one of these changes so that it shows the chore done:
@@ -138,13 +142,31 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Broken Home Replay (*unproven*) | the game marks the week's Broken Home replay completed |
   | Soul Supplies from Lupe (*unproven*) | the game marks Lupe's supplies claimed |
   | Effigy Incubator (*unproven*) | the game marks the month's Effigy Incubator completed |
+  | Archaeology Research | you send out a research team |
+  | Miscellania (daily and weekly) | you collect the kingdom's resources |
+  | Bakriminel Bolts | you fell one of your bloodwood trees |
+  | Player-Owned Farm | you put food in one of the farm's troughs |
+  | Herb Run | you plant one of your herb patches: the first patch planted ticks the day's run |
+  | God Statues | the game's count of months since you built the statues falls to 0 |
+  | Troll Invasion | the game marks the month's Troll Invasion limit reached |
+  | Menaphos Obelisk and Scarabs | you have squashed 23 corrupted scarabs today (the last at full reputation) and drained the soul obelisk at all |
+  | Goebie Supply Run | you have handed in today's 10 supplies |
+  | GWD2 Bounties | Feng gives you a bounty |
+  | Clan Citadel Cap | the game marks the quartermaster's weekly XP boost claimed |
+  | Rush of Blood | you clear a wave in the week's reward run |
+  | Meg's Questions | Meg leaves on her mission after your third answer |
+  | Water Filtration | the game records a new clean-out time |
+  | Arc Supplies from Rosie | the game marks Rosie's free supplies taken |
+  | Giant Oyster | the oyster has been fed both its sea cucumber and its seaweed |
+  | Arc Contracts | you complete the day's last contract: 3, plus one for each "contracts per day" upgrade bought |
   | Dream of Iaia Resources (daily and weekly) | every base-camp resource you have workers on has been used down to 0, and one of them just fell (sending the workers elsewhere doesn't tick it) |
   | Dream of Iaia XP (weekly and monthly) | every skilling station you have workers for holds 0 stored XP, and one just fell (sending the workers elsewhere doesn't tick it) |
 
   How often the two Dream of Iaia chores are due depends on how you split your workers, so
   each is offered in two periods: pick the one that fits.
 
-  *Unproven* ones haven't been checked in game yet. The four free collections keep the
+  *Unproven* ones haven't been checked in game yet. The rest were checked either by doing
+  the chore or by setting the var with a developer cheat and seeing the chore tick. The four free collections keep the
   weekly reset the list gives them, although the game lets you claim each daily.
 
   **Only a change the plugin sees ticks a chore.** For 10 seconds after you log in or the
@@ -168,7 +190,8 @@ list of shop inventories but no purchase there has been checked yet; they count 
 | Seaweed and Pineapples from Arhein | Arhein (Catherby) |
 
 Not watched yet, so tick it by hand: Bandit Duty Free (no match for Noterazzo's shop was found
-in the game's list).
+in the game's list). Nor is Fort Forinthry Bonus XP: the game doesn't send your client the
+record of bonus XP taken from the Town Hall, and the bonus XP itself could come from anywhere.
 
 ## When chores reset
 
@@ -200,7 +223,7 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 - **No permissions.** The submitted plugin requests none; the development checkout's manifest
   asks for `httpAccess` only for the dev log tee, which is stripped before submitting. The plugin
   reads the game clock, your own character's display name and position, your backpack, the stock
-  of an open shop it watches, and your own character's game vars for the chores in the "Seen from
+  of an open shop it watches, your Invention machines' output, and your own character's game vars for the chores in the "Seen from
   game vars" table. Plugins can read all of these without one.
 
 ## Credits
@@ -224,7 +247,9 @@ not), logs
 `[CHORES] purchase <chore id> at <shop>` (such as
 `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`), and a collection that ticks its
 chore logs `[CHORES] collected <chore id> near <giver>` (such as
-`[CHORES] collected oldman-potato-cactus near the Weird Old Man`), and a chore ticked from
+`[CHORES] collected oldman-potato-cactus near the Weird Old Man`), a collect from an
+Invention machine that ticks its chore logs `[CHORES] collected <chore id> from <inventory>`
+(such as `[CHORES] collected invention-machine from INVENT_MACHINE_GUILD_3_OUTPUT`), and a chore ticked from
 the game's vars logs `[CHORES] seen <chore id> done (<var>)`, naming the var whose change
 ticked it (such as `[CHORES] seen bert-sand done (HANDSAND_BUCKETS_CLAIMED_TODAY)`). A watched
 var the game no longer has is logged once at start as `[CHORES] unknown var <name>; not
@@ -273,7 +298,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `main.lua` | The three views, list, settings and info, ticking and picking, and following the login and clock |
 | `shell/window.lua` | The window itself: making it, collapsing it to its strip and opening it again, and saving where it is |
 | `shell/strip.lua` | The collapsed strip's content: the next chore's row, which a click ticks, or a message |
-| `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
+| `shell/detect.lua` | Seeing shop runs, collections and machine collects done, from shop stock, machine output, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
 | `shell/rows.lua` | One chore's row in the list, settings or info view: its icon, text and tick box (and a list row's grip; an info row has no box), changed in place |
@@ -297,6 +322,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `data/shops.lua` | The shops each shop-run chore watches (hand-written) |
 | `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
 | `data/vars.lua` | The chores seen from game vars and each one's rule (hand-written) |
+| `data/machines.lua` | The machine chores and the output inventories collecting empties (hand-written) |
 | `data/icons.lua` | Each chore's icon, a built-in item or interface sprite (hand-written) |
 
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
@@ -318,7 +344,7 @@ Chore Tracker is a checklist for RuneScape's repeatable chores: the daily, weekl
 
 Pick the chores you do with the settings button, then click a chore in the list to tick it off. Ticks clear themselves at the game's resets, in UTC: daily chores at 00:00, weekly ones on Wednesday and monthly ones on the 1st. Drag a chore by its grip to put your list in your own order.
 
-Some chores tick themselves: the shop runs when you buy from their shops, Dell Monti's and the Weird Old Man's when their notes arrive in your backpack, and others, such as the Daily Challenge and Bert's sand, when the game's own record of your progress shows them done. Only a change seen while the plugin runs ticks a chore, so a chore done while it was off needs a tick by hand. The info button in the plugin lists every chore as Automatic, Unproven (should tick itself, not yet checked in game) or Manual.
+Some chores tick themselves: the shop runs when you buy from their shops, Dell Monti's and the Weird Old Man's when their notes arrive in your backpack, the Invention machines when you collect from one, and others, such as the Daily Challenge and Bert's sand, when the game's own record of your progress shows them done. Only a change seen while the plugin runs ticks a chore, so a chore done while it was off needs a tick by hand. The info button in the plugin lists every chore as Automatic, Unproven (should tick itself, not yet checked in game) or Manual.
 
 The menu button at the window's top-right corner folds it into a small strip showing your next chore, which a click ticks. When the plugin ticks a chore, or you finish a period's chores, a short popup celebrates it; settings turn the popups or their sound off.
 
@@ -334,7 +360,7 @@ By submitting a Plugin (as defined in Schedule 4 of the EULA), you acknowledge t
 This plugin requests no permissions.
 
 ## Data Protection
-This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores it ticks from them, such as the Daily Challenge and Bert's sand (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites, and each chore with one of the game's own item icons or sprites.
+This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, what your Invention machines hold, your own character's game vars for the chores it ticks from them, such as the Daily Challenge and Bert's sand (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites, and each chore with one of the game's own item icons or sprites.
 This information is not transmitted outside of the plugin under any circumstances.
 Your picked chores in your order, the ones you ticked, and when you last bought from each watched shop, and how many shops each shop run needs (when you set fewer than all), are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
 ```

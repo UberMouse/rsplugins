@@ -5,8 +5,9 @@
 -- var, that var goes up; for one naming `falls` vars, the rule turns true as one of them
 -- goes down), never on a var's first read.
 --
--- `proven` marks a rule whose vars were checked against the chore in the beta client (recorded
--- in docs/api-concepts.md); an unproven one ticks the same way. The four free collections keep
+-- `proven` marks a rule checked in the beta client: its vars seen moving as the chore was done
+-- (recorded in docs/api-concepts.md), or the rule seen ticking its chore when its vars were set
+-- with the !setvar cheat; the comments say which. An unproven one ticks the same way. The four free collections keep
 -- their weekly period (data/chores.lua), so a claim ticks one until Wednesday's reset,
 -- although the game's flag is daily.
 
@@ -49,7 +50,7 @@ local resourceDone, resourceFalls = iaiaRule("DINO_BASE_CAMP_RESOURCE_", 1)
 local xpDone, xpFalls = iaiaRule("QUEST_EGW_FINALE_REWARD_STATION_XP_", 2)
 
 ---@type ChoreVarRule[]
-return {
+local rules = {
     -- Bit 1 of HANDSAND_BUCKETS: 0 -> 1 on the claim, still 1 after a relog.
     {
         chore = "bert-sand",
@@ -103,6 +104,19 @@ return {
     { chore = "dream-of-iaia-resource", done = resourceDone, falls = resourceFalls, proven = true },
     { chore = "dream-of-iaia-xp-weekly", done = xpDone, falls = xpFalls, proven = true },
     { chore = "dream-of-iaia-xp", done = xpDone, falls = xpFalls, proven = true },
+
+    -- Seen moving as the user did each chore (chore probe, 2026-10-30, docs/api-concepts.md),
+    -- and each ticked its chore in the client when set with !setvar (2026-10-31).
+    -- Bits 0-1 of ARCH_RESEARCH_CONTRACT_1_1: 0 idle, 1 team out, 2 back to claim. Only
+    -- sending a team moves it into 1.
+    {
+        chore = "archaeology-research",
+        done = { { "ARCH_RESEARCH_CONTRACT_1_STATE", "==", 1 } },
+        proven = true,
+    },
+    -- The epoch minute of the last resource collect; it rose to the collect's minute.
+    { chore = "miscellania", done = {}, rises = "MISC_LAST_COLLECTION", proven = true },
+    { chore = "miscellania-weekly", done = {}, rises = "MISC_LAST_COLLECTION", proven = true },
 
     -- The rules below are inferred from each var's name, unproven.
 
@@ -198,4 +212,140 @@ return {
         done = { { "KERAPAC_DND_MONTHLY_COMPLETE", "==", 1 } },
         proven = false,
     },
+    -- The rules below each ticked their chore in the client when their vars were set with
+    -- !setvar (2026-10-31), so each var reaches the client and the rule fires. What each var
+    -- means follows its name and the wiki's account of the activity (runescape.wiki, read
+    -- 2026-10-31); none was seen moving with the chore done in play.
+
+    -- Months since the statues were last built: it read 3 at login, and building should take
+    -- it to 0. Only a fall ticks, so a var that reads 0 because it isn't sent never does.
+    {
+        chore = "god-statues",
+        done = { { "GODSS_MONTHS_SINCE_USED", "==", 0 } },
+        falls = { "GODSS_MONTHS_SINCE_USED" },
+        proven = true,
+    },
+    -- The Troll Invasion limit reached: read 0 at login, the month's waves not yet played.
+    {
+        chore = "troll-invasion",
+        done = { { "DNDTRACKER_TROLL_INVASION_LIMIT", "==", 1 } },
+        proven = true,
+    },
+
+    -- The day's 23rd corrupted scarab, the last at full reputation, once the soul obelisk has
+    -- been drained at all today. The obelisk's own cap (236 interactions) is in units the var
+    -- doesn't show, so only a start counts.
+    {
+        chore = "menaphos-obelisk",
+        done = {
+            { "MENAPHOS_SCARABS_SQUISHED_TODAY", ">=", 23 },
+            { "MENAPHOS_SOUL_OBELISK_DRAINED_AMOUNT", ">", 0 },
+        },
+        proven = true,
+    },
+    -- The day's 10 supplies handed in to Quercy, the most that give XP.
+    {
+        chore = "goebie-bands",
+        done = { { "RAID1_GOEBIE_COURIER_LOOT_HANDED_IN_TODAY", ">=", 10 } },
+        proven = true,
+    },
+    -- The day assigned a bounty last: taking one from Feng raises it.
+    { chore = "gwd2-bounties", done = {}, rises = "GWD2_REP_TASK_LAST_DAY_GIVEN", proven = true },
+    -- The quartermaster's weekly XP boost claimed: that needs the week's resources gathered.
+    {
+        chore = "capping-clan-citadel",
+        done = { { "CLAN_CLAIMED_XP_REWARD", "==", 1 } },
+        proven = true,
+    },
+    -- Waves cleared in the week's reward run; a reset takes it down, never up.
+    {
+        chore = "rush-of-blood",
+        done = {},
+        rises = "ELFCITY_SLAYER_WEEKLY_CHALLENGE_WAVES_COMPLETED",
+        proven = true,
+    },
+    -- Meg leaves on her mission after the week's third answer: it read 0 with her at home, and
+    -- her return takes it back down, so only her leaving can tick.
+    { chore = "meg", done = { { "POP_MEG_ONMISSION", ">", 0 } }, proven = true },
+    -- Taken as the time of the last clean-out. It read 0 in the client and on the server (never
+    -- cleaned out), and a !setvar reached the client away from the oasis, so it is sent
+    -- anywhere and arriving there can't tick it.
+    {
+        chore = "water-filtration",
+        done = {},
+        rises = "DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME",
+        proven = true,
+    },
+    -- Bit 16 of ELR1_BASEVAR2: Rosie's free supplies taken. Daily in the game, weekly here, as
+    -- for the freebies above.
+    { chore = "arc-supplies", done = { { "ELR1_DAILY_SUPPLIES_TAKEN", "==", 1 } }, proven = true },
+    -- The oyster fed both its sea cucumber and its seaweed, which closes it for the month.
+    {
+        chore = "giant-oyster",
+        done = {
+            { "TUTISLAND_REWARD_OYSTER_FED_SEACUCMBER", "==", 1 },
+            { "TUTISLAND_REWARD_OYSTER_FED_SEAWEED", "==", 1 },
+        },
+        proven = true,
+    },
 }
+
+-- Arc contracts: PGC_TALLY counts the day's completed contracts, and the limit is 3 plus the
+-- Waiko shop's "contracts per day" upgrades bought (PGC_PER_DAY_INCREASE, 0 to 4; it read 4).
+for bought = 0, 4 do
+    rules[#rules + 1] = {
+        chore = "arc-contracts",
+        done = { { "PGC_PER_DAY_INCREASE", "==", bought }, { "PGC_TALLY", ">=", 3 + bought } },
+        proven = true,
+    }
+end
+
+-- Chores with one var per tree, trough or patch: a rule each, any of which ticks the chore.
+-- Seen moving in the chore probe of 2026-10-30. One var of each (tree 8, trough 1, patch 1)
+-- ticked its chore in the client when set with !setvar (2026-10-31); the rest share its
+-- layout.
+
+-- A bloodwood tree reads 1 standing and 2 felled; felling tree 8 took it 1 -> 2.
+for n = 1, 8 do
+    rules[#rules + 1] = {
+        chore = "bloodwood-tree",
+        done = { { "SNIPER_BLOODTREE_" .. n, "==", 2 } },
+        proven = true,
+    }
+end
+
+-- Food in each Player-Owned Farm trough (of 1000); feeding took trough 1 0 -> 3. Only
+-- feeding raises it, while the animals eat it down.
+for _, trough in ipairs({ "1", "2", "3", "4", "5", "6", "BREEDING" }) do
+    rules[#rules + 1] = {
+        chore = "player-owned-farm",
+        done = {},
+        rises = "POF_FEEDING_TROUGH_" .. trough .. "_GENERAL_AMOUNT",
+        proven = true,
+    }
+end
+
+-- Seeds in each herb patch: clearing one took it 7 -> 0, planting 0 -> 7. Which number is
+-- which patch is unknown, so the first patch planted in the day ticks the run.
+for _, patch in ipairs({
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "9",
+    "DRUID",
+    "MYARM",
+    "WILDY",
+    "ECOSYSTEM_1",
+    "ECOSYSTEM_2",
+}) do
+    rules[#rules + 1] = {
+        chore = "herb-run",
+        done = {},
+        rises = "FARMING_SEEDS_PLANTED_HERB_PATCH_" .. patch,
+        proven = true,
+    }
+end
+
+return rules

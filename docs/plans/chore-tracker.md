@@ -21,8 +21,9 @@ that dumps what a plugin sees to a local server (`lib/dev/`).
 | B | The plugin with manual ticking: chore data, resets, selection, per-character state, the window | `5581386..c0c94b0` |
 | C | Shop runs tick on a purchase; Dell Monti and the Weird Old Man tick on notes gained nearby | `22f67e4..6125dd2` |
 | C2 | Chores tick from the player's own game vars: 7 proven or user-accepted, 16 unproven | `6125dd2..69d3f6f` |
+| D | The 30 manual chores audited: 18 var rules checked in the client, Invention machine collects (unproven), 10 confirmed manual (see below) | 2026-10-31 |
 
-34 of the 66 chores tick themselves. The plugin README's "Chores it ticks for you" is the list,
+58 of the 68 chores tick themselves (35 checked in game, 23 unproven). The plugin README's "Chores it ticks for you" is the list,
 and `data/shops.lua`, `data/collections.lua` and `data/vars.lua` are the source.
 
 ## Decisions that bind later work
@@ -145,12 +146,83 @@ Staged order, with a check-in in the beta client after each:
      cap" is not built.
 5. **More auto-detection**, from the table below, batched to the chores the user actually does.
 
-## Chores still ticked by hand (30)
+## The manual chores, audited (2026-10-31)
 
-Each is grouped by the most promising route. "Candidates" are var names from `docs/vars/vars.csv`
-or API signals. "Probe" is what a probe in the beta client must show before building. Notes are
-from 2026-10-25 research, updated by the 2026-10-30 probe below. The user's call for that probe:
-cover every chore that can be covered, not only the ones they do.
+The user's call: every chore that was ticked by hand is suspect. Each must get a detector,
+unproven until checked, or be confirmed manual with the reason, and a detector that rsdev can
+validate in the client (`!setvar`, `!getvar`, `!tele`) is automatic. Of the 30: 18 got var
+rules, all ticking in the client (automatic); the 2 Invention machine chores got an output
+detector (`data/machines.lua`, unproven); 10 stay manual. Status counts now: 35 automatic,
+23 unproven, 10 manual.
+
+**How each rule was validated** (session `a3abc00dce`): `!getvar` read each var's value, then
+`!setvar` moved it to a done value, the console showed `[CHORES] seen <id> done (<var>)`, and
+a second `!setvar` put the old value back. The two `!setvar`s need about 3 s between them: sent
+back to back they land in one server tick and the client only gets the unchanged final value
+(Miscellania and the trough first showed nothing). A chore already done this period logs
+nothing, so Herb Run was unticked first. This proves the wiring (the name resolves, the var
+reaches the client, the rule fires), not what the var means. The user set this as the bar for
+automatic. Which rules also had their meaning seen in play is below. A chore ticked by a check
+stays done in the tracker until its reset: God Statues and Giant Oyster were picked and were
+unticked by hand; the others, unpicked, stay marked (dailies and monthlies clear at 00:00 UTC
+on 2026-11-01, the weekly ones on Wednesday 2026-11-04).
+
+### Automatic: signal seen in the chore probe (2026-10-30), wiring checked
+
+| Chore | Rule | Var set |
+|---|---|---|
+| Archaeology Research | `ARCH_RESEARCH_CONTRACT_1_STATE == 1` (only sending a team moves it into 1) | 0 -> 1 |
+| Miscellania (daily, weekly) | `MISC_LAST_COLLECTION` rises | +1 |
+| Bakriminel Bolts | any `SNIPER_BLOODTREE_<1..8> == 2` (felled), a rule per tree | tree 8, 1 -> 2 |
+| Player-Owned Farm | any `POF_FEEDING_TROUGH_<1..6, BREEDING>_GENERAL_AMOUNT` rises (feeding). The collector farmhand (`POF_COLLECTOR_ANIMALS_STORED_SLOT_<n>` falling) isn't used: a plain `falls` needs a rule-language change | trough 1, 3 -> 4 |
+| Herb Run | any `FARMING_SEEDS_PLANTED_HERB_PATCH_<n>` rises (planting): the first patch planted ticks the day. A per-patch count like the shop runs is the bigger option | patch 1, 1 -> 2 |
+
+### Automatic: wiring checked, meaning from the var name and the wiki
+
+The wiki facts are from runescape.wiki, read 2026-10-31; values read on the main account that
+day in brackets.
+
+| Chore | Rule | Doubt |
+|---|---|---|
+| God Statues | `GODSS_MONTHS_SINCE_USED` falls to 0 [3] | none big; never `GODSS_PLAYER` |
+| Troll Invasion | `DNDTRACKER_TROLL_INVASION_LIMIT == 1` [0] | |
+| Arc Contracts | `PGC_TALLY >= 3 + PGC_PER_DAY_INCREASE`, a rule per upgrade count [0, 4] | TALLY taken as the day's completions (wiki: 3 a day, +1 per Waiko upgrade, up to 7) |
+| Menaphos Obelisk and Scarabs | `MENAPHOS_SCARABS_SQUISHED_TODAY >= 23` and `MENAPHOS_SOUL_OBELISK_DRAINED_AMOUNT > 0` [0, 0] | the obelisk's daily cap is 236 interactions, in units the 21-bit var doesn't show |
+| Goebie Supply Run | `RAID1_GOEBIE_COURIER_LOOT_HANDED_IN_TODAY >= 10` [0] | |
+| GWD2 Bounties | `GWD2_REP_TASK_LAST_DAY_GIVEN` rises (Feng gives a bounty) [233] | ticks on taking a bounty, not finishing one |
+| Clan Citadel Cap | `CLAN_CLAIMED_XP_REWARD == 1` [0] | the boost, not the resource cap: the cap is on all resources together, and the rule language has no sum |
+| Rush of Blood | `ELFCITY_SLAYER_WEEKLY_CHALLENGE_WAVES_COMPLETED` rises [0] | whether practice runs move it; `ELFCITY_SLAYER_WEEKLY_RESET`'s direction is unknown, so not used |
+| Meg's Questions | `POP_MEG_ONMISSION > 0` [0, with her home] | ticks on her leaving; any non-zero away value works, and her return can't tick |
+| Water Filtration | `DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME` rises [0 in client and on the server] | whether it is the clean-out time; it is sent away from the oasis |
+| Arc Supplies from Rosie | `ELR1_DAILY_SUPPLIES_TAKEN == 1` [0] | `ELR2_FREE_SUPPLIES` (4 bits) unused |
+| Giant Oyster | `TUTISLAND_REWARD_OYSTER_FED_SEACUCMBER == 1` and `_SEAWEED == 1` [0, 0; `TUTISLAND_REWARD_STATE` 1] | ticks on feeding, the month's last step; looting last month's chest isn't seen |
+
+### Unproven: Invention Machines (daily, weekly)
+
+Any `INVENT_MACHINE_GUILD_<1..6>_OUTPUT` total falling (`core/detect.lua` `fell`) ticks both:
+a collect. The 2026-10-30 probe saw a collect empty an output (7500 eternal planks). Filling
+isn't counted. The inventory names resolved in the client (no `unknown inventory` at load).
+Not checkable by cheat: `!give` only fills an inventory. To prove it, collect from a machine
+with the plugin running.
+
+### Confirmed manual (10)
+
+| Chore | Why | What would move it |
+|---|---|---|
+| Nemi Forest | the map comes from outside the game; no var in the catalog | nothing in reach |
+| Book of Char | no var found (wiki: unleash and teleport once a day each) | a change log while unleashing |
+| Rapid Growth | the cast moved only the patch's region-relative stage var (2026-10-30); `POF_RAPIDGROWTH_*` are the farm's patches | a chat line at the cap (`chatAccess`) |
+| Player-Owned Port | the Black Marketeer's `POP_MARKET_QUANTITY` is borderline (`POP_MARKET_RESOURCE_ROLLS` may encode future offers); "manage port" has no single signal | the user's go-ahead on the market var |
+| Big Top Bonanza | no var found (the `FMC_CIRCUS_*` vars are the quest's) | a change log during a show |
+| Familiarisation | `DNDTRACKER_FAMILIARIZATION_*` is only the schedule | a chat line (`chatAccess`) |
+| Penguin Hide and Seek | the `PENG_SPY_*` vars may encode this week's locations: off limits without the user's go-ahead | a chat line, or the go-ahead |
+| Skeletal Horror | only an NPC removal nearby shows the kill (NPC tracking is the extra-review tier); `CHEEVO_MINIGAME_CLUES_SKELETAL_HORROR` is a one-bit achievement | the user's call on NPC tracking |
+| Fort Forinthry Bonus XP | `PLAYER_FORT_GLE_TOTAL_XP_GAINED` (base `PLAYER_FORT_BUILDING_PERM7`) never reaches the client: a `!setvar` read back 0 in the client, at the fort too. The user's claim from Aster moved only `BONUSXP_AGILITY` (0 -> 1596975) and said "You have been awarded 159,697 Bonus XP in Agility!", both of which any bonus XP source may give | the user's call on a new detector: a `BONUSXP_<skill>` rise (or that chat line) while near Aster (3302, 3571), like the note collections. `PLAYER_COORD` packs the tile (`x << 14 | z`) |
+| Bandit Duty Free | the client's only bandit shop inventory, `DT_BANDIT_SHOP`, may be the Desert Treasure camp's shop, which would tick it falsely | open the shop with the bridge on: its `InventoryAdded` names the inventory |
+
+## Evidence: the 2026-10-30 probe and earlier candidate notes
+
+Kept for the evidence behind the rules above; where they differ, the audit above is current.
 
 ### Probed 2026-10-30: signals found, not built yet
 

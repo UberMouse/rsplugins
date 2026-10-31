@@ -105,12 +105,13 @@ describe("chore-tracker vars core", function()
     end)
 
     -- A rule without conditions holds on any values, so it's checked to have a rises var
-    -- instead: only a rise ticks it, never all-zero values as such.
+    -- instead: only a rise ticks it, never all-zero values as such. A falls rule may hold on
+    -- zeros (God Statues' months since built), since only a var going down ticks it.
     it("holds no rule with conditions on all-zero vars but Advance Time's", function()
         for _, rule in ipairs(varRules) do
             if #rule.done == 0 then
                 assert(rule.rises, rule.chore .. " has neither conditions nor a rises var")
-            else
+            elseif not rule.falls then
                 local holds = varsCore.holds(rule, zeros(rule), 9006)
                 assert.are.equal(rule.chore == "advance-time", holds, rule.chore)
             end
@@ -328,18 +329,83 @@ describe("chore-tracker vars core", function()
         values.SWORLDS_REWARD_CHALLENGE_GOLD_COMPLETE = 1
         assert.is_true(varsCore.holds(rule, values, nil))
     end)
+
+    -- Whether any of chore `id`'s rules ticks on the change from `before` to `after`.
+    ---@param id string
+    ---@param before table<string, integer>
+    ---@param after table<string, integer>
+    ---@return boolean
+    local function anyTicks(id, before, after)
+        for _, rule in ipairs(varRules) do
+            if rule.chore == id and varsCore.ticks(rule, before, after, nil) then return true end
+        end
+        return false
+    end
+
+    it("ticks Arc Contracts at the day's limit, 3 plus the upgrades bought", function()
+        local function step(bought, from, to)
+            return anyTicks(
+                "arc-contracts",
+                { PGC_PER_DAY_INCREASE = bought, PGC_TALLY = from },
+                { PGC_PER_DAY_INCREASE = bought, PGC_TALLY = to }
+            )
+        end
+        assert.is_true(step(4, 6, 7))
+        assert.is_false(step(4, 2, 3))
+        assert.is_true(step(0, 2, 3))
+        assert.is_true(step(2, 4, 5))
+    end)
+
+    it("ticks a tree, trough or patch chore from any one of its vars", function()
+        assert.is_true(
+            anyTicks("bloodwood-tree", { SNIPER_BLOODTREE_5 = 1 }, { SNIPER_BLOODTREE_5 = 2 })
+        )
+        -- A felled tree growing back is no tick.
+        assert.is_false(
+            anyTicks("bloodwood-tree", { SNIPER_BLOODTREE_5 = 2 }, { SNIPER_BLOODTREE_5 = 1 })
+        )
+        local trough = "POF_FEEDING_TROUGH_BREEDING_GENERAL_AMOUNT"
+        assert.is_true(anyTicks("player-owned-farm", { [trough] = 0 }, { [trough] = 3 }))
+        assert.is_false(anyTicks("player-owned-farm", { [trough] = 3 }, { [trough] = 2 }))
+        local patch = "FARMING_SEEDS_PLANTED_HERB_PATCH_DRUID"
+        assert.is_true(anyTicks("herb-run", { [patch] = 0 }, { [patch] = 7 }))
+        assert.is_false(anyTicks("herb-run", { [patch] = 7 }, { [patch] = 0 }))
+    end)
+
+    it("ticks God Statues only on the months since built falling to 0", function()
+        local name = "GODSS_MONTHS_SINCE_USED"
+        assert.is_true(anyTicks("god-statues", { [name] = 3 }, { [name] = 0 }))
+        assert.is_false(anyTicks("god-statues", { [name] = 0 }, { [name] = 1 }))
+    end)
+
+    it("ticks Meg's Questions on her leaving, not on her return", function()
+        local name = "POP_MEG_ONMISSION"
+        assert.is_true(anyTicks("meg", { [name] = 0 }, { [name] = 1 }))
+        assert.is_false(anyTicks("meg", { [name] = 1 }, { [name] = 0 }))
+        -- Any value for away or back: a move between two non-zero values is no tick.
+        assert.is_false(anyTicks("meg", { [name] = 1 }, { [name] = 2 }))
+    end)
 end)
 
 describe("chore-tracker var list", function()
+    -- A chore with a rule per var (a tree, a trough, a patch) shows once, as "<id> xN".
     it("lists exactly the var chores, each in the chore list", function()
         local ids, byId = {}, {}
         for _, chore in ipairs(chores) do
             byId[chore.id] = chore
         end
+        local last, run = nil, 0
         for _, rule in ipairs(varRules) do
             assert(byId[rule.chore], "no chore " .. rule.chore)
             assert(type(rule.proven) == "boolean", rule.chore .. " has no proven flag")
-            ids[#ids + 1] = rule.chore .. (rule.proven and "" or " (unproven)")
+            local id = rule.chore .. (rule.proven and "" or " (unproven)")
+            if id == last then
+                run = run + 1
+                ids[#ids] = id .. " x" .. run
+            else
+                last, run = id, 1
+                ids[#ids + 1] = id
+            end
         end
         assert.are.same({
             "bert-sand",
@@ -353,6 +419,9 @@ describe("chore-tracker var list", function()
             "dream-of-iaia-resource",
             "dream-of-iaia-xp-weekly",
             "dream-of-iaia-xp",
+            "archaeology-research",
+            "miscellania",
+            "miscellania-weekly",
             "crystal-tree-blossom (unproven)",
             "sinkholes (unproven)",
             "big-chinchompa (unproven)",
@@ -369,6 +438,21 @@ describe("chore-tracker var list", function()
             "broken-home (unproven)",
             "lupe (unproven)",
             "effigy-incubator (unproven)",
+            "god-statues",
+            "troll-invasion",
+            "menaphos-obelisk",
+            "goebie-bands",
+            "gwd2-bounties",
+            "capping-clan-citadel",
+            "rush-of-blood",
+            "meg",
+            "water-filtration",
+            "arc-supplies",
+            "giant-oyster",
+            "arc-contracts x5",
+            "bloodwood-tree x8",
+            "player-owned-farm x7",
+            "herb-run x11",
         }, ids)
     end)
 

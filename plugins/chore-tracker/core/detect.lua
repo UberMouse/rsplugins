@@ -6,6 +6,9 @@
 --
 -- Collections (data/collections.lua) are no shops: the goods arrive as banknotes in the
 -- backpack, so such a chore is a rise in those notes while the player stands near the giver.
+--
+-- Machines (data/machines.lua) keep their product in an output inventory that only
+-- collecting takes from, so such a chore is that inventory's total falling.
 
 local M = {}
 
@@ -47,6 +50,22 @@ function M.dropped(before, after)
         if was and count < was then return true end
     end
     return false
+end
+
+-- Whether the counts of `after` add up to less than those of `before` (both slot -> count).
+-- Totals, not slots, since collecting may leave a slot out of `after` altogether.
+---@param before integer[]
+---@param after integer[]
+---@return boolean
+function M.fell(before, after)
+    local was, now = 0, 0
+    for _, count in pairs(before) do
+        was = was + count
+    end
+    for _, count in pairs(after) do
+        now = now + count
+    end
+    return now < was
 end
 
 -- Whether any of `names` has a higher count in `after` than in `before` (both name ->

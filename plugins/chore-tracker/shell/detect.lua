@@ -1,7 +1,8 @@
 -- Seeing chores done from what the client shows the player: purchases at the shops in
--- data/shops.lua, and banknotes collected near the givers in data/collections.lua. It reads
--- only those shops' inventories, the backpack, and the player's own tile; the pure
--- comparisons are in core/detect.lua.
+-- data/shops.lua, banknotes collected near the givers in data/collections.lua, and products
+-- collected from the machines in data/machines.lua. It reads only those shops' and machines'
+-- inventories, the backpack, and the player's own tile; the pure comparisons are in
+-- core/detect.lua.
 --
 -- main.lua subscribes the inventory events to the handlers here and hands in an `apply`
 -- that changes the tracker, so this module keeps no chore state of its own: only the last
@@ -21,6 +22,7 @@ local BACKPACK = "INV"
 ---@field chores Chore[]
 ---@field shops table<string, ChoreShop[]>
 ---@field collections ChoreCollection[]
+---@field machines ChoreMachine[]
 ---@field say fun(...: any)
 ---Run `change` on the tracker at the clock's minute and keep what it returns (the same
 ---table means nothing changed); skipped, `change` uncalled, without a character and a
@@ -48,6 +50,21 @@ local objTypes = {} ---@type table<string, ObjType>
 -- while its shop is open), and the backpack's count of each note, nil without a backpack.
 local shopCounts = {} ---@type table<string, integer[]>
 local noteCounts = nil ---@type table<string, integer>?
+-- Machine output inventory name -> the chores it serves, its config, and its slot counts now
+-- (nil while the client doesn't hold it).
+local machineChores = {} ---@type table<string, Chore[]>
+local machineTypes = {} ---@type table<string, InvType>
+local machineCounts = {} ---@type table<string, integer[]>
+
+-- `name`'s config, or nil after saying the client's config lacks it.
+---@param name string
+---@param say fun(...: any)
+---@return InvType?
+local function invConfig(name, say)
+    local invType = config.Inv[name] --[[@as InvType?]]
+    if not invType then say("unknown inventory", name .. "; not watched") end
+    return invType
+end
 
 ---@param o ChoreDetectOptions
 function M.init(o)
@@ -68,11 +85,24 @@ function M.init(o)
         for i, entry in ipairs(indexed) do
             entries[i] = { chore = state.resolve(o.chores, entry.chore, "data"), shop = entry.shop }
         end
-        local invType = config.Inv[name] --[[@as InvType?]]
+        local invType = invConfig(name, o.say)
         if invType then
             shopIndex[name], invTypes[name] = entries, invType
-        else
-            o.say("unknown inventory", name .. "; not watched")
+        end
+    end
+    machineChores, machineTypes, machineCounts = {}, {}, {}
+    local looked = {}
+    for _, machine in ipairs(o.machines) do
+        local chore = state.resolve(o.chores, machine.chore, "data/machines.lua")
+        for _, name in ipairs(machine.invs) do
+            if not looked[name] then
+                looked[name] = true
+                local invType = invConfig(name, o.say)
+                if invType then
+                    machineTypes[name], machineChores[name] = invType, {}
+                end
+            end
+            if machineChores[name] then table.insert(machineChores[name], chore) end
         end
     end
     noteNames, objTypes = {}, {}
@@ -144,15 +174,18 @@ local function playerTile()
     return { x = at.x, z = at.z, level = at.level }
 end
 
--- Take the counts of every listed shop the client holds now, and of the notes in the
--- backpack, dropping older ones. main.lua calls it on each character switch, which
--- includes the load's first sync when logged in, so a plugin reloaded with a shop open
+-- Take the counts of every listed shop and machine output the client holds now, and of the
+-- notes in the backpack, dropping older ones. main.lua calls it on each character switch,
+-- which includes the load's first sync when logged in, so a plugin reloaded with a shop open
 -- still sees the next purchase, and one character's counts are never compared with
 -- another's.
 function M.scan()
-    shopCounts = {}
+    shopCounts, machineCounts = {}, {}
     for name, invType in pairs(invTypes) do
         shopCounts[name] = readCounts(invType)
+    end
+    for name, invType in pairs(machineTypes) do
+        machineCounts[name] = readCounts(invType)
     end
     noteCounts = readNotes()
 end
@@ -204,6 +237,22 @@ local function onNotesRose(before, after)
     end
 end
 
+-- Something was collected from machine output `name`: tick each chore it serves, if it isn't
+-- done this period, logging only a tick.
+---@param name string
+local function onCollected(name)
+    assert(options, "init runs before any inventory event")
+    local say = options.say
+    options.apply(function(tracker, now)
+        for _, chore in ipairs(machineChores[name]) do
+            local ticked = state.autoMark(tracker, chore, now)
+            if ticked ~= tracker then say("collected", chore.id, "from", name) end
+            tracker = ticked
+        end
+        return tracker
+    end)
+end
+
 -- The backpack changed: compare the notes with their last counts. Only a rise reads the
 -- player's tile.
 local function onBackpack()
@@ -218,33 +267,39 @@ end
 -- Inventory events
 ---------------------------------------------------------------------------
 
--- Events for anything but a listed shop or the backpack (the bank, say) return after
--- reading the inventory's name, so their size costs nothing here.
+-- Events for anything but a listed shop, a listed machine output or the backpack (the bank,
+-- say) return after reading the inventory's name, so their size costs nothing here.
 
 ---@param ev InventoryAddedEventPayload
 function M.onInventoryAdded(ev)
     local name = ev.inv.configName
     if shopIndex[name] then
         shopCounts[name] = readCounts(ev.inv)
+    elseif machineChores[name] then
+        machineCounts[name] = readCounts(ev.inv)
     elseif name == BACKPACK then
         noteCounts = readNotes()
     end
 end
 
 -- In the backpack, a rise in notes may be a collection. In a listed shop, any line lower
--- than before is a purchase; the new counts become the baseline either way, so a restock or
--- a sale (counts rising) only moves it.
+-- than before is a purchase; in a machine output, a lower total is a collect. The new counts
+-- become the baseline either way, so a restock, a sale or a machine working (counts rising)
+-- only moves it.
 ---@param ev InventoryUpdatedEventPayload
 function M.onInventoryUpdated(ev)
     local name = ev.inv.configName
     if name == BACKPACK then
         onBackpack()
-        return
+    elseif machineChores[name] then
+        local before, after = machineCounts[name], readCounts(ev.inv)
+        machineCounts[name] = after
+        if before and after and detectCore.fell(before, after) then onCollected(name) end
+    elseif shopIndex[name] then
+        local before, after = shopCounts[name], readCounts(ev.inv)
+        shopCounts[name] = after
+        if before and after and detectCore.dropped(before, after) then onPurchase(name) end
     end
-    if not shopIndex[name] then return end
-    local before, after = shopCounts[name], readCounts(ev.inv)
-    shopCounts[name] = after
-    if before and after and detectCore.dropped(before, after) then onPurchase(name) end
 end
 
 ---@param ev InventoryRemovedEventPayload
@@ -252,6 +307,8 @@ function M.onInventoryRemoved(ev)
     local name = ev.inv.configName
     if name == BACKPACK then
         noteCounts = nil
+    elseif machineChores[name] then
+        machineCounts[name] = nil
     elseif shopIndex[name] then
         shopCounts[name] = nil
     end

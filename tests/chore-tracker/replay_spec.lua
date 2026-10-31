@@ -2,12 +2,13 @@
 -- claim) through the Chore Tracker's real detection. The recordings hold recorder-demo's reads,
 -- not the tracker's, so the spec supplies what they lack: the shop stock before the buy, the base
 -- var HANDSAND_BUCKETS = 3 before the Bert window (over the zeroed vars helpers.loaded sets), the
--- PersistentDB keys, httpAccess declined, and nil Finds for unwatched shops. The Bert window
+-- PersistentDB keys, httpAccess declined, and nil Finds for unwatched shops and machine outputs. The Bert window
 -- opens 550 ticks before the reset because the tracker ignores var changes for SETTLE_TICKS (500)
 -- after load (plugins/chore-tracker/shell/vars.lua).
 
 local helpers = require("tests.chore-tracker.helpers")
 local paths = require("tests.harness.paths")
+local machines = require("data/machines")
 local shops = require("data/shops")
 local timeline = require("tests.harness.timeline")
 
@@ -45,24 +46,30 @@ local STOCK = {
 -- SHOP_LAST_VIEWED_BUYAMT var (3500) and the backpack's feather slot both show.
 local FEATHERS_BEFORE = 3500
 
--- The fixture's entries, and a read of nil for every shop the tracker watches except `open`: the
--- client held none of them open (Inventory.Find returns nil for an inventory that isn't
--- loaded), but recorder-demo never looked, and a replayed read nobody recorded faults.
+-- The fixture's entries, and a read of nil for every shop the tracker watches except `open`,
+-- and for every machine output: the client held none of them (Inventory.Find returns nil for
+-- an inventory that isn't loaded; the recording's character has no Invention machines), but
+-- recorder-demo never looked, and a replayed read nobody recorded faults.
 ---@param fixture string
 ---@param open string? the shop the recording has open, if any
 ---@return table[]
 local function entries(fixture, open)
     local recorded = timeline.parse(assert(paths.read(paths.repo(fixture))))
     local list = { table.remove(recorded, 1) } -- the session header
+    local unheld = {} ---@type string[]
     for _, hits in pairs(shops) do
         for _, shop in ipairs(hits) do
             for _, inv in ipairs(shop.invs) do
-                if inv ~= open then
-                    list[#list + 1] =
-                        { t = 0, k = "read", path = "Inventory.Find(config.Inv." .. inv .. ")" }
-                end
+                if inv ~= open then unheld[#unheld + 1] = inv end
             end
         end
+    end
+    -- Both Invention chores list the same six outputs, read once each.
+    for _, inv in ipairs(machines[1].invs) do
+        unheld[#unheld + 1] = inv
+    end
+    for _, inv in ipairs(unheld) do
+        list[#list + 1] = { t = 0, k = "read", path = "Inventory.Find(config.Inv." .. inv .. ")" }
     end
     table.move(recorded, 1, #recorded, #list + 1, list)
     return list

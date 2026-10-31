@@ -165,6 +165,16 @@ The official reference annotates Lua with pseudo-types:
 - **Farming patch-stage VarBits look region-relative**, as in OSRS: `FARMING_HERB_VARBIT_3`
   and `FARMING_CURRENT_PATCH` change meaning as the player moves. `FARMING_SEEDS_PLANTED_HERB_PATCH_<n>`
   (on `DESERT_FARM_PERM_*`) are per patch: clearing a patch set it 7 -> 0, planting 0 -> 7. (chore probe, 2026-10-30)
+- **Not every VarPlayer reaches the client, even where its content is.**
+  `PLAYER_FORT_GLE_TOTAL_XP_GAINED` (base `PLAYER_FORT_BUILDING_PERM7`) moved on the server
+  (`!getvar` read the new value) but the client still read 0 for both, away from Fort
+  Forinthry and standing by Aster in it. A rule on such a var can never fire. `!setvar` then a
+  client read is the quick test; Chore Tracker's 18 var rules of 2026-10-31 all passed it. (setvar probe, 2026-10-31)
+- **Claiming Fort Forinthry's bonus XP from Aster** sent the system line "You have been
+  awarded 159,697 Bonus XP in Agility!" and moved `BONUSXP_AGILITY` 0 -> 1596975 (the pool,
+  in tenths of XP); no `PLAYER_FORT_*` var moved. (fort claim, 2026-10-31)
+- **`PLAYER_COORD` packs the player's tile** as `x << 14 | z`: 54103539 is x 3302, z 3571,
+  where `coordGrid` read `0,51,55,38,51`. It is sent on each teleport. (2026-10-31)
 
 ## Coordinates
 
@@ -829,6 +839,17 @@ Found in the beta client (2026-10-20), not in the official docs:
   `beginDomain`'s `pcall(nameLister)` starting `pairs(id.VarPlayer)`). The cause is unconfirmed. The
   rule we follow: grant var-dump's `httpAccess` by typing `ppe` in the console, never through the
   bridge.
+- **Crash 10 (SIGSEGV, pid 1500573, 2026-10-31 22:48:57)**: `prl chore-tracker` sent through
+  the bridge (`rsdev.py exec`), with chore-tracker's log tee and remote eval polling (both POST
+  with `httpAccess`) and the dev bridge itself polling. The stack is crash 9's, frame for frame
+  (rs2client+0x3c76a4, +0xe3f8b, +0x1c110c, +0x16648f5, +0x1402ec8). The chore-tracker reloaded
+  had new code (machine output `Inventory.Find`s and about 50 more var lookups at load), and the
+  bridge had been turned on minutes earlier by `ExecuteConsoleCommand("pon dev-bridge")` from
+  chore-tracker's remote eval. What it shares with crash 9: a console command from the bridge
+  that starts a plugin holding `httpAccess` while another `httpAccess` plugin is posting. That
+  makes var-dump's `start()` an unlikely cause of crash 9. Unconfirmed. Until it is: don't
+  `prl` a plugin that has `httpAccess` through the bridge while another `httpAccess` plugin is
+  running; ask the user to type it, or restart the client.
 - **Closing the client segfaults** (2026-10-26, beta client 951-1): closing it gave a SIGSEGV
   three times out of three, at 15:09:17 (pid 2637620), 15:12:49 (pid 2649914) and 15:15:07 (pid
   2656263). `coredumpctl` shows the same stack each time, frame #4 jumping into a heap address.

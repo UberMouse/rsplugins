@@ -31,6 +31,17 @@ describe("chore-tracker shops core", function()
         assert.is_false(detect.dropped({ 20, 3 }, { 20 }))
     end)
 
+    it("sees a collect in a total that falls, however the slots changed", function()
+        assert.is_true(detect.fell({ 7500 }, { 0 }))
+        -- Collecting may leave the slot out altogether.
+        assert.is_true(detect.fell({ 7500 }, {}))
+        assert.is_true(detect.fell({ 10, 5 }, { 12 }))
+        -- A machine working (a rise) or moving goods between slots is no collect.
+        assert.is_false(detect.fell({ 10 }, { 15 }))
+        assert.is_false(detect.fell({ 10, 5 }, { 5, 10 }))
+        assert.is_false(detect.fell({}, {}))
+    end)
+
     it("sees a rise in any named count", function()
         local both = { "A", "B" }
         assert.is_true(detect.rose({ A = 0, B = 5 }, { A = 30, B = 5 }, both))

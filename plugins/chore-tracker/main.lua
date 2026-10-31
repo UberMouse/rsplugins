@@ -15,7 +15,9 @@
 -- and shop-run counts are saved per character, by display name; the window's place, size and
 -- collapsed state (shell/window.lua) and the celebration settings are saved for all characters.
 -- Collapsed, the window becomes a strip showing the next chore not done, Daily first, then
--- Weekly, then Monthly, in the player's order, which a click ticks (shell/strip.lua).
+-- Weekly, then Monthly, in the player's order, which a click ticks (shell/strip.lua). The info
+-- button beside the settings button opens the info view: a little help, then every chore
+-- under Automatic, Unproven or Manual, by whether it ticks itself (core/info.lua).
 --
 -- It reads only what the game already gives your client: the game clock, your own display
 -- name and position, your backpack, an open shop's stock and your own game vars. It asks for
@@ -47,6 +49,7 @@ local icons = require("data/icons")
 local shops = require("data/shops")
 local varRules = require("data/vars")
 local celebrate = require("core/celebrate")
+local info = require("core/info")
 local layout = require("core/layout")
 local listlayout = require("core/listlayout")
 local settings = require("core/settings")
@@ -68,6 +71,8 @@ local function say(...)
 end
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
+-- The space between the list's settings and info buttons.
+local BUTTON_GAP = 6
 
 -- How often, in Logic ticks (50 a second), to look for a login change and a moved or
 -- resized window.
@@ -87,11 +92,11 @@ local character = nil ---@type string?
 local tracker = state.new()
 -- What the window shows: logged out, waiting for the game clock, or ready.
 ---@alias ChorePhase "loggedOut"|"waiting"|"ready"
----@alias ChoreMode "list"|"settings"
+---@alias ChoreMode "list"|"settings"|"info"
 local phase = nil ---@type ChorePhase?
 local mode = "list" ---@type ChoreMode
--- The open view's components, to update in place: chore id -> its row (list rows or settings
--- rows, whichever view is open; ids are the same in both), and period -> its list heading. Both
+-- The open view's components, to update in place: chore id -> its row (list, settings or info
+-- rows, whichever view is open; ids are the same in all), and period -> its list heading. Both
 -- go with the window.
 local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
@@ -211,7 +216,7 @@ local function onDrop(id, slot)
 end
 
 -- A section's row ids from its rows or chores, top to bottom.
----@param period ChorePeriod
+---@param period ChorePeriod|ChoreStatus the section's heading key
 ---@param items {id: string}[]
 ---@return ChoreSectionIds
 local function sectionIds(period, items)
@@ -222,13 +227,22 @@ local function sectionIds(period, items)
     return { period = period, ids = ids }
 end
 
--- The list: the settings button and any notice in PrettyUI's flow, then a heading per period
--- and a hand-built row per picked chore below them, at the spots core/listlayout.lua gives.
+-- The list: the settings button and any notice in PrettyUI's flow, with the info button beside
+-- the settings button, then a heading per period and a hand-built row per picked chore below
+-- them, at the spots core/listlayout.lua gives.
 ---@param w prettyui.Window
 ---@param openSettings fun()
-local function buildList(w, openSettings)
+---@param openInfo fun()
+local function buildList(w, openSettings, openInfo)
     local button =
         w:AddSpriteButton("SETTINGS", openSettings, { size = BUTTON_SIZE, tooltip = "Pick chores" })
+    -- At an explicit x and y, so it sits on the settings button's row and the flow doesn't move.
+    w:AddSpriteButton("INFO", openInfo, {
+        x = button.root.x + BUTTON_SIZE + BUTTON_GAP,
+        y = button.root.y,
+        size = BUTTON_SIZE,
+        tooltip = "About Chore Tracker",
+    })
     -- The list goes below the last of these, the button or the notice.
     local top = button.root.y + button.root.height
     local now = clockNow()
@@ -412,14 +426,49 @@ local function buildSettings(w)
 end
 
 ---------------------------------------------------------------------------
+-- Info view
+---------------------------------------------------------------------------
+
+-- The info view: the help paragraphs in PrettyUI's flow, each broken into lines that fit the
+-- narrowest window (core/layout.lua, HELP_TEXT_WIDTH), then a heading per status and a
+-- display-only row per chore below them, all from the data files. Nothing here reads the game.
+---@param w prettyui.Window
+local function buildInfo(w)
+    local top = 0
+    for _, paragraph in ipairs(info.HELP) do
+        local text = w:AddText(rows.wrapText(paragraph, layout.HELP_TEXT_WIDTH))
+        top = text.y + text.height
+    end
+    local groups = info.byStatus(chores, shops, collections, varRules)
+    local sections = {} ---@type ChoreSectionIds[]
+    for i, group in ipairs(groups) do
+        sections[i] = sectionIds(group.status, group.chores)
+    end
+    local spots = listlayout.place(sections, top)
+    local wheel = prettyuiInternals.wheelHandler(w)
+    for _, group in ipairs(groups) do
+        w:AddTitle({ text = info.headingText(group), y = spots.headings[group.status] })
+        for _, chore in ipairs(group.chores) do
+            local row =
+                rows.new(w.content, spots.rows[chore.id], icons[chore.id], nil, { wheel = wheel })
+            rowViews[chore.id] = row
+            rows.show(row, info.rowName(chore, chores), false)
+            rows.setTooltip(row, view.tooltip(chore))
+        end
+    end
+    w:SetContentHeight(spots.height)
+end
+
+---------------------------------------------------------------------------
 -- The window (its chrome and collapsed button are shell/window.lua's)
 ---------------------------------------------------------------------------
 
--- Whether the window shows the settings view. Logged out there is nothing to pick, so the
--- logged-out notice shows whatever the mode.
----@return boolean
-local function inSettings()
-    return phase ~= "loggedOut" and mode == "settings"
+-- The view the window shows. Logged out there is nothing to pick or tick, so the logged-out
+-- notice shows whatever the mode.
+---@return ChoreMode|"loggedOut"
+local function shownView()
+    if phase == "loggedOut" then return "loggedOut" end
+    return mode
 end
 
 -- What the collapsed strip shows: the next chore not done, or a notice while logged out or
@@ -437,13 +486,18 @@ end
 -- A new window's content for the current phase and mode.
 ---@param w prettyui.Window
 local function buildContent(w)
-    if phase == "loggedOut" then
+    local shown = shownView()
+    if shown == "loggedOut" then
         w:AddText("Log in to see your chores.")
-    elseif inSettings() then
+    elseif shown == "settings" then
         buildSettings(w)
+    elseif shown == "info" then
+        buildInfo(w)
     else
         buildList(w, function()
             pendingMode = "settings"
+        end, function()
+            pendingMode = "info"
         end)
     end
 end
@@ -451,9 +505,13 @@ end
 window.init({
     parent = parent,
     say = say,
-    inSettings = inSettings,
-    -- The settings view's way out, in the title-bar slot so it stays in reach however far the
-    -- list is scrolled. Like every view switch, it waits a tick.
+    -- Settings and info both go back to the list from the title-bar slot.
+    awayFromList = function()
+        local shown = shownView()
+        return shown == "settings" or shown == "info"
+    end,
+    -- The way back from settings or info, in the title-bar slot so it stays in reach however
+    -- far the view is scrolled. Like every view switch, it waits a tick.
     backToList = function()
         pendingMode = "list"
     end,

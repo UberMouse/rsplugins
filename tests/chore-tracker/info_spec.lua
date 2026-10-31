@@ -1,0 +1,169 @@
+-- The Chore Tracker's info view through the harness: the info button beside the settings
+-- button, the help, the status headings and their display-only rows, and the way back.
+
+local helpers = require("tests.chore-tracker.helpers")
+local chores = require("data/chores")
+local shops = require("data/shops")
+local collections = require("data/collections")
+local varRules = require("data/vars")
+local fonts = require("tests.harness.api.fonts")
+local fit = require("core/fit")
+local info = require("core/info")
+local layout = require("core/layout")
+local view = require("core/view")
+local loaded, openInfo, window = helpers.loaded, helpers.openInfo, helpers.window
+
+-- The info view's row for chore `id`, found by position: the rows are in byStatus order.
+---@param h table
+---@param id string
+---@return table
+local function infoRow(h, id)
+    local list, n = helpers.rows(h), 0
+    for _, group in ipairs(info.byStatus(chores, shops, collections, varRules)) do
+        for _, chore in ipairs(group.chores) do
+            n = n + 1
+            if chore.id == id then return assert(list[n], "no info row " .. id) end
+        end
+    end
+    error("no chore " .. id)
+end
+
+describe("chore-tracker info button", function()
+    it("sits beside the settings button, the same size, with its tooltip", function()
+        local h = loaded()
+        local settings = h.ui:layout(h.ui:get("SpriteButton", { sprite = "SETTINGS" }))
+        local button = h.ui:get("SpriteButton", { sprite = "INFO" })
+        local at = h.ui:layout(button)
+        assert.are.equal(settings.y, at.y)
+        assert.are.same({ settings.width, settings.height }, { at.width, at.height })
+        assert.is_true(at.x >= settings.x + settings.width)
+        assert.is_true(h.ui:hover(button))
+        assert.are.same({ "About Chore Tracker" }, h.ui:tooltips())
+        h.ui:leave()
+    end)
+
+    it("shows while waiting for the clock, but not logged out", function()
+        local waiting = loaded({ clock = 0 })
+        waiting.ui:get("SpriteButton", { sprite = "INFO" })
+        local out = loaded({ login = false })
+        assert.are.same({}, out.ui:find("SpriteButton", { sprite = "INFO" }))
+    end)
+end)
+
+describe("chore-tracker info view", function()
+    it("opens on the next tick with the back button in the slot", function()
+        local h = loaded()
+        helpers.click(h, h.ui:get("SpriteButton", { sprite = "INFO" }))
+        h.ui:get("SpriteButton", { sprite = "SETTINGS" })
+        h:advance(20)
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "SETTINGS" }))
+        local back = h.ui:get("SpriteButton", { sprite = "BACK" })
+        assert.is_true(h.ui:hover(back))
+        assert.are.same({ "Back to the list" }, h.ui:tooltips())
+        h.ui:leave()
+    end)
+
+    it(
+        "shows the help, wrapped to the narrowest window, above the three status headings",
+        function()
+            local h = loaded()
+            openInfo(h)
+            local texts = h.ui:find("Text")
+            assert.are.equal(#info.HELP, #texts)
+            local tooWide = {}
+            for _, text in ipairs(texts) do
+                for line in (text.content .. fit.BREAK):gmatch("(.-)" .. fit.BREAK) do
+                    if fonts.width(line, false) > layout.HELP_TEXT_WIDTH then
+                        tooWide[#tooWide + 1] = line
+                    end
+                end
+            end
+            assert.are.same({}, tooWide)
+            h.ui:get("Text", { text = "Drag a row by its grip" })
+            local titles = h.ui:find("Title")
+            assert.are.same(
+                { "Automatic (17)", "Unproven (21)", "Manual (30)" },
+                { titles[1].content, titles[2].content, titles[3].content }
+            )
+            local last = texts[#texts]
+            assert.is_true(titles[1].y >= last.y + last.height)
+        end
+    )
+
+    it("lists every chore as a display-only icon row, with its tooltip", function()
+        local h = loaded()
+        openInfo(h)
+        assert.are.equal(#chores, #helpers.rows(h))
+        local r = infoRow(h, "dream-of-iaia-xp-weekly")
+        assert.are.equal("Dream of Iaia XP (weekly)", r.text)
+        assert.is_nil(r.box)
+        assert.is_nil(r.grip)
+        assert.is_not_nil(r.icon)
+        local feathers = infoRow(h, "feather-shop-run")
+        assert.are.equal("Feather Shop Run", feathers.text)
+        window(h):SetScrollPosition(feathers.layer.y - 40)
+        assert.is_true(h.ui:hover(feathers.layer))
+        local chore = assert(require("core/state").find(chores, "feather-shop-run"))
+        assert.are.same({ view.tooltip(chore).text }, h.ui:tooltips())
+        h.ui:leave()
+    end)
+
+    it("ticks and picks nothing on a click, and scrolls on the wheel", function()
+        local h = loaded()
+        openInfo(h)
+        local r = infoRow(h, "daily-challenge")
+        window(h):SetScrollPosition(r.layer.y - 40)
+        assert.is_true(h.ui:click(r.label))
+        h:advance(20)
+        assert.is_nil(helpers.stored(h))
+        local before = window(h)._scroll.scrollY
+        assert.are.same({ true, 1 }, { h.ui:wheel(r.label, 1) })
+        assert.are.equal(before + 32, window(h)._scroll.scrollY)
+    end)
+
+    it("cuts a long name with dots and refits it when the window widens", function()
+        local h = loaded()
+        openInfo(h)
+        local r = infoRow(h, "dellmonti-pineapples")
+        assert.are.equal("...", r.label.content:sub(-3))
+        assert.is_true(fonts.width(r.label.content, false) <= h.ui:layout(r.label).width)
+        h.ui:resize(window(h), 400, 0)
+        h:advance(600)
+        assert.are.equal("Pineapples and Apples from Dell Monti", r.label.content)
+    end)
+
+    it("goes back to the list", function()
+        local h = loaded()
+        openInfo(h)
+        helpers.back(h)
+        h.ui:get("SpriteButton", { sprite = "INFO" })
+        h.ui:get("SpriteButton", { sprite = "MENU" })
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "BACK" }))
+    end)
+
+    it("returns to the logged-out notice on a logout, and to the list on the next login", function()
+        local h = loaded()
+        openInfo(h)
+        h.world:logout()
+        h:advance(helpers.POLL_MS)
+        h.ui:get("Text", { text = "Log in to see your chores" })
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "BACK" }))
+        h.world:login("Zezima")
+        h:advance(helpers.POLL_MS)
+        h.ui:get("SpriteButton", { sprite = "INFO" })
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "BACK" }))
+    end)
+
+    it("drops an info switch clicked just before a logout", function()
+        local h = loaded()
+        helpers.click(h, h.ui:get("SpriteButton", { sprite = "INFO" }))
+        -- The logout is seen through the clock's VarTransmit before the next Logic tick.
+        h.world:logout()
+        helpers.setClock(h, helpers.NOW + 1)
+        h:advance(20)
+        h.ui:get("Text", { text = "Log in to see your chores" })
+        h.world:login("Zezima")
+        h:advance(helpers.POLL_MS)
+        assert.are.same({}, h.ui:find("SpriteButton", { sprite = "BACK" }))
+    end)
+end)

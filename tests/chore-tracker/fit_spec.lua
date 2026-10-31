@@ -41,3 +41,34 @@ describe("chore-tracker fit", function()
         assert.is_true(calls <= #"Pure Essence" + 2)
     end)
 end)
+
+describe("chore-tracker wrap", function()
+    it("breaks between words before a line would pass the width", function()
+        -- 10 px a character: 9 fit on a line.
+        assert.are.equal(
+            "Pick the<br>chores<br>you do",
+            fit.wrap("Pick the chores you do", 90, measure)
+        )
+    end)
+
+    it("leaves text that fits on one line whole", function()
+        assert.are.equal("Pick chores", fit.wrap("Pick chores", 110, measure))
+    end)
+
+    it("keeps a break already in the text, and wraps each part", function()
+        assert.are.equal("ab<br>cd ef<br>gh", fit.wrap("ab<br>cd ef gh", 50, measure))
+        assert.are.equal("ab<br>", fit.wrap("ab<br>", 50, measure))
+    end)
+
+    it("gives a word wider than the width a line of its own, unsplit", function()
+        assert.are.equal("a<br>Miscellania<br>b", fit.wrap("a Miscellania b", 50, measure))
+    end)
+
+    it("measures with the tags left in, so a tag-aware measure ignores them", function()
+        local function tagless(s)
+            return #s:gsub("<[^>]*>", "") * 10
+        end
+        local text = "<col=ffd700>Manual</col>: by hand"
+        assert.are.equal("<col=ffd700>Manual</col>: by<br>hand", fit.wrap(text, 100, tagless))
+    end)
+end)

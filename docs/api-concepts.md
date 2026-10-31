@@ -1058,6 +1058,15 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
     PLUS sprite but no MINUS (`tests/harness/api/prettyui/internal.lua`), hence the hand-built
     pair. A name `ui.Text` sized to end before the minus button still drew over it when too long
     (it can't clip), so the name is cut to fit like a row's.
+- **`AddText` wraps, once** (dev-bridge probe, `eval --plugin chore-tracker` making a throwaway
+  PrettyUI 1.2.0 window, 2026-10-31). A text row wraps at the window's width: a long sentence
+  in a 300-wide window came back 78 px high (4 lines). `<br>` breaks a line and
+  `<col=ffd700>...</col>` colours text. After `SetSize` to 520 wide the text reflowed to 2
+  lines but its row kept its 78 px height, and the rows below didn't move. So text built in a
+  wide window and then narrowed would wrap to more lines than its row holds and overlap the next
+  row. Chore Tracker's info view breaks its help with `<br>` to fit the narrowest window it
+  allows (`core/layout.lua`, `HELP_TEXT_WIDTH`), measured with the client font, so PrettyUI
+  never wraps it further.
 - **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
   not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
   position is read only from the internal `window._scroll.scrollY`.

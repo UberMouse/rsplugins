@@ -1,7 +1,7 @@
--- Where the list and settings views' headings, subheadings and chore rows go in the window's
--- content, as plain data. Pure: the shell gives the sections and the bottom of what is
--- already placed at the top (the settings button and any notice, or the Celebrations
--- switches and the Shop runs lines), and makes the components at these spots.
+-- Where the list, settings and info views' headings, subheadings and chore rows go in the
+-- window's content, as plain data. Pure: the shell gives the sections and the bottom of what
+-- is already placed at the top (the settings button and any notice, the Celebrations
+-- switches and the Shop runs lines, or the help), and makes the components at these spots.
 
 local M = {}
 
@@ -20,13 +20,13 @@ M.SUBHEADING_HEIGHT = 24
 M.FLOW_PADDING = 14
 
 ---@class ChoreListLayout
----@field headings table<ChorePeriod, integer> each section's heading y, by period
+---@field headings table<ChorePeriod|ChoreStatus, integer> each section's heading y, by its key
 ---@field subheadings table<string, integer> each subheading's y, by its key
 ---@field rows table<string, integer> each row's y, by chore id
 ---@field height integer the content height that holds them all, padding included
 
 ---@class ChoreSectionIds the row-id shape both the list layout and the grips use
----@field period ChorePeriod
+---@field period ChorePeriod|ChoreStatus its heading's key: its period, or the info view's status
 ---@field ids string[] the chore ids of its rows, top to bottom
 ---@field subheads table<integer, string>? settings only: index in `ids` -> the key of the
 ---subheading above that row

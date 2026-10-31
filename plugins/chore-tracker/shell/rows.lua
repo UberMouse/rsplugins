@@ -2,6 +2,8 @@
 -- window's content, or in the collapsed strip (shell/strip.lua, whose row changes its icon as it
 -- moves to the next chore): the chore's icon at the left, its text, and a tick box at the right edge.
 -- A list row also has a drag grip left of the icon (shell/grips.lua takes the presses on it).
+-- The info view's rows are display-only: icon and text, with no tick box, no click and no
+-- hyperlink hand, but the same name fitting and tooltip.
 -- The row layer takes the clicks; the icon, text and box let them through to it. While the
 -- mouse is over the row it shows the hyperlink hand, and its box shows a hovered sprite. A
 -- row is changed in place (colour, dimming, tick, text, tooltip) and goes when its window is
@@ -74,8 +76,9 @@ local reported = {} ---@type table<string, boolean>
 ---@field iconSprites { obj: ui.Sprite?, sprite: ui.Sprite? } one sprite per kind of icon, made
 --- as first needed
 ---@field label ui.Text
----@field box ui.Sprite
+---@field box ui.Sprite? nil on a display-only row
 ---@field textX integer where the label starts in the row
+---@field rightGap integer the space right of the label: the tick box and the gap before it
 ---@field text string? the row's full text
 ---@field availWidth integer? the label width `text` was last fitted to
 ---@field shortened boolean whether the label shows less than `text`
@@ -84,7 +87,7 @@ local reported = {} ---@type table<string, boolean>
 ---@field ticked boolean? whether the box is ticked
 -- Only dev/remote's press() reads onClick back (a dev tool). It stays in the submitted plugin,
 -- unread there, so what ships is the code that was tested.
----@field onClick fun() what a press on the row does
+---@field onClick fun()? what a press on the row does; nil on a display-only row
 ---@field dimmed boolean? whether the icon and text are dimmed
 ---@field hovered boolean whether the mouse is over the row
 ---@field tooltipText string?
@@ -117,7 +120,7 @@ end
 -- Show the box for the row's tick and hover state.
 ---@param row ChoreRowView
 local function drawBox(row)
-    if row.ticked == nil then return end
+    if row.ticked == nil or row.box == nil then return end
     if row.ticked then
         row.box.spriteID = row.hovered and BOX_TICKED_HOVERED or BOX_TICKED
     else
@@ -201,14 +204,15 @@ end
 -- Make a row at content height `y` under `content`, showing `icon` (nothing if it is nil or its
 -- name doesn't resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick
 -- click can arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
--- `ui.Layer`"). `opts.wheel`, when given, takes the mouse wheel over the row, which the row
+-- `ui.Layer`"). Without `onClick` the row is display-only: no tick box, no hover state, no
+-- hyperlink hand, and its name may run to the row's right edge. `opts.wheel`, when given, takes the mouse wheel over the row, which the row
 -- would otherwise swallow. With `opts.grip`, the row gets a drag grip at its left and the rest
 -- moves right to make room. `opts.margins` sets the space left free at the content's sides
 -- (PrettyUI's flow padding by default). Call M.show to give it its text and state.
 ---@param content ui.Layer
 ---@param y integer
 ---@param icon ChoreIcon?
----@param onClick fun()
+---@param onClick fun()?
 ---@param opts { wheel: ChoreWheelHandler?, grip: boolean?, margins: { left: integer, right: integer }? }
 ---@return ChoreRowView
 function M.new(content, y, icon, onClick, opts)
@@ -216,11 +220,14 @@ function M.new(content, y, icon, onClick, opts)
     local layer = ui.Layer.new(content)
     layer:SetPos(margins.left, y)
     layer:SetSize(-(margins.left + margins.right), ROW_HEIGHT, 1.0, 0)
+    -- A display-only row still takes the mouse, for its tooltip and the wheel.
     layer.clickthrough = false
-    M.setCursor(layer, M.ROW_CURSOR)
-    layer:Subscribe(ui.Hook.ONCLICK, function()
-        onClick()
-    end)
+    if onClick then
+        M.setCursor(layer, M.ROW_CURSOR)
+        layer:Subscribe(ui.Hook.ONCLICK, function()
+            onClick()
+        end)
+    end
     if opts.wheel then layer:Subscribe(ui.Hook.ONSCROLLWHEEL, opts.wheel) end
 
     local left = 0
@@ -235,14 +242,18 @@ function M.new(content, y, icon, onClick, opts)
 
     -- At the same x whether or not there is an icon, so the names line up.
     local textX = left + TEXT_X
+    local rightGap = onClick and BOX_SIZE + LABEL_GAP or 0
     local label = M.newText(layer)
     label:SetPos(textX, 0)
-    label:SetSize(-(textX + BOX_SIZE + LABEL_GAP), ROW_HEIGHT, 1.0, 0)
+    label:SetSize(-(textX + rightGap), ROW_HEIGHT, 1.0, 0)
 
-    local box = ui.Sprite.new(layer)
-    box:SetPos(-BOX_SIZE, (ROW_HEIGHT - BOX_SIZE) // 2, 1.0, 0)
-    box:SetSize(BOX_SIZE, BOX_SIZE)
-    box.clickthrough = true
+    local box = nil ---@type ui.Sprite?
+    if onClick then
+        box = ui.Sprite.new(layer)
+        box:SetPos(-BOX_SIZE, (ROW_HEIGHT - BOX_SIZE) // 2, 1.0, 0)
+        box:SetSize(BOX_SIZE, BOX_SIZE)
+        box.clickthrough = true
+    end
 
     local row = ---@type ChoreRowView
         {
@@ -253,11 +264,13 @@ function M.new(content, y, icon, onClick, opts)
             label = label,
             box = box,
             textX = textX,
+            rightGap = rightGap,
             shortened = false,
             hovered = false,
             onClick = onClick,
         }
     M.setIcon(row, icon)
+    if not onClick then return row end
     -- Under the default id: Tooltip.attach subscribes the same hooks under its own id
     -- (PrettyUI 1.2.0, src/tooltip.lua), so the two don't replace each other. Both return
     -- true: in the client a listener that returns nothing stops the ones after it, the
@@ -350,6 +363,21 @@ function M.fitText(text, avail)
     return shown, shortened
 end
 
+-- `text` with line breaks put in so no line is wider than `maxWidth` pixels in the rows' font
+-- (core/fit.lua's wrap), so the client never wraps it further. A font that can't measure
+-- leaves the text unbroken, logged once.
+---@param text string
+---@param maxWidth number
+---@return string
+function M.wrapText(text, maxWidth)
+    local ok, wrapped = pcall(fit.wrap, text, maxWidth, measure)
+    if not ok then
+        reportMeasure(wrapped)
+        return text
+    end
+    return wrapped
+end
+
 -- Show the row's text cut to the label's width, leaving the tooltip to the caller. Does
 -- nothing when that width hasn't changed since the text was last fitted, so it is cheap to
 -- call for every row. Until the row has a width the full text shows, and the next call tries
@@ -360,7 +388,7 @@ local function fitLabel(row)
     local text = row.text
     assert(text, "a row is fitted after show gave it text")
     if row.layer.width <= 0 then return end
-    local avail = row.layer.width - row.textX - BOX_SIZE - LABEL_GAP
+    local avail = row.layer.width - row.textX - row.rightGap
     if avail == row.availWidth then return end
     local shown, shortened = M.fitText(text, avail)
     row.availWidth = avail
@@ -403,7 +431,7 @@ local function apply(row, text, ticked, dimmed)
     end
 end
 
--- List view: show `text`, and the row as done (dimmed icon, muted text, ticked box) or not.
+-- List view (and the info view, never done): show `text`, and the row as done (dimmed icon, muted text, ticked box) or not.
 ---@param row ChoreRowView
 ---@param text string
 ---@param done boolean

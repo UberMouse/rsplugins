@@ -28,6 +28,15 @@ local DEFAULT_X, DEFAULT_Y, DEFAULT_WIDTH, DEFAULT_HEIGHT = 600, 300, 320, 420
 -- The smallest the window can be resized to.
 M.MIN_WIDTH, M.MIN_HEIGHT = 240, 160
 
+-- The widest line of the info view's help, so it never wraps further in any window the user
+-- can size (docs/api-concepts.md, "PrettyUI in the client": a text row keeps the height it was
+-- built with, so text that rewrapped narrower would overlap the next row). It is a text row's
+-- width at MIN_WIDTH: PrettyUI 1.2.0's 8 px frame each side, the 18 px its scrollbar takes and
+-- its 14 px flow padding each side come off (docs/testing.md's fidelity ledger), and 8 px more
+-- are kept spare in case the client's line-breaking measures a little wider than
+-- GetStringWidth.
+M.HELP_TEXT_WIDTH = M.MIN_WIDTH - 2 * 8 - 18 - 2 * 14 - 8
+
 -- Where the window first opens: open, with its button in its slot.
 ---@return ChoreLayout
 function M.default()

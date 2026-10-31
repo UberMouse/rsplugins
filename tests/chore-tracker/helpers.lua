@@ -355,6 +355,13 @@ function M.openSettings(h)
     h:advance(20)
 end
 
+-- Open the info view.
+---@param h table
+function M.openInfo(h)
+    click(h, h.ui:get("SpriteButton", { sprite = "INFO" }))
+    h:advance(20)
+end
+
 -- Click the visible hamburger, which collapses an open window and expands a collapsed one.
 ---@param h table
 function M.collapse(h)

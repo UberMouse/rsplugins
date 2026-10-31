@@ -4,7 +4,7 @@
 -- content for the current view, and the window calls it on every (re)build.
 --
 -- The title-bar slot (where PrettyUI's close X would be) holds the hamburger, which collapses
--- the window, or in the settings view a back button to the list. Collapsed, the window is
+-- the window, or in the settings and info views a back button to the list. Collapsed, the window is
 -- closed and a strip stands with its hamburger where the slot was, and the next chore to do
 -- (shell/strip.lua) to its left: Alt-drag it to move it (with the console closed), click the
 -- chore to tick it, or click the hamburger to open the window again, grown left and down from
@@ -22,14 +22,14 @@ local BUTTON_SIZE = layout.BUTTON_SIZE
 
 -- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapseAt).
 local COLLAPSE_TOOLTIP = { text = "Collapse" }
--- The same slot's tooltip while the settings view is open.
+-- The same slot's tooltip while the settings or info view is open.
 local BACK_TOOLTIP = { text = "Back to the list" }
 
 ---@class ChoreWindowOpts
 ---@field parent ui.Component the plugin layer, where the window and the collapsed button go
 ---@field say fun(...) where log lines go (main.lua's, so they carry [CHORES])
----@field inSettings fun(): boolean whether the settings view is the one to show; its slot
---- button is then the back button
+---@field awayFromList fun(): boolean whether a view the slot goes back from (settings or info)
+--- is the one to show; its slot button is then the back button
 ---@field backToList fun() the back button's action
 ---@field clearViews fun() forget the old window's content views; called once it is destroyed
 ---@field build fun(w: prettyui.Window) fill a new window's content for the current view
@@ -39,7 +39,7 @@ local BACK_TOOLTIP = { text = "Back to the list" }
 
 local opts = nil ---@type ChoreWindowOpts?
 local win = nil ---@type prettyui.Window?
--- The title-bar slot's button: the hamburger, or back to the list in settings.
+-- The title-bar slot's button: the hamburger, or back to the list in settings and info.
 local openButton = nil ---@type prettyui.SpriteButton?
 local collapsed = nil ---@type prettyui.Panel? exists only while collapsed
 local collapsedButton = nil ---@type prettyui.SpriteButton?
@@ -202,20 +202,20 @@ local function build(at)
     prettyuiInternals.setResizeCursors(w)
     w.closeButton.hidden = true
     -- The title-bar slot is the one spot of the title bar the drag layer leaves clickable.
-    -- It collapses the window, except in the settings view, where it goes back to the list
-    -- (collapsing from there means going back first). A view switch rebuilds the window, so
-    -- each view simply makes its own button.
-    local settings = opts.inSettings()
+    -- It collapses the window, except in the settings and info views, where it goes back to
+    -- the list (collapsing from there means going back first). A view switch rebuilds the
+    -- window, so each view simply makes its own button.
+    local away = opts.awayFromList()
     openButton = prettyui.SpriteButton.new(
         w.root,
-        settings and "BACK" or "MENU",
-        settings and opts.backToList or collapse,
+        away and "BACK" or "MENU",
+        away and opts.backToList or collapse,
         {
             x = layout.SLOT_X,
             y = layout.SLOT_Y,
             xAnchor = 1.0,
             size = BUTTON_SIZE,
-            tooltip = settings and BACK_TOOLTIP or COLLAPSE_TOOLTIP,
+            tooltip = away and BACK_TOOLTIP or COLLAPSE_TOOLTIP,
         }
     )
     opts.build(w)

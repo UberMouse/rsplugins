@@ -55,6 +55,13 @@ your client, never does anything in game for you, and sends nothing anywhere.
   as wide as the longest of your picked chores, so it keeps its size while you work through
   them. It shows no tooltip. Click the menu button to open the window again: it opens leftwards
   and down from the button.
+- **Info.** The info button, beside the settings button, opens a short help on the ideas
+  above, then every chore under one of three headings, each with its count: **Automatic**
+  (ticks itself, checked in game), **Unproven** (should tick itself, not yet checked in game)
+  and **Manual** (tick it by hand). Each row shows the chore's icon and name, with its period after a name offered in two periods
+  ("Dream of Iaia XP (weekly)"); hover one for the same tooltip as in settings. The rows can't
+  be clicked. The back button in the window's top-right corner returns to the list. The help is
+  broken into lines that fit the narrowest window, so it never overlaps when you resize.
 - **Moving it.** Drag the window by its title bar, and resize it from its edges or corners,
   which show a resize cursor when you hover them. While it is collapsed, hold **Alt** and drag
   the strip to move it. Alt-dragging only works with the console closed.
@@ -261,13 +268,13 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 
 | File | What |
 |---|---|
-| `main.lua` | The two views, list and settings, ticking and picking, and following the login and clock |
+| `main.lua` | The three views, list, settings and info, ticking and picking, and following the login and clock |
 | `shell/window.lua` | The window itself: making it, collapsing it to its strip and opening it again, and saving where it is |
 | `shell/strip.lua` | The collapsed strip's content: the next chore's row, which a click ticks, or a message |
 | `shell/detect.lua` | Seeing shop runs and collections done, from shop stock, the backpack and your tile |
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
-| `shell/rows.lua` | One chore's row in the list or settings: its icon, text and tick box (and a list row's grip), changed in place |
+| `shell/rows.lua` | One chore's row in the list, settings or info view: its icon, text and tick box (and a list row's grip; an info row has no box), changed in place |
 | `shell/stepper.lua` | A Shop runs line in settings: the chore's name and its "[-] N of M [+]" buttons |
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/prettyui_internals.lua` | Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI versions |
@@ -277,9 +284,10 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
 | `core/view.lua` | What the list, the collapsed strip and the settings groups show, as plain data |
-| `core/fit.lua` | Cutting a row's name short with "..." so it fits before the tick box |
+| `core/info.lua` | What the info view shows: the help, and each chore's status (Automatic, Unproven or Manual) from the data files' `proven` flags |
+| `core/fit.lua` | Cutting a row's name short with "..." so it fits before the tick box, and breaking the help into lines |
 | `core/layout.lua` | The saved window layout, read back and kept on screen, and where the collapsed strip goes |
-| `core/listlayout.lua` | Where the list's and settings' headings, subheadings and rows go in the window |
+| `core/listlayout.lua` | Where the list's, settings' and info view's headings, subheadings and rows go in the window |
 | `core/reorder.lua` | Where a dragged row and its neighbours go, and when the list scrolls under a drag |
 | `core/celebrate.lua` | Which celebrations a change to the picks and ticks earns |
 | `core/settings.lua` | The celebration settings, defaults and reading them back |
@@ -292,9 +300,28 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
 (`docs/testing.md`).
 
+## Mod.io summary
+
+The Profile's Summary field (shown under the screenshot on the list page; 10-250 ASCII
+characters):
+
+```text
+Track your daily, weekly and monthly RS3 chores in one window. Pick the ones you do and tick them off; shop runs and many more tick themselves.
+```
+
 ## Mod.io description
 
 ```markdown
+Chore Tracker is a checklist for RuneScape's repeatable chores: the daily, weekly and monthly tasks such as the Daily Challenge, Soul Reaper or the Giant Oyster.
+
+Pick the chores you do with the settings button, then click a chore in the list to tick it off. Ticks clear themselves at the game's resets, in UTC: daily chores at 00:00, weekly ones on Wednesday and monthly ones on the 1st. Drag a chore by its grip to put your list in your own order.
+
+Some chores tick themselves: the shop runs when you buy from their shops, Dell Monti's and the Weird Old Man's when their notes arrive in your backpack, and others, such as the Daily Challenge and Bert's sand, when the game's own record of your progress shows them done. Only a change seen while the plugin runs ticks a chore, so a chore done while it was off needs a tick by hand. The info button in the plugin lists every chore as Automatic, Unproven (should tick itself, not yet checked in game) or Manual.
+
+The menu button at the window's top-right corner folds it into a small strip showing your next chore, which a click ticks. When the plugin ticks a chore, or you finish a period's chores, a short popup celebrates it; settings turn the popups or their sound off.
+
+Your chores are saved per character, so each character has its own list.
+
 ## Email
 The contact email address for this plugin is you@example.com.
 
@@ -305,7 +332,7 @@ By submitting a Plugin (as defined in Schedule 4 of the EULA), you acknowledge t
 This plugin requests no permissions.
 
 ## Data Protection
-This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores in the "Seen from game vars" table above (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites, and each chore with one of the game's own item icons or sprites.
+This plugin uses the following information: the game clock, your own character's display name and position, the contents of your backpack, the stock of a shop you have open, your own character's game vars for the chores it ticks from them, such as the Daily Challenge and Bert's sand (to see them done), and the chores you pick and tick. It shows popups about those chores, using the game's own sounds and sprites, and each chore with one of the game's own item icons or sprites.
 This information is not transmitted outside of the plugin under any circumstances.
 Your picked chores in your order, the ones you ticked, and when you last bought from each watched shop, and how many shops each shop run needs (when you set fewer than all), are stored on this device in the plugin's PersistentDB, under your character's display name, with the window's position, size and collapsed state. Your choices of whether to show celebration popups and play their sound are stored in the same way, for all characters.
 ```

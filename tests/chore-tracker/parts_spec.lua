@@ -3,14 +3,13 @@
 require("tests.chore-tracker.support")
 local chores = require("data/chores")
 local counts = require("data/counts")
-local machines = require("data/machines")
 local parts = require("core/parts")
 local shops = require("data/shops")
 local state = require("core/state")
 local varRules = require("data/vars")
 
 describe("chore-tracker parts", function()
-    local built = parts.build(shops, varRules, machines, counts)
+    local built = parts.build(shops, varRules, counts)
 
     it("gives each chore with a choice its parts and default, as the user set them", function()
         local got = {}
@@ -25,9 +24,7 @@ describe("chore-tracker parts", function()
             ["bloodwood-tree"] = { 8, 1, "Trees" },
             ["player-owned-farm"] = { 7, 1, "Troughs" },
             ["penguin-hide-and-seek"] = { 13, 10, "Penguins" },
-            ["player-owned-ports"] = { 4, 1, "Voyages" },
-            ["invention-machine"] = { 6, 2, "Machines" },
-            ["invention-machine-weekly"] = { 6, 2, "Machines" },
+            ["player-owned-ports"] = { 4, 4, "Voyages" },
             ["thalmunds-wares"] = { 4, 4, "Slots" },
             ["shattered-worlds"] = { 3, 3, "Challenges" },
             ["broad-arrowheads"] = { 2, 2, "Shops" },
@@ -48,10 +45,8 @@ describe("chore-tracker parts", function()
         for _, part in ipairs(built["herb-run"].list) do
             assert.is_nil(part.name)
         end
-        assert.are.same(
-            { keys = { "INVENT_MACHINE_GUILD_1_OUTPUT" } },
-            built["invention-machine"].list[1]
-        )
+        -- Any Invention machine collect ticks its chores: they have no parts.
+        assert.is_nil(built["invention-machine"])
     end)
 
     it(
@@ -60,6 +55,9 @@ describe("chore-tracker parts", function()
             for _, part in ipairs(built["player-owned-ports"].list) do
                 assert.matches("^POP_VOYAGE_%d_DONE$", part.keys[1])
             end
+            -- Its count is fixed at all four voyages, with no help for a settings line.
+            assert.is_true(built["player-owned-ports"].fixed)
+            assert.is_nil(built["player-owned-ports"].help)
             assert.is_nil(built["fort-forinthry-bonus-xp"])
             assert.is_nil(built["arc-contracts"])
         end
@@ -68,13 +66,16 @@ describe("chore-tracker parts", function()
     it("fails naming a chore with parts that counts lacks, or a count for one without", function()
         local rule = { chore = "x", done = {}, part = "A", proven = true }
         assert.has_error(function()
-            parts.build({}, { rule }, {}, {})
+            parts.build({}, { rule }, {})
         end, "data/counts.lua lacks x, which has parts")
         assert.has_error(function()
-            parts.build({}, {}, {}, { y = { noun = "Ys" } })
+            parts.build({}, {}, { y = { noun = "Ys", help = "?" } })
         end, "data/counts.lua names y, which has no parts")
+        assert.has_error(function()
+            parts.build({}, { rule }, { x = { noun = "Xs" } })
+        end, "data/counts.lua gives x no help")
         -- A key named by two rules is one part.
-        local twice = parts.build({}, { rule, rule }, {}, { x = { noun = "Xs" } })
+        local twice = parts.build({}, { rule, rule }, { x = { noun = "Xs", help = "?" } })
         assert.are.equal(1, #twice.x.list)
     end)
 

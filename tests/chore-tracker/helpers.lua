@@ -382,13 +382,13 @@ end
 M.MINUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_MINUS")
 M.PLUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_PLUS")
 
--- The settings view's count line for chore `id`: its name and value texts and its minus
--- and plus button layers. They sit straight in the content: the name is the content's own
+-- The settings view's count line for chore `id`: its name and value texts, its minus and plus
+-- button layers, and the empty layer under the name that holds its tooltip. They sit straight in the content: the name is the content's own
 -- text with the chore's name, whole or cut with "..." (a settings row's label is inside its row
 -- layer), and the value and buttons share its row.
 ---@param h table
 ---@param id string
----@return { label: table, value: table, minus: table, plus: table }
+---@return { label: table, value: table, minus: table, plus: table, hover: table }
 function M.stepper(h, id)
     -- A chore sharing its name with another is labelled with its period (view.countSettings).
     local chore = assert(state.find(chores, id), "no chore " .. id)
@@ -413,6 +413,8 @@ function M.stepper(h, id)
         local inRow = proxy.y >= label.y and proxy.y < label.y + listlayout.ROW_HEIGHT
         if inRow and part.class == "ui.Text" and part.content:match("^%d+ of %d+$") then
             out.value = proxy
+        elseif inRow and part.class == "ui.Layer" and #h.ui:children(proxy) == 0 then
+            out.hover = proxy
         elseif inRow and part.class == "ui.Layer" then
             for _, inner in ipairs(h.ui:children(proxy)) do
                 local sprite = assert(uiFake.stateOf(inner)).spriteID
@@ -421,16 +423,20 @@ function M.stepper(h, id)
             end
         end
     end
-    assert(out.value and out.minus and out.plus, "an incomplete count line for " .. id)
+    assert(
+        out.value and out.minus and out.plus and out.hover,
+        "an incomplete count line for " .. id
+    )
     return out
 end
 
--- Open settings, step chore `id`'s needed count to `n` with its stepper, and go back
--- to the list.
+-- Pick chore `id` if it isn't (only picked chores have a count line), open settings, step its
+-- needed count to `n` with its stepper, and go back to the list.
 ---@param h table
 ---@param id string
 ---@param n integer
 function M.setNeeded(h, id, n)
+    if not M.findRow(h, M.name(id)) then M.togglePicks(h, { id }) end
     M.openSettings(h)
     local line = M.stepper(h, id)
     M.window(h):SetScrollPosition(line.label.y - 40)
@@ -449,12 +455,14 @@ end
 ---@param ids string[]
 function M.togglePicks(h, ids)
     M.openSettings(h)
-    local win = M.window(h)
     for _, id in ipairs(ids) do
         -- Settings lists every chore, so a row may be scrolled out of the view; bring it in.
+        -- Picking a chore with a count rebuilds the view on the next tick, so each pick
+        -- finds its row and window afresh.
         local picking = M.settingsRow(h, id)
-        win:SetScrollPosition(picking.layer.y - 40)
+        M.window(h):SetScrollPosition(picking.layer.y - 40)
         click(h, picking.label)
+        h:advance(20)
     end
     M.back(h)
 end

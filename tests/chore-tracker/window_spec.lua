@@ -416,7 +416,7 @@ describe("chore-tracker window", function()
         helpers.collapse(h)
         local shown = strip(h)
         -- Both are done at several parts, so each shows its count; a hand tick marks no part.
-        assert.are.equal("Daily: Player-Owned Port (0/1)", shown.text)
+        assert.are.equal("Daily: Player-Owned Port (0/4)", shown.text)
 
         local writes = h.dbWrites
         assert.is_true(h.ui:click(shown.label))

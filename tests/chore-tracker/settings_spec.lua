@@ -6,6 +6,7 @@ local catalog = require("tests.harness.catalog")
 local chores = require("data/chores")
 local fonts = require("tests.harness.api.fonts")
 local listlayout = require("core/listlayout")
+local view = require("core/view")
 local loaded, openSettings = helpers.loaded, helpers.openSettings
 
 local BOX_EMPTY, BOX_EMPTY_HOVERED = helpers.BOX_EMPTY, helpers.BOX_EMPTY_HOVERED
@@ -24,7 +25,6 @@ describe("chore-tracker settings rows", function()
         h:advance(600)
         local list = helpers.rows(h)
         assert.are.equal(#chores, #list)
-        local view = require("core/view")
         local expected = {} ---@type { text: string, y: number }[]
         for _, group in ipairs(view.byPeriod(chores)) do
             local heading = h.ui:get("Title", { text = group.title })
@@ -138,29 +138,73 @@ describe("chore-tracker settings rows", function()
 end)
 
 describe("chore-tracker count settings", function()
-    -- Every chore with a choice of parts, in data/chores.lua's order, at its default: all of a
-    -- shop run's shops, else data/counts.lua's.
+    -- Every chore with a count, in data/chores.lua's order, at its default: all of a shop run's
+    -- shops, else data/counts.lua's.
     local COUNTS = {
         { id = "bloodwood-tree", value = "1 of 8" },
         { id = "herb-run", value = "8 of 11" },
-        { id = "invention-machine", value = "2 of 6" },
         { id = "player-owned-farm", value = "1 of 7" },
-        { id = "player-owned-ports", value = "1 of 4" },
         { id = "penguin-hide-and-seek", value = "10 of 13" },
         { id = "shattered-worlds", value = "3 of 3" },
-        { id = "invention-machine-weekly", value = "2 of 6" },
         { id = "broad-arrowheads", value = "2 of 2" },
         { id = "feather-shop-run", value = "4 of 4" },
         { id = "rune-shop-run", value = "11 of 11" },
         { id = "thalmunds-wares", value = "4 of 4" },
         { id = "vial-of-water-packs", value = "5 of 5" },
     }
+    -- Picked chores with no count line: a single shop, a fixed count (the port's four voyages),
+    -- no parts (any Invention machine collect ticks), and rules that are alternatives.
+    local NO_COUNT = {
+        "yak-hide",
+        "player-owned-ports",
+        "invention-machine",
+        "invention-machine-weekly",
+        "fort-forinthry-bonus-xp",
+    }
+
+    -- The settings window's scroll.
+    ---@param h table
+    ---@return number
+    local function prettyuiScroll(h)
+        -- PrettyUI 1.2.0's internal scroll, as shell/prettyui_internals.lua reads it.
+        return assert(window(h)._scroll.scrollY, "no scroll")
+    end
+
+    ---@param h table
+    ---@return table? the How many to do help text, if shown
+    local function countsHelp(h)
+        for _, text in ipairs(h.ui:find("Text")) do
+            if text.content:gsub("<br>", " ") == view.NO_COUNTS then return text end
+        end
+        return nil
+    end
+
+    it("shows help instead of lines while no picked chore has a count", function()
+        local h = loaded()
+        helpers.togglePicks(h, NO_COUNT)
+        openSettings(h)
+        local title = h.ui:get("Title", { text = "How many to do" })
+        local help = assert(countsHelp(h), "no help")
+        assert.is_true(help.y >= title.y + title.height)
+        assert.is_true(help.y + help.height <= h.ui:get("Title", { text = "Daily" }).y)
+        for _, id in ipairs(NO_COUNT) do
+            assert.has_error(function()
+                helpers.stepper(h, id)
+            end)
+        end
+    end)
 
     it(
-        "shows a stepper per chore with a choice of parts, in list order, at its default, above the list",
+        "shows a stepper per picked chore with a count, in list order, at its default, above the list",
         function()
             local h = loaded()
+            local ids = {}
+            for i, count in ipairs(COUNTS) do
+                ids[i] = count.id
+            end
+            helpers.togglePicks(h, ids)
             openSettings(h)
+            assert.is_nil(countsHelp(h))
             local title = h.ui:get("Title", { text = "How many to do" })
             local switches = h.ui:find("CheckboxButton")[1]
             assert.is_true(switches.root.y + switches.root.height <= title.y)
@@ -174,18 +218,61 @@ describe("chore-tracker count settings", function()
             end
             -- The lists' layout starts below the block.
             assert.is_true(lastY + listlayout.ROW_HEIGHT <= h.ui:get("Title", { text = "Daily" }).y)
-            -- A single-shop chore has no stepper, nor one whose rules are alternatives.
-            assert.has_error(function()
-                helpers.stepper(h, "yak-hide")
-            end)
-            assert.has_error(function()
-                helpers.stepper(h, "fort-forinthry-bonus-xp")
-            end)
         end
     )
 
+    it(
+        "adds a picked chore's line and drops an unpicked one's, keeping the row in place",
+        function()
+            local h = loaded()
+            helpers.togglePicks(h, { "rune-shop-run" })
+            openSettings(h)
+            local row = helpers.settingsRow(h, "herb-run")
+            window(h):SetScrollPosition(row.layer.y - 100)
+            local shownAt = row.layer.y - prettyuiScroll(h)
+            helpers.click(h, row.label)
+            h:advance(20)
+            helpers.stepper(h, "herb-run")
+            row = helpers.settingsRow(h, "herb-run")
+            assert.are.equal(BOX_TICKED, row.box.spriteID)
+            assert.are.equal(shownAt, row.layer.y - prettyuiScroll(h))
+            helpers.click(h, row.label)
+            h:advance(20)
+            assert.has_error(function()
+                helpers.stepper(h, "herb-run")
+            end)
+            row = helpers.settingsRow(h, "herb-run")
+            assert.are.equal(shownAt, row.layer.y - prettyuiScroll(h))
+            -- Unpicking the last chore with a count brings the help back.
+            local runes = helpers.settingsRow(h, "rune-shop-run")
+            window(h):SetScrollPosition(runes.layer.y - 40)
+            helpers.click(h, runes.label)
+            h:advance(20)
+            assert.is_not_nil(countsHelp(h))
+        end
+    )
+
+    it("says what a count counts, and per when, in its line's tooltip", function()
+        local h = loaded()
+        helpers.togglePicks(h, { "player-owned-farm", "feather-shop-run" })
+        openSettings(h)
+        for id, want in pairs({
+            ["player-owned-farm"] = "Player-Owned Farm<br>How many pens you feed, the breeding pen "
+                .. "included each day.",
+            ["feather-shop-run"] = "Feather Shop Run<br>How many of its shops you buy from each "
+                .. "week.",
+        }) do
+            local line = helpers.stepper(h, id)
+            window(h):SetScrollPosition(line.label.y - 40)
+            assert(h.ui:hover(line.hover))
+            assert.are.same({ want }, h.ui:tooltips())
+            h.ui:leave()
+        end
+    end)
+
     it("steps a count in place, saving and logging, with no-ops at either end", function()
         local h = loaded()
+        helpers.togglePicks(h, { "broad-arrowheads" })
         openSettings(h)
         local win, line = window(h), helpers.stepper(h, "broad-arrowheads")
         win:SetScrollPosition(line.label.y - 40)
@@ -214,6 +301,7 @@ describe("chore-tracker count settings", function()
         "cuts a long name with dots short of the minus button, and re-fits it on a resize",
         function()
             local h = loaded()
+            helpers.togglePicks(h, { "broad-arrowheads" })
             openSettings(h)
             -- Down to the window's least width.
             h.ui:resize(window(h), -1000, 0)
@@ -238,6 +326,7 @@ describe("chore-tracker count settings", function()
         h.world:logout()
         h.world:login("Lynx Titan")
         h:advance(helpers.POLL_MS)
+        helpers.togglePicks(h, { "feather-shop-run" })
         openSettings(h)
         assert.are.equal("4 of 4", helpers.stepper(h, "feather-shop-run").value.content)
     end)
@@ -259,7 +348,11 @@ describe("chore-tracker count settings", function()
 
     it("loads a version 2 state with every chore at its default count", function()
         local h = loaded({ load = false })
-        helpers.seed(h, "state:Zezima", { version = 2, selected = {}, done = {}, shops = {} })
+        helpers.seed(
+            h,
+            "state:Zezima",
+            { version = 2, selected = { "rune-shop-run" }, done = {}, shops = {} }
+        )
         h:load()
         openSettings(h)
         assert.are.equal("11 of 11", helpers.stepper(h, "rune-shop-run").value.content)

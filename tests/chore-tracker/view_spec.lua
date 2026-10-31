@@ -122,6 +122,7 @@ describe("chore-tracker view", function()
             wshop = {
                 noun = "Shops",
                 word = "bought",
+                help = "How many shops",
                 list = {
                     { name = "Shop A", keys = { "SHOP_A" } },
                     { name = "Shop B", keys = { "SHOP_B", "SHOP_B2" } },
@@ -259,14 +260,42 @@ describe("chore-tracker view", function()
             assert.are.same({ "Patches this week (1/1):" }, view.partTooltip(row, "weekly"))
         end)
 
-        it("lists each multi-shop chore for settings, picked or not, in list order", function()
+        it("lists each picked chore with a count for settings, with its help", function()
             local s = state.setPartsNeeded(state.new(), byId.wshop, listed.wshop, 1)
+            -- Unpicked, it has no line.
+            assert.are.same({}, view.countSettings(s, chores, listed))
+            s = state.select(state.select(s, chores, "wshop"), chores, "dshop")
             local lines = view.countSettings(s, chores, listed)
             assert.are.equal(1, #lines)
             assert.are.equal(byId.wshop, lines[1].chore)
+            assert.are.equal("WSHOP", lines[1].label)
             assert.are.equal(1, lines[1].needed)
             assert.are.equal(2, lines[1].total)
             assert.are.equal("1 of 2", view.neededText(lines[1].needed, lines[1].total))
+            assert.are.equal("WSHOP<br>How many shops each week.", lines[1].tooltip.text)
+            -- A fixed count has no line, though its row still counts.
+            local fixed = {
+                noun = "Voyages",
+                word = "done",
+                list = listed.wshop.list,
+                default = 2,
+                fixed = true,
+            }
+            assert.are.same({}, view.countSettings(s, chores, { wshop = fixed }))
+            assert.is_false(view.hasCount(fixed))
+            assert.is_true(view.hasCount(listed.wshop))
+            -- A fixed count ignores a count stored before it was fixed.
+            assert.are.equal(2, state.partsNeeded(s, byId.wshop, fixed))
+        end)
+
+        it("tells apart same-named chores of two periods by their period", function()
+            local twin = { id = "wtwin", name = "Same", period = "weekly" }
+            local other = { id = "dtwin", name = "Same", period = "daily" }
+            local both = { other, twin }
+            local s = state.select(state.select(state.new(), both, "wtwin"), both, "dtwin")
+            local lines =
+                view.countSettings(s, both, { wtwin = listed.wshop, dtwin = listed.wshop })
+            assert.are.same({ "Daily: Same", "Weekly: Same" }, { lines[1].label, lines[2].label })
         end)
 
         it("gives a choice of shops only with more than one", function()

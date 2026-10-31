@@ -95,24 +95,25 @@ ticked until its reset, and unticking one by hand changes nothing below.
   versions, before and after a quest, counts once, bought from either.
 - **Chores done at several places.** Some chores have parts you may do all or only some of:
   a shop run's shops, the herb patches, bloodwood trees, farm troughs, the week's penguins,
-  the port's voyages, the Invention machines, Thalmund's slots and the Shattered Worlds
-  challenges. The plugin records each part as done this period when it sees it done, and
+  the port's voyages, Thalmund's slots and the Shattered Worlds challenges. The plugin records each part as done this period when it sees it done, and
   ticks the chore once as many are done as it needs. Its row shows how many of those it
   needs are done, as "Herb Run (3/8)" (never more than it needs), changing as you go without
   moving the list, and its tooltip gives the same count; a shop run's tooltip also lists every
   shop as "bought" or "not yet". The other parts aren't listed by name, since which of the
   game's records is which patch or penguin isn't known.
 - **How many to do.** In the settings view, under **How many to do** (below Celebrations),
-  each chore with more than one part has a line with its name and "[-] 8 of 11 [+]": click the
-  minus or plus to set how many of its parts tick it, from 1 to all of them. A shop run starts
-  at all its shops, Thalmund's Wares at all four slots and Shattered Worlds at all three
+  each chore you picked that has more than one part has a line with its name and
+  "[-] 8 of 11 [+]": click the minus or plus to set how many of its parts tick it, from 1 to
+  all of them. Hover the name for what it counts, such as "How many pens you feed, the
+  breeding pen included each day." for the Player-Owned Farm. Picking or unpicking such a
+  chore adds or drops its line; with none picked, the block says what it is for. A shop run
+  starts at all its shops, Thalmund's Wares at all four slots and Shattered Worlds at all three
   challenges; the others start where most players are: 8 of the 11 herb patches, 1 of the 8
-  bloodwood trees, 1 of the 7 farm troughs, 10 of the 13 penguins (the polar bear counts as
-  one), 1 of the 4 voyages, and 2 of the 6 Invention machines (daily and weekly each have a
-  count, labelled "Daily:" and "Weekly:"). A count saves straight away and is kept per
-  character, as characters reach different places. Changing it never ticks or unticks the
-  chore: lowered to what you have already done, the chore ticks on the next part you do;
-  raised above it, a tick stays.
+  bloodwood trees, 1 of the 7 farm troughs and 10 of the 13 penguins (the polar bear counts as
+  one). The Player-Owned Port has no line: it always needs all 4 voyages. A count saves
+  straight away and is kept per character, as characters reach different places. Changing it
+  never ticks or unticks the chore: lowered to what you have already done, the chore ticks on
+  the next part you do; raised above it, a tick stays.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or
@@ -121,9 +122,8 @@ ticked until its reset, and unticking one by hand changes nothing below.
   taking some out of the bank, a trade or picking them up near the giver ticks the chore too.
 - **Collecting from your Invention machines** (daily and weekly). Each Invention
   Guild machine keeps what it made in a store the game sends your client wherever you are, and
-  only collecting takes from it, so a machine whose store goes down counts as done, and the
-  chore ticks once as many machines are as it needs (2 unless you change it). Filling a machine
-  doesn't count.
+  only collecting takes from it, so the chore ticks when any machine's store goes down. Filling
+  a machine doesn't count.
 - **Seen from game vars.** The game keeps a record of your character's progress in numbered
   values called vars, and sends your client yours as they change. A chore below ticks when
   one of these changes so that it shows the chore done:
@@ -171,7 +171,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Giant Oyster | the oyster has been fed both its sea cucumber and its seaweed |
   | Arc Contracts | you complete the day's last contract: 3, plus one for each "contracts per day" upgrade bought |
   | Penguin Hide and Seek | you spot the week's penguins or the polar bear: each is a part, 10 by default |
-  | Player-Owned Port | you send ships on voyages (each voyage slot is a part, 1 by default), or buy the Black Marketeer's offer, which ticks it by itself (the market part is *unproven*) |
+  | Player-Owned Port | you send ships on all 4 voyages (each voyage slot is a part), or buy the Black Marketeer's offer, which ticks it by itself (the market part is *unproven*) |
   | Fort Forinthry Bonus XP | any skill's bonus XP goes up while you stand within 10 tiles of Aster, in the Town Hall: claiming from Aster does that (so does a lamp or star used beside her) |
   | Dream of Iaia Resources (daily and weekly) | every base-camp resource you have workers on has been used down to 0, and one of them just fell (sending the workers elsewhere doesn't tick it) |
   | Dream of Iaia XP (weekly and monthly) | every skilling station you have workers for holds 0 stored XP, and one just fell (sending the workers elsewhere doesn't tick it) |
@@ -260,8 +260,7 @@ not), logs
 `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`), and a collection that ticks its
 chore logs `[CHORES] collected <chore id> near <giver>` (such as
 `[CHORES] collected oldman-potato-cactus near the Weird Old Man`), a collect from an
-Invention machine that ticks its chore, or is the period's first from that machine, logs
-`[CHORES] collected <chore id> from <inventory>` (such as
+Invention machine that ticks its chore logs `[CHORES] collected <chore id> from <inventory>` (such as
 `[CHORES] collected invention-machine from INVENT_MACHINE_GUILD_3_OUTPUT`), and a chore ticked
 from the game's vars logs `[CHORES] seen <chore id> done (<var>)`, naming the var whose change
 ticked it (such as `[CHORES] seen bert-sand done (HANDSAND_BUCKETS_CLAIMED_TODAY)`); a part
@@ -313,7 +312,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
 | `shell/rows.lua` | One chore's row in the list, settings or info view: its icon, text and tick box (and a list row's grip; an info row has no box), changed in place |
-| `shell/stepper.lua` | A How many to do line in settings: the chore's name and its "[-] N of M [+]" buttons |
+| `shell/stepper.lua` | A How many to do line in settings: the chore's name, with its tooltip, and its "[-] N of M [+]" buttons |
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/prettyui_internals.lua` | Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI versions |
 | `shell/store.lua` | Saving and loading in PersistentDB |
@@ -335,7 +334,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
 | `data/vars.lua` | The chores seen from game vars and each one's rule (hand-written) |
 | `data/machines.lua` | The machine chores and the output inventories collecting empties (hand-written) |
-| `data/counts.lua` | The chores done at several parts that aren't shops: their parts' word and default count (hand-written) |
+| `data/counts.lua` | The chores done at several parts that aren't shops: their parts' word, default count and settings tooltip (hand-written) |
 | `data/icons.lua` | Each chore's icon, a built-in item or interface sprite (hand-written) |
 
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API

@@ -1,9 +1,9 @@
 -- Chores done by collecting what a machine made, hand-written. Each machine keeps its product
 -- in an output inventory the client holds wherever the player is (once they have been to the
--- machines since logging in), and only collecting takes from it, so shell/detect.lua counts a
--- machine done when the total in its output inventory falls (core/detect.lua, fell). Each
--- machine is a part (core/parts.lua): the chore ticks once its count of them is done, 2 by
--- default (data/counts.lua). `proven` marks a chore seen ticking in the beta client.
+-- machines since logging in), and only collecting takes from it, so shell/detect.lua ticks a
+-- chore when the total in any of its output inventories falls (core/detect.lua, fell): one
+-- machine collected is enough, with no count to set (the user's call, 2026-10-31). `proven`
+-- marks a chore seen ticking in the beta client.
 --
 -- The Invention Guild's six machines: collecting 7500 eternal planks emptied one's output, and
 -- the outputs updated as the machines worked while the user was at the Player-Owned Farm (chore

@@ -238,18 +238,17 @@ local function onNotesRose(before, after)
     end
 end
 
--- Something was collected from machine output `name`: record that machine done for each
--- chore it serves, which ticks the chore once enough machines are (state.recordPart). Each
--- chore it changes is logged, as for a purchase.
+-- Something was collected from machine output `name`: tick each chore it serves, if it isn't
+-- done this period, logging only a tick.
 ---@param name string
 local function onCollected(name)
     assert(options, "init runs before any inventory event")
-    local say, parts = options.say, options.parts
+    local say = options.say
     options.apply(function(tracker, now)
         for _, chore in ipairs(machineChores[name]) do
-            local recorded = state.recordPart(tracker, chore, parts[chore.id], name, now)
-            if recorded ~= tracker then say("collected", chore.id, "from", name) end
-            tracker = recorded
+            local ticked = state.autoMark(tracker, chore, now)
+            if ticked ~= tracker then say("collected", chore.id, "from", name) end
+            tracker = ticked
         end
         return tracker
     end)

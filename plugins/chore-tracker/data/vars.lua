@@ -410,8 +410,8 @@ end
 -- Player-Owned Port: each voyage slot's _DONE read 1 with its voyage back, so sending a new one
 -- takes it to 0; and the Black Marketeer's offer (POP_MARKET_QUANTITY, 133 that day) taken to
 -- fall to 0 when bought. Only a fall ticks, so an unsent var's 0 never does. Each voyage is a
--- part (data/counts.lua); the market buy ticks the chore by itself (the user's call,
--- 2026-10-31). A !setvar of POP_VOYAGE_1_DONE to 0 ticked the chore in the client
+-- part, all four needed (data/counts.lua); the market buy ticks the chore by itself (the
+-- user's call, 2026-10-31). A !setvar of POP_VOYAGE_1_DONE to 0 ticked the chore in the client
 -- (2026-10-31); the market rule was never seen ticking, as the voyage had already ticked the
 -- day.
 for n = 1, 4 do

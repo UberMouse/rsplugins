@@ -84,7 +84,7 @@ end
 local BUTTON_SIZE = layout.BUTTON_SIZE
 
 -- Each chore's parts and their default count, from the data files.
-local parts = partsCore.build(shops, varRules, machines, counts)
+local parts = partsCore.build(shops, varRules, counts)
 
 -- How often, in Logic ticks (50 a second), to look for a login change and a moved or
 -- resized window.
@@ -114,13 +114,20 @@ local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
 -- The settings view's count lines, refitted with the rows; they go with the window too.
 local stepperViews = {} ---@type ChoreStepperView[]
--- While the info view is open: the window width its help was wrapped for, and the width at the
--- last poll, to re-lay the help once a resize settles. They go with the window too.
+-- While the info view, or the settings view's help for an empty How many to do block, is open:
+-- the window width its help was wrapped for, and the width at the last poll, to re-lay the help
+-- once a resize settles. They go with the window too.
 local helpWidth = nil ---@type integer?
 local polledWidth = nil ---@type integer?
 -- A view switch left for the next Logic tick. A button's action mustn't destroy the button
 -- while PrettyUI is still handling its click, and a view switch rebuilds the window.
 local pendingMode = nil ---@type ChoreMode?
+-- A settings rebuild left for the next Logic tick, for the same reason: the chore just picked
+-- or unpicked, whose count line comes or goes. Its row's content height is kept until then,
+-- so the rebuild can keep that row where it was in the window.
+local pendingCounts = nil ---@type { id: string, y: integer }?
+-- The settings view's rows' content heights, by chore id; they go with the window too.
+local settingsRowYs = {} ---@type table<string, integer>
 -- The celebration settings, for all characters.
 local celebrations = settings.default()
 
@@ -319,7 +326,9 @@ end
 ---------------------------------------------------------------------------
 
 -- A settings row was clicked: pick or unpick its chore, save it straight away and tick or
--- empty the row's box. No celebration: picking is not completing.
+-- empty the row's box. A chore with a count line in How many to do (which lists picked chores
+-- only) has the view rebuilt on the next tick, to add or drop that line. No celebration:
+-- picking is not completing.
 ---@param chore Chore
 local function onPick(chore)
     assert(character, "settings are only built for a logged-in character")
@@ -331,6 +340,10 @@ local function onPick(chore)
     end
     store.saveState(character, tracker)
     rows.showPick(rowViews[chore.id], chore.name, picked)
+    local own = parts[chore.id]
+    if own and view.hasCount(own) then
+        pendingCounts = { id = chore.id, y = assert(settingsRowYs[chore.id], "a settings row") }
+    end
 end
 
 -- A celebration setting was ticked or unticked: apply it and save it for all characters.
@@ -363,14 +376,22 @@ local function onPartsNeeded(chore, delta, shown)
     say("needed", chore.id, needed)
 end
 
--- The "How many to do" block: its title next in PrettyUI's flow, then a stepper per chore with
--- more than one part, picked or not. Gives back the block's bottom.
+-- The "How many to do" block: its title next in PrettyUI's flow, then a stepper per picked
+-- chore with a count (view.countSettings), or, with none, help saying what the block is for,
+-- wrapped to the window's width (re-laid after a resize, as the info view's help is). Gives
+-- back the block's bottom.
 ---@param w prettyui.Window
 ---@param wheel ChoreWheelHandler?
 ---@return integer
 local function buildCounts(w, wheel)
     local title = w:AddTitle("How many to do")
     local settingsLines = view.countSettings(tracker, chores, parts)
+    if #settingsLines == 0 then
+        helpWidth = w.root.width
+        polledWidth = helpWidth
+        local help = w:AddText(rows.wrapText(view.NO_COUNTS, layout.helpTextWidth(helpWidth)))
+        return help.y + help.height
+    end
     local ys, bottom = listlayout.stack(#settingsLines, title.y + title.height)
     for i, line in ipairs(settingsLines) do
         stepperViews[#stepperViews + 1] = stepper.new(
@@ -381,6 +402,7 @@ local function buildCounts(w, wheel)
             function(delta, shown)
                 onPartsNeeded(line.chore, delta, shown)
             end,
+            line.tooltip,
             wheel
         )
     end
@@ -435,6 +457,7 @@ local function buildSettings(w)
                     onPick(chore)
                 end, { wheel = wheel })
                 rowViews[chore.id] = row
+                settingsRowYs[chore.id] = spots.rows[chore.id]
                 rows.showPick(row, chore.name, state.isSelected(tracker, chore.id))
                 rows.setTooltip(row, view.tooltip(chore))
             end
@@ -448,7 +471,7 @@ end
 ---------------------------------------------------------------------------
 
 -- The info view: the help paragraphs in PrettyUI's flow, each broken into lines that fit the
--- window's width now (core/layout.lua, helpTextWidth; relayInfoOnPoll below re-lays them
+-- window's width now (core/layout.lua, helpTextWidth; relayHelpOnPoll below re-lays them
 -- after a resize), then a heading per status and a display-only row per chore below them, all
 -- from the data files. Nothing here reads the game.
 ---@param w prettyui.Window
@@ -481,15 +504,15 @@ local function buildInfo(w)
     w:SetContentHeight(spots.height)
 end
 
--- On the poll, rebuild the info view (keeping its scroll) once the window's width differs from
--- the one its help was wrapped for and has stopped changing (layout.relayInfo), unless a resize
--- drag is in progress, since the rebuild would end it. Does nothing outside the info view or
--- while collapsed.
-local function relayInfoOnPoll()
+-- On the poll, rebuild the view with help in it (the info view, or settings with an empty How
+-- many to do block), keeping its scroll, once the window's width differs from the one its help
+-- was wrapped for and has stopped changing (layout.relayInfo), unless a resize drag is in
+-- progress, since the rebuild would end it. Does nothing without help shown or while collapsed.
+local function relayHelpOnPoll()
     if helpWidth == nil or window.isCollapsed() then return end
     local w = window.current()
-    assert(w, "the info view is only re-laid while its window exists")
-    assert(polledWidth, "buildInfo sets both widths")
+    assert(w, "help is only re-laid while its window exists")
+    assert(polledWidth, "the view that wraps help sets both widths")
     local width = w.root.width
     local settled = layout.relayInfo(helpWidth, polledWidth, width)
     polledWidth = width
@@ -552,9 +575,9 @@ window.init({
     backToList = function()
         pendingMode = "list"
     end,
-    -- The old window's rows, headings, count lines and info widths went with it.
+    -- The old window's rows, headings, count lines and help widths went with it.
     clearViews = function()
-        rowViews, headings, stepperViews = {}, {}, {}
+        rowViews, headings, stepperViews, settingsRowYs = {}, {}, {}, {}
         helpWidth, polledWidth = nil, nil
     end,
     build = buildContent,
@@ -659,6 +682,20 @@ local function sync(clockTicked)
     end
 end
 
+-- Rebuild settings for a count line come or gone (onPick), keeping the clicked chore's row
+-- where it was in the window: the scroll moves by as much as the block above it grew or
+-- shrank. Skipped if the view has moved on (logged out, collapsed, or no longer settings).
+---@param pending { id: string, y: integer }
+local function rebuildCounts(pending)
+    local w = window.current()
+    if not w or window.isCollapsed() or shownView() ~= "settings" then return end
+    local scrollY = prettyuiInternals.scrollPosition(w)
+    window.rebuild(true)
+    local moved = settingsRowYs[pending.id]
+    local now = window.current()
+    if scrollY and moved and now then now:SetScrollPosition(scrollY + moved - pending.y) end
+end
+
 ---------------------------------------------------------------------------
 -- Start and stop
 ---------------------------------------------------------------------------
@@ -670,12 +707,16 @@ Event.Logic.Subscribe("chore-tracker", function(ev)
     if pendingMode then
         mode = pendingMode
         pendingMode = nil
+        pendingCounts = nil
         window.rebuild(false)
+    elseif pendingCounts then
+        rebuildCounts(pendingCounts)
+        pendingCounts = nil
     end
     if ev.logicTick % POLL_TICKS == 0 then
         sync(false)
         window.saveLayoutIfChanged()
-        relayInfoOnPoll()
+        relayHelpOnPoll()
         refitRows()
     end
     -- Every tick, so a grip's target keeps up with the window moving or scrolling.

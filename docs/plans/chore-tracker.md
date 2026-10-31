@@ -22,7 +22,7 @@ that dumps what a plugin sees to a local server (`lib/dev/`).
 | C | Shop runs tick on a purchase; Dell Monti and the Weird Old Man tick on notes gained nearby | `22f67e4..6125dd2` |
 | C2 | Chores tick from the player's own game vars: 7 proven or user-accepted, 16 unproven | `6125dd2..69d3f6f` |
 | D | The 30 manual chores audited: 24 now tick themselves, all seen ticking in the client; 6 confirmed manual (see below) | 2026-10-31 |
-| E | Every chore with several options gets a count in settings ("How many to do"), not just shop runs | 2026-10-31 |
+| E | Every chore with several options gets a count in settings ("How many to do"), not just shop runs; only picked chores show, each with a tooltip | 2026-10-31 |
 
 62 of the 68 chores tick themselves (41 checked in game, 21 unproven). The plugin README's "Chores it ticks for you" is the list,
 and `data/shops.lua`, `data/collections.lua` and `data/vars.lua` are the source.
@@ -66,14 +66,16 @@ These are the user's calls. They aren't all visible in the code.
   - `GODSS_PLAYER` is another player's id. Never read it.
 - **A chore with several options has a count** (the user, 2026-10-31): every chore done at
   several parts (`core/parts.lua`: shops, herb patches, bloodwood trees, farm troughs,
-  penguins, voyages, Invention machines, Thalmund's slots, Shattered Worlds' challenges) ticks
-  once the player's count of them is done this period, set in settings' "How many to do". The
-  maximums are the parts' own numbers (the user confirmed them). Defaults, the user's: shop
-  runs, Thalmund and Shattered Worlds all; herb patches 8 of 11, penguins 10 of 13 (12 and the
-  polar bear), Invention machines 2 of 6, bloodwood trees, troughs and voyages 1. The port's
-  count is over its 4 voyages; a Black Marketeer buy ticks it by itself. Chores whose rules are
-  alternatives (Fort's 29 skills, Arc contracts' upgrade levels) or counts of one activity
-  (sinkholes, bounties) have no count.
+  penguins, voyages, Thalmund's slots, Shattered Worlds' challenges) ticks once the player's
+  count of them is done this period, set in settings' "How many to do". The maximums are the
+  parts' own numbers (the user confirmed them). Defaults, the user's: shop runs, Thalmund and
+  Shattered Worlds all; herb patches 8 of 11, penguins 10 of 13 (12 and the polar bear),
+  bloodwood trees and troughs 1. Two counts aren't worth a setting (the user): the
+  Player-Owned Port is fixed at all 4 voyages (a Black Marketeer buy still ticks it by
+  itself), and the Invention machines have no parts, any one collect ticking both. The block
+  lists only picked chores, each line's tooltip saying what it counts, and says what it is
+  for when none is picked. Chores whose rules are alternatives (Fort's 29 skills, Arc
+  contracts' upgrade levels) or counts of one activity (sinkholes, bounties) have no count.
 - **PrettyUI has no licence:** read its source locally, never copy or vendor it. The window's
   scroll keep and the drag grips read PrettyUI 1.2.0's internal `_scroll.scrollY`, each list
   row is handed the window's internal `_onScrollWheel` so the wheel scrolls over it, and the
@@ -207,13 +209,13 @@ day in brackets.
 | Arc Supplies from Rosie | `ELR1_DAILY_SUPPLIES_TAKEN == 1` [0] | `ELR2_FREE_SUPPLIES` (4 bits) unused |
 | Giant Oyster | `TUTISLAND_REWARD_OYSTER_FED_SEACUCMBER == 1` and `_SEAWEED == 1` [0, 0; `TUTISLAND_REWARD_STATE` 1] | ticks on feeding, the month's last step; looting last month's chest isn't seen |
 | Penguin Hide and Seek | each `PENG_SPY_<0..11> == 1` or `PENG_SPY_BEAR_FOUND == 1` [all 0, none spotted this week] is a part; 10 of 13 tick the week by default | the wiki's week is 12 penguins and the bear; `PENG_SPY_POINTS` (35) and `_TOTAL_PENG` (311) look lifelong |
-| Player-Owned Port | each `POP_VOYAGE_<1..4>_DONE` falling to 0 (sending a voyage) [all 1, voyages back] is a part, 1 by default; or `POP_MARKET_QUANTITY` falls to 0, ticking it alone (buying the Black Marketeer's offer) [133] | the market rule is unproven: its `!setvar` came after the voyage had ticked the day |
+| Player-Owned Port | each `POP_VOYAGE_<1..4>_DONE` falling to 0 (sending a voyage) [all 1, voyages back] is a part, all 4 needed; or `POP_MARKET_QUANTITY` falls to 0, ticking it alone (buying the Black Marketeer's offer) [133] | the market rule is unproven: its `!setvar` came after the voyage had ticked the day |
 
 ### Automatic: seen ticking on the real activity (2026-10-31)
 
 | Chore | Detector | What was seen |
 |---|---|---|
-| Invention Machines (daily, weekly) | each `INVENT_MACHINE_GUILD_<1..6>_OUTPUT` total falling (`core/detect.lua` `fell`), a collect, is a part; 2 by default. Filling isn't counted | the user collected from machine 3: `[CHORES] collected invention-machine from INVENT_MACHINE_GUILD_3_OUTPUT`, and the weekly one. After a client restart the outputs weren't held (`Inventory.Find` nil, even after `!inventmachinerun`) until the user reached the machines |
+| Invention Machines (daily, weekly) | any `INVENT_MACHINE_GUILD_<1..6>_OUTPUT` total falls (`core/detect.lua` `fell`): a collect. Filling isn't counted | the user collected from machine 3: `[CHORES] collected invention-machine from INVENT_MACHINE_GUILD_3_OUTPUT`, and the weekly one. After a client restart the outputs weren't held (`Inventory.Find` nil, even after `!inventmachinerun`) until the user reached the machines |
 | Fort Forinthry Bonus XP | any `BONUSXP_<skill>` rises while the player is within 10 tiles of Aster (3302, 3571): a new `near` field in the rule language (`core/vars.lua`), the tile read only when such a rule's var changes. A lamp or star used beside Aster ticks it too | the user's claim raised `BONUSXP_AGILITY` 0 -> 1596975 beside Aster; then a `!setvar` of it there logged `seen fort-forinthry-bonus-xp done (BONUSXP_AGILITY)`. The Town Hall's own `PLAYER_FORT_GLE_TOTAL_XP_GAINED` never reaches the client |
 | Bandit Duty Free | a shop row: Noterazzo's shop is the inventory `TAXFREE` (not `DT_BANDIT_SHOP`) | a purchase moved `TAXFREE`; after a reload a second purchase logged `purchase bandit-duty-free at Noterazzo, Bandit Duty Free`. The camp's bandits kill an unskulled player: get skulled by Mr Ex first (Edgeville, 3088, 3507).
 
@@ -354,7 +356,7 @@ it with location or a var. There is no interface-opened event.
   for an unknown var or config name is unconfirmed; the plugin handles both.
 - A count's part rule seen moving in play: a `[CHORES] seen <id> part (<var>)` line (herb
   patches, trees, troughs, penguins and voyages were proven one var each; the others share the
-  layout). Two Invention machines collected in a day should tick the machine chores.
+  layout).
 - Console regex for all of the plugin's detection lines:
   `\[CHORES\] (purchase|collected|seen|unknown var)`.
 

@@ -1,9 +1,9 @@
 -- A settings line that sets a number: a name at the left, cut with "..." to stop short of the
--- buttons, and "[-] N of M [+]" at the right edge (the Shop runs block: how many of a chore's
--- shops tick it). PrettyUI 1.2.0's SpriteButton has a PLUS sprite but no minus
+-- buttons, and "[-] N of M [+]" at the right edge (the How many to do block: how many of a
+-- chore's parts tick it), with a tooltip over the name saying what the number counts. PrettyUI 1.2.0's SpriteButton has a PLUS sprite but no minus
 -- (tests/harness/api/prettyui/internal.lua), so both buttons are hand-built as a matched pair.
 -- The texts sit straight in the content, not in a layer, so the line is never taken for a
--- chore row.
+-- chore row; the tooltip hangs on an empty layer under the name.
 
 local listlayout = require("core/listlayout")
 local rows = require("shell/rows")
@@ -73,16 +73,25 @@ end
 
 -- Make a line at content height `y` under `content`: `name`, then the stepper showing
 -- `valueText`. `onStep` gets -1 or +1 on a click of the minus or plus button, and this line;
--- the caller decides what that changes and calls M.show with the result. `wheel`, when given,
--- takes the mouse wheel over the buttons; the texts let it through to the window.
+-- the caller decides what that changes and calls M.show with the result. `tooltip` shows over
+-- the name. `wheel`, when given, takes the mouse wheel over the name and the buttons.
 ---@param content ui.Layer
 ---@param y integer
 ---@param name string
 ---@param valueText string
 ---@param onStep fun(delta: integer, stepper: ChoreStepperView)
+---@param tooltip ChoreTooltip
 ---@param wheel ChoreWheelHandler?
 ---@return ChoreStepperView
-function M.new(content, y, name, valueText, onStep, wheel)
+function M.new(content, y, name, valueText, onStep, tooltip, wheel)
+    -- Under the name, taking the mouse for the tooltip; made first, so the text draws over it.
+    local hover = ui.Layer.new(content)
+    hover:SetPos(PADDING, y)
+    hover:SetSize(-NAME_INSET, ROW_HEIGHT, 1.0, 0)
+    hover.clickthrough = false
+    if wheel then hover:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel) end
+    prettyui.Tooltip.attach(hover, content, tooltip)
+
     local label = rows.newText(content)
     label:SetPos(PADDING, y)
     label:SetSize(-NAME_INSET, ROW_HEIGHT, 1.0, 0)

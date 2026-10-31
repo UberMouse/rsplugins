@@ -197,6 +197,8 @@ describe("chore-tracker info view", function()
 
     it("leaves the list and settings views alone on a resize", function()
         local h = loaded()
+        -- A picked chore with a count, so settings shows its line rather than help to re-lay.
+        helpers.togglePicks(h, { "herb-run" })
         local list = window(h)
         h.ui:resize(list, -80, 0)
         h:advance(3 * helpers.POLL_MS)
@@ -206,6 +208,25 @@ describe("chore-tracker info view", function()
         h.ui:resize(settings, 80, 0)
         h:advance(3 * helpers.POLL_MS)
         assert.are.equal(settings, window(h))
+    end)
+
+    it("re-lays the settings' How many to do help on a resize", function()
+        local h = loaded()
+        helpers.openSettings(h)
+        local settings = window(h)
+        ---@return string? the help, its line breaks taken back out
+        local function shownHelp()
+            for _, text in ipairs(h.ui:find("Text")) do
+                local joined = text.content:gsub(fit.BREAK, " ")
+                if joined == view.NO_COUNTS then return text.content end
+            end
+            return nil
+        end
+        local before = assert(shownHelp(), "no How many to do help")
+        h.ui:resize(settings, 160, 0)
+        h:advance(3 * helpers.POLL_MS)
+        assert.are_not.equal(settings, window(h))
+        assert.are_not.equal(before, shownHelp())
     end)
 
     it("goes back to the list", function()

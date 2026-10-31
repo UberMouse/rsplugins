@@ -174,6 +174,14 @@ local function partCount(row)
     return string.format("%d/%d", math.min(row.partsDone, row.needed), row.needed)
 end
 
+-- Whether a chore with these parts has a count line in settings: a choice of parts and a
+-- count that isn't fixed.
+---@param parts ChoreParts
+---@return boolean
+function M.hasCount(parts)
+    return M.hasChoice(parts.list) and not parts.fixed
+end
+
 -- A list row's text: the chore's name, and for a chore with a choice of parts, how many of
 -- the parts it needs were done this period, as "Feather Shop Run (1/4)".
 ---@param row ChoreRow
@@ -207,11 +215,16 @@ end
 ---cut label keeps the period) when another line shares it
 ---@field needed integer its current count (state.partsNeeded)
 ---@field total integer how many parts it has
+---@field tooltip ChoreTooltip the chore's full name, then what its count counts
 
--- The settings view's count lines: each chore with a choice of parts, picked or not, in
--- chore-list order, with how many of its parts tick it. The block has no period headings, so
--- chores of one name in two periods (Invention Machines) are told apart by their period, as
--- "Weekly: Invention Machines".
+-- The settings view's How many to do block, when no picked chore has a count line.
+M.NO_COUNTS = "Pick a chore below that you do at several places, such as a shop run, the "
+    .. "herb run or Penguin Hide and Seek, and a line here sets how many of them tick it."
+
+-- The settings view's count lines: each picked chore with a choice of parts and a count that
+-- isn't fixed, in chore-list order, with how many of its parts tick it. Only picked chores have
+-- one, so the block stays short. The block has no period headings, so chores of one name in
+-- two periods would be told apart by their period, as "Weekly: <name>".
 ---@param s ChoreState
 ---@param chores Chore[]
 ---@param parts table<string, ChoreParts> chore id -> its parts
@@ -220,12 +233,22 @@ function M.countSettings(s, chores, parts)
     local out = {}
     for _, chore in ipairs(chores) do
         local own = parts[chore.id]
-        if own and M.hasChoice(own.list) then
+        if own and M.hasCount(own) and state.isSelected(s, chore.id) then
+            local help = assert(own.help, "a count that isn't fixed has help")
             out[#out + 1] = {
                 chore = chore,
                 label = chore.name,
                 needed = state.partsNeeded(s, chore, own),
                 total = #own.list,
+                tooltip = {
+                    text = string.format(
+                        "%s<br>%s each %s.",
+                        chore.name,
+                        help,
+                        M.PERIOD_WORDS[chore.period]
+                    ),
+                    maxWidth = TOOLTIP_WIDTH,
+                },
             }
         end
     end

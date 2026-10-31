@@ -298,16 +298,17 @@ function M.partsDone(state, chore, parts, now)
     return done
 end
 
--- How many of `parts` must be done in a period to tick `chore`: the player's count, else the
--- parts' default, else all of them; at least 1 and at most #parts.list (the list may have
--- shrunk since it was set). 0 when the list is empty.
+-- How many of `parts` must be done in a period to tick `chore`: the player's count (none for a
+-- fixed one), else the parts' default, else all of them; at least 1 and at most #parts.list
+-- (the list may have shrunk since it was set). 0 when the list is empty.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param parts ChoreParts
 ---@return integer
 function M.partsNeeded(state, chore, parts)
     local total = #parts.list
-    local set = state.needed[chore.id] or parts.default
+    local set = parts.default
+    if not parts.fixed then set = state.needed[chore.id] or set end
     if set == nil then return total end
     return math.min(math.max(set, 1), total)
 end

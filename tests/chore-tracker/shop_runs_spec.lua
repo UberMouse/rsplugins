@@ -157,9 +157,9 @@ describe("chore-tracker shop runs", function()
         togglePicks(h, { FEATHERS.id })
         assert.is_false(ticked(h, FEATHERS.name))
         assert.are.equal("Feather Shop Run (1/4)", (rowShown(h, FEATHERS.name)))
-        -- Set to one shop, unpicked: the tick waits for the next purchase, and comes then.
-        togglePicks(h, { FEATHERS.id })
+        -- Set to one shop, then unpicked: the tick waits for the next purchase, and comes then.
         helpers.setNeeded(h, FEATHERS.id, 1)
+        togglePicks(h, { FEATHERS.id })
         stockFeathers(h, "FISHINGSHOP", 0) -- the baseline after the last purchase
         stockFeathers(h, "FISHINGSHOP", 20)
         stockFeathers(h, "FISHINGSHOP", 10)

@@ -128,7 +128,7 @@ The official reference annotates Lua with pseudo-types:
   challenge's reward can be claimed as soon as that one challenge is finished (the user,
   2026-10-25). Chore Tracker ticks the Daily Challenge on any rise of
   `CHALLENGE_TOTAL_COMPLETED`.
-- **Dream of Iaia vars are sent away from the activity** (the user's validation, read 2026-10-31):
+- **Dream of Iaia vars, read live 2026-10-31**, validated against the chores by the user:
   70 workers on `DINO_BASE_CAMP_WORKER_ASSIGNED_STONE`, 0 on the other five; `DINO_BASE_CAMP_RESOURCE_*`
   wood 14400, vines 20400, leaves 19600, pelts 12000, stone 93800, clay 14000;
   `QUEST_EGW_FINALE_REWARD_STATION_XP_*` Construction 150000, the other five 75000. Resource ->

@@ -143,6 +143,10 @@ scripts/rsdev.py events [--since N] [--follow] [--name X]
 scripts/rsdev.py eval <lua code...> | --file F | --reset [--timeout 10]
 scripts/rsdev.py logs [--since N] [--follow] [--plugin X] [--json]
 scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S] [--window 0x...]
+scripts/rsdev.py ui [--all]                  # the plugin layer's components: type, centre, size, flags, text
+scripts/rsdev.py click X Y | --text T [--nth N] [--right] [--hold 0.08] [--shot]
+scripts/rsdev.py move X Y | --text T [--nth N] [--stay 0.5] [--shot]
+scripts/rsdev.py drag X Y X2 Y2 [--hold 0.1] [--steps 10] [--duration 0.5] [--shot]
 scripts/rsdev.py stop                        # asks the daemon for its pid; signals only if it matches the pid file
 ```
 
@@ -239,6 +243,54 @@ hidden and run it again: it exits 2 with a message naming the client's workspace
 Privacy: a shot shows whatever is on screen, including other players' names and chat. Shots stay in
 the gitignored `dumps/`, and Claude views them whenever useful (approved by the user); delete them
 when done, nothing prunes them.
+
+### Input: `ui`, `click`, `move`, `drag`
+
+These let Claude press plugin UI in the client itself, with the user's real pointer (XTEST
+through `xdotool`; the client ignores XSendEvent clicks). The scope is the user's decision
+([plans/client-driving.md](plans/client-driving.md)): **only UI a plugin made**, never the game
+world or game interfaces, which could send an action to the server. There is no keyboard
+command yet: plugins can't tell whether the console is open, so typed keys could reach ability
+keybinds or the chat box.
+
+**`ui`** runs `plugins/dev-bridge/probes/ui-tree.lua` through the bridge and prints every
+component under the plugin layer, nested: `#index TYPE at cx,cy WxH [flags] 'text'`, where
+`cx,cy` is the centre of the part left visible after clipping by its ancestors, in window
+pixels, and the flags are `c` clickthrough, `e` enabled, `v` visible. Components that are hidden or
+clipped out of view are left out unless `--all`. Use it to find what to click instead of
+reading coordinates off a shot.
+
+**`click`**, **`move`** and **`drag`** take window-pixel points (the `ui` coordinates), or for
+`click` and `move`, `--text T`: the shown component whose text is T (ignoring case), or else
+contains it; several matches need `--nth N`. Before touching the pointer, each command:
+
+1. walks the plugin layer through the bridge. **The bridge must be connected**: nothing else can
+   vouch that a point is plugin UI;
+2. refuses an interface scale other than 100, the only one where plugin units are window pixels;
+3. refuses a point outside the window, or one not on a shown, non-clickthrough plugin component
+   other than the plugin layer itself (that component stops the click reaching the game; `enabled`
+   doesn't count, since clickable rows read false). For `drag`, both ends;
+4. waits up to `--idle-wait` (30 s) until you've left mouse and keyboard alone for 3 s
+   (`xprintidle`), else refuses.
+
+Then it notes where the pointer and focus were and moves the pointer onto the point (i3's focus
+follows it). If the pointer isn't where it was put, or the client lost focus, it stops: someone
+else has the mouse. `click` holds the button `--hold` seconds, so the press and release fall in
+different Logic ticks rather than arriving release-first. `move` stays `--stay` seconds (for
+hover states and tooltips). `drag` presses, moves in `--steps` over `--duration`, checks the
+end, and releases. With `--shot`, a shot (shot's `--region`/`--max`/`--window` apply) is taken
+`--shot-delay` (0.5 s) later, while the pointer is still there. Whatever happens, including
+Ctrl-C, a held button is released and the pointer and focus are put back.
+
+Exit codes: 0 done; 1 stopped partway (the pointer moved, focus lost, an X tool failed); 2 never
+started (refused, the bridge is down, you were active, no client window, a tool missing); 130
+interrupted. Every outcome is appended to `dumps/rsdev/input.log`, the input audit trail (the
+CLI does the input itself, so `daemon.log` doesn't see it).
+
+In-client check (2026-10-31, chore-tracker): `ui` listed the window and rows with their text;
+`move --text 'Dream of Iaia XP' --shot` showed the row's tooltip; two `click --text` on it
+unticked then re-ticked it; `click 500 500` (the game world) was refused with exit 2 and the
+pointer untouched; `drag` on a row's grip moved the row and a second drag moved it back.
 
 ### Protocol (schema 1)
 

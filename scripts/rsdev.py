@@ -9,6 +9,10 @@ Usage: scripts/rsdev.py daemon [--port 8766] [--out dumps]     run the daemon in
        scripts/rsdev.py logs [--since N] [--follow] [--plugin X] [--json]
        scripts/rsdev.py shot [--region WxH+X+Y] [--max 1600] [--count N --every S] [--delay S]
        scripts/rsdev.py exec <console command...> --shot [--shot-delay 1.0]
+       scripts/rsdev.py ui [--all]
+       scripts/rsdev.py click X Y | --text T [--nth N] [--right] [--hold 0.08] [--shot]
+       scripts/rsdev.py move X Y | --text T [--nth N] [--stay 0.5] [--shot]
+       scripts/rsdev.py drag X Y X2 Y2 [--steps 10] [--duration 0.5] [--shot]
 
 The daemon listens on 127.0.0.1 only, port 8766 (the "rsdev" url name, shared by the
 recorder, tee and bridge).
@@ -1073,6 +1077,396 @@ def cmd_shot(args):
     return 0
 
 
+# ---- input: drive the pointer in the client (host side: XTEST through xdotool) ----
+#
+# The scope is the user's call (docs/plans/client-driving.md): in the client, a click, hover or
+# drag must land on UI a plugin made, which the dev bridge vouches for by walking the plugin
+# layer (plugins/dev-bridge/probes/ui-tree.lua). Never the game world or game interfaces, which
+# could send an action to the server. XTEST moves the user's real pointer (XSendEvent clicks are
+# ignored by the client), so every command waits for the user to be idle and puts the pointer
+# and focus back.
+
+INPUT_TOOLS = ("xdotool", "xprintidle", "xprop", "xwininfo")
+UI_TREE_PROBE = Path(__file__).resolve().parent.parent / "plugins/dev-bridge/probes/ui-tree.lua"
+IDLE_MS = 3000  # the user must have left mouse and keyboard alone this long
+SETTLE = 0.15  # after a pointer move: i3 moves focus to the window under the pointer
+PROBED_SCALE = 100  # the interface scale where plugin-layer units are window pixels
+# ui.ComponentType as numbers, read from the client (docs/api-concepts.md): the stub's order from
+# 0, but with no 19, so LAYER is 20.
+COMPONENT_TYPES = dict(
+    enumerate(
+        "LINE RECTANGLE LABEL SPRITE MODEL MODEL_GROUP RADIAL_PROGRESS_OVERLAY CUTSCENE_LAYER "
+        "CANVAS BUTTON CHECK LIST INPUTFIELD SLIDER COMBO PAGED_LAYER_HEADER CAROUSEL "
+        "PAGED_CAROUSEL RADIO_GROUP".split()
+    )
+) | dict(enumerate("LAYER PANEL GRID PAGED_LAYER GROUP_BOX".split(), start=20))
+
+
+class InputError(ShotError):
+    """An input command that stops: `code` 1 if it was cut short, 2 if it never started."""
+
+
+def type_name(number):
+    return COMPONENT_TYPES.get(number, str(number))
+
+
+def parse_ui_tree(values):
+    """(scale, truncated, nodes) from ui-tree.lua's eval values. Each node is a dict: index,
+    parent (an index, None for the plugin layer), type, rect and clip as (left, top, right,
+    bottom), clickthrough, enabled, visible and text. `clip` is the rect cut by every
+    ancestor's: the client's hit area (docs/api-concepts.md). Raises ValueError if malformed."""
+    if len(values) < 3 or not is_int(values[0]) or not isinstance(values[1], bool):
+        raise ValueError("not a ui-tree reply")
+    nodes = []
+    for chunk in values[2:]:
+        if not isinstance(chunk, str):
+            raise ValueError("not a ui-tree reply")
+        for line in filter(None, chunk.split("\n")):
+            f = line.split("\t")
+            if len(f) != 8:
+                raise ValueError(f"bad ui-tree line: {line!r}")
+            parent = int(f[0]) - 1  # the Lua index of the parent's line; 0 for the root
+            if not -1 <= parent < len(nodes):
+                raise ValueError(f"bad parent in ui-tree line: {line!r}")
+            x, y, w, h = (int(v) for v in f[2:6])
+            rect = (x, y, x + w, y + h)
+            clip = rect
+            if parent >= 0:
+                p = nodes[parent]["clip"]
+                clip = (
+                    max(rect[0], p[0]),
+                    max(rect[1], p[1]),
+                    min(rect[2], p[2]),
+                    min(rect[3], p[3]),
+                )
+            nodes.append(
+                {
+                    "index": len(nodes),
+                    "parent": parent if parent >= 0 else None,
+                    "type": int(f[1]),
+                    "rect": rect,
+                    "clip": clip,
+                    "clickthrough": "c" in f[6],
+                    "enabled": "e" in f[6],
+                    "visible": "v" in f[6],
+                    "text": f[7],
+                }
+            )
+    return values[0], values[1], nodes
+
+
+def shown(node):
+    """True if any of the node is on screen: visible, with some of its rect left after clipping."""
+    left, top, right, bottom = node["clip"]
+    return node["visible"] and right > left and bottom > top
+
+
+def centre(node):
+    """The middle of the node's visible (clipped) part, in window pixels."""
+    left, top, right, bottom = node["clip"]
+    return (left + right) // 2, (top + bottom) // 2
+
+
+def blocking_node(nodes, x, y):
+    """The innermost plugin component that takes a click at window point (x, y): shown, not
+    clickthrough, its clipped rect holding the point; the plugin layer itself never counts. Such
+    a component keeps the click from the game below it. None means the click would reach the
+    game, so it is refused. `enabled` doesn't count: chore-tracker's rows read false and take
+    clicks (docs/api-concepts.md)."""
+    found = None
+    for node in nodes[1:]:  # nodes[0] is the plugin layer, which spans the whole window
+        left, top, right, bottom = node["clip"]
+        takes = shown(node) and not node["clickthrough"]
+        if takes and left <= x < right and top <= y < bottom:
+            found = node  # later in the walk is deeper, or drawn after
+    return found
+
+
+def find_text(nodes, text, nth=None):
+    """The shown node whose text is `text` (ignoring case), or else contains it. Several matches
+    need `nth` (from 1, in walk order). Raises InputError(2) naming the candidates."""
+    want = text.casefold()
+    candidates = [n for n in nodes if shown(n) and n["text"]]
+    matches = [n for n in candidates if n["text"].casefold() == want] or [
+        n for n in candidates if want in n["text"].casefold()
+    ]
+    if not matches:
+        raise InputError(2, f"no shown plugin component has the text {text!r}")
+    if nth is not None:
+        if nth > len(matches):
+            raise InputError(2, f"--nth {nth}, but only {len(matches)} match {text!r}")
+        return matches[nth - 1]
+    if len(matches) > 1:
+        listed = "; ".join(f"{i}: {n['text']!r} at {centre(n)}" for i, n in enumerate(matches, 1))
+        raise InputError(
+            2, f"{len(matches)} components match {text!r}, pick one with --nth: {listed}"
+        )
+    return matches[0]
+
+
+def format_node(node, depth):
+    """One `ui` line: index, type, centre, size, flags and text, indented by depth."""
+    left, top, right, bottom = node["rect"]
+    flags = "".join(
+        ch
+        for ch, on in (("c", node["clickthrough"]), ("e", node["enabled"]), ("v", node["visible"]))
+        if on
+    )
+    cx, cy = centre(node)
+    text = f" {node['text']!r}" if node["text"] else ""
+    return (
+        f"{'  ' * depth}#{node['index']} {type_name(node['type'])} at {cx},{cy} "
+        f"{right - left}x{bottom - top} [{flags}]{text}"
+    )
+
+
+def fetch_ui_tree(args):
+    """Walk the plugin layer through the bridge: (scale, nodes). The bridge must be connected:
+    without it nothing can vouch that a point is plugin UI. Raises InputError."""
+    try:
+        source = UI_TREE_PROBE.read_text(encoding="utf-8")
+    except OSError as err:
+        raise InputError(2, f"cannot read {UI_TREE_PROBE}: {err}") from None
+    code, reply = send_command(args, "eval", source)
+    if code:
+        raise InputError(2, "could not walk the plugin layer through the bridge (above)")
+    try:
+        scale, truncated, nodes = parse_ui_tree(reply.get("values", []))
+    except ValueError as err:
+        raise InputError(2, f"the bridge's ui-tree reply: {err}") from None
+    if truncated:
+        print("rsdev: the plugin layer has more components than the walk keeps", file=sys.stderr)
+    return scale, nodes
+
+
+def window_geometry(win):
+    """(left, top, width, height) of `win` on the screen, from xwininfo."""
+    text = tool_text(["xwininfo", "-id", win])
+    fields = []
+    for name in ("Absolute upper-left X", "Absolute upper-left Y", "Width", "Height"):
+        m = re.search(rf"{name}:\s*(-?\d+)", text)
+        if not m:
+            raise InputError(2, f"xwininfo gave no {name} for {win}")
+        fields.append(int(m[1]))
+    return tuple(fields)
+
+
+def pointer_location():
+    """(x, y) of the pointer on the screen."""
+    text = tool_text(["xdotool", "getmouselocation", "--shell"])
+    vals = dict(line.split("=", 1) for line in text.split() if "=" in line)
+    return int(vals["X"]), int(vals["Y"])
+
+
+def active_window():
+    """The focused window's id as a number, or None if nothing has focus."""
+    res = run_tool(["xdotool", "getactivewindow"])
+    return int(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip().isdigit() else None
+
+
+def wait_for_idle(timeout):
+    """Wait until the user has left mouse and keyboard alone for IDLE_MS; InputError(2) if they
+    haven't within `timeout` seconds. Only before the first event: ours reset the idle time too."""
+    deadline = time.monotonic() + timeout
+    while True:
+        idle = int(tool_text(["xprintidle"]).strip())
+        if idle >= IDLE_MS:
+            return
+        if time.monotonic() >= deadline:
+            raise InputError(
+                2, f"you were active {idle} ms ago; not taking the pointer (waited {timeout:g} s)"
+            )
+        time.sleep(0.25)
+
+
+def audit(args, text):
+    """Append one line to <out>/rsdev/input.log, the input commands' audit trail."""
+    path = args.out / "rsdev" / "input.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with path.open("a", encoding="utf-8") as f:
+        f.write(f"{stamp} {text}\n")
+
+
+class PointerSession:
+    """The pointer, borrowed for one command: entering waits for the user to be idle and notes
+    where the pointer and focus were; leaving releases any held button and puts both back."""
+
+    def __init__(self, win, geometry, idle_wait):
+        self.win, self.geometry, self.idle_wait = win, geometry, idle_wait
+        self.held = None
+        self.home = None
+        self.focus = None
+
+    def __enter__(self):
+        wait_for_idle(self.idle_wait)
+        self.home = pointer_location()
+        self.focus = active_window()
+        return self
+
+    def __exit__(self, *exc):
+        if self.held:
+            run_tool(["xdotool", "mouseup", str(self.held)])
+        run_tool(["xdotool", "mousemove", str(self.home[0]), str(self.home[1])])
+        if self.focus is not None:
+            run_tool(["xdotool", "windowfocus", str(self.focus)])
+        return False
+
+    def move(self, x, y, check=True):
+        """Put the pointer at window point (x, y); with `check`, then make sure it is there and
+        the client has focus (i3 gives focus to the window under the pointer)."""
+        tool_text(["xdotool", "mousemove", "--window", self.win, str(x), str(y)])
+        if check:
+            time.sleep(SETTLE)
+            self.check(x, y)
+
+    def check(self, x, y):
+        """InputError(1) unless the pointer is still at window point (x, y) and the client has
+        focus: anything else means someone else moved it, so stop."""
+        want = (self.geometry[0] + x, self.geometry[1] + y)
+        at = pointer_location()
+        if at != want:
+            raise InputError(
+                1, f"the pointer is at {at}, not {want}: moved by someone else? stopped"
+            )
+        if active_window() != window_number(self.win):
+            raise InputError(1, "the client lost focus: stopped")
+
+    def press(self, button):
+        tool_text(["xdotool", "mousedown", str(button)])
+        self.held = button
+
+    def release(self, button):
+        tool_text(["xdotool", "mouseup", str(button)])
+        self.held = None
+
+
+def input_target(args, nodes, geometry, x, y, text, nth):
+    """The window point to act on: (x, y), or the centre of the node showing `text`. Refused
+    with InputError(2) unless it is inside the window and on a plugin component that takes it."""
+    if text is not None:
+        x, y = centre(find_text(nodes, text, nth))
+    if not (0 <= x < geometry[2] and 0 <= y < geometry[3]):
+        raise InputError(2, f"{x},{y} is outside the {geometry[2]}x{geometry[3]} window")
+    node = blocking_node(nodes, x, y)
+    if node is None:
+        raise InputError(
+            2, f"{x},{y} is not on plugin UI that takes clicks; refused (it would reach the game)"
+        )
+    return x, y, node
+
+
+def prepare_input(args):
+    """Everything an input command checks before it touches the pointer: tools, the window, the
+    interface scale and the plugin layer's tree. Returns (window, geometry, nodes)."""
+    for tool in INPUT_TOOLS:
+        if shutil.which(tool) is None:
+            raise InputError(2, f"{tool} not found: enter the dev shell (direnv)")
+    win = args.window or find_client_window()
+    check_visible(win, warn_focus=False)
+    geometry = window_geometry(win)
+    scale, nodes = fetch_ui_tree(args)
+    if scale != PROBED_SCALE:
+        raise InputError(
+            2,
+            f"interface scale is {scale}; only {PROBED_SCALE} maps plugin units to pixels (probed)",
+        )
+    return win, geometry, nodes
+
+
+def shoot_now(args):
+    """A shot of the client while the pointer is still where the command left it."""
+    take_shots(SimpleNamespace(**{**vars(args), "count": 1, "every": 1, "delay": args.shot_delay}))
+
+
+def run_input(args, action):
+    """Run an input command's `action(win, geometry, nodes)` and turn its errors into exit codes;
+    each outcome is audited."""
+    try:
+        win, geometry, nodes = prepare_input(args)
+        what = action(win, geometry, nodes)
+    except ShotError as err:  # InputError included
+        audit(args, f"{args.cmd} refused/stopped ({err.code}): {err}")
+        print(f"rsdev: {err}", file=sys.stderr)
+        return err.code
+    except KeyboardInterrupt:
+        audit(args, f"{args.cmd} interrupted")
+        return 130
+    audit(args, what)
+    print(what)
+    return 0
+
+
+def cmd_click(args):
+    def action(win, geometry, nodes):
+        x, y, node = input_target(args, nodes, geometry, args.x, args.y, args.text, args.nth)
+        button = 3 if args.right else 1
+        with PointerSession(win, geometry, args.idle_wait) as s:
+            s.move(x, y)
+            s.press(button)
+            time.sleep(args.hold)  # a press and release in one tick arrive release-first
+            s.release(button)
+            if args.shot:
+                shoot_now(args)
+        side = "right-" if args.right else ""
+        return f"{side}clicked {x},{y} on #{node['index']} {type_name(node['type'])}"
+
+    return run_input(args, action)
+
+
+def cmd_move(args):
+    def action(win, geometry, nodes):
+        x, y, node = input_target(args, nodes, geometry, args.x, args.y, args.text, args.nth)
+        with PointerSession(win, geometry, args.idle_wait) as s:
+            s.move(x, y)
+            time.sleep(args.stay)
+            if args.shot:
+                shoot_now(args)
+        return f"hovered {x},{y} on #{node['index']} {type_name(node['type'])} for {args.stay:g} s"
+
+    return run_input(args, action)
+
+
+def cmd_drag(args):
+    def action(win, geometry, nodes):
+        x1, y1, start = input_target(args, nodes, geometry, args.x, args.y, None, None)
+        x2, y2, _ = input_target(args, nodes, geometry, args.x2, args.y2, None, None)
+        with PointerSession(win, geometry, args.idle_wait) as s:
+            s.move(x1, y1)
+            s.press(1)
+            time.sleep(args.hold)
+            # In steps a Logic tick or more apart, so the plugin's ONHOLD sees the pointer travel.
+            for i in range(1, args.steps + 1):
+                s.move(x1 + (x2 - x1) * i // args.steps, y1 + (y2 - y1) * i // args.steps, False)
+                time.sleep(args.duration / args.steps)
+            time.sleep(SETTLE)
+            s.check(x2, y2)
+            s.release(1)
+            if args.shot:
+                shoot_now(args)
+        return f"dragged {x1},{y1} -> {x2},{y2} from #{start['index']} {type_name(start['type'])}"
+
+    return run_input(args, action)
+
+
+def cmd_ui(args):
+    """Print the plugin layer's components, one per line, nested by depth."""
+    try:
+        scale, nodes = fetch_ui_tree(args)
+    except InputError as err:
+        print(f"rsdev: {err}", file=sys.stderr)
+        return err.code
+    print(
+        f"interface scale {scale}; {len(nodes)} components (flags: c clickthrough, e enabled, v visible)"
+    )
+    depth = {None: -1}
+    for node in nodes:
+        depth[node["index"]] = depth[node["parent"]] + 1
+        if args.all or shown(node):
+            print(format_node(node, depth[node["index"]]))
+    return 0
+
+
 def follow_events(args, name, show):
     """Print events through `show`: those after args.since, named `name` (None for all), and with
     args.follow, new ones as they arrive. Returns the exit code."""
@@ -1199,7 +1593,66 @@ def main(argv=None):
     p.add_argument("--every", type=number_arg(0, 3600, "--every", low_open=True), default=1.0)
     p.add_argument("--delay", type=number_arg(0, 3600, "--delay"), default=0.0)
     p.set_defaults(run=cmd_shot)
+
+    # The input commands. Their shot options are shot's, minus the series.
+    timeout_opt = argparse.ArgumentParser(add_help=False)
+    timeout_opt.add_argument(
+        "--timeout", type=number_arg(0, MAX_WAIT, "--timeout", low_open=True), default=10.0
+    )
+    pointer_opts = argparse.ArgumentParser(add_help=False)
+    pointer_opts.add_argument(
+        "--idle-wait",
+        type=number_arg(0, 600, "--idle-wait"),
+        default=30.0,
+        help="how long to wait for you to leave mouse and keyboard alone (s)",
+    )
+    pointer_opts.add_argument("--shot", action="store_true", help="capture before letting go")
+    pointer_opts.add_argument("--shot-delay", type=number_arg(0, 60, "--shot-delay"), default=0.5)
+    pointer_opts.set_defaults(region=None, max=DEFAULT_SHOT_MAX)
+    coord = number_arg(0, 100_000, "a coordinate", int)
+    target = argparse.ArgumentParser(add_help=False)
+    target.add_argument("x", type=coord, nargs="?")
+    target.add_argument("y", type=coord, nargs="?")
+    target.add_argument("--text", help="the plugin component showing this text (or containing it)")
+    target.add_argument("--nth", type=number_arg(1, 10_000, "--nth", int))
+    for name, fn, what in (
+        ("click", cmd_click, "click plugin UI in the client"),
+        ("move", cmd_move, "hover over plugin UI in the client"),
+    ):
+        p = sub.add_parser(
+            name, parents=[common, shot_opts, timeout_opt, pointer_opts, target], help=what
+        )
+        p.set_defaults(run=fn)
+        if name == "click":
+            p.add_argument("--right", action="store_true", help="right button")
+            p.add_argument("--hold", type=number_arg(0, 5, "--hold"), default=0.08)
+        else:
+            p.add_argument("--stay", type=number_arg(0, 60, "--stay"), default=0.5)
+    p = sub.add_parser(
+        "drag",
+        parents=[common, shot_opts, timeout_opt, pointer_opts],
+        help="press on plugin UI, move, release on plugin UI",
+    )
+    for name in ("x", "y", "x2", "y2"):
+        p.add_argument(name, type=coord)
+    p.add_argument("--hold", type=number_arg(0, 5, "--hold"), default=0.1)
+    p.add_argument("--steps", type=number_arg(1, 200, "--steps", int), default=10)
+    p.add_argument("--duration", type=number_arg(0, 30, "--duration"), default=0.5)
+    p.set_defaults(run=cmd_drag)
+    p = sub.add_parser(
+        "ui", parents=[common, timeout_opt], help="list the plugin layer's components"
+    )
+    p.add_argument("--all", action="store_true", help="include hidden and clipped-out ones")
+    p.set_defaults(run=cmd_ui)
+
     args = parser.parse_args(argv)
+    if args.cmd in ("click", "move"):
+        if args.text is None and (args.x is None or args.y is None):
+            parser.error("give a point as X Y, or --text")
+        if args.text is not None and args.x is not None:
+            parser.error("give X Y or --text, not both")
+        if args.nth is not None and args.text is None:
+            parser.error("--nth only applies with --text")
     if args.cmd == "exec":
         given = [
             f for f in ("window", "region", "max", "shot_delay") if getattr(args, f) is not None

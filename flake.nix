@@ -83,8 +83,8 @@
               pkgs.xprop
               pkgs.xwininfo
               pkgs.imagemagick
-              # rsdev.py input (planned, docs/plans/client-driving.md): XTEST clicks and keys into the
-              # client and Bolt, held off while xprintidle shows the user was just active.
+              # rsdev.py click/move/drag (docs/dev-environment.md): XTEST pointer input on plugin UI
+              # in the client, held off while xprintidle shows the user was just active.
               pkgs.xdotool
               pkgs.xprintidle
             ];

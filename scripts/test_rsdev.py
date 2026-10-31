@@ -1641,5 +1641,294 @@ class ExecShotTests(unittest.TestCase):
         shot.assert_not_called()
 
 
+def tree_line(parent, kind, x, y, w, h, flags, text=""):
+    """One ui-tree.lua line; `parent` is the Lua index of the parent's line (0 for the root)."""
+    return f"{parent}\t{kind}\t{x}\t{y}\t{w}\t{h}\t{flags}\t{text}"
+
+
+# A plugin layer holding a 300x200 window (not clickthrough) at 100,100, with a row whose
+# enabled flag is false (as chore-tracker's read) and a clickthrough label on it, a row scrolled
+# below the window's bottom, and a hidden layer.
+TREE = [
+    100,
+    False,
+    "\n".join(
+        [
+            tree_line(0, 20, 0, 0, 1000, 800, "cv"),
+            tree_line(1, 20, 100, 100, 300, 200, "v"),
+            tree_line(2, 20, 110, 120, 280, 30, "v"),
+            tree_line(3, 2, 130, 120, 200, 30, "cv", "Rune Shop Run (0/5)"),
+            tree_line(2, 20, 110, 310, 280, 30, "v"),
+            tree_line(5, 2, 130, 310, 200, 30, "cv", "Rune Shop Run (1/5)"),
+            tree_line(1, 20, 500, 500, 50, 50, "e", "hidden"),
+        ]
+    ),
+]
+
+
+class UiTreeTests(unittest.TestCase):
+    def setUp(self):
+        self.scale, self.truncated, self.nodes = rsdev.parse_ui_tree(TREE)
+
+    def test_parse_clips_by_ancestors(self):
+        self.assertEqual((self.scale, self.truncated, len(self.nodes)), (100, False, 7))
+        self.assertIsNone(self.nodes[0]["parent"])
+        self.assertEqual(self.nodes[3]["parent"], 2)
+        self.assertEqual(self.nodes[3]["clip"], (130, 120, 330, 150))
+        self.assertEqual(self.nodes[4]["clip"], (110, 310, 390, 300))  # wholly below the window
+        self.assertFalse(rsdev.shown(self.nodes[4]))
+        self.assertFalse(rsdev.shown(self.nodes[6]))
+        self.assertTrue(self.nodes[3]["clickthrough"] and not self.nodes[2]["enabled"])
+
+    def test_parse_refuses_malformed(self):
+        for bad in (
+            [],
+            ["100", False, ""],
+            [100, "no", ""],
+            [100, False, "0\t20\t0"],
+            [100, False, tree_line(2, 20, 0, 0, 1, 1, "")],  # a parent not yet seen
+            [100, False, 5],
+        ):
+            with self.subTest(bad), self.assertRaises(ValueError):
+                rsdev.parse_ui_tree(bad)
+
+    def test_chunks_join(self):
+        lines = TREE[2].split("\n")
+        _, _, nodes = rsdev.parse_ui_tree([100, True, "\n".join(lines[:3]), "\n".join(lines[3:])])
+        self.assertEqual(len(nodes), 7)
+
+    def test_blocking_node(self):
+        # A clickthrough label passes the click to the row under it; a disabled row still counts.
+        self.assertEqual(rsdev.blocking_node(self.nodes, 200, 130)["index"], 2)
+        self.assertEqual(rsdev.blocking_node(self.nodes, 105, 105)["index"], 1)  # the window
+        self.assertIsNone(rsdev.blocking_node(self.nodes, 50, 50))  # only the plugin layer
+        self.assertIsNone(rsdev.blocking_node(self.nodes, 520, 520))  # hidden
+        self.assertIsNone(rsdev.blocking_node(self.nodes, 200, 320))  # clipped out of the window
+        self.assertIsNone(rsdev.blocking_node(self.nodes, 400, 130))  # right edge is exclusive
+
+    def test_find_text(self):
+        # The scrolled-out row has the same words but isn't shown, so only one matches.
+        node = rsdev.find_text(self.nodes, "rune shop")
+        self.assertEqual((node["index"], rsdev.centre(node)), (3, (230, 135)))
+        self.assertEqual(rsdev.find_text(self.nodes, "RUNE SHOP RUN (0/5)")["index"], 3)
+        with self.assertRaises(rsdev.InputError) as caught:
+            rsdev.find_text(self.nodes, "hidden")
+        self.assertEqual(caught.exception.code, 2)
+        with self.assertRaises(rsdev.InputError):
+            rsdev.find_text(self.nodes, "rune", nth=2)
+
+    def test_find_text_prefers_exact_and_needs_nth(self):
+        _, _, nodes = rsdev.parse_ui_tree(
+            [
+                100,
+                False,
+                "\n".join(
+                    [
+                        tree_line(0, 20, 0, 0, 1000, 800, "cv"),
+                        tree_line(1, 2, 0, 0, 100, 20, "v", "Daily"),
+                        tree_line(1, 2, 0, 40, 100, 20, "v", "Daily Challenge"),
+                        tree_line(1, 2, 0, 80, 100, 20, "v", "Daily Challenge"),
+                    ]
+                ),
+            ]
+        )
+        self.assertEqual(rsdev.find_text(nodes, "daily")["index"], 1)
+        with self.assertRaises(rsdev.InputError) as caught:
+            rsdev.find_text(nodes, "challenge")
+        self.assertIn("--nth", str(caught.exception))
+        self.assertEqual(rsdev.find_text(nodes, "challenge", nth=2)["index"], 3)
+
+    def test_type_names(self):
+        self.assertEqual(rsdev.type_name(13), "SLIDER")
+        self.assertEqual(rsdev.type_name(20), "LAYER")
+        self.assertEqual(rsdev.type_name(24), "GROUP_BOX")
+        self.assertEqual(rsdev.type_name(19), "19")
+
+
+WIN = "0x5c0002d"
+GEOMETRY = (1922, 18, 1000, 800)
+
+
+class FakeDesk:
+    """A stand-in for rsdev.run_tool on the input side: one client window at GEOMETRY, a pointer
+    that xdotool moves, and i3's focus following it. Records argvs. `idle` is xprintidle's
+    answer; `nudge` moves the pointer elsewhere right after the first move into the window, as
+    a user grabbing the mouse would."""
+
+    def __init__(self, idle=5000, nudge=False):
+        self.calls = []
+        self.pointer = (50, 60)
+        self.idle = idle
+        self.nudge = nudge
+        self.focus = 777  # the terminal
+
+    def __call__(self, argv):
+        self.calls.append(argv)
+        out = ""
+        left, top, w, h = GEOMETRY
+        if argv[:3] == ["xprop", "-root", "_NET_CLIENT_LIST"]:
+            out = f"_NET_CLIENT_LIST(WINDOW): window id # {WIN}"
+        elif argv[0] == "xprop":
+            out = RS_CLASS
+        elif argv[0] == "xwininfo":
+            out = (
+                f"  Absolute upper-left X:  {left}\n  Absolute upper-left Y:  {top}\n"
+                f"  Width: {w}\n  Height: {h}\n  Map State: IsViewable\n"
+            )
+        elif argv[0] == "xprintidle":
+            out = f"{self.idle}\n"
+        elif argv[1] == "getmouselocation":
+            out = f"X={self.pointer[0]}\nY={self.pointer[1]}\nSCREEN=0\nWINDOW=1\n"
+        elif argv[1] == "getactivewindow":
+            out = f"{self.focus}\n"
+        elif argv[1] == "mousemove":
+            if argv[2] == "--window":
+                self.pointer = (left + int(argv[4]), top + int(argv[5]))
+                self.focus = int(WIN, 16)
+                if self.nudge:
+                    self.pointer = (0, 0)
+            else:
+                self.pointer = (int(argv[2]), int(argv[3]))
+        elif argv[1] == "windowfocus":
+            self.focus = int(argv[2])
+        return SimpleNamespace(returncode=0, stdout=out, stderr="")
+
+    def xdotool(self):
+        """The xdotool calls that act (not queries)."""
+        return [c[1:] for c in self.calls if c[0] == "xdotool" and not c[1].startswith("get")]
+
+
+class InputCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        _, _, nodes = rsdev.parse_ui_tree(TREE)
+        self.nodes = nodes
+
+    def run_cli(self, desk, *argv, sleep=None):
+        """rsdev.main(argv) against `desk`, the bridge's tree replaced by TREE; (code, stderr)."""
+        err = StringIO()
+        with (
+            mock.patch.object(rsdev, "run_tool", desk),
+            mock.patch.object(rsdev, "fetch_ui_tree", return_value=(100, self.nodes)),
+            mock.patch("shutil.which", return_value="/bin/x"),
+            mock.patch("time.sleep", sleep or (lambda s: None)),
+            mock.patch("sys.stderr", err),
+            redirect_stdout(StringIO()),
+        ):
+            code = rsdev.main([*argv, "--out", self.tmp.name])
+        return code, err.getvalue()
+
+    def audit(self):
+        return (Path(self.tmp.name) / "rsdev" / "input.log").read_text()
+
+    def test_click_by_text_moves_presses_and_puts_back(self):
+        desk = FakeDesk()
+        code, _ = self.run_cli(desk, "click", "--text", "rune shop")
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            desk.xdotool(),
+            [
+                ["mousemove", "--window", WIN, "230", "135"],
+                ["mousedown", "1"],
+                ["mouseup", "1"],
+                ["mousemove", "50", "60"],
+                ["windowfocus", "777"],
+            ],
+        )
+        self.assertEqual((desk.pointer, desk.focus), ((50, 60), 777))
+        self.assertIn("clicked 230,135 on #2 LAYER", self.audit())
+
+    def test_point_off_plugin_ui_is_refused_untouched(self):
+        for argv in (["click", "50", "50"], ["move", "200", "320"], ["click", "5000", "10"]):
+            desk = FakeDesk()
+            with self.subTest(argv):
+                code, err = self.run_cli(desk, *argv)
+                self.assertEqual(code, 2)
+                self.assertEqual(desk.xdotool(), [])
+                self.assertNotIn(["xprintidle"], desk.calls)
+        self.assertIn("would reach the game", self.audit())
+
+    def test_drag_needs_both_ends_on_plugin_ui(self):
+        desk = FakeDesk()
+        code, err = self.run_cli(desk, "drag", "200", "130", "50", "50")
+        self.assertEqual(code, 2)
+        self.assertEqual(desk.xdotool(), [])
+
+    def test_drag_steps_then_releases(self):
+        desk = FakeDesk()
+        code, _ = self.run_cli(desk, "drag", "200", "130", "200", "200", "--steps", "2")
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            desk.xdotool()[:5],
+            [
+                ["mousemove", "--window", WIN, "200", "130"],
+                ["mousedown", "1"],
+                ["mousemove", "--window", WIN, "200", "165"],
+                ["mousemove", "--window", WIN, "200", "200"],
+                ["mouseup", "1"],
+            ],
+        )
+
+    def test_user_active_is_waited_for_then_refused(self):
+        desk = FakeDesk(idle=100)
+        code, err = self.run_cli(desk, "click", "200", "130", "--idle-wait", "0")
+        self.assertEqual(code, 2)
+        self.assertIn("you were active 100 ms ago", err)
+        self.assertEqual(desk.xdotool(), [])
+
+    def test_pointer_moved_by_someone_else_stops_before_pressing(self):
+        desk = FakeDesk(nudge=True)
+        code, err = self.run_cli(desk, "click", "200", "130")
+        self.assertEqual(code, 1)
+        self.assertIn("moved by someone else", err)
+        acts = desk.xdotool()
+        self.assertNotIn(["mousedown", "1"], acts)
+        self.assertEqual(acts[-2:], [["mousemove", "50", "60"], ["windowfocus", "777"]])
+
+    def test_interrupt_while_held_releases_the_button(self):
+        desk = FakeDesk()
+
+        def sleep(seconds):
+            if ["mousedown", "1"] in desk.xdotool():
+                raise KeyboardInterrupt
+
+        code, _ = self.run_cli(desk, "click", "200", "130", sleep=sleep)
+        self.assertEqual(code, 130)
+        self.assertEqual(
+            desk.xdotool()[-3:],
+            [["mouseup", "1"], ["mousemove", "50", "60"], ["windowfocus", "777"]],
+        )
+
+    def test_scale_other_than_probed_is_refused(self):
+        desk = FakeDesk()
+        with mock.patch.object(rsdev, "fetch_ui_tree", return_value=(125, self.nodes)):
+            err = StringIO()
+            with (
+                mock.patch.object(rsdev, "run_tool", desk),
+                mock.patch("shutil.which", return_value="/bin/x"),
+                mock.patch("sys.stderr", err),
+            ):
+                code = rsdev.main(["click", "200", "130", "--out", self.tmp.name])
+        self.assertEqual(code, 2)
+        self.assertIn("interface scale is 125", err.getvalue())
+        self.assertEqual(desk.xdotool(), [])
+
+    def test_target_arguments(self):
+        for argv in (
+            ["click"],
+            ["click", "1"],
+            ["move", "1", "2", "--text", "x"],
+            ["click", "1", "2", "--nth", "1"],
+        ):
+            with (
+                self.subTest(argv),
+                mock.patch("sys.stderr", StringIO()),
+                self.assertRaises(SystemExit) as caught,
+            ):
+                rsdev.main(argv)
+            self.assertEqual(caught.exception.code, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

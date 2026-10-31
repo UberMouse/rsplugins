@@ -29,8 +29,9 @@ RS3 client plugins written in Lua 5.4.8 against Jagex's Client Plugin API.
   read what plugins forward with `events`, and look at the game and plugin UI with `shot` (then
   Read the printed path). The user's one console step is `pon dev-bridge`, because the bridge
   can't enable itself: if it isn't connected, ask them for that and nothing else, then do the
-  console work yourself. Beyond that, ask them only for in-game actions a check needs (click this,
-  open that). Only the main session uses rsdev, never a subagent. Two agents must not send console
+  console work yourself. Click, hover and drag plugin UI yourself (`rsdev.py ui`, then `click`,
+  `move` or `drag`; they refuse anything that isn't plugin UI). Beyond that, ask them only for
+  in-game actions a check needs (open this, walk there). Only the main session uses rsdev, never a subagent. Two agents must not send console
   commands to the user's client at once, and every action should show in the conversation they
   are watching.
 - Work and commit directly on `main`; don't create branches or worktrees unless asked or truly

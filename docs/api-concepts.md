@@ -501,6 +501,14 @@ never ran with results recorded (recover it with
   The setters with a `triggerEvents` flag (`List:SetEntrySelected`, `Slider:SetValue`,
   `ComboField:Select`, `RadioGroup:SetOptionSelected`, `Carousel:Select`) are only a guess to
   behave the same; no API call fires `ONCLICK`, `ONHOLD` or `ONSCROLLWHEEL`.
+- **`ui.ComponentType` numbers skip 19** (dev bridge, 2026-10-31): `LINE` 0 … `RADIO_GROUP` 18
+  in the stub's order, then `LAYER` 20, `PANEL` 21, `GRID` 22, `PAGED_LAYER` 23, `GROUP_BOX` 24.
+  Compare `c.type` with the named members, never with a position in the stub's list.
+- **`enabled` is false on layers that take clicks** (chore-tracker, 2026-10-31): its row layers,
+  title-bar layer and window root read `enabled` false and `clickthrough` false, and the rows
+  still got `ONCLICK` from an XTEST click (`rsdev.py click`). The resize-grip layers read
+  `enabled` true. So `enabled` doesn't say whether a component takes a click; `clickthrough`
+  and visibility do.
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its
@@ -879,6 +887,12 @@ Found in the beta client (2026-10-20), not in the official docs:
   another `alt+grave` closed it. A pointer hook still fired while the console was open. Check
   that the console really opened (a shot) before typing: typed text goes to the chat box when it
   is closed, and Return would send it. (probe-drive, 2026-10-31)
+- **A plugin can't tell whether the console is open** (dev-bridge `KeyDown`/`KeyTyped` eval
+  probes, XTEST keys, 2026-10-31). Shift gave `KeyDown` `gameKey` 81 (SHIFT) with `modifiers` 1
+  with the console closed and open alike, and `z` typed into the open console gave `KeyDown` 64
+  (Z) each time. Alt+\` gave one `KeyDown` 86 (ALT) with `modifiers` 2 (the bit `ModifierKey`
+  calls CONTROL) and nothing for the \` itself, so no `GameKey.CONSOLE` (28). Backspace in the
+  open console gave no `KeyDown`. `KeyTyped` never fired during the whole probe.
 
 ## Shops in the client
 

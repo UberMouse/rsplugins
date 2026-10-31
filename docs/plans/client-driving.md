@@ -41,17 +41,13 @@ X11" and UI.
 Each slice ends with a check-in with the user.
 
 1. **Probes** (done, above).
-2. **`rsdev.py` input commands** for the client: `click`, `move`, `key`, `type`.
-   - Window from `WM_CLASS`, as `shot` finds it; coordinates relative to the window and refused
-     outside it.
-   - Waits up to a timeout for the user to be idle 3 s (`xprintidle`), then checks that the
-     client is focused and is the window under the pointer; puts the pointer and focus back
-     afterwards.
-   - Holds the button about 80 ms, so a click arrives as press, hold, release, not release-first.
-   - Logs every action in `daemon.log`.
-   - `click --component <selector>` resolves through a bridge eval and refuses a point that isn't
-     inside a plugin-made component.
-   - `xprintidle` and `xdotool` are already in the dev shell.
+2. **Pointer commands** (done 2026-10-31): `rsdev.py ui`, `click`, `move` and `drag`, documented
+   in [dev-environment.md](../dev-environment.md#input-ui-click-move-drag). A point must be on a
+   shown, non-clickthrough plugin component, which the bridge vouches for by walking the plugin
+   layer (`plugins/dev-bridge/probes/ui-tree.lua`). The audit trail is `dumps/rsdev/input.log`.
+   Keyboard input was left out: a probe showed a plugin can't tell whether the console is open
+   (api-concepts), and a key sent with it closed could hit an ability keybind. It moves to slice 4,
+   where `pon dev-bridge` is the only thing typed.
 3. **In-plugin eval and the handler registry:** `lib/dev/eval.lua`, commands over the tee's
    channel (the tee's post becomes a sync that returns commands),
    `rsdev.py eval --plugin <name>`. Then named handles in chore-tracker's `rows`, `stepper` and
@@ -64,8 +60,11 @@ Each slice ends with a check-in with the user.
 ## Open questions
 
 - Bolt's window: its `WM_CLASS`, and whether `maim` captures it (it's CEF).
-- How a script can tell the console is open before it types, so typed text never reaches the
-  chat box. For now: a shot, checked by Claude, between Alt+\` and typing.
+- How to tell the console is open before typing (needed for slice 4). Plugins can't (they get
+  `KeyDown` either way). Options: (a) Claude checks a shot between Alt+\` and typing; (b) a
+  pixel test on the console's band in a shot, compared with one taken just before the toggle;
+  (c) type only while the bridge is down (after a relaunch), when no plugin is running but the
+  game still takes keys, so this doesn't remove the risk by itself.
 - The login and lobby screens run no plugins, so the bridge can't vouch for a click target
   there. Raw coordinates are allowed only while the bridge is disconnected?
 - Other interface scales than 100.

@@ -187,6 +187,9 @@ Logic tick, one command per tick, like `exec`.
 `probes/client-surface.lua` snapshots the client's API surface (names and types only) for
 `scripts/client-surface.py`, which writes `tests/fixtures/client-surface.json`
 ([docs/testing.md](../../docs/testing.md#checking-the-mocks-against-the-live-client)).
+`probes/ui-tree.lua` lists every component under the plugin layer (type, rect, flags, text) for
+`rsdev.py ui`/`click`/`move`/`drag` ([docs/dev-environment.md](../../docs/dev-environment.md#input-ui-click-move-drag)).
+It only reads.
 
 ## Why it isn't for submission
 

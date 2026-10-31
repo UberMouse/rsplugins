@@ -14,7 +14,8 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Opening it.** Enable the plugin and a window titled **Chores** opens. On the first run it
   says no chores are picked yet.
 - **Picking chores.** Click the settings button at the top left of the window. Above the chores
-  are a Celebrations section and a Shop runs section (see below). Every chore is listed under Daily, Weekly and Monthly,
+  are a Celebrations section and a Shop runs section (see below). Every chore is listed under
+  Daily, Weekly and Monthly,
   and within Daily and Weekly under a gold subheading for its kind: Activities, Combat,
   Skilling, Upkeep, Free supplies (handed out by someone who is no shop) and Shops, each in
   alphabetical order. Monthly has too few chores to need them. Each is a row with its icon, its
@@ -172,7 +173,8 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 ## What it remembers
 
-- **Your picks, their order, your ticks and your shop-run counts, per character.** They are saved each time you change
+- **Your picks, their order, your ticks and your shop-run counts, per character.** They are
+  saved each time you change
   them, under your character's display name, so each character on the same computer has its own
   list. While you are logged out the window says "Log in to see your chores".
 - **Where the window is**, for all characters: its position, its size, whether it is collapsed,

@@ -4,9 +4,9 @@
 -- no minus (its sprite names, as the test harness's PrettyUI copies them in
 -- tests/harness/api/prettyui/internal.lua), so both buttons are built here as a matched pair,
 -- like the rows of shell/rows.lua: a layer that takes the click and shows the rows' hand
--- cursor, holding a sprite that lets it through. The texts sit straight in the content rather than in a layer of their own, so the
--- line is never taken for a chore row. The value changes in place; the line goes when its
--- window is destroyed.
+-- cursor, holding a sprite that lets it through. The texts sit straight in the content rather
+-- than in a layer of their own, so the line is never taken for a chore row. The value changes
+-- in place; the line goes when its window is destroyed.
 
 local listlayout = require("core/listlayout")
 local rows = require("shell/rows")

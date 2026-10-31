@@ -94,7 +94,8 @@ Staged order, with a check-in in the beta client after each:
    from a hand tick and again after an untick and re-tick, and both settings toggles. **Not yet
    heard:** the sounds (`ARCH_INFO_POPUP`, `LEAGUE2_HARD_TASK_COMPLETE`), as the user's VM has no
    audio; check them on a machine with sound. On a tick the plugin made itself (not a manual
-   click), show
+   click), show (superseded 2026-11-01: every tick of a picked chore celebrates, by hand or by
+   lowering its count too)
    `prettyui.AchievementPopup.show{title, text, item, x, y, xAnchor, yAnchor, sound, soundID}`
    centred, a third of the way down. On clearing a whole period, show a bigger one with a grander
    jingle. PrettyUI 1.2.0 exports it: a HUD-framed toast with an item slot that fades out after

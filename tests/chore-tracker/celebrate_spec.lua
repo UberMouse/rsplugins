@@ -24,7 +24,7 @@ describe("chore-tracker celebrate", function()
         return out
     end
 
-    describe("a chore the plugin ticked", function()
+    describe("a picked chore that gets ticked", function()
         it("celebrates a picked chore turning done, named by its text", function()
             local old = support.stateWith({ "d1", "d2" })
             local new = state.autoMark(old, byId.d1, NOW)

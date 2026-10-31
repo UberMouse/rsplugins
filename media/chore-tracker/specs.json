@@ -172,7 +172,7 @@
       "title": "Fold it away",
       "desc": "The menu button folds the window into a strip that shows your current chore, in your defined run order. Finish a period's chores and a popup celebrates it.",
       "descWidth": 1300,
-      "note": "Chores the plugin ticks for you get their own CHORE COMPLETE popup. Turn popups or their sound off in settings.",
+      "note": "Every chore you pick gets its own CHORE COMPLETE popup when it is ticked, by you or by the plugin. Turn popups or their sound off in settings.",
       "images": [
         {
           "raw": "raw/strip.png",

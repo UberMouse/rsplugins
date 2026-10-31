@@ -11,8 +11,8 @@
 -- Saved per character, by display name: picks, their order, ticks, parts done and counts. Saved
 -- for all characters: the window's layout and the celebration settings.
 --
--- A picked chore that gets ticked, however (seen done in the game, ticked by hand, or ticked by
--- lowering its count), gets a celebration popup, and so does a period whose picked chores are
+-- Every picked chore that gets ticked (seen done in the game, ticked by hand, or ticked by
+-- lowering its count) gets a celebration popup, and so does a period whose picked chores are
 -- now all done. Settings turn the popups or their sound off.
 --
 -- Every console line carries [CHORES] (grep: \[CHORES\]); the display name is never logged.

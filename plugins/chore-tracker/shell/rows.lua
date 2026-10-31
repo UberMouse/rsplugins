@@ -66,7 +66,8 @@ local measureReported = false
 -- Icon names already reported missing, so each is logged once per load.
 local reported = {} ---@type table<string, boolean>
 
--- PrettyUI 1.2.0's window wheel handler (types/prettyui.lua, Window._onScrollWheel).
+-- A wheel handler for a window's rows (shell/window.lua, wheelHandler): it scrolls the window
+-- and returns false if that moved it, else true.
 ---@alias ChoreWheelHandler fun(component: ui.Component, delta: number): boolean
 
 ---@class ChoreRowView
@@ -205,11 +206,11 @@ end
 -- name doesn't resolve). `onClick` runs on a press anywhere on the row: on ONCLICK, since a quick
 -- click can arrive release-first in the client (docs/api-concepts.md, "Pointer hooks on a plain
 -- `ui.Layer`"). Without `onClick` the row is display-only: no tick box, no hover state, no
--- hyperlink hand, and its name may run to the row's right edge. `opts.wheel`, when given, takes
--- the mouse wheel over the row, which the row would otherwise swallow. With `opts.grip`, the row
--- gets a drag grip at its left and the rest moves right to make room. `opts.margins` sets the
--- space left free at the content's sides (PrettyUI's flow padding by default). Call M.show to
--- give it its text and state.
+-- hyperlink hand, and its name may run to the row's right edge. `opts.wheel` takes the mouse
+-- wheel over the row, which the row would otherwise swallow; the collapsed strip's row, with no
+-- window to scroll, has none. With `opts.grip`, the row gets a drag grip at its left and the
+-- rest moves right to make room. `opts.margins` sets the space left free at the content's sides
+-- (PrettyUI's flow padding by default). Call M.show to give it its text and state.
 ---@param content ui.Layer
 ---@param y integer
 ---@param icon ChoreIcon?

@@ -266,16 +266,16 @@ describe("chore-tracker shop runs", function()
             -- view: it is clicked below.
             window(h):SetScrollPosition(20)
             local win = window(h)
-            assert.are.equal(20, win._scroll.scrollY)
+            assert.are.equal(20, win.scrollY)
             stockFeathers(h, "FISHINGSHOP", 20)
             stockFeathers(h, "FISHINGSHOP", 0)
             h:advance(20)
             assert.are.equal(win, window(h))
             assert.are.equal("Feather Shop Run (1/4)", helpers.row(h, FEATHERS.name).text)
-            assert.are.equal(20, window(h)._scroll.scrollY)
+            assert.are.equal(20, window(h).scrollY)
 
             helpers.openSettings(h)
-            assert.are.equal(0, window(h)._scroll.scrollY)
+            assert.are.equal(0, window(h).scrollY)
         end
     )
 

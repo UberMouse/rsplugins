@@ -286,7 +286,7 @@ local function buildList(w, openSettings, openInfo)
         lists[i] = sectionIds(section.period, section.rows)
     end
     local spots = listlayout.place(lists, top)
-    local wheel = prettyuiInternals.wheelHandler(w)
+    local wheel = window.wheelHandler(w)
     for _, section in ipairs(sections) do
         headings[section.period] =
             w:AddTitle({ text = view.headingText(section), y = spots.headings[section.period] })
@@ -299,26 +299,23 @@ local function buildList(w, openSettings, openInfo)
     w:SetContentHeight(spots.height)
     refreshList()
     -- The grips' press targets sit over the window, placed from its viewport (see grips.lua).
-    local viewport = prettyuiInternals.viewport(w)
-    if viewport ~= nil then
-        grips.build({
-            -- The plugin layer takes children (docs/api-concepts.md, "UI"); GetComponent's
-            -- stub types it as a plain component.
-            parent = parent --[[@as ui.ComponentCollection]],
-            viewport = viewport,
-            rows = rowViews,
-            sections = lists,
-            scrollY = function()
-                return prettyuiInternals.scrollPosition(w)
-            end,
-            scrollTo = function(y)
-                w:SetScrollPosition(y)
-            end,
-            wheel = wheel,
-            watchSync = prettyuiInternals.overlaySync(w, parent --[[@as ui.ComponentCollection]]),
-            onDrop = onDrop,
-        })
-    end
+    grips.build({
+        -- The plugin layer takes children (docs/api-concepts.md, "UI"); GetComponent's
+        -- stub types it as a plain component.
+        parent = parent --[[@as ui.ComponentCollection]],
+        viewport = w.viewport,
+        rows = rowViews,
+        sections = lists,
+        scrollY = function()
+            return w.scrollY
+        end,
+        scrollTo = function(y)
+            w:SetScrollPosition(y)
+        end,
+        wheel = wheel,
+        watchSync = prettyuiInternals.overlaySync(w, parent --[[@as ui.ComponentCollection]]),
+        onDrop = onDrop,
+    })
 end
 
 ---------------------------------------------------------------------------
@@ -381,7 +378,7 @@ end
 -- wrapped to the window's width (re-laid after a resize, as the info view's help is). Gives
 -- back the block's bottom.
 ---@param w prettyui.Window
----@param wheel ChoreWheelHandler?
+---@param wheel ChoreWheelHandler
 ---@return integer
 local function buildCounts(w, wheel)
     local title = w:AddTitle("How many to do")
@@ -427,7 +424,7 @@ local function buildSettings(w)
         { text = "Celebration popups", value = "popups", selected = celebrations.popups },
         { text = "Popup sound", value = "sound", selected = celebrations.sound },
     }, { onChange = onCelebrationSetting })
-    local wheel = prettyuiInternals.wheelHandler(w)
+    local wheel = window.wheelHandler(w)
     local top = buildCounts(w, wheel)
     local groups = view.byPeriod(chores)
     local sections = {} ---@type ChoreSectionIds[]
@@ -490,7 +487,7 @@ local function buildInfo(w)
         sections[i] = sectionIds(group.status, group.chores)
     end
     local spots = listlayout.place(sections, top)
-    local wheel = prettyuiInternals.wheelHandler(w)
+    local wheel = window.wheelHandler(w)
     for _, group in ipairs(groups) do
         w:AddTitle({ text = info.headingText(group), y = spots.headings[group.status] })
         for _, chore in ipairs(group.chores) do
@@ -689,11 +686,11 @@ end
 local function rebuildCounts(pending)
     local w = window.current()
     if not w or window.isCollapsed() or shownView() ~= "settings" then return end
-    local scrollY = prettyuiInternals.scrollPosition(w)
+    local scrollY = w.scrollY
     window.rebuild(true)
     local moved = settingsRowYs[pending.id]
     local now = window.current()
-    if scrollY and moved and now then now:SetScrollPosition(scrollY + moved - pending.y) end
+    if moved and now then now:SetScrollPosition(scrollY + moved - pending.y) end
 end
 
 ---------------------------------------------------------------------------

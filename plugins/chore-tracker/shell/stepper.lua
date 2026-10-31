@@ -40,7 +40,7 @@ local PLUS_SPRITE = id.Sprite.RS3_CONTEXTUAL_INPUT_PLUS
 ---@param y integer
 ---@param sprite integer an id.Sprite member
 ---@param onClick fun()
----@param wheel ChoreWheelHandler?
+---@param wheel ChoreWheelHandler
 local function newButton(content, x, y, sprite, onClick, wheel)
     local layer = ui.Layer.new(content)
     layer:SetPos(x, y + (ROW_HEIGHT - BUTTON_SIZE) // 2, 1.0, 0)
@@ -51,7 +51,7 @@ local function newButton(content, x, y, sprite, onClick, wheel)
         onClick()
     end)
     -- The button would otherwise swallow the wheel over it.
-    if wheel then layer:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel) end
+    layer:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel)
     local icon = ui.Sprite.new(layer)
     icon:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     icon.clickthrough = true
@@ -74,14 +74,14 @@ end
 -- Make a line at content height `y` under `content`: `name`, then the stepper showing
 -- `valueText`. `onStep` gets -1 or +1 on a click of the minus or plus button, and this line;
 -- the caller decides what that changes and calls M.show with the result. `tooltip` shows over
--- the name. `wheel`, when given, takes the mouse wheel over the name and the buttons.
+-- the name. `wheel` takes the mouse wheel over the name and the buttons.
 ---@param content ui.Layer
 ---@param y integer
 ---@param name string
 ---@param valueText string
 ---@param onStep fun(delta: integer, stepper: ChoreStepperView)
 ---@param tooltip ChoreTooltip
----@param wheel ChoreWheelHandler?
+---@param wheel ChoreWheelHandler
 ---@return ChoreStepperView
 function M.new(content, y, name, valueText, onStep, tooltip, wheel)
     -- Under the name, taking the mouse for the tooltip; made first, so the text draws over it.
@@ -89,7 +89,7 @@ function M.new(content, y, name, valueText, onStep, tooltip, wheel)
     hover:SetPos(PADDING, y)
     hover:SetSize(-NAME_INSET, ROW_HEIGHT, 1.0, 0)
     hover.clickthrough = false
-    if wheel then hover:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel) end
+    hover:Subscribe(ui.Hook.ONSCROLLWHEEL, wheel)
     prettyui.Tooltip.attach(hover, content, tooltip)
 
     local label = rows.newText(content)

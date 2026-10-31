@@ -131,9 +131,9 @@ describe("chore-tracker settings rows", function()
         openSettings(h)
         local r = helpers.settingsRow(h, "daily-challenge")
         window(h):SetScrollPosition(r.layer.y - 40)
-        local before = window(h)._scroll.scrollY
+        local before = window(h).scrollY
         assert.are.same({ true, 1 }, { h.ui:wheel(r.label, 1) })
-        assert.are.equal(before + 32, window(h)._scroll.scrollY)
+        assert.are.equal(before + 32, window(h).scrollY)
     end)
 end)
 
@@ -167,7 +167,7 @@ describe("chore-tracker count settings", function()
     ---@return number
     local function prettyuiScroll(h)
         -- PrettyUI 1.2.0's internal scroll, as shell/prettyui_internals.lua reads it.
-        return assert(window(h)._scroll.scrollY, "no scroll")
+        return assert(window(h).scrollY, "no scroll")
     end
 
     ---@param h table

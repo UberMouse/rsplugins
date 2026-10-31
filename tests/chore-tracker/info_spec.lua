@@ -126,9 +126,9 @@ describe("chore-tracker info view", function()
         assert.is_true(h.ui:click(r.label))
         h:advance(20)
         assert.is_nil(helpers.stored(h))
-        local before = window(h)._scroll.scrollY
+        local before = window(h).scrollY
         assert.are.same({ true, 1 }, { h.ui:wheel(r.label, 1) })
-        assert.are.equal(before + 32, window(h)._scroll.scrollY)
+        assert.are.equal(before + 32, window(h).scrollY)
     end)
 
     it("cuts a long name with dots and refits it when the window widens", function()
@@ -156,7 +156,7 @@ describe("chore-tracker info view", function()
         assert.are_not.equal(first, h.ui:find("Text")[1])
         assert.are.equal(layout.MIN_WIDTH, window(h).root.width)
         assert.are.same({}, (helpLines(h, layout.helpTextWidth(layout.MIN_WIDTH))))
-        assert.are.equal(100, window(h)._scroll.scrollY)
+        assert.are.equal(100, window(h).scrollY)
         h.ui:get("SpriteButton", { sprite = "BACK" })
     end)
 

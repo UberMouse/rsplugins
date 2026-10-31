@@ -65,12 +65,11 @@ local function dailyIds()
     return ids
 end
 
--- How far a window's content is scrolled, read off the fake (not through `_scroll`, which a spec
--- may have removed).
+-- How far the window's content is scrolled.
 ---@param h table
 ---@return number
 local function scrollOf(h)
-    return h.ui:record(window(h), "Window").s.scrollY
+    return window(h).scrollY
 end
 
 -- Scrolls the list under the not-ready notice, then the clock starting rebuilds it to the
@@ -235,6 +234,25 @@ describe("chore-tracker window", function()
         assert.are.same({ false, "clipped: scrolled out of the window's view" }, {
             h.ui:click(first.label),
         })
+    end)
+
+    it("passes the wheel over a row on at the list's ends, and takes it in between", function()
+        local h = loaded()
+        togglePicks(h, dailyIds())
+        local layer = helpers.rows(h)[1].layer
+        -- The handler the row subscribed, called directly: the driver's wheel doesn't return it.
+        local wheel = assert(uiFake.stateOf(layer)).hooks[uiFake.Hook.ONSCROLLWHEEL][1].fn
+        assert.is_true(wheel(layer, -1))
+        assert.are.equal(0, scrollOf(h))
+        assert.is_false(wheel(layer, 1))
+        assert.are.equal(32, scrollOf(h))
+        window(h):ScrollBy(100000)
+        local bottom = scrollOf(h)
+        assert.is_true(bottom > 32)
+        assert.is_true(wheel(layer, 1))
+        assert.are.equal(bottom, scrollOf(h))
+        assert.is_false(wheel(layer, -1))
+        assert.are.equal(bottom - 32, scrollOf(h))
     end)
 
     it("keeps the list's scroll when the clock starting rebuilds the window", function()
@@ -684,16 +702,15 @@ end)
 -- The plugin promises that a PrettyUI version without one of the internals it reaches into
 -- loses only what that internal gave it (the header of shell/prettyui_internals.lua lists
 -- them). The harness toggles stand in for such a version; nothing is probed against one.
-describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
+describe("chore-tracker on a PrettyUI whose internals differ", function()
     local BERT_FLAG = "HANDSAND_BUCKETS_CLAIMED_TODAY"
 
     -- A tracker with every daily chore and Bert's sand picked (so the list scrolls), loaded after `setup`
     -- has toggled the fake, and past the settle window so var ticks count.
     ---@param setup fun(h: table)
-    ---@param clock integer? # the game clock at load (default NOW; 0 for not ready)
     ---@return table
-    local function drifted(setup, clock)
-        local h = loaded({ load = false, clock = clock })
+    local function drifted(setup)
+        local h = loaded({ load = false })
         local selected = dailyIds()
         selected[#selected + 1] = "bert-sand" -- the weekly the signal ticks
         helpers.seed(h, "state:Zezima", { version = 2, selected = selected, done = {}, shops = {} })
@@ -740,52 +757,6 @@ describe("chore-tracker on a PrettyUI that lacks a scroll internal", function()
         assert.is_true(h.ui:layout(window(h)).visible)
         assert.is_true(ticked(h, "Sand from Bert"))
     end
-
-    it("loses only the scroll kept through a rebuild and the grips without _scroll", function()
-        -- With the internal, the scroll survives the rebuild and the grips are built.
-        local control = drifted(function() end, 0)
-        local before, after = scrollThenRebuild(control)
-        assert.are.equal(before, after)
-        assert.is_true(gripTargets(control) > 0)
-
-        local h = drifted(function(fake)
-            fake.ui:scrollInternals("noScroll")
-        end, 0)
-        assert.is_nil(window(h)._scroll)
-        before, after = scrollThenRebuild(h)
-        assert.is_true(before > 0)
-        assert.are.equal(0, after)
-        assert.are.equal(0, gripTargets(h))
-        assertStillWorks(h)
-    end)
-
-    it("loses only the grips without a viewport", function()
-        local h = drifted(function(fake)
-            fake.ui:scrollInternals("noViewport")
-        end)
-        assert.is_nil(window(h).viewport)
-        assert.are.equal(0, gripTargets(h))
-        assertStillWorks(h)
-        assert.are.equal(0, gripTargets(h))
-        -- Last, because scrolling moves the settings button (first in the content) out of the
-        -- viewport and the harness refuses clicks on it, even with every internal present.
-        local first = helpers.rows(h)[1]
-        assert.are.same({ true, 1 }, { h.ui:wheel(first.label, 1) })
-        assert.is_true(scrollOf(h) > 0)
-    end)
-
-    it("loses only the wheel over a row without _onScrollWheel", function()
-        local h = drifted(function(fake)
-            fake.ui:scrollInternals("noWheel")
-        end)
-        assert.is_nil(window(h)._onScrollWheel)
-        local first = helpers.rows(h)[1]
-        -- The row has no wheel listener, so it swallows the wheel.
-        assert.are.same({ true, 0 }, { h.ui:wheel(first.label, 1) })
-        assert.are.equal(0, scrollOf(h))
-        assert.is_true(gripTargets(h) > 0)
-        assertStillWorks(h)
-    end)
 
     it("loses only the grips' raise when _RegisterOverlay raises", function()
         local control = drifted(function() end)

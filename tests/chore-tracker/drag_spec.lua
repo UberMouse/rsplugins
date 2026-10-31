@@ -209,7 +209,7 @@ describe("chore-tracker grips", function()
         assert.is_true(inView > 0 and inView < 8)
         -- The wheel over a grip still scrolls the window.
         assert.are.same({ true, 1 }, { h.ui:wheel(t, 1) })
-        assert.are.equal(32, window(h)._scroll.scrollY)
+        assert.are.equal(32, window(h).scrollY)
     end)
 
     it("follows its grip within a tick when the window scrolls, moves or resizes", function()
@@ -222,14 +222,14 @@ describe("chore-tracker grips", function()
         local scroll = rowY(h, "daily-challenge") + 6 + 8
         win:SetScrollPosition(scroll)
         h:advance(20)
-        assert.are.equal(scroll, win._scroll.scrollY)
+        assert.are.equal(scroll, win.scrollY)
         assert.is_nil(targetOf(h, "daily-challenge"))
         assert.is_not_nil(targetOf(h, "player-owned-ports"))
         docked(h)
 
         assert.are.same({ true, 1 }, { h.ui:wheel(row(h, "Player-Owned Farm").layer, 1) })
         h:advance(20)
-        assert.are.equal(scroll + 32, win._scroll.scrollY)
+        assert.are.equal(scroll + 32, win.scrollY)
         docked(h)
         h.ui:dragTitle(win, -200, 40)
         h:advance(20)
@@ -504,7 +504,7 @@ describe("chore-tracker grips over the window", function()
                 assert.is_true(h.ui:moveTo(x, view.globalY + view.height + 20))
             end, 20)
         end
-        assert.is_true(win._scroll.scrollY > 0)
+        assert.is_true(win.scrollY > 0)
         checkRaises(h, false, function()
             assert.is_true(h.ui:release())
         end, 40)
@@ -692,24 +692,24 @@ describe("chore-tracker drag", function()
         -- The row stays under the pointer's spot at the edge (the grab was 8 px into the grip,
         -- 6 px down the row).
         assert.are.equal(view.height + 8 - 14, rowY(h, "daily-challenge"))
-        local scrolls = { win._scroll.scrollY }
+        local scrolls = { win.scrollY }
         for _ = 1, 2 do
             assert.is_true(h.ui:moveTo(x, bottom + 20))
-            scrolls[#scrolls + 1] = win._scroll.scrollY
+            scrolls[#scrolls + 1] = win.scrollY
         end
         assert.are.same({ SCROLL_STEP, 2 * SCROLL_STEP, 3 * SCROLL_STEP }, scrolls)
         -- To the end of the content and no further.
         for _ = 1, 100 do
             h.ui:moveTo(x, bottom + 20)
         end
-        local most = win._scroll.scrollY
+        local most = win.scrollY
         h.ui:moveTo(x, bottom + 20)
-        assert.are.equal(most, win._scroll.scrollY)
+        assert.are.equal(most, win.scrollY)
         -- Inside the list it stops; above the top it scrolls back up.
         assert.is_true(h.ui:moveTo(x, bottom - 30))
-        assert.are.equal(most, win._scroll.scrollY)
+        assert.are.equal(most, win.scrollY)
         assert.is_true(h.ui:moveTo(x, view.globalY - 5))
-        assert.are.equal(most - SCROLL_STEP, win._scroll.scrollY)
+        assert.are.equal(most - SCROLL_STEP, win.scrollY)
         assert.is_true(h.ui:release())
     end)
 

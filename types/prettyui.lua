@@ -34,6 +34,7 @@ prettyui = {}
 ---@field maxHeight number?
 ---@field onClose fun(window: prettyui.Window)? Called by Close(), before the window hides
 ---@field tooltip prettyui.Tooltip?
+---@field scrollStep number? Interface units the content moves per wheel delta. Default 32
 
 ---@class prettyui.WindowModule
 local WindowModule = {}
@@ -48,10 +49,11 @@ function WindowModule.new(parent, options) end
 ---@field closeButton ui.Sprite The X at (width - 28, 7); clicking it calls Close()
 ---@field content ui.Layer The scrolling layer the rows live in. Make your own ui.Layer/Sprite/Text under it at an explicit position and call SetContentHeight so the window scrolls over them. nil after Destroy()
 ---@field viewport ui.Layer The layer the content scrolls in, inside the window's frame: its xyGlobal, width and height are the part of the content on show (in 1.2.0 less the scrollbar's 18 px while it shows). nil after Destroy()
----@field _onScrollWheel fun(component: ui.Component, delta: number): boolean Internal, not API: the window's wheel handler. Subscribe it to a row's ui.Hook.ONSCROLLWHEEL so the wheel over that row still scrolls the window; it scrolls by delta * 32 px while the content overflows and returns false if the position moved, else true
+---@field scrollY number The current scroll position, px from the content's top. 1.2.0 syncs it onto the window after every scroll (SetScrollPosition, ScrollBy, the wheel, the scrollbar)
+---@field _onScrollWheel fun(component: ui.Component, delta: number): boolean Internal, not API: the window's wheel handler. Subscribe it to a row's ui.Hook.ONSCROLLWHEEL so the wheel over that row still scrolls the window; it scrolls by delta * scrollStep px while the content overflows and returns false if the position moved, else true
 ---@field resize { handles: table<string, ui.Layer>?, enabled: boolean?, SetEnabled: fun(self: table, enabled: boolean)?, dragState: table? }? Internal, not API: 1.2.0's resize controller of a resizable window; its `handles` are the eight resize layers on the window's parent, keyed n s e w nw ne sw se. `enabled` is false while the title bar is pressed (and, in 1.2.0, stuck false after a quick click); `SetEnabled(enabled)` sets it. `dragState` is a table from a handle's press until the resize drag ends, else nil. nil on a window that isn't resizable or after Destroy()
 ---@field titleDrag ui.Layer? Internal, not API: 1.2.0's title-bar drag layer of a titled window, a sibling of the root on the window's parent; its `isClicked` reads true while the title bar is held. nil on an untitled window or after Destroy()
----@field _scroll { scrollY: number }? Internal, not API: the content's scroll controller, whose `scrollY` is the only way to read the scroll position. nil after Destroy()
+---@field _scroll { scrollY: number }? Internal, not API: the content's scroll controller; its `scrollY` is the scroll position, as the public `scrollY` is. nil after Destroy()
 local Window = {}
 
 ---Internal, not API: register `component` (on the window's parent) as one of the window's
@@ -71,6 +73,10 @@ function Window:_UnregisterOverlay(component) end
 ---Scroll the content to `position` px from its top, clamped to 0..(content height - viewport height).
 ---@param position number?
 function Window:SetScrollPosition(position) end
+
+---Scroll the content by `delta` px (positive is down): SetScrollPosition(scrollY + delta).
+---@param delta number
+function Window:ScrollBy(delta) end
 
 ---Set the scrollable height of the content. It replaces the height the rows grew it to, and
 ---re-clamps the scroll position.

@@ -314,7 +314,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `shell/rows.lua` | One chore's row in the list, settings or info view: its icon, text and tick box (and a list row's grip; an info row has no box), changed in place |
 | `shell/stepper.lua` | A How many to do line in settings: the chore's name, with its tooltip, and its "[-] N of M [+]" buttons |
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
-| `shell/prettyui_internals.lua` | Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI versions |
+| `shell/prettyui_internals.lua` | Keeping the window's grips and resize cursors working across PrettyUI versions: the one file that uses PrettyUI's private internals |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began, and the RuneDay (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks, parts done and needed counts, and whether a chore is done now |

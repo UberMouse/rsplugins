@@ -1065,11 +1065,13 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
     `viewport:SetScrollPos(0, 120)`, and again on a later frame; the row's `y` stayed 150. PrettyUI
     1.2.0 scrolls a window that way (`src/core/scroll.lua`) and places its own overlays from
     the root y plus the target's y less `_scroll.scrollY` (`src/window.lua`). So a row's
-    on-screen spot is `viewport.xyGlobal` plus the row's `x`, `y`, less the scroll position.
+    on-screen spot is `viewport.xyGlobal` plus the row's `x`, `y`, less the scroll position
+    (the public `window.scrollY`).
   - **A raw row swallows the mouse wheel.** Over a row that subscribes nothing for the wheel,
     the window didn't scroll. `row:Subscribe(ui.Hook.ONSCROLLWHEEL, window._onScrollWheel)`
     (internal, read from the 1.2.0 source; PrettyUI's own content components bind the same
-    handler) made it scroll.
+    handler) made it scroll. Chore Tracker binds its own handler built from the public
+    `ScrollBy` and `scrollY` instead (see "A window's scroll, viewport and step are public").
   - Tooltips: `prettyui.Tooltip` is exported, and `Tooltip.attach(target, parent, value)` is
     what PrettyUI's `ItemSlot` uses on content children. It works on a hand-built row
     (user-checked in the beta client, 2026-10-29): the tooltip shows on hover and goes on leave,
@@ -1105,9 +1107,20 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   three steps over 4 s, still for over a second between steps, kept the same window while held,
   and the view was rebuilt once just after release, at 245 with no overlapping help, and not
   again; a `SetSize` back to 345 re-laid it once.
-- **A window's scroll is settable but only internally readable** (read from the 1.2.0 source,
-  not yet confirmed in the client): `Window:SetScrollPosition(position)` is public, but the
-  position is read only from the internal `window._scroll.scrollY`.
+- **A window's scroll, viewport and step are public** (dev-bridge probe, `eval --plugin
+  chore-tracker`, beta client, 2026-11-01; https://prettyui.j3.gg lists them). `window.scrollY`
+  is the current scroll position and `window.viewport` the clipped layer the content scrolls
+  in; `window:ScrollBy(delta)` scrolls by `delta` px (positive is down), clamped like
+  `SetScrollPosition`; the `scrollStep` option (default 32) is how far one wheel delta moves.
+  1.2.0's scroll controller copies `scrollY` and `viewport` onto the window at the end of every
+  `SetScrollPosition`, which `ScrollBy`, the wheel, the arrows and the thumb drag all go
+  through (`src/core/scroll.lua`, `syncOwner`), so `scrollY` is never stale: after
+  SetSize(345, 300), ScrollBy(64), SetScrollPosition(10), the wheel at +1, -100, -1 at the top,
+  ScrollBy(huge) and +1 at the bottom it read 0, 64, 10, 42, 0, 0, 270, 270, equal to the
+  internal `_scroll.scrollY` each time, and `viewport` was the controller's own. The internal
+  wheel handler returned false when it moved the scroll and true at either end. So a row's
+  own wheel handler can be built from public API: `ScrollBy(delta * scrollStep)`, then return
+  whether `scrollY` is unchanged.
 
 The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
 types are in `types/prettyui.lua`.

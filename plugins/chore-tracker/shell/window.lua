@@ -19,6 +19,10 @@ local strip = require("shell/strip")
 local M = {}
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
+-- Pixels one wheel notch scrolls the window. It is the window's `scrollStep` (PrettyUI's
+-- default, 32), so the wheel moves the list as far over a row (wheelHandler) as over the bare
+-- content, where PrettyUI's own handler takes it.
+local SCROLL_STEP = 32
 
 -- The window hamburger's tooltip. A table, so SetTooltip replaces it (see collapseAt).
 local COLLAPSE_TOOLTIP = { text = "Collapse" }
@@ -68,6 +72,20 @@ end
 ---@return boolean
 function M.isCollapsed()
     return collapsed ~= nil
+end
+
+-- A wheel handler for `w`'s hand-built rows, which would otherwise swallow the wheel
+-- (docs/api-concepts.md). It scrolls `w` by SCROLL_STEP per wheel delta (positive is down) and
+-- returns false if that moved it, else true, so at either end the wheel passes on, as with
+-- PrettyUI 1.2.0's own handler on the window's content.
+---@param w prettyui.Window
+---@return ChoreWheelHandler
+function M.wheelHandler(w)
+    return function(_, delta)
+        local before = w.scrollY
+        w:ScrollBy(delta * SCROLL_STEP)
+        return w.scrollY == before
+    end
 end
 
 -- A component's on-screen position relative to the plugin layer, in whole pixels.
@@ -203,6 +221,7 @@ local function build(at)
         resizable = true,
         minWidth = layout.MIN_WIDTH,
         minHeight = layout.MIN_HEIGHT,
+        scrollStep = SCROLL_STEP,
     })
     win = w
     prettyuiInternals.setResizeCursors(w)
@@ -236,9 +255,9 @@ end
 function M.rebuild(keepScroll)
     assert(win, "the window exists from load to shutdown")
     local r = win.root
-    local scrollY = keepScroll and prettyuiInternals.scrollPosition(win) or nil
+    local scrollY = win.scrollY
     build({ x = r.x, y = r.y, width = r.width, height = r.height })
-    if scrollY then win:SetScrollPosition(scrollY) end
+    if keepScroll then win:SetScrollPosition(scrollY) end
     if collapsed then
         win:Close()
         M.refreshStrip()

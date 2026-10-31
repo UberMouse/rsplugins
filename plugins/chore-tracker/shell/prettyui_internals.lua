@@ -1,14 +1,10 @@
--- Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI
--- versions. PrettyUI 1.2.0 offers no public way to do these, so this is the one file that
--- reaches into its state and internals; main.lua and shell/window.lua go through it.
+-- Keeping the window's grips and resize cursors working across PrettyUI versions. PrettyUI
+-- 1.2.0 offers no public way to do these, so this is the one file that reaches into its
+-- private (underscore or controller) internals; main.lua and shell/window.lua go through it.
+-- Window `root` and `closeButton` (used elsewhere) are undocumented but confirmed in the client.
 --
--- State and internals used, each guarded so a version without it loses only that. The rule:
--- reads are type-guarded, method calls are pcalled.
--- - `_scroll.scrollY`: keeps the scroll through a rebuild (scrollPosition) and places the
---   grips' press targets over scrolled rows.
--- - `_onScrollWheel`: lets the wheel over a row scroll the window (wheelHandler).
--- - `viewport` (viewport): where the grips' targets are placed from; without it, or the
---   scroll, the grips don't drag.
+-- Internals used, each guarded so a version without it loses only that. The rule: reads are
+-- type-guarded, method calls are pcalled.
 -- - `_RegisterOverlay` / `_UnregisterOverlay`: to hear when the window lays out its overlays,
 --   so the grips' targets can be raised back over it (overlaySync); without them the targets
 --   stay under the window after a title-bar press or a resize.
@@ -23,40 +19,6 @@
 local rows = require("shell/rows")
 
 local M = {}
-
--- How far `w`'s content is scrolled, or nil if that can't be read. PrettyUI 1.2.0
--- can set it (SetScrollPosition) but has no getter, so this reads its internal
--- `_scroll.scrollY`; a version without that field gives nil.
----@param w prettyui.Window
----@return number?
-function M.scrollPosition(w)
-    local scroll = w._scroll
-    local y = type(scroll) == "table" and scroll.scrollY
-    if type(y) == "number" then return y end
-    return nil
-end
-
--- The layer the window's content is clipped to and scrolls in, or nil if there is none.
--- PrettyUI 1.2.0's `viewport` is internal; client components are userdata, the harness's
--- fakes tables.
----@param w prettyui.Window
----@return ui.Layer?
-function M.viewport(w)
-    local viewport = w.viewport
-    if type(viewport) == "userdata" or type(viewport) == "table" then
-        return viewport --[[@as ui.Layer]]
-    end
-    return nil
-end
-
--- A row swallows the mouse wheel unless it hands it to the window. The handler is PrettyUI
--- 1.2.0-internal, so without it the rows are still made, just without that.
----@param w prettyui.Window
----@return ChoreWheelHandler?
-function M.wheelHandler(w)
-    if type(w._onScrollWheel) == "function" then return w._onScrollWheel end
-    return nil
-end
 
 -- A way to hear when `w` lays out its overlays, for grips.lua: called with a callback, it
 -- registers a sentinel layer as one of `w`'s overlays (PrettyUI 1.2.0-internal) whose layout

@@ -522,6 +522,7 @@ other = ui.Layer.new(parent)
         end
         for _, key in ipairs({
             "closeButton",
+            "scrollY",
             "_onScrollWheel",
             "_RegisterOverlay",
             "_UnregisterOverlay",
@@ -533,6 +534,38 @@ other = ui.Layer.new(parent)
                 end)
             )
         end
+    end)
+
+    it("reads the public scrollY as _scroll does, and ScrollBy moves it by a delta", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "t", x = 0, y = 0, width = 300, height = 200 })
+            w:SetContentHeight(282)
+        ]])
+        local w = h.env.w
+        -- Content 282 in a 160 px viewport: 0..122.
+        assert.are.equal(0, w.scrollY)
+        w:ScrollBy(64)
+        assert.are.equal(64, w.scrollY)
+        assert.are.equal(w._scroll.scrollY, w.scrollY)
+        w:ScrollBy(-10)
+        assert.are.equal(54, w.scrollY)
+        w:ScrollBy(1000)
+        assert.are.equal(122, w.scrollY)
+        w:ScrollBy(-1000)
+        assert.are.equal(0, w.scrollY)
+        assert.matches("needs a number", harness.errorOf(w.ScrollBy, w, "down"))
+        w:Destroy()
+        assert.matches("used after Destroy", harness.errorOf(w.ScrollBy, w, 1))
+    end)
+
+    it("scrolls by delta * scrollStep from its own wheel handler", function()
+        local h = load([[
+            w = prettyui.Window.new(parent, { title = "t", width = 300, height = 200, scrollStep = 10 })
+            w:SetContentHeight(1000)
+        ]])
+        local w = h.env.w
+        assert.is_false(w._onScrollWheel(w.content, 2))
+        assert.are.equal(20, w.scrollY)
     end)
 
     it("faults on an unmodelled key of _scroll, and reads its scrollY", function()
@@ -1753,32 +1786,6 @@ describe("prettyui Window resize and title-bar state", function()
                 n = handles ~= nil and handles.n ~= nil,
                 titleDrag = w.titleDrag ~= nil,
             }, mode)
-        end
-    end)
-
-    it("names the getter each scrollInternals mode takes away, and 'all' has every one", function()
-        local expected = {
-            all = { _scroll = true, viewport = true, _onScrollWheel = true },
-            noScroll = { _scroll = false, viewport = true, _onScrollWheel = true },
-            noViewport = { _scroll = true, viewport = false, _onScrollWheel = true },
-            noWheel = { _scroll = true, viewport = true, _onScrollWheel = false },
-        }
-        for mode, shape in pairs(expected) do
-            local h = load(WINDOW)
-            h.ui:scrollInternals(mode)
-            local w = h.env.prettyui.Window.new(h.env.parent, { title = "T", resizable = true })
-            w:SetContentHeight(1000)
-            assert.are.same(shape, {
-                _scroll = w._scroll ~= nil,
-                viewport = w.viewport ~= nil,
-                _onScrollWheel = w._onScrollWheel ~= nil,
-            }, mode)
-            -- The fake's own scrolling and wheel listener don't go through the getters.
-            local s = h.ui:record(w, "Window").s
-            assert.are.equal(1, ui.fire(s.contentState, ui.Hook.ONSCROLLWHEEL, 1), mode)
-            assert.are.equal(32, s.scrollY, mode)
-            w:SetScrollPosition(40)
-            assert.are.equal(40, s.scrollY, mode)
         end
     end)
 

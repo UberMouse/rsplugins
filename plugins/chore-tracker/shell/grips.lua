@@ -52,9 +52,9 @@ local DRAG_LOST_TICKS = 10
 ---@field viewport ui.Layer the layer the window's content scrolls in
 ---@field rows table<string, ChoreRowView> the list's rows by chore id
 ---@field sections ChoreSectionIds[] each period's row ids, top to bottom
----@field scrollY fun(): number? how far the content is scrolled, or nil if unreadable
+---@field scrollY fun(): number how far the content is scrolled
 ---@field scrollTo fun(y: number) scroll the content (the window clamps it)
----@field wheel ChoreWheelHandler? the window's wheel handler, so the wheel over a grip scrolls
+---@field wheel ChoreWheelHandler the window's wheel handler, so the wheel over a grip scrolls
 ---@field watchSync (fun(onSync: fun()): fun()?)? have onSync called each time the window lays out
 --- its overlays; returns the function that stops it, or nil if it couldn't start. Without it
 --- the targets stay under the window after a title-bar press or a resize
@@ -93,21 +93,19 @@ local synced = false
 -- and the raise waits.
 local syncedSinceFollow = false
 
--- The viewport's spot and size in plugin-layer coordinates, and the scroll position; nil when
--- the scroll can't be read. Rows are placed from these, not from their own xyGlobal, which
--- leaves out the scroll in the client (docs/api-concepts.md).
----@return { x: number, y: number, width: number, height: number, scroll: number }?
+-- The viewport's spot and size in plugin-layer coordinates, and the scroll position. Rows are
+-- placed from these, not from their own xyGlobal, which leaves out the scroll in the client
+-- (docs/api-concepts.md).
+---@return { x: number, y: number, width: number, height: number, scroll: number }
 local function view()
     assert(ctx, "grips are only followed once built")
-    local scroll = ctx.scrollY()
-    if scroll == nil then return nil end
     local at, origin = ctx.viewport.xyGlobal, ctx.parent.xyGlobal
     return {
         x = at.x - origin.x,
         y = at.y - origin.y,
         width = ctx.viewport.width,
         height = ctx.viewport.height,
-        scroll = scroll,
+        scroll = ctx.scrollY(),
     }
 end
 
@@ -137,15 +135,12 @@ local function dock()
     for _, grip in ipairs(grips) do
         if not (drag and drag.grip == grip) then
             local layer = ctx.rows[grip.id].layer
-            local x, y, inView = 0, 0, false
-            if v then
-                x = math.floor(v.x + layer.x + 0.5)
-                y = math.floor(v.y + layer.y - v.scroll + GRIP_Y + 0.5)
-                inView = x >= v.x
-                    and x + GRIP_SIZE <= v.x + v.width
-                    and y >= v.y
-                    and y + GRIP_SIZE <= v.y + v.height
-            end
+            local x = math.floor(v.x + layer.x + 0.5)
+            local y = math.floor(v.y + layer.y - v.scroll + GRIP_Y + 0.5)
+            local inView = x >= v.x
+                and x + GRIP_SIZE <= v.x + v.width
+                and y >= v.y
+                and y + GRIP_SIZE <= v.y + v.height
             place(grip, x, y, not (shown and inView))
         end
     end
@@ -167,12 +162,11 @@ local function update(pointerY)
     assert(ctx and drag, "a drag sample needs a drag")
     if type(pointerY) ~= "number" then return end
     local v = view()
-    if v == nil then return end
     local top, bottom = v.y, v.y + v.height
     local step = reorder.scrollStep(pointerY, top, bottom)
     if step ~= 0 then
         ctx.scrollTo(v.scroll + step)
-        v.scroll = ctx.scrollY() or v.scroll
+        v.scroll = ctx.scrollY()
     end
     -- Past an edge the row stays at that edge, under where the pointer leaves the list.
     local clamped = math.max(top, math.min(pointerY, bottom))
@@ -250,12 +244,9 @@ local function drop()
 end
 
 -- Make a press target over each list row's grip. Call after the rows are made, then follow.
--- Without a readable scroll position a target couldn't be put over its grip, so then none is
--- made and the grips don't drag.
 ---@param opts ChoreGripsOpts
 function M.build(opts)
     M.clear()
-    if opts.scrollY() == nil then return end
     ctx = opts
     for i, section in ipairs(opts.sections) do
         sections[i] =
@@ -285,7 +276,7 @@ function M.build(opts)
                 pressed = nil
                 if drag and drag.grip == grip then drop() end
             end)
-            if opts.wheel then target:Subscribe(ui.Hook.ONSCROLLWHEEL, opts.wheel) end
+            target:Subscribe(ui.Hook.ONSCROLLWHEEL, opts.wheel)
             grips[#grips + 1] = grip
         end
     end

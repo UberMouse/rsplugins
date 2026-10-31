@@ -6,7 +6,7 @@
 -- probe on 2026-10-25; docs/testing.md's fidelity ledger says which is which.
 --
 -- Modelled: Window (titled, resizable, close button, AddText/AddTitle/AddCheckboxButton/
--- AddDivider/AddSpriteButton, SetScrollPosition and the `_scroll.scrollY` it sets, the
+-- AddDivider/AddSpriteButton, SetScrollPosition, ScrollBy and the `scrollY` (and internal `_scroll.scrollY`) they set, the
 -- `content` layer for a plugin's own components and the `viewport` it scrolls in,
 -- SetContentHeight, the wheel handler, the title-bar drag layer `titleDrag`'s stacking, and the
 -- overlays registered with the internal `_RegisterOverlay` and when they are synced),
@@ -38,6 +38,7 @@ local CLOSE_SIZE = internal.CLOSE_SIZE
 local CLOSE_RIGHT = internal.CLOSE_RIGHT
 local CLOSE_Y = internal.CLOSE_Y
 local WINDOW_DEFAULTS = internal.WINDOW_DEFAULTS
+local SCROLL_STEP = internal.SCROLL_STEP
 local PANEL_BORDER = internal.PANEL_BORDER
 local PANEL_DEFAULTS = internal.PANEL_DEFAULTS
 local START_Y = internal.START_Y
@@ -81,6 +82,7 @@ local WindowModule = module("Window", function(lib, parent, options)
         minHeight = options.minHeight or WINDOW_DEFAULTS.minHeight,
         maxWidth = options.maxWidth,
         maxHeight = options.maxHeight,
+        scrollStep = options.scrollStep or SCROLL_STEP,
         flow = { nextY = START_Y, hasItems = false, contentHeight = 0 },
         destroyed = false,
     }
@@ -116,7 +118,6 @@ local WindowModule = module("Window", function(lib, parent, options)
     s.overlays = {}
     s.noOverlayInternals = lib.h.ui.noOverlayInternals
     s.registerRaises = lib.h.ui.registerRaises
-    s.scrollMode = lib.h.ui.scrollMode
     if s.title then
         local drag, dragState = ui.create("Layer", ps)
         s.titleDrag = drag

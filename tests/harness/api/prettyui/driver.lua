@@ -37,7 +37,6 @@ function M.driver(h)
         altHeld = false,
         noOverlayInternals = false,
         registerRaises = false,
-        scrollMode = "all",
         resizeMode = "all",
     }, Driver)
 end
@@ -99,15 +98,6 @@ end
 ---@param on boolean
 function Driver:overlayRaises(on)
     self.registerRaises = on
-end
-
--- Make every Window made from now on lack 1.2.0's internal `_scroll` ("noScroll"), its public
--- `viewport` ("noViewport") or its internal `_onScrollWheel` ("noWheel"), each reading nil as on
--- a PrettyUI version without it; "all" (the default) restores them. Set it before `h:load()`
--- for a window made at load.
----@param mode "all"|"noScroll"|"noViewport"|"noWheel"
-function Driver:scrollInternals(mode)
-    self.scrollMode = mode
 end
 
 -- Make every Window made from now on lack 1.2.0's internal `resize` ("none") or its `handles`

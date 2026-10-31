@@ -8,7 +8,6 @@ local internal = require("tests.harness.api.prettyui.internal")
 require("tests.harness.api.prettyui.objects")
 
 local PANEL_MIN = internal.PANEL_MIN
-local SCROLL_STEP = internal.SCROLL_STEP
 local clamp = internal.clamp
 local live = internal.live
 local remember = internal.remember
@@ -92,7 +91,8 @@ local function windowSetContentHeight(s, height)
 end
 
 -- The window's wheel handler (its scroll controller's `_onScrollWheel`), as 1.2.0 binds it
--- to the content: while the content overflows it scrolls by delta * 32 px and returns false
+-- to the content: while the content overflows it scrolls by delta * scrollStep px (the Window
+-- option, default 32) and returns false
 -- if the position moved; otherwise it returns true. A top-level window has no parent
 -- handler to pass the wheel on to.
 ---@param s table
@@ -102,7 +102,7 @@ local function windowWheel(s, delta)
     live(s)
     if s.flow.contentHeight > viewportHeight(s) then
         local before = s.scrollY
-        windowScrollTo(s, before + delta * SCROLL_STEP)
+        windowScrollTo(s, before + delta * s.scrollStep)
         if s.scrollY ~= before then return false end
     end
     return true
@@ -314,21 +314,28 @@ local Window = strict.class("prettyui.Window instance", {
         -- The layer the content scrolls in: its rect is the part of the content on show.
         -- Public state 1.2.0's scroll controller syncs onto the window (`syncOwner`).
         viewport = function(s)
-            if s.destroyed or s.scrollMode == "noViewport" then return nil end
+            if s.destroyed then return nil end
             return s.viewport
         end,
         -- 1.2.0's internal wheel handler (also set on the window by its scroll controller):
         -- a plugin hands it to a row's ONSCROLLWHEEL so the wheel still scrolls the window.
         _onScrollWheel = liveField(
-            ---@return function?
+            ---@return function
             function(s)
-                if s.scrollMode == "noWheel" then return nil end
                 return s.onWheel
+            end
+        ),
+        -- The scroll position, public state the scroll controller syncs onto the window after
+        -- every scroll (`syncOwner`, from SetScrollPosition's layout).
+        scrollY = liveField(
+            ---@return number
+            function(s)
+                return s.scrollY
             end
         ),
         ---@return table?
         _scroll = function(s)
-            if s.destroyed or s.scrollMode == "noScroll" then return nil end
+            if s.destroyed then return nil end
             return ScrollController.new({ scrollY = s.scrollY, owner = s })
         end,
         -- 1.2.0's internal title-bar drag layer (a titled window's only), a sibling of the root
@@ -380,6 +387,14 @@ local Window = strict.class("prettyui.Window instance", {
         SetScrollPosition = function(s, position)
             live(s)
             windowScrollTo(s, position)
+        end,
+        -- 1.2.0's Scroll:ScrollBy: SetScrollPosition(scrollY + delta).
+        ScrollBy = function(s, delta)
+            live(s)
+            if type(delta) ~= "number" then
+                strict.fault("prettyui Window:ScrollBy(delta) needs a number")
+            end
+            windowScrollTo(s, s.scrollY + delta)
         end,
         SetContentHeight = windowSetContentHeight,
         Show = function(s)

@@ -28,7 +28,7 @@ local TITLE_HEIGHT_ROW, TITLE_GAP, TITLE_MARGIN = 28, 8, 16
 local CHECKBOX_ROW = 22
 local DIVIDER_HEIGHT = 60
 local SPRITE_BUTTON_SIZE = 24
--- Pixels one wheel notch scrolls (the scroll controller's default scrollStep).
+-- Pixels one wheel notch scrolls by default (the Window option scrollStep).
 local SCROLL_STEP = 32
 
 -- The names SpriteButton accepts (case-insensitive), from 1.2.0's sprite table.
@@ -66,6 +66,7 @@ local OPTIONS = {
         "maxHeight",
         "onClose",
         "tooltip",
+        "scrollStep",
     }),
     Panel = set({ "x", "y", "width", "height", "backgroundAlpha", "scrollable", "tooltip" }),
     SpriteButton = set({ "x", "y", "xAnchor", "yAnchor", "size", "width", "height", "tooltip" }),

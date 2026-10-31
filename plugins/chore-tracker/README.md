@@ -226,8 +226,9 @@ Everything is kept on this computer in the plugin's PersistentDB.
   changed under **How many to do**. While you are logged out the window says "Log in to see
   your chores".
 - **For all characters**: the window's position, size and collapsed state, and where the
-  collapsed strip is, saved within a second of a change and restored next time, moved back on
-  screen if they no longer fit; and whether celebration popups and their sound are on.
+  collapsed strip is, saved within a second of the window coming to rest and restored next
+  time, moved back on screen if they no longer fit; and whether celebration popups and their
+  sound are on.
 
 Your position in the game is read only to tell a collection or bonus XP claim made beside Dell
 Monti, the Weird Old Man or Aster from one made elsewhere. It is never stored.

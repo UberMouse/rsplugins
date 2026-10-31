@@ -3,11 +3,11 @@
 require("tests.chore-tracker.support")
 local listlayout = require("core/listlayout")
 
----@param period string
+---@param key string
 ---@param ids string[]
 ---@return table section
-local function section(period, ids)
-    return { period = period, ids = ids }
+local function section(key, ids)
+    return { key = key, ids = ids }
 end
 
 describe("chore-tracker list layout", function()

@@ -26,7 +26,7 @@ M.FLOW_PADDING = 14
 ---@field height integer the content height that holds them all, padding included
 
 ---@class ChoreSectionIds the row-id shape both the list layout and the grips use
----@field period ChorePeriod|ChoreStatus its heading's key: its period, or the info view's status
+---@field key ChorePeriod|ChoreStatus its heading's key: its period, or the info view's status
 ---@field ids string[] the chore ids of its rows, top to bottom
 ---@field subheads table<integer, string>? settings only: index in `ids` -> the key of the
 ---subheading above that row
@@ -57,7 +57,7 @@ function M.place(sections, top)
     local y = top
     for _, section in ipairs(sections) do
         y = y + HEADING_GAP
-        out.headings[section.period] = y
+        out.headings[section.key] = y
         y = y + M.HEADING_HEIGHT + M.AFTER_HEADING
         for i, rowId in ipairs(section.ids) do
             local key = section.subheads and section.subheads[i]

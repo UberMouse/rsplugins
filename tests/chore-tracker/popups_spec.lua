@@ -99,6 +99,32 @@ describe("chore-tracker popups", function()
         assert.are.same({}, titles(h))
     end)
 
+    it(
+        "neither saves nor weighs celebrations for a chore seen done that changes nothing",
+        function()
+            local h = settled()
+            togglePicks(h, { BERT.id, GEOFF.id })
+            toggleTick(h, BERT.name)
+            -- The plugin's own copy of core/celebrate, from its sandboxed require.
+            local celebrate = h.env.require("core/celebrate")
+            local decide, decided = celebrate.decide, 0
+            celebrate.decide = function(...)
+                decided = decided + 1
+                return decide(...)
+            end
+            local writes = h.dbWrites
+            claim(h, BERT.flag)
+            assert.are.equal(writes, h.dbWrites)
+            assert.are.equal(0, decided)
+            assert.are.same({}, titles(h))
+            -- One that ticks a chore is saved and weighed.
+            claim(h, GEOFF.flag)
+            assert.is_true(h.dbWrites > writes)
+            assert.are.equal(1, decided)
+            assert.are.same({ "CHORE COMPLETE" }, titles(h))
+        end
+    )
+
     it("celebrates the last picked chore of a period, by hand or by itself", function()
         local h = settled()
         togglePicks(h, { BERT.id, GEOFF.id })

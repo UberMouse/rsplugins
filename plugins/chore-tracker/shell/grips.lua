@@ -38,7 +38,7 @@ local DRAG_LOST_TICKS = 10
 
 ---@class ChoreGrip
 ---@field id string the chore id of the row it sits over
----@field period string
+---@field key string its section's heading key
 ---@field target ui.Layer the press target, a child of the plugin layer
 ---@field x integer? where it was last docked, in plugin-layer coordinates
 ---@field y integer?
@@ -173,15 +173,15 @@ local function update(pointerY)
     end
 end
 
--- The period's section, by period.
----@param period string
+-- The grips' copy of the section whose heading key is `key`.
+---@param key string
 ---@return ChoreSectionIds
-local function sectionOf(period)
+local function sectionOf(key)
     assert(ctx, "sections exist once built")
     for _, section in ipairs(sections) do
-        if section.period == period then return section end
+        if section.key == key then return section end
     end
-    error("no section for " .. period)
+    error("no section for " .. key)
 end
 
 -- The first ONHOLD of a press on `grip`, `localY` the pointer's y on its docked target:
@@ -192,7 +192,7 @@ end
 local function start(grip, localY)
     assert(ctx, "a drag needs built grips")
     if type(localY) ~= "number" or grip.y == nil then return end
-    local section = sectionOf(grip.period)
+    local section = sectionOf(grip.key)
     local ids = table.move(section.ids, 1, #section.ids, 1, {})
     local from = 1
     for i, rowId in ipairs(ids) do
@@ -227,7 +227,7 @@ local function drop()
     local ids = d.ids
     table.remove(ids, d.from)
     table.insert(ids, d.slot, d.grip.id)
-    sectionOf(d.grip.period).ids = ids
+    sectionOf(d.grip.key).ids = ids
     for rowId, y in pairs(reorder.settle(ids, d.firstY)) do
         moveRow(ctx.rows[rowId], y)
     end
@@ -244,8 +244,7 @@ function M.build(opts)
     M.clear()
     ctx = opts
     for i, section in ipairs(opts.sections) do
-        sections[i] =
-            { period = section.period, ids = table.move(section.ids, 1, #section.ids, 1, {}) }
+        sections[i] = { key = section.key, ids = table.move(section.ids, 1, #section.ids, 1, {}) }
         for _, rowId in ipairs(section.ids) do
             local target = ui.Layer.new(opts.parent)
             target:SetSize(GRIP_SIZE, GRIP_SIZE)
@@ -253,7 +252,7 @@ function M.build(opts)
             target.hidden = true
             rows.setCursor(target, GRIP_CURSOR)
             local grip = ---@type ChoreGrip
-                { id = rowId, period = section.period, target = target, hidden = true }
+                { id = rowId, key = section.key, target = target, hidden = true }
             target:Subscribe(ui.Hook.ONCLICK, function()
                 pressed = { grip = grip, ticks = 0 }
             end)

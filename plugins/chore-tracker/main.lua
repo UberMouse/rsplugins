@@ -108,7 +108,7 @@ local pendingMode = nil ---@type ChoreMode?
 -- so the rebuild can keep that row where it was in the window.
 local pendingCounts = nil ---@type { id: string, y: integer }?
 -- The celebration settings, for all characters.
-local celebrations = store.loadSettings()
+local celebrationSettings = store.loadSettings()
 
 -- dev-only:begin
 -- The state above, for `rsdev.py eval --plugin` snippets and press(). A getter, since tracker,
@@ -122,7 +122,7 @@ if remote then
             tracker = tracker,
             mode = mode,
             phase = phase,
-            celebrations = celebrations,
+            celebrationSettings = celebrationSettings,
         }
     end)
 end
@@ -185,6 +185,28 @@ local function refitRows()
     end
 end
 
+-- Every change to the tracker goes through here, so none goes unsaved. Returns false, writing
+-- nothing, when `changed` is `tracker` itself. A change at the clock's minute `now` can tick or
+-- untick chores: it refreshes the list if showing and queues its celebrations (`manual`, the
+-- player's own change, earns only a cleared period's). Without `now` (a pick, a count, a new
+-- order), neither.
+---@param changed ChoreState
+---@param now integer?
+---@param manual boolean?
+---@return boolean
+local function keep(changed, now, manual)
+    assert(character, "the tracker only changes while logged in")
+    if changed == tracker then return false end
+    local before = tracker
+    tracker = changed
+    store.saveState(character, tracker)
+    if now then
+        if phase == "ready" and mode == "list" then refreshList() end
+        popups.enqueue(celebrate.decide(before, tracker, chores, now, manual == true))
+    end
+    return true
+end
+
 -- A row was clicked: tick or untick its chore at the clock's minute, and save. Without a
 -- character or a clock there is nothing to mark against, so nothing changes.
 ---@param id string
@@ -193,16 +215,11 @@ local function onTick(id)
     if character == nil or now == nil then return end
     local chore = state.find(chores, id)
     assert(chore, "a row is only made for a chore in the list")
-    local before = tracker
     if state.isDone(tracker, chore, now) then
-        tracker = state.unmark(tracker, id)
+        keep(state.unmark(tracker, id), now, true)
     else
-        tracker = state.mark(tracker, id, now)
+        keep(state.mark(tracker, id, now), now, true)
     end
-    store.saveState(character, tracker)
-    refreshList()
-    -- A hand tick earns no popup of its own, but the one that clears a period does.
-    popups.enqueue(celebrate.decide(before, tracker, chores, now, true))
 end
 
 -- A row was dragged by its grip to `slot` among its period's rows: keep that order, saved for
@@ -212,23 +229,21 @@ end
 local function onDrop(id, slot)
     if character == nil then return end
     local chore = assert(state.find(chores, id), "a row is only made for a chore in the list")
-    local moved = state.move(tracker, chores, id, slot)
-    if moved == tracker then return end
-    tracker = moved
-    store.saveState(character, tracker)
-    say(string.format("moved %s to %d in %s", id, slot, chore.period))
+    if keep(state.move(tracker, chores, id, slot)) then
+        say(string.format("moved %s to %d in %s", id, slot, chore.period))
+    end
 end
 
 -- A section's row ids from its rows or chores, top to bottom.
----@param period ChorePeriod|ChoreStatus the section's heading key
+---@param key ChorePeriod|ChoreStatus the section's heading key
 ---@param items {id: string}[]
 ---@return ChoreSectionIds
-local function sectionIds(period, items)
+local function sectionIds(key, items)
     local ids = {}
     for i, item in ipairs(items) do
         ids[i] = item.id
     end
-    return { period = period, ids = ids }
+    return { key = key, ids = ids }
 end
 
 -- The list: the settings button and any notice in PrettyUI's flow, with the info button beside
@@ -312,11 +327,10 @@ local function onPick(chore)
     assert(character, "settings are only built for a logged-in character")
     local picked = not state.isSelected(tracker, chore.id)
     if picked then
-        tracker = state.select(tracker, chore.id)
+        keep(state.select(tracker, chore.id))
     else
-        tracker = state.deselect(tracker, chore.id)
+        keep(state.deselect(tracker, chore.id))
     end
-    store.saveState(character, tracker)
     local row = views.rows[chore.id]
     rows.showPick(row, chore.name, picked)
     local own = parts[chore.id]
@@ -345,9 +359,9 @@ end
 ---@param setting "popups"|"sound"
 ---@param on boolean
 local function onCelebrationSetting(_, _values, setting, on)
-    celebrations[setting] = on
-    popups.configure(celebrations)
-    store.saveSettings(celebrations)
+    celebrationSettings[setting] = on
+    popups.configure(celebrationSettings)
+    store.saveSettings(celebrationSettings)
 end
 
 -- A count stepper was clicked: change how many of the chore's parts tick it by `delta`, save
@@ -362,17 +376,14 @@ local function onPartsNeeded(chore, delta, shown)
     local own = parts[chore.id]
     local now = clockNow()
     local count = state.partsNeeded(tracker, chore, own) + delta
-    local before = tracker
     local changed = state.setPartsNeeded(tracker, chore, own, count, now)
     if changed == tracker then return end
-    tracker = changed
-    store.saveState(character, tracker)
-    local needed = state.partsNeeded(tracker, chore, own)
+    local needed = state.partsNeeded(changed, chore, own)
     stepper.show(shown, view.neededText(needed, #own.list))
     say("needed", chore.id, needed)
     -- The player's own change, so like a hand tick it earns no popup of its own, but the
     -- one that clears a period does.
-    if now then popups.enqueue(celebrate.decide(before, tracker, chores, now, true)) end
+    keep(changed, now, true)
 end
 
 -- The "How many to do" block: its title next in PrettyUI's flow, then a stepper per picked
@@ -423,8 +434,8 @@ end
 local function buildSettings(w)
     w:AddTitle("Celebrations")
     w:AddCheckboxButton({
-        { text = "Celebration popups", value = "popups", selected = celebrations.popups },
-        { text = "Popup sound", value = "sound", selected = celebrations.sound },
+        { text = "Celebration popups", value = "popups", selected = celebrationSettings.popups },
+        { text = "Popup sound", value = "sound", selected = celebrationSettings.sound },
     }, { onChange = onCelebrationSetting })
     local wheel = window.wheelHandler(w)
     local top = buildCounts(w, wheel)
@@ -440,7 +451,7 @@ local function buildSettings(w)
                 ids[#ids + 1] = chore.id
             end
         end
-        sections[i] = { period = group.period, ids = ids, subheads = subheads }
+        sections[i] = { key = group.period, ids = ids, subheads = subheads }
     end
     local spots = listlayout.place(sections, top)
     for _, group in ipairs(groups) do
@@ -577,27 +588,13 @@ end
 -- Chores the plugin sees done (shell/detect.lua, shell/vars.lua)
 ---------------------------------------------------------------------------
 
--- Keep a changed tracker: save it and show it. `changed` the same table as `tracker` means
--- nothing changed, and nothing is written.
----@param changed ChoreState
-local function keep(changed)
-    assert(character, "a chore is only seen done while logged in")
-    if changed == tracker then return end
-    tracker = changed
-    store.saveState(character, tracker)
-    if phase == "ready" and mode == "list" then refreshList() end
-end
-
 -- Like a tick by hand, a chore seen done is ignored without a character and a clock to mark
 -- it against.
 ---@param change ChoreChange
 local function apply(change)
     local now = clockNow()
     if character == nil or now == nil then return end
-    local before = tracker
-    local changed = change(tracker, now)
-    keep(changed)
-    popups.enqueue(celebrate.decide(before, changed, chores, now, false))
+    keep(change(tracker, now), now, false)
 end
 
 ---------------------------------------------------------------------------
@@ -703,7 +700,7 @@ vars.init({
     apply = apply,
     where = detect.playerTile,
 })
-popups.configure(celebrations)
+popups.configure(celebrationSettings)
 -- The login and clock before the window, so it opens on the right view. sync clears the
 -- popups and scans what detect and vars watch, so their inits come first.
 sync(false)

@@ -71,7 +71,7 @@ This plugin requests no permissions.
 This plugin uses the following information:
 - the game clock;
 - your own character's display name (only as the key your chores are saved under);
-- your position (to tell when you stand beside Dell Monti, the Weird Old Man or Aster in Fort Forinthry);
+- your position (to tell when you stand beside Dell Monti or the Weird Old Man, or beside Aster in Fort Forinthry);
 - the contents of your backpack;
 - the stock of a shop you have open;
 - what your Invention machines hold;

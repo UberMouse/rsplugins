@@ -320,5 +320,4 @@ the same file, or the requiring file is itself that `shell/` module (`detectCore
 | `data/counts.lua` | The chores done at several parts that aren't shops: their parts' word, default count and settings tooltip (hand-written) |
 | `data/icons.lua` | Each chore's icon, a built-in item or interface sprite (hand-written) |
 
-The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
-(`docs/testing.md`).
+The development repo has tests for these modules, run against a mock of the plugin API.

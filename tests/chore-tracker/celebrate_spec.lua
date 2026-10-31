@@ -112,7 +112,7 @@ describe("chore-tracker celebrate", function()
             assert.are.same({ "m1", "monthly cleared" }, labels(out))
         end)
 
-        it("doesn't celebrate while a picked chore is still to do", function()
+        it("celebrates only the chore, not the period, while another is still to do", function()
             local old = support.stateWith({ "d1", "d2" })
             local out = celebrate.decide(old, state.mark(old, "d1", NOW), chores, NOW)
             assert.are.same({ "d1" }, labels(out))

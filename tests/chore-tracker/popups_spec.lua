@@ -82,7 +82,11 @@ describe("chore-tracker popups", function()
         assert.are.same({ "CHORE COMPLETE" }, titles(h))
         assert.are.equal("Sand from Bert", h.ui:popups()[1].text)
         assert.matches("%[CHORES%] celebrate bert%-sand", h:output())
+        h:advance(POPUP_MS) -- let the hand tick's popup finish
+        assert.are.equal(0, showing(h))
         toggleTick(h, BERT.name) -- unticking
+        h:advance(POPUP_MS) -- a popup the untick queued would surface by now
+        assert.are.equal(0, showing(h))
         assert.are.same({ "CHORE COMPLETE" }, titles(h))
     end)
 

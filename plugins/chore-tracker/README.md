@@ -107,7 +107,8 @@ ticked until its reset, and unticking one by hand changes nothing below.
   bloodwood trees, 1 of the 7 farm troughs and 10 of the 13 penguins (the polar bear counts as
   one). The Player-Owned Port has no line: it always needs all 4 voyages. A count saves
   straight away and is kept per character, as characters reach different places. Lowering it
-  to what you have already done this period ticks the chore (and shows its popup); raising it above that never unticks it.
+  to what you have already done this period ticks the chore (and shows its popup); raising it
+  above that never unticks it.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or

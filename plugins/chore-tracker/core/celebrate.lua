@@ -1,5 +1,6 @@
--- Which celebrations a change to the tracker earns, as plain data: a chore that got ticked, and a period whose picked chores are now all done. Pure: the shell passes the
--- tracker before and after a change and shows what comes back.
+-- Which celebrations a change to the tracker earns, as plain data: a chore that got ticked, and a
+-- period whose picked chores are now all done. Pure: the shell passes the tracker before and
+-- after a change and shows what comes back.
 
 local period = require("core/period")
 local state = require("core/state")

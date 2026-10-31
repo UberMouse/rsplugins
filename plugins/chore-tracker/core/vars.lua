@@ -11,10 +11,14 @@
 -- conditions, not further groups, and an empty group never holds). A rule may also name, as
 -- `rises`, a var whose going up is what ticks its chore, or, as `falls`, a list of vars whose
 -- going down does: it ticks only on a change where its conditions turned from false to true
--- and at least one of those vars went down. A rule has `rises` or `falls`, not both.
+-- and at least one of those vars went down. A rule has `rises` or `falls`, not both. A rule
+-- may also name a tile it must be seen `near` (core/detect.lua's near): it ticks only while
+-- the player stands within range of it, for a var that other places move too.
 --
 -- data/vars.lua is typed `---@type ChoreVarRule[]`, so LuaLS checks its operators and
 -- operands against the class below.
+
+local detect = require("core/detect")
 
 local M = {}
 
@@ -35,7 +39,11 @@ local M = {}
 ---@field done ChoreVarCondition[] all must hold for the chore to be done
 ---@field rises string? a var whose rise in a change ticks the chore
 ---@field falls string[]? vars of which a fall, in a change that makes the conditions hold, ticks the chore
+---@field near ChoreVarNear? where the player must stand for a change to tick the chore
 ---@field proven boolean
+
+---@class ChoreVarNear: ChoreTile
+---@field range integer tiles from it in each direction
 
 -- A condition's comparisons, any one of which satisfies it: a group's members, or a plain
 -- comparison as a group of one.
@@ -140,13 +148,17 @@ end
 -- without ticks when its conditions turned from false to true. Either way every var it reads
 -- must have had a value before: a var with none is read for the first time, which is a
 -- baseline, not a change. A rule with `falls` ticks when its conditions turned from false to
--- true and one of its `falls` vars went down.
+-- true and one of its `falls` vars went down. A rule with `near` ticks only with the player's
+-- `tile` within its range (never without a tile).
 ---@param rule ChoreVarRule
 ---@param before table<string, integer>
 ---@param after table<string, integer>
 ---@param day integer?
+---@param tile ChoreTile? the player's tile
 ---@return boolean
-function M.ticks(rule, before, after, day)
+function M.ticks(rule, before, after, day, tile)
+    local near = rule.near
+    if near and not (tile and detect.near(tile, near, near.range)) then return false end
     for _, name in ipairs(M.names(rule)) do
         if before[name] == nil then return false end
     end

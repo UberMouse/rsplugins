@@ -93,7 +93,7 @@ describe("chore-tracker info view", function()
         h.ui:get("Text", { text = "Drag a row by its grip" })
         local titles = h.ui:find("Title")
         assert.are.same(
-            { "Automatic (35)", "Unproven (23)", "Manual (10)" },
+            { "Automatic (39)", "Unproven (21)", "Manual (8)" },
             { titles[1].content, titles[2].content, titles[3].content }
         )
         local last = texts[#texts]

@@ -348,4 +348,50 @@ for _, patch in ipairs({
     }
 end
 
+-- Fort Forinthry: the Town Hall's own record of bonus XP taken never reaches the client
+-- (docs/api-concepts.md), so the chore ticks when any skill's bonus XP pool rises while the
+-- player stands by Aster, who trades rested XP in. A claim of 2026-10-31 took
+-- BONUSXP_AGILITY 0 -> 1596975 there, and a !setvar of it beside Aster ticked the chore in the
+-- client (2026-10-31). A lamp or star used beside Aster ticks it too.
+local ASTER = { x = 3302, z = 3571, level = 0, range = 10 } -- runescape.wiki/w/Aster
+for _, skill in ipairs({
+    "AGILITY",
+    "ARCHAEOLOGY",
+    "ATTACK",
+    "CONSTRUCTION",
+    "COOKING",
+    "CRAFTING",
+    "DEFENCE",
+    "DIVINATION",
+    "DUNGEONEERING",
+    "FARMING",
+    "FIREMAKING",
+    "FISHING",
+    "FLETCHING",
+    "HERBLORE",
+    "HITPOINTS",
+    "HUNTER",
+    "INVENTION",
+    "MAGIC",
+    "MINING",
+    "NECROMANCY",
+    "PRAYER",
+    "RANGED",
+    "RUNECRAFTING",
+    "SLAYER",
+    "SMITHING",
+    "STRENGTH",
+    "SUMMONING",
+    "THIEVING",
+    "WOODCUTTING",
+}) do
+    rules[#rules + 1] = {
+        chore = "fort-forinthry-bonus-xp",
+        done = {},
+        rises = "BONUSXP_" .. skill,
+        near = ASTER,
+        proven = true,
+    }
+end
+
 return rules

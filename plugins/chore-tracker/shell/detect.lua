@@ -164,9 +164,9 @@ local function readNotes()
     return counts
 end
 
--- The player's own tile, or nil when logged out or loading.
+-- The player's own tile, or nil when logged out or loading. shell/vars.lua reads it too.
 ---@return ChoreTile?
-local function playerTile()
+function M.playerTile()
     if not Player.IsAvailable() then return nil end
     local entity = Player.GetEntity()
     local at = entity and entity.coordGrid
@@ -220,7 +220,7 @@ end
 ---@param after table<string, integer>
 local function onNotesRose(before, after)
     assert(options, "init runs before any inventory event")
-    local say, at = options.say, playerTile()
+    local say, at = options.say, M.playerTile()
     if not at then return end
     for _, hit in ipairs(collectionHits) do
         local collection = hit.collection

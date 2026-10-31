@@ -21,9 +21,9 @@ that dumps what a plugin sees to a local server (`lib/dev/`).
 | B | The plugin with manual ticking: chore data, resets, selection, per-character state, the window | `5581386..c0c94b0` |
 | C | Shop runs tick on a purchase; Dell Monti and the Weird Old Man tick on notes gained nearby | `22f67e4..6125dd2` |
 | C2 | Chores tick from the player's own game vars: 7 proven or user-accepted, 16 unproven | `6125dd2..69d3f6f` |
-| D | The 30 manual chores audited: 18 var rules checked in the client, Invention machine collects (unproven), 10 confirmed manual (see below) | 2026-10-31 |
+| D | The 30 manual chores audited: 22 now tick themselves, all seen ticking in the client; 8 confirmed manual (see below) | 2026-10-31 |
 
-58 of the 68 chores tick themselves (35 checked in game, 23 unproven). The plugin README's "Chores it ticks for you" is the list,
+60 of the 68 chores tick themselves (39 checked in game, 21 unproven). The plugin README's "Chores it ticks for you" is the list,
 and `data/shops.lua`, `data/collections.lua` and `data/vars.lua` are the source.
 
 ## Decisions that bind later work
@@ -150,10 +150,10 @@ Staged order, with a check-in in the beta client after each:
 
 The user's call: every chore that was ticked by hand is suspect. Each must get a detector,
 unproven until checked, or be confirmed manual with the reason, and a detector that rsdev can
-validate in the client (`!setvar`, `!getvar`, `!tele`) is automatic. Of the 30: 18 got var
-rules, all ticking in the client (automatic); the 2 Invention machine chores got an output
-detector (`data/machines.lua`, unproven); 10 stay manual. Status counts now: 35 automatic,
-23 unproven, 10 manual.
+validate in the client (`!setvar`, `!getvar`, `!tele`) is automatic. Of the 30, 22 tick
+themselves and each was seen ticking in the client: 19 var rules, the 2 Invention machine
+chores (a new output detector, `data/machines.lua`) and Bandit Duty Free (a shop row). 8 stay
+manual, each for a reason below. Status counts now: 39 automatic, 21 unproven, 8 manual.
 
 **How each rule was validated** (session `a3abc00dce`): `!getvar` read each var's value, then
 `!setvar` moved it to a done value, the console showed `[CHORES] seen <id> done (<var>)`, and
@@ -197,28 +197,26 @@ day in brackets.
 | Arc Supplies from Rosie | `ELR1_DAILY_SUPPLIES_TAKEN == 1` [0] | `ELR2_FREE_SUPPLIES` (4 bits) unused |
 | Giant Oyster | `TUTISLAND_REWARD_OYSTER_FED_SEACUCMBER == 1` and `_SEAWEED == 1` [0, 0; `TUTISLAND_REWARD_STATE` 1] | ticks on feeding, the month's last step; looting last month's chest isn't seen |
 
-### Unproven: Invention Machines (daily, weekly)
+### Automatic: seen ticking on the real activity (2026-10-31)
 
-Any `INVENT_MACHINE_GUILD_<1..6>_OUTPUT` total falling (`core/detect.lua` `fell`) ticks both:
-a collect. The 2026-10-30 probe saw a collect empty an output (7500 eternal planks). Filling
-isn't counted. The inventory names resolved in the client (no `unknown inventory` at load).
-Not checkable by cheat: `!give` only fills an inventory. To prove it, collect from a machine
-with the plugin running.
+| Chore | Detector | What was seen |
+|---|---|---|
+| Invention Machines (daily, weekly) | any `INVENT_MACHINE_GUILD_<1..6>_OUTPUT` total falls (`core/detect.lua` `fell`): a collect. Filling isn't counted | the user collected from machine 3: `[CHORES] collected invention-machine from INVENT_MACHINE_GUILD_3_OUTPUT`, and the weekly one. After a client restart the outputs weren't held (`Inventory.Find` nil, even after `!inventmachinerun`) until the user reached the machines |
+| Fort Forinthry Bonus XP | any `BONUSXP_<skill>` rises while the player is within 10 tiles of Aster (3302, 3571): a new `near` field in the rule language (`core/vars.lua`), the tile read only when such a rule's var changes. A lamp or star used beside Aster ticks it too | the user's claim raised `BONUSXP_AGILITY` 0 -> 1596975 beside Aster; then a `!setvar` of it there logged `seen fort-forinthry-bonus-xp done (BONUSXP_AGILITY)`. The Town Hall's own `PLAYER_FORT_GLE_TOTAL_XP_GAINED` never reaches the client |
+| Bandit Duty Free | a shop row: Noterazzo's shop is the inventory `TAXFREE` (not `DT_BANDIT_SHOP`) | a purchase moved `TAXFREE`; after a reload a second purchase logged `purchase bandit-duty-free at Noterazzo, Bandit Duty Free`. The camp's bandits kill an unskulled player: get skulled by Mr Ex first (Edgeville, 3088, 3507).
 
-### Confirmed manual (10)
+### Confirmed manual (8)
 
 | Chore | Why | What would move it |
 |---|---|---|
 | Nemi Forest | the map comes from outside the game; no var in the catalog | nothing in reach |
-| Book of Char | no var found (wiki: unleash and teleport once a day each) | a change log while unleashing |
+| Book of Char | its vars are `FMC_*` (the item is `FMC_FIREMAKERS_HANDBOOK`). Unleashing set `FMC_REWARD_BOOK_USE` to today's RuneDay (9012) on the server, but the client still read 0: it isn't sent. The client saw only the chat line "You unleash the power of the book of Char. You feel like you could burn any logs you touch!" (2026-10-31) | a chat detector (`chatAccess`) on that line |
 | Rapid Growth | the cast moved only the patch's region-relative stage var (2026-10-30); `POF_RAPIDGROWTH_*` are the farm's patches | a chat line at the cap (`chatAccess`) |
 | Player-Owned Port | the Black Marketeer's `POP_MARKET_QUANTITY` is borderline (`POP_MARKET_RESOURCE_ROLLS` may encode future offers); "manage port" has no single signal | the user's go-ahead on the market var |
 | Big Top Bonanza | no var found (the `FMC_CIRCUS_*` vars are the quest's) | a change log during a show |
 | Familiarisation | `DNDTRACKER_FAMILIARIZATION_*` is only the schedule | a chat line (`chatAccess`) |
 | Penguin Hide and Seek | the `PENG_SPY_*` vars may encode this week's locations: off limits without the user's go-ahead | a chat line, or the go-ahead |
 | Skeletal Horror | only an NPC removal nearby shows the kill (NPC tracking is the extra-review tier); `CHEEVO_MINIGAME_CLUES_SKELETAL_HORROR` is a one-bit achievement | the user's call on NPC tracking |
-| Fort Forinthry Bonus XP | `PLAYER_FORT_GLE_TOTAL_XP_GAINED` (base `PLAYER_FORT_BUILDING_PERM7`) never reaches the client: a `!setvar` read back 0 in the client, at the fort too. The user's claim from Aster moved only `BONUSXP_AGILITY` (0 -> 1596975) and said "You have been awarded 159,697 Bonus XP in Agility!", both of which any bonus XP source may give | the user's call on a new detector: a `BONUSXP_<skill>` rise (or that chat line) while near Aster (3302, 3571), like the note collections. `PLAYER_COORD` packs the tile (`x << 14 | z`) |
-| Bandit Duty Free | the client's only bandit shop inventory, `DT_BANDIT_SHOP`, may be the Desert Treasure camp's shop, which would tick it falsely | open the shop with the bridge on: its `InventoryAdded` names the inventory |
 
 ## Evidence: the 2026-10-30 probe and earlier candidate notes
 
@@ -311,8 +309,8 @@ it with location or a var. There is no interface-opened event.
 
 ### Unconfirmed shop
 
-- **Bandit Duty Free** (weekly): candidate Inv `DT_BANDIT_SHOP`. Its shop id wasn't probed
-  (account state). Adding it is a `data/shops.lua` row, unproven, once the id is checked.
+- **Bandit Duty Free** (weekly): candidate Inv `DT_BANDIT_SHOP`. Settled 2026-10-31: the shop
+  is `TAXFREE`, now a proven row (see the audit above).
 
 ### Probably manual only
 

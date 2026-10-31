@@ -98,4 +98,9 @@ return {
             proven = false,
         },
     },
+    -- Noterazzo's shop in the Wilderness bandit camp: a purchase there on 2026-10-31 moved
+    -- TAXFREE (DT_BANDIT_SHOP, the only inventory named for bandits, is another shop's).
+    ["bandit-duty-free"] = {
+        { name = "Noterazzo, Bandit Duty Free", invs = { "TAXFREE" }, proven = true },
+    },
 }

@@ -217,7 +217,7 @@ describe("chore-tracker var detect", function()
                 },
                 { chore = "w1", done = { { "GONE", ">", 0 } }, proven = true },
             },
-            machines = {},
+            where = function() end,
             say = function(...)
                 said[#said + 1] = table.concat({ ... }, " ")
             end,
@@ -254,7 +254,7 @@ describe("chore-tracker var detect", function()
             vars.init({
                 chores = support.chores(),
                 rules = { { chore = "nochore", done = { { "FLAG", "==", 1 } }, proven = true } },
-                machines = {},
+                where = function() end,
                 say = function() end,
                 apply = function() end,
             })

@@ -20,6 +20,7 @@ local SETTLE_TICKS = 500
 ---@field rules ChoreVarRule[]
 ---@field say fun(...: any)
 ---@field apply fun(change: ChoreChange) as ChoreDetectOptions.apply
+---@field where fun(): ChoreTile? the player's tile, for rules that must be seen near one
 
 local options = nil ---@type ChoreVarOptions?
 -- The rules whose vars the client's config has all of, each with the names it reads and its
@@ -127,12 +128,17 @@ end
 ---@param changed table<string, true>
 local function onChanged(before, after, changed)
     assert(options, "init runs before any var event")
-    local say = options.say
+    local say, where = options.say, options.where
+    -- The tile is read only for a rule that must be seen near one, once per change.
+    local tile, located = nil, false ---@type ChoreTile?, boolean
     options.apply(function(tracker, now)
         local day = period.runeDay(now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)
-            if cause and varsCore.ticks(entry.rule, before, after, day) then
+            if cause and entry.rule.near and not located then
+                tile, located = where(), true
+            end
+            if cause and varsCore.ticks(entry.rule, before, after, day, tile) then
                 local ticked = state.autoMark(tracker, entry.chore, now)
                 if ticked ~= tracker then
                     say("seen", entry.chore.id, "done", "(" .. cause .. ")")

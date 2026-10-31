@@ -117,6 +117,7 @@ describe("chore-tracker shop list", function()
                 "LIGHTHOUSESHOP",
             },
             ["yak-hide"] = { "FRISD_YAK_CONTRABAND" },
+            ["bandit-duty-free"] = { "TAXFREE" },
             ["feathers-of-ma-at"] = { "MENAPHOS_SLAYER_SHOP" },
             ["broad-arrowheads"] = { "OMGE_SLAYERSHOP_SMKI", "SMKI_SLAYERSHOP" },
             ["seaweed-and-pineapples"] = { "ARHEINSTORE" },

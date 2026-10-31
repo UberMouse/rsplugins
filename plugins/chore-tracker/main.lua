@@ -595,7 +595,7 @@ detect.init({
     say = say,
     apply = apply,
 })
-vars.init({ chores = chores, rules = varRules, say = say, apply = apply })
+vars.init({ chores = chores, rules = varRules, say = say, apply = apply, where = detect.playerTile })
 
 ---------------------------------------------------------------------------
 -- Following the game

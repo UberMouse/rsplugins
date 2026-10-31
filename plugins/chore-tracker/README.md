@@ -109,7 +109,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   pineapple notes, or the Weird Old Man's potato cactus notes (outside the Kalphite Lair;
   *unproven*, as nobody has checked his yet). Any rise counts, wherever the notes came from:
   taking some out of the bank, a trade or picking them up near the giver ticks the chore too.
-- **Collecting from your Invention machines** (daily and weekly, *unproven*). Each Invention
+- **Collecting from your Invention machines** (daily and weekly). Each Invention
   Guild machine keeps what it made in a store the game sends your client wherever you are, and
   only collecting takes from it, so the chore ticks when any machine's store goes down. Filling
   a machine doesn't count.
@@ -159,6 +159,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Arc Supplies from Rosie | the game marks Rosie's free supplies taken |
   | Giant Oyster | the oyster has been fed both its sea cucumber and its seaweed |
   | Arc Contracts | you complete the day's last contract: 3, plus one for each "contracts per day" upgrade bought |
+  | Fort Forinthry Bonus XP | any skill's bonus XP goes up while you stand within 10 tiles of Aster, in the Town Hall: claiming from Aster does that (so does a lamp or star used beside her) |
   | Dream of Iaia Resources (daily and weekly) | every base-camp resource you have workers on has been used down to 0, and one of them just fell (sending the workers elsewhere doesn't tick it) |
   | Dream of Iaia XP (weekly and monthly) | every skilling station you have workers for holds 0 stored XP, and one just fell (sending the workers elsewhere doesn't tick it) |
 
@@ -188,10 +189,8 @@ list of shop inventories but no purchase there has been checked yet; they count 
 | Meat Packs from Chargurr | Chargurr (Oo'glog, *unproven*) |
 | Planks from Razmire | Razmire Keelgan (Mort'ton, *unproven*) |
 | Seaweed and Pineapples from Arhein | Arhein (Catherby) |
+| Bandit Duty Free | Noterazzo (Wilderness bandit camp) |
 
-Not watched yet, so tick it by hand: Bandit Duty Free (no match for Noterazzo's shop was found
-in the game's list). Nor is Fort Forinthry Bonus XP: the game doesn't send your client the
-record of bonus XP taken from the Town Hall, and the bonus XP itself could come from anywhere.
 
 ## When chores reset
 

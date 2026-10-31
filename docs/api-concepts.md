@@ -173,6 +173,16 @@ The official reference annotates Lua with pseudo-types:
 - **Claiming Fort Forinthry's bonus XP from Aster** sent the system line "You have been
   awarded 159,697 Bonus XP in Agility!" and moved `BONUSXP_AGILITY` 0 -> 1596975 (the pool,
   in tenths of XP); no `PLAYER_FORT_*` var moved. (fort claim, 2026-10-31)
+- **The Book of Char's daily use isn't sent.** Unleashing it set `FMC_REWARD_BOOK_USE` to
+  today's RuneDay (9012) on the server (`!getvar`) while the client read 0; the client saw only
+  the line "You unleash the power of the book of Char. You feel like you could burn any logs you
+  touch!" and, 2 minutes later, "The effects of the Book of Char wear off." The item is
+  `FMC_FIREMAKERS_HANDBOOK` (Firemaker's Curse). (2026-10-31)
+- **Noterazzo's Bandit Duty Free is the inventory `TAXFREE`**, not `DT_BANDIT_SHOP`; the
+  camp's bandits kill an unskulled player who comes near. (2026-10-31)
+- **Invention machine outputs aren't held after a client restart** until the player reaches the
+  machines: `Inventory.Find` returned nil for all six, at the guild entrance too and after
+  `!inventmachinerun`; a collect then sent `InventoryUpdated` for the output. (2026-10-31)
 - **`PLAYER_COORD` packs the player's tile** as `x << 14 | z`: 54103539 is x 3302, z 3571,
   where `coordGrid` read `0,51,55,38,51`. It is sent on each teleport. (2026-10-31)
 

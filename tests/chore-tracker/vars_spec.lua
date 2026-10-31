@@ -378,6 +378,31 @@ describe("chore-tracker vars core", function()
         assert.is_false(anyTicks("god-statues", { [name] = 0 }, { [name] = 1 }))
     end)
 
+    it("ticks Fort Forinthry Bonus XP on a bonus XP rise only beside Aster", function()
+        local function rises(tile)
+            for _, rule in ipairs(varRules) do
+                if
+                    rule.chore == "fort-forinthry-bonus-xp"
+                    and varsCore.ticks(
+                        rule,
+                        { BONUSXP_AGILITY = 0 },
+                        { BONUSXP_AGILITY = 1596975 },
+                        nil,
+                        tile
+                    )
+                then
+                    return true
+                end
+            end
+            return false
+        end
+        -- The tile the claim of 2026-10-31 was made from.
+        assert.is_true(rises({ x = 3302, z = 3571, level = 0 }))
+        assert.is_false(rises({ x = 3013, z = 3225, level = 0 }))
+        assert.is_false(rises({ x = 3302, z = 3571, level = 1 }))
+        assert.is_false(rises(nil))
+    end)
+
     it("ticks Meg's Questions on her leaving, not on her return", function()
         local name = "POP_MEG_ONMISSION"
         assert.is_true(anyTicks("meg", { [name] = 0 }, { [name] = 1 }))
@@ -453,6 +478,7 @@ describe("chore-tracker var list", function()
             "bloodwood-tree x8",
             "player-owned-farm x7",
             "herb-run x11",
+            "fort-forinthry-bonus-xp x29",
         }, ids)
     end)
 

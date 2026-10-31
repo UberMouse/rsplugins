@@ -94,6 +94,7 @@ describe("chore-tracker detect", function()
                 shops = { nochore = { { name = "S", invs = { "KNOWN_SHOP" }, proven = true } } },
                 collections = {},
                 machines = {},
+                parts = {},
                 say = say,
                 apply = apply,
             })
@@ -113,6 +114,7 @@ describe("chore-tracker detect", function()
                     },
                 },
                 machines = {},
+                parts = {},
                 say = say,
                 apply = apply,
             })
@@ -154,6 +156,7 @@ describe("chore-tracker detect", function()
                 },
             },
             machines = {},
+            parts = {},
             say = function() end,
             apply = function()
                 applied = applied + 1
@@ -218,6 +221,7 @@ describe("chore-tracker var detect", function()
                 { chore = "w1", done = { { "GONE", ">", 0 } }, proven = true },
             },
             where = function() end,
+            parts = {},
             say = function(...)
                 said[#said + 1] = table.concat({ ... }, " ")
             end,
@@ -255,6 +259,7 @@ describe("chore-tracker var detect", function()
                 chores = support.chores(),
                 rules = { { chore = "nochore", done = { { "FLAG", "==", 1 } }, proven = true } },
                 where = function() end,
+                parts = {},
                 say = function() end,
                 apply = function() end,
             })

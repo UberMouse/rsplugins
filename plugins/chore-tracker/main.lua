@@ -5,15 +5,16 @@
 -- Weekly and Monthly headings, and you tick one off by clicking its row, or drag it by its grip
 -- to reorder it within its period. Ticks clear themselves when the game clock passes the
 -- period's reset (UTC: daily at 00:00, weekly on Wednesday 00:00, monthly on the 1st). Some
--- chores also tick themselves, picked or not. A shop run ticks once you have bought from as
--- many of its shops as it needs this period (all of them, or fewer set in the Shop runs
--- block); a collection when its notes rise in your backpack near the giver, Invention
--- machines when you collect from one (shell/detect.lua); others when one of your own game vars
--- changes to show them done (shell/vars.lua). A chore
+-- chores also tick themselves, picked or not: a shop run when you buy from its shops, a
+-- collection when its notes rise in your backpack near the giver, Invention machines when you
+-- collect from them (shell/detect.lua), and others when one of your own game vars changes to
+-- show them done (shell/vars.lua). A chore done at several parts (shops, herb patches,
+-- penguins...; core/parts.lua) ticks once as many of them are done this period as it needs,
+-- a count set in the settings' "How many to do" block. A chore
 -- already done at login or while the plugin was off is left to tick by hand. When the plugin
 -- ticks a picked chore, or a period's picked chores are all done, a popup celebrates it
 -- (shell/popups.lua); settings turn the popups or their sound off. Picks, their order, ticks
--- and shop-run counts are saved per character, by display name; the window's place, size and
+-- and counts are saved per character, by display name; the window's place, size and
 -- collapsed state (shell/window.lua) and the celebration settings are saved for all characters.
 -- Collapsed, the window becomes a strip showing the next chore not done, Daily first, then
 -- Weekly, then Monthly, in the player's order, which a click ticks (shell/strip.lua). The info
@@ -28,9 +29,9 @@
 --
 -- Every console line carries [CHORES] (grep: \[CHORES\]); the display name is never logged.
 -- Chores ticked by the plugin and celebrations log "[CHORES] purchase", "collected", "seen" or
--- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)), and a shop run's
--- count set in settings logs "[CHORES] shops needed <chore id> <n>"; README.md's "Console
--- lines" section lists the others.
+-- "celebrate" lines (grep: \[CHORES\] (purchase|collected|seen|celebrate)), and a count set
+-- in settings logs "[CHORES] needed <chore id> <n>"; README.md's "Console lines" section
+-- lists the others.
 --
 -- dev-only:begin
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
@@ -52,6 +53,7 @@ if remote then remote.install(_ENV, tee) end
 
 local chores = require("data/chores")
 local collections = require("data/collections")
+local counts = require("data/counts")
 local machines = require("data/machines")
 local icons = require("data/icons")
 local shops = require("data/shops")
@@ -60,6 +62,7 @@ local celebrate = require("core/celebrate")
 local info = require("core/info")
 local layout = require("core/layout")
 local listlayout = require("core/listlayout")
+local partsCore = require("core/parts")
 local settings = require("core/settings")
 local state = require("core/state")
 local view = require("core/view")
@@ -79,6 +82,9 @@ local function say(...)
 end
 
 local BUTTON_SIZE = layout.BUTTON_SIZE
+
+-- Each chore's parts and their default count, from the data files.
+local parts = partsCore.build(shops, varRules, machines, counts)
 
 -- How often, in Logic ticks (50 a second), to look for a login change and a moved or
 -- resized window.
@@ -106,7 +112,7 @@ local mode = "list" ---@type ChoreMode
 -- go with the window.
 local rowViews = {} ---@type table<string, ChoreRowView>
 local headings = {} ---@type table<string, ui.Text>
--- The settings view's Shop runs lines, refitted with the rows; they go with the window too.
+-- The settings view's count lines, refitted with the rows; they go with the window too.
 local stepperViews = {} ---@type ChoreStepperView[]
 -- While the info view is open: the window width its help was wrapped for, and the width at the
 -- last poll, to re-lay the help once a resize settles. They go with the window too.
@@ -165,14 +171,14 @@ end
 local function refreshList()
     local win = window.current()
     assert(win, "the list is only refreshed while its window exists")
-    for _, section in ipairs(view.view(tracker, chores, clockNow(), shops)) do
+    for _, section in ipairs(view.view(tracker, chores, clockNow(), parts)) do
         local heading = headings[section.period]
         if heading then heading.content = view.headingText(section) end
         for _, row in ipairs(section.rows) do
             local rowView = rowViews[row.id]
             if rowView then
                 rows.show(rowView, view.rowText(row), row.done)
-                rows.setTooltip(rowView, view.tooltip(row, view.shopTooltip(row, section.period)))
+                rows.setTooltip(rowView, view.tooltip(row, view.partTooltip(row, section.period)))
             end
         end
     end
@@ -180,7 +186,7 @@ local function refreshList()
 end
 
 -- Re-fit the rows' names to their widths (ui.Text can't clip, so a name is cut with "..." to
--- stop before the tick box), and the Shop runs lines' names likewise. rows.fit and
+-- stop before the tick box), and the count lines' names likewise. rows.fit and
 -- stepper.fit return at once when the width is unchanged, so fitting them all on each poll
 -- costs nothing while the window is idle.
 local function refitRows()
@@ -262,7 +268,7 @@ local function buildList(w, openSettings, openInfo)
         local notice = w:AddText("Waiting for the game clock.")
         top = notice.y + notice.height
     end
-    local sections = view.view(tracker, chores, now, shops)
+    local sections = view.view(tracker, chores, now, parts)
     if #sections == 0 then
         w:AddText("No chores picked yet: use the settings button above to choose some.")
         return
@@ -338,42 +344,42 @@ local function onCelebrationSetting(_, _values, setting, on)
     store.saveSettings(celebrations)
 end
 
--- A shop-run stepper was clicked: change how many of the chore's shops tick it by `delta`,
--- save it straight away and show the new count. At either end of its range it changes
--- nothing. It never ticks or unticks the chore: the next purchase is judged by the new count.
+-- A count stepper was clicked: change how many of the chore's parts tick it by `delta`, save
+-- it straight away and show the new count. At either end of its range it changes nothing. It
+-- never ticks or unticks the chore: the next part seen done is judged by the new count.
 ---@param chore Chore
 ---@param delta integer
 ---@param shown ChoreStepperView
-local function onShopsNeeded(chore, delta, shown)
+local function onPartsNeeded(chore, delta, shown)
     assert(character, "settings are only built for a logged-in character")
-    local listed = shops[chore.id]
-    local count = state.shopsNeeded(tracker, chore, listed) + delta
-    local changed = state.setShopsNeeded(tracker, chore, listed, count)
+    local own = parts[chore.id]
+    local count = state.partsNeeded(tracker, chore, own) + delta
+    local changed = state.setPartsNeeded(tracker, chore, own, count)
     if changed == tracker then return end
     tracker = changed
     store.saveState(character, tracker)
-    local needed = state.shopsNeeded(tracker, chore, listed)
-    stepper.show(shown, view.neededText(needed, #listed))
-    say("shops needed", chore.id, needed)
+    local needed = state.partsNeeded(tracker, chore, own)
+    stepper.show(shown, view.neededText(needed, #own.list))
+    say("needed", chore.id, needed)
 end
 
--- The Shop runs block: its title next in PrettyUI's flow, then a stepper per chore with more
--- than one listed shop, picked or not. Gives back the block's bottom.
+-- The "How many to do" block: its title next in PrettyUI's flow, then a stepper per chore with
+-- more than one part, picked or not. Gives back the block's bottom.
 ---@param w prettyui.Window
 ---@param wheel ChoreWheelHandler?
 ---@return integer
-local function buildShopRuns(w, wheel)
-    local title = w:AddTitle("Shop runs")
-    local settingsLines = view.shopsSettings(tracker, chores, shops)
+local function buildCounts(w, wheel)
+    local title = w:AddTitle("How many to do")
+    local settingsLines = view.countSettings(tracker, chores, parts)
     local ys, bottom = listlayout.stack(#settingsLines, title.y + title.height)
     for i, line in ipairs(settingsLines) do
         stepperViews[#stepperViews + 1] = stepper.new(
             w.content,
             ys[i],
-            line.chore.name,
+            line.label,
             view.neededText(line.needed, line.total),
             function(delta, shown)
-                onShopsNeeded(line.chore, delta, shown)
+                onPartsNeeded(line.chore, delta, shown)
             end,
             wheel
         )
@@ -389,8 +395,8 @@ local function subheadingKey(p, category)
     return p .. "/" .. category
 end
 
--- The settings view: the Celebrations switches and the Shop runs title in PrettyUI's flow,
--- the Shop runs steppers, then a heading per period, a subheading per category within it, and
+-- The settings view: the Celebrations switches and the counts title in PrettyUI's flow, the
+-- count steppers, then a heading per period, a subheading per category within it, and
 -- a hand-built row per chore below them.
 ---@param w prettyui.Window
 local function buildSettings(w)
@@ -400,7 +406,7 @@ local function buildSettings(w)
         { text = "Popup sound", value = "sound", selected = celebrations.sound },
     }, { onChange = onCelebrationSetting })
     local wheel = prettyuiInternals.wheelHandler(w)
-    local top = buildShopRuns(w, wheel)
+    local top = buildCounts(w, wheel)
     local groups = view.byPeriod(chores)
     local sections = {} ---@type ChoreSectionIds[]
     for i, group in ipairs(groups) do
@@ -509,7 +515,7 @@ local function stripContent()
     local notice = phase == "loggedOut" and "Log in to see your chores"
         or phase == "waiting" and "Waiting for the game clock"
         or nil
-    local content = view.strip(view.view(tracker, chores, clockNow(), shops), notice)
+    local content = view.strip(view.view(tracker, chores, clockNow(), parts), notice)
     if content.id then content.icon = icons[content.id] end
     return content
 end
@@ -546,7 +552,7 @@ window.init({
     backToList = function()
         pendingMode = "list"
     end,
-    -- The old window's rows, headings, Shop runs lines and info widths went with it.
+    -- The old window's rows, headings, count lines and info widths went with it.
     clearViews = function()
         rowViews, headings, stepperViews = {}, {}, {}
         helpWidth, polledWidth = nil, nil
@@ -599,10 +605,18 @@ detect.init({
     shops = shops,
     collections = collections,
     machines = machines,
+    parts = parts,
     say = say,
     apply = apply,
 })
-vars.init({ chores = chores, rules = varRules, say = say, apply = apply, where = detect.playerTile })
+vars.init({
+    chores = chores,
+    rules = varRules,
+    parts = parts,
+    say = say,
+    apply = apply,
+    where = detect.playerTile,
+})
 
 ---------------------------------------------------------------------------
 -- Following the game

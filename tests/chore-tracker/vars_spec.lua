@@ -301,33 +301,44 @@ describe("chore-tracker vars core", function()
         assert.is_false(varsCore.holds(rule, values, nil))
     end)
 
-    it("holds Thalmund's Wares with every slot bought up to a limit above 0", function()
-        local rule = ruleFor("thalmunds-wares")
-        local values = {}
-        for n = 1, 4 do
-            values["NECRO_HUB_THALMUND_SLOT_" .. n .. "_MAX"] = 5
-            values["NECRO_HUB_THALMUND_SLOT_" .. n .. "_BOUGHT"] = 5
+    -- Chore `id`'s rules by the part each marks.
+    ---@param id string
+    ---@return table<string, table>
+    local function partRules(id)
+        local out = {}
+        for _, rule in ipairs(varRules) do
+            if rule.chore == id then
+                out[assert(rule.part, id .. " has a rule without a part")] = rule
+            end
         end
-        assert.is_true(varsCore.holds(rule, values, nil))
-        values.NECRO_HUB_THALMUND_SLOT_3_BOUGHT = 4
-        assert.is_false(varsCore.holds(rule, values, nil))
-        values.NECRO_HUB_THALMUND_SLOT_3_BOUGHT = 5
+        return out
+    end
+
+    it("holds each Thalmund slot bought up to its own limit above 0", function()
+        local rules = partRules("thalmunds-wares")
+        local slot = "NECRO_HUB_THALMUND_SLOT_3"
+        local rule = assert(rules[slot], slot)
+        assert.are.same({ slot .. "_MAX", slot .. "_BOUGHT" }, varsCore.names(rule))
+        assert.is_true(varsCore.holds(rule, { [slot .. "_MAX"] = 5, [slot .. "_BOUGHT"] = 5 }))
+        assert.is_false(varsCore.holds(rule, { [slot .. "_MAX"] = 5, [slot .. "_BOUGHT"] = 4 }))
         -- A slot with no limit isn't bought out at 0 >= 0.
-        values.NECRO_HUB_THALMUND_SLOT_2_MAX = 0
-        values.NECRO_HUB_THALMUND_SLOT_2_BOUGHT = 0
-        assert.is_false(varsCore.holds(rule, values, nil))
+        assert.is_false(varsCore.holds(rule, { [slot .. "_MAX"] = 0, [slot .. "_BOUGHT"] = 0 }))
+        local count = 0
+        for _ in pairs(rules) do
+            count = count + 1
+        end
+        assert.are.equal(4, count)
     end)
 
-    it("holds Shattered Worlds only with all three reward challenges", function()
-        local rule = ruleFor("shattered-worlds")
-        local values = {
-            SWORLDS_REWARD_CHALLENGE_BRONZE_COMPLETE = 1,
-            SWORLDS_REWARD_CHALLENGE_SILVER_COMPLETE = 1,
-            SWORLDS_REWARD_CHALLENGE_GOLD_COMPLETE = 0,
-        }
-        assert.is_false(varsCore.holds(rule, values, nil))
-        values.SWORLDS_REWARD_CHALLENGE_GOLD_COMPLETE = 1
-        assert.is_true(varsCore.holds(rule, values, nil))
+    it("holds each Shattered Worlds challenge on its own flag", function()
+        local rules = partRules("shattered-worlds")
+        for _, tier in ipairs({ "BRONZE", "SILVER", "GOLD" }) do
+            local name = "SWORLDS_REWARD_CHALLENGE_" .. tier .. "_COMPLETE"
+            local rule = assert(rules[name], tier)
+            assert.are.same({ name }, varsCore.names(rule))
+            assert.is_true(varsCore.holds(rule, { [name] = 1 }))
+            assert.is_false(varsCore.holds(rule, { [name] = 0 }))
+        end
     end)
 
     -- Whether any of chore `id`'s rules ticks on the change from `before` to `after`.
@@ -453,11 +464,9 @@ describe("chore-tracker var list", function()
             "fixate (unproven)",
             "runesphere (unproven)",
             "soul-reaper (unproven)",
-            "thalmunds-wares (unproven)",
             "tears-of-guthix (unproven)",
             "herby-werby (unproven)",
             "wisps-of-the-grove (unproven)",
-            "shattered-worlds (unproven)",
             "aquarium-treasure-chest (unproven)",
             "agoroth (unproven)",
             "broken-home (unproven)",
@@ -474,6 +483,8 @@ describe("chore-tracker var list", function()
             "water-filtration",
             "arc-supplies",
             "giant-oyster",
+            "thalmunds-wares (unproven) x4",
+            "shattered-worlds (unproven) x3",
             "arc-contracts x5",
             "bloodwood-tree x8",
             "player-owned-farm x7",

@@ -163,7 +163,7 @@ describe("chore-tracker replaying a recorded feather purchase", function()
         local h = feathersBought()
         assert.is_false(helpers.ticked(h, FEATHERS.name))
         assert.are.equal("Feather Shop Run (1/4)", (helpers.rowShown(h, FEATHERS.name)))
-        assert.are.same({ FISHINGSHOP_LUM = CLOCK }, helpers.stored(h, WHO).shops[FEATHERS.id])
+        assert.are.same({ FISHINGSHOP_LUM = CLOCK }, helpers.stored(h, WHO).parts[FEATHERS.id])
         assert.are.same({}, helpers.stored(h, WHO).done)
     end)
 
@@ -177,7 +177,7 @@ describe("chore-tracker replaying a recorded feather purchase", function()
             h:output()
                 :find("[CHORES] purchase feather-shop-run at Lumbridge Fishing Supplies", 1, true)
         )
-        assert.are.same({ FISHINGSHOP_LUM = CLOCK }, helpers.stored(h, WHO).shops[FEATHERS.id])
+        assert.are.same({ FISHINGSHOP_LUM = CLOCK }, helpers.stored(h, WHO).parts[FEATHERS.id])
         assert.are.equal(CLOCK, helpers.doneAt(h, FEATHERS.id, WHO))
     end)
 
@@ -186,7 +186,7 @@ describe("chore-tracker replaying a recorded feather purchase", function()
         assert.are.same({ [FEATHERS.id] = CLOCK }, helpers.stored(h, WHO).done)
         assert.are.same(
             { [FEATHERS.id] = { FISHINGSHOP_LUM = CLOCK } },
-            helpers.stored(h, WHO).shops
+            helpers.stored(h, WHO).parts
         )
     end)
 end)

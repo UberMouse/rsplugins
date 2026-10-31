@@ -2,7 +2,7 @@
 -- A purchase at one of a chore's shops records that shop as bought from this period (see
 -- shell/detect.lua). A chore with one shop then ticks; one with several ticks once as many of
 -- them as it needs were bought from: all of them, or fewer if the player set a count in
--- settings (core/state.lua, shopsNeeded).
+-- settings (each shop is a part, core/parts.lua; core/state.lua, partsNeeded).
 --
 -- `invs` are the shop's inventory config names (config.Inv.<name>), which is how the client
 -- tells one shop from another: every shop has its own inventory, even shops selling the

@@ -23,6 +23,7 @@ local BACKPACK = "INV"
 ---@field shops table<string, ChoreShop[]>
 ---@field collections ChoreCollection[]
 ---@field machines ChoreMachine[]
+---@field parts table<string, ChoreParts> chore id -> its parts (core/parts.lua)
 ---@field say fun(...: any)
 ---Run `change` on the tracker at the clock's minute and keep what it returns (the same
 ---table means nothing changed); skipped, `change` uncalled, without a character and a
@@ -196,17 +197,17 @@ end
 
 -- A purchase at shop inventory `name`: record it for each chore the shop serves (picked or
 -- not, so picking one later shows the period's truth), and tick the chore if it isn't done
--- this period and enough of its shops were bought from (state.recordPurchase). Each chore it
+-- this period and enough of its shops were bought from (state.recordPart). Each chore it
 -- changes is logged: a repeat purchase at a shop already bought from this period changes and
 -- logs nothing, unless it now ticks the chore (unticked by hand, or its count lowered, since).
 ---@param name string
 local function onPurchase(name)
     assert(options, "init runs before any inventory event")
-    local say, shops = options.say, options.shops
+    local say, parts = options.say, options.parts
     options.apply(function(tracker, now)
         for _, entry in ipairs(shopIndex[name]) do
-            local listed = shops[entry.chore.id]
-            local recorded = state.recordPurchase(tracker, entry.chore, listed, name, now)
+            local own = parts[entry.chore.id]
+            local recorded = state.recordPart(tracker, entry.chore, own, name, now)
             if recorded ~= tracker then say("purchase", entry.chore.id, "at", entry.shop.name) end
             tracker = recorded
         end
@@ -237,17 +238,18 @@ local function onNotesRose(before, after)
     end
 end
 
--- Something was collected from machine output `name`: tick each chore it serves, if it isn't
--- done this period, logging only a tick.
+-- Something was collected from machine output `name`: record that machine done for each
+-- chore it serves, which ticks the chore once enough machines are (state.recordPart). Each
+-- chore it changes is logged, as for a purchase.
 ---@param name string
 local function onCollected(name)
     assert(options, "init runs before any inventory event")
-    local say = options.say
+    local say, parts = options.say, options.parts
     options.apply(function(tracker, now)
         for _, chore in ipairs(machineChores[name]) do
-            local ticked = state.autoMark(tracker, chore, now)
-            if ticked ~= tracker then say("collected", chore.id, "from", name) end
-            tracker = ticked
+            local recorded = state.recordPart(tracker, chore, parts[chore.id], name, now)
+            if recorded ~= tracker then say("collected", chore.id, "from", name) end
+            tracker = recorded
         end
         return tracker
     end)

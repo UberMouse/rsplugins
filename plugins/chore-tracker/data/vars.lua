@@ -154,22 +154,6 @@ local rules = {
         done = { { "BSLAY_REACHED_WEEKLY_CAP", "==", 1 } },
         proven = false,
     },
-    -- Every one of Thalmund's four slots bought up to its limit. A slot's limit must be
-    -- above 0: one with no limit would otherwise read 0 >= 0 as bought out.
-    {
-        chore = "thalmunds-wares",
-        done = {
-            { "NECRO_HUB_THALMUND_SLOT_1_MAX", ">", 0 },
-            { "NECRO_HUB_THALMUND_SLOT_1_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_1_MAX" },
-            { "NECRO_HUB_THALMUND_SLOT_2_MAX", ">", 0 },
-            { "NECRO_HUB_THALMUND_SLOT_2_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_2_MAX" },
-            { "NECRO_HUB_THALMUND_SLOT_3_MAX", ">", 0 },
-            { "NECRO_HUB_THALMUND_SLOT_3_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_3_MAX" },
-            { "NECRO_HUB_THALMUND_SLOT_4_MAX", ">", 0 },
-            { "NECRO_HUB_THALMUND_SLOT_4_BOUGHT", ">=", "NECRO_HUB_THALMUND_SLOT_4_MAX" },
-        },
-        proven = false,
-    },
     -- Its base var, SHOP_MULTIPURPOSE, wasn't sent during an Arhein purchase
     -- (docs/api-concepts.md), so this may never fire.
     { chore = "tears-of-guthix", done = { { "TOG_TEARS_COMPLETE", "==", 1 } }, proven = false },
@@ -181,16 +165,6 @@ local rules = {
     {
         chore = "wisps-of-the-grove",
         done = { { "NATURE_BEINGS_DND_COMPLETED", "==", 1 } },
-        proven = false,
-    },
-    -- All three of the week's reward challenges.
-    {
-        chore = "shattered-worlds",
-        done = {
-            { "SWORLDS_REWARD_CHALLENGE_BRONZE_COMPLETE", "==", 1 },
-            { "SWORLDS_REWARD_CHALLENGE_SILVER_COMPLETE", "==", 1 },
-            { "SWORLDS_REWARD_CHALLENGE_GOLD_COMPLETE", "==", 1 },
-        },
         proven = false,
     },
     {
@@ -290,6 +264,31 @@ local rules = {
     },
 }
 
+-- Each of Thalmund's four slots bought up to its limit is a part of his chore
+-- (data/counts.lua). A slot's limit must be above 0: one with no limit would otherwise read
+-- 0 >= 0 as bought out. Inferred from the names, unproven.
+for n = 1, 4 do
+    local slot = "NECRO_HUB_THALMUND_SLOT_" .. n
+    rules[#rules + 1] = {
+        chore = "thalmunds-wares",
+        done = { { slot .. "_MAX", ">", 0 }, { slot .. "_BOUGHT", ">=", slot .. "_MAX" } },
+        part = slot,
+        proven = false,
+    }
+end
+
+-- Each of the week's three Shattered Worlds reward challenges is a part. Inferred from the
+-- names, unproven.
+for _, tier in ipairs({ "BRONZE", "SILVER", "GOLD" }) do
+    local name = "SWORLDS_REWARD_CHALLENGE_" .. tier .. "_COMPLETE"
+    rules[#rules + 1] = {
+        chore = "shattered-worlds",
+        done = { { name, "==", 1 } },
+        part = name,
+        proven = false,
+    }
+end
+
 -- Arc contracts: PGC_TALLY counts the day's completed contracts, and the limit is 3 plus the
 -- Waiko shop's "contracts per day" upgrades bought (PGC_PER_DAY_INCREASE, 0 to 4; it read 4).
 for bought = 0, 4 do
@@ -300,8 +299,9 @@ for bought = 0, 4 do
     }
 end
 
--- Chores with one var per tree, trough or patch: a rule each, any of which ticks the chore.
--- Seen moving in the chore probe of 2026-10-30. One var of each (tree 8, trough 1, patch 1)
+-- Chores with one var per tree, trough or patch: a rule each, marking its part done; the
+-- chore ticks once the player's count of them is (data/counts.lua). Seen moving in the chore
+-- probe of 2026-10-30. One var of each (tree 8, trough 1, patch 1)
 -- ticked its chore in the client when set with !setvar (2026-10-31); the rest share its
 -- layout.
 
@@ -310,6 +310,7 @@ for n = 1, 8 do
     rules[#rules + 1] = {
         chore = "bloodwood-tree",
         done = { { "SNIPER_BLOODTREE_" .. n, "==", 2 } },
+        part = "SNIPER_BLOODTREE_" .. n,
         proven = true,
     }
 end
@@ -317,16 +318,13 @@ end
 -- Food in each Player-Owned Farm trough (of 1000); feeding took trough 1 0 -> 3. Only
 -- feeding raises it, while the animals eat it down.
 for _, trough in ipairs({ "1", "2", "3", "4", "5", "6", "BREEDING" }) do
-    rules[#rules + 1] = {
-        chore = "player-owned-farm",
-        done = {},
-        rises = "POF_FEEDING_TROUGH_" .. trough .. "_GENERAL_AMOUNT",
-        proven = true,
-    }
+    local name = "POF_FEEDING_TROUGH_" .. trough .. "_GENERAL_AMOUNT"
+    rules[#rules + 1] =
+        { chore = "player-owned-farm", done = {}, rises = name, part = name, proven = true }
 end
 
 -- Seeds in each herb patch: clearing one took it 7 -> 0, planting 0 -> 7. Which number is
--- which patch is unknown, so the first patch planted in the day ticks the run.
+-- which patch is unknown, so the tooltip counts patches without naming them.
 for _, patch in ipairs({
     "1",
     "2",
@@ -340,12 +338,8 @@ for _, patch in ipairs({
     "ECOSYSTEM_1",
     "ECOSYSTEM_2",
 }) do
-    rules[#rules + 1] = {
-        chore = "herb-run",
-        done = {},
-        rises = "FARMING_SEEDS_PLANTED_HERB_PATCH_" .. patch,
-        proven = true,
-    }
+    local name = "FARMING_SEEDS_PLANTED_HERB_PATCH_" .. patch
+    rules[#rules + 1] = { chore = "herb-run", done = {}, rises = name, part = name, proven = true }
 end
 
 -- Fort Forinthry: the Town Hall's own record of bonus XP taken never reaches the client
@@ -396,33 +390,37 @@ end
 
 -- Penguin Hide and Seek: a bit per penguin spotted this week (PENG_SPY_<0..11>, on
 -- PENG_SPY_SWITCH) and one for the polar bear; all read 0 on 2026-10-31, a week none was
--- spotted. The first spot of the week ticks the chore: how many penguins a week has isn't in a
--- var we know. Reading these only to tick is the user's call (docs/plans/chore-tracker.md).
+-- spotted. Each is a part (data/counts.lua): the wiki's week has 12 penguins and the bear.
+-- Reading these only to tick is the user's call (docs/plans/chore-tracker.md).
 -- A !setvar of PENG_SPY_0 ticked the chore in the client (2026-10-31).
+local PENGUINS = {}
 for n = 0, 11 do
+    PENGUINS[#PENGUINS + 1] = "PENG_SPY_" .. n
+end
+PENGUINS[#PENGUINS + 1] = "PENG_SPY_BEAR_FOUND"
+for _, name in ipairs(PENGUINS) do
     rules[#rules + 1] = {
         chore = "penguin-hide-and-seek",
-        done = { { "PENG_SPY_" .. n, "==", 1 } },
+        done = { { name, "==", 1 } },
+        part = name,
         proven = true,
     }
 end
-rules[#rules + 1] = {
-    chore = "penguin-hide-and-seek",
-    done = { { "PENG_SPY_BEAR_FOUND", "==", 1 } },
-    proven = true,
-}
 
 -- Player-Owned Port: each voyage slot's _DONE read 1 with its voyage back, so sending a new one
 -- takes it to 0; and the Black Marketeer's offer (POP_MARKET_QUANTITY, 133 that day) taken to
--- fall to 0 when bought. Only a fall ticks, so an unsent var's 0 never does. A !setvar of
--- POP_VOYAGE_1_DONE to 0 ticked the chore in the client (2026-10-31); the market rule was
--- never seen ticking, as the voyage had already ticked the day.
+-- fall to 0 when bought. Only a fall ticks, so an unsent var's 0 never does. Each voyage is a
+-- part (data/counts.lua); the market buy ticks the chore by itself (the user's call,
+-- 2026-10-31). A !setvar of POP_VOYAGE_1_DONE to 0 ticked the chore in the client
+-- (2026-10-31); the market rule was never seen ticking, as the voyage had already ticked the
+-- day.
 for n = 1, 4 do
     local name = "POP_VOYAGE_" .. n .. "_DONE"
     rules[#rules + 1] = {
         chore = "player-owned-ports",
         done = { { name, "==", 0 } },
         falls = { name },
+        part = name,
         proven = true,
     }
 end

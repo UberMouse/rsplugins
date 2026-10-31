@@ -13,7 +13,8 @@
 -- going down does: it ticks only on a change where its conditions turned from false to true
 -- and at least one of those vars went down. A rule has `rises` or `falls`, not both. A rule
 -- may also name a tile it must be seen `near` (core/detect.lua's near): it ticks only while
--- the player stands within range of it, for a var that other places move too.
+-- the player stands within range of it, for a var that other places move too. A rule naming
+-- a `part` marks that part done rather than the chore (shell/vars.lua).
 --
 -- data/vars.lua is typed `---@type ChoreVarRule[]`, so LuaLS checks its operators and
 -- operands against the class below.
@@ -40,6 +41,8 @@ local M = {}
 ---@field rises string? a var whose rise in a change ticks the chore
 ---@field falls string[]? vars of which a fall, in a change that makes the conditions hold, ticks the chore
 ---@field near ChoreVarNear? where the player must stand for a change to tick the chore
+---@field part string? for a chore done at several parts (core/parts.lua): the part this rule
+---sees done, so a change counts towards the chore's count instead of ticking it
 ---@field proven boolean
 
 ---@class ChoreVarNear: ChoreTile

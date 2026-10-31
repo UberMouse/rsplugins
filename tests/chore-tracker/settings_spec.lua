@@ -137,39 +137,49 @@ describe("chore-tracker settings rows", function()
     end)
 end)
 
-describe("chore-tracker shop runs settings", function()
-    -- In data/chores.lua's order.
-    local SHOP_RUNS = {
-        { id = "broad-arrowheads", total = 2 },
-        { id = "feather-shop-run", total = 4 },
-        { id = "rune-shop-run", total = 11 },
-        { id = "vial-of-water-packs", total = 5 },
+describe("chore-tracker count settings", function()
+    -- Every chore with a choice of parts, in data/chores.lua's order, at its default: all of a
+    -- shop run's shops, else data/counts.lua's.
+    local COUNTS = {
+        { id = "bloodwood-tree", value = "1 of 8" },
+        { id = "herb-run", value = "8 of 11" },
+        { id = "invention-machine", value = "2 of 6" },
+        { id = "player-owned-farm", value = "1 of 7" },
+        { id = "player-owned-ports", value = "1 of 4" },
+        { id = "penguin-hide-and-seek", value = "10 of 13" },
+        { id = "shattered-worlds", value = "3 of 3" },
+        { id = "invention-machine-weekly", value = "2 of 6" },
+        { id = "broad-arrowheads", value = "2 of 2" },
+        { id = "feather-shop-run", value = "4 of 4" },
+        { id = "rune-shop-run", value = "11 of 11" },
+        { id = "thalmunds-wares", value = "4 of 4" },
+        { id = "vial-of-water-packs", value = "5 of 5" },
     }
 
     it(
-        "shows a stepper per multi-shop chore, in list order, at all shops, above the list",
+        "shows a stepper per chore with a choice of parts, in list order, at its default, above the list",
         function()
             local h = loaded()
             openSettings(h)
-            local title = h.ui:get("Title", { text = "Shop runs" })
+            local title = h.ui:get("Title", { text = "How many to do" })
             local switches = h.ui:find("CheckboxButton")[1]
             assert.is_true(switches.root.y + switches.root.height <= title.y)
             local lastY = title.y
-            for _, run in ipairs(SHOP_RUNS) do
-                local line = helpers.stepper(h, run.id)
-                assert.is_true(line.label.y > lastY)
+            for _, count in ipairs(COUNTS) do
+                local line = helpers.stepper(h, count.id)
+                assert(line.label.y > lastY, count.id .. " is out of order")
                 lastY = line.label.y
-                assert.are.equal(
-                    string.format("%d of %d", run.total, run.total),
-                    line.value.content
-                )
+                assert.are.equal(count.value, line.value.content, count.id)
                 assert.are.equal(HAND, line.minus.cursorConfig.mouseOverCursor)
             end
             -- The lists' layout starts below the block.
             assert.is_true(lastY + listlayout.ROW_HEIGHT <= h.ui:get("Title", { text = "Daily" }).y)
-            -- A single-shop chore has no stepper.
+            -- A single-shop chore has no stepper, nor one whose rules are alternatives.
             assert.has_error(function()
                 helpers.stepper(h, "yak-hide")
+            end)
+            assert.has_error(function()
+                helpers.stepper(h, "fort-forinthry-bonus-xp")
             end)
         end
     )
@@ -178,6 +188,7 @@ describe("chore-tracker shop runs settings", function()
         local h = loaded()
         openSettings(h)
         local win, line = window(h), helpers.stepper(h, "broad-arrowheads")
+        win:SetScrollPosition(line.label.y - 40)
         local writes = h.dbWrites
         -- At 2 of 2, plus changes nothing.
         assert.is_true(h.ui:click(line.plus))
@@ -186,11 +197,11 @@ describe("chore-tracker shop runs settings", function()
         assert.are.equal("1 of 2", line.value.content)
         assert.are.equal(writes + 1, h.dbWrites)
         assert.are.same({ ["broad-arrowheads"] = 1 }, helpers.stored(h).needed)
-        assert.matches("%[CHORES%] shops needed broad%-arrowheads 1", h:output())
+        assert.matches("%[CHORES%] needed broad%-arrowheads 1", h:output())
         -- At 1, minus changes nothing.
         assert.is_true(h.ui:click(line.minus))
         assert.are.equal(writes + 1, h.dbWrites)
-        local _, lines = h:output():gsub("shops needed", "")
+        local _, lines = h:output():gsub("%] needed ", "")
         assert.are.equal(1, lines)
         assert.are.equal(win, window(h))
         -- Back to all shops, the default, nothing is held for it.
@@ -219,7 +230,7 @@ describe("chore-tracker shop runs settings", function()
 
     it("keeps a count per character, across reloads", function()
         local h = loaded()
-        helpers.setShopsNeeded(h, "feather-shop-run", 2)
+        helpers.setNeeded(h, "feather-shop-run", 2)
         h:reload()
         openSettings(h)
         assert.are.equal("2 of 4", helpers.stepper(h, "feather-shop-run").value.content)
@@ -236,12 +247,12 @@ describe("chore-tracker shop runs settings", function()
         helpers.togglePicks(h, { "feather-shop-run" })
         helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
         -- Lowered to the one shop bought: still unticked, until the next purchase.
-        helpers.setShopsNeeded(h, "feather-shop-run", 1)
+        helpers.setNeeded(h, "feather-shop-run", 1)
         assert.is_false(helpers.ticked(h, "Feather Shop Run"))
         helpers.stock(h, "FISHINGSHOP", "FEATHER_PACK", 15)
         assert.is_true(helpers.ticked(h, "Feather Shop Run"))
         -- Raised above it: the tick stays.
-        helpers.setShopsNeeded(h, "feather-shop-run", 3)
+        helpers.setNeeded(h, "feather-shop-run", 3)
         assert.is_true(helpers.ticked(h, "Feather Shop Run"))
         assert.are.equal("Feather Shop Run (1/3)", (helpers.rowShown(h, "Feather Shop Run")))
     end)

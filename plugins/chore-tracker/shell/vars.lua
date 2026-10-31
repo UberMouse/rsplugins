@@ -18,6 +18,7 @@ local SETTLE_TICKS = 500
 ---@class ChoreVarOptions
 ---@field chores Chore[]
 ---@field rules ChoreVarRule[]
+---@field parts table<string, ChoreParts> chore id -> its parts (core/parts.lua), for rules naming one
 ---@field say fun(...: any)
 ---@field apply fun(change: ChoreChange) as ChoreDetectOptions.apply
 ---@field where fun(): ChoreTile? the player's tile, for rules that must be seen near one
@@ -120,15 +121,17 @@ local function firstChanged(names, changed)
     return nil
 end
 
--- Watched vars changed from `before` to `after`: tick each chore whose rule reads one of
--- them and whose change ticks it (core/vars.lua's ticks), if it isn't done this period,
--- logging only a tick.
+-- Watched vars changed from `before` to `after`: for each rule that reads one of them and
+-- whose change ticks it (core/vars.lua's ticks), mark its part done (the chore ticks once
+-- enough are, state.recordPart), or for a rule without a part tick its chore if it isn't done
+-- this period. Each change to the tracker is logged, "done" when it ticked the chore, "part"
+-- when it only counted towards it.
 ---@param before table<string, integer>
 ---@param after table<string, integer>
 ---@param changed table<string, true>
 local function onChanged(before, after, changed)
     assert(options, "init runs before any var event")
-    local say, where = options.say, options.where
+    local say, where, parts = options.say, options.where, options.parts
     -- The tile is read only for a rule that must be seen near one, once per change.
     local tile, located = nil, false ---@type ChoreTile?, boolean
     options.apply(function(tracker, now)
@@ -138,12 +141,17 @@ local function onChanged(before, after, changed)
             if cause and entry.rule.near and not located then
                 tile, located = where(), true
             end
-            if cause and varsCore.ticks(entry.rule, before, after, day, tile) then
-                local ticked = state.autoMark(tracker, entry.chore, now)
-                if ticked ~= tracker then
-                    say("seen", entry.chore.id, "done", "(" .. cause .. ")")
+            local rule, chore = entry.rule, entry.chore
+            if cause and varsCore.ticks(rule, before, after, day, tile) then
+                local seen = rule.part
+                        and state.recordPart(tracker, chore, parts[chore.id], rule.part, now)
+                    or state.autoMark(tracker, chore, now)
+                if seen ~= tracker then
+                    local ticked = state.isDone(seen, chore, now)
+                        and not state.isDone(tracker, chore, now)
+                    say("seen", chore.id, ticked and "done" or "part", "(" .. cause .. ")")
                 end
-                tracker = ticked
+                tracker = seen
             end
         end
         return tracker

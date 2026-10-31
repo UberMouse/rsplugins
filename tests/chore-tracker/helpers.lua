@@ -382,7 +382,7 @@ end
 M.MINUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_MINUS")
 M.PLUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_PLUS")
 
--- The settings view's Shop runs line for chore `id`: its name and value texts and its minus
+-- The settings view's count line for chore `id`: its name and value texts and its minus
 -- and plus button layers. They sit straight in the content: the name is the content's own
 -- text with the chore's name, whole or cut with "..." (a settings row's label is inside its row
 -- layer), and the value and buttons share its row.
@@ -390,7 +390,14 @@ M.PLUS = catalog.config("Sprite", "RS3_CONTEXTUAL_INPUT_PLUS")
 ---@param id string
 ---@return { label: table, value: table, minus: table, plus: table }
 function M.stepper(h, id)
-    local name = M.name(id)
+    -- A chore sharing its name with another is labelled with its period (view.countSettings).
+    local chore = assert(state.find(chores, id), "no chore " .. id)
+    local name = chore.name
+    for _, other in ipairs(chores) do
+        if other ~= chore and other.name == chore.name then
+            name = view.TITLES[chore.period] .. ": " .. chore.name
+        end
+    end
     local children = h.ui:children(M.window(h).content)
     local label
     for _, proxy in ipairs(children) do
@@ -399,7 +406,7 @@ function M.stepper(h, id)
         local cut = text and text:match("^(.*)%.%.%.$")
         if text == name or (cut and name:sub(1, #cut) == cut) then label = proxy end
     end
-    assert(label, "no Shop runs line for " .. id)
+    assert(label, "no count line for " .. id)
     local out = { label = label }
     for _, proxy in ipairs(children) do
         local part = assert(uiFake.stateOf(proxy))
@@ -414,16 +421,16 @@ function M.stepper(h, id)
             end
         end
     end
-    assert(out.value and out.minus and out.plus, "an incomplete Shop runs line for " .. id)
+    assert(out.value and out.minus and out.plus, "an incomplete count line for " .. id)
     return out
 end
 
--- Open settings, step chore `id`'s shops-needed count to `n` with its stepper, and go back
+-- Open settings, step chore `id`'s needed count to `n` with its stepper, and go back
 -- to the list.
 ---@param h table
 ---@param id string
 ---@param n integer
-function M.setShopsNeeded(h, id, n)
+function M.setNeeded(h, id, n)
     M.openSettings(h)
     local line = M.stepper(h, id)
     M.window(h):SetScrollPosition(line.label.y - 40)

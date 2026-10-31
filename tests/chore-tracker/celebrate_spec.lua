@@ -61,13 +61,22 @@ describe("chore-tracker celebrate", function()
         end)
 
         it("doesn't celebrate a purchase that only records another shop of a done chore", function()
-            local old = state.recordPurchase(
+            -- Two shops, either of which ticks the chore.
+            local shops = {
+                noun = "Shops",
+                word = "bought",
+                list = { { keys = { "inv-a" } }, { keys = { "inv-b" } } },
+                default = 1,
+            }
+            local old = state.recordPart(
                 support.stateWith(chores, { "dshop", "d1" }),
                 byId.dshop,
+                shops,
                 "inv-a",
                 NOW
             )
-            local new = state.recordPurchase(old, byId.dshop, "inv-b", NOW + 1)
+            assert.is_true(state.isDone(old, byId.dshop, NOW))
+            local new = state.recordPart(old, byId.dshop, shops, "inv-b", NOW + 1)
             assert.are_not.equal(old, new)
             assert.are.same({}, celebrate.decide(old, new, chores, NOW + 1, false))
         end)

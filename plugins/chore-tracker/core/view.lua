@@ -17,9 +17,9 @@ M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 
 ---@alias ChoreTooltip { text: string, maxWidth: integer }
 
----@class ChoreShopLine
----@field name string
----@field bought boolean bought from this period
+---@class ChorePartLine
+---@field name string? only shops have one
+---@field done boolean done this period
 
 ---@class ChoreRow
 ---@field id string
@@ -28,9 +28,12 @@ M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 ---@field url string
 ---@field links string[]
 ---@field done boolean
----@field shops ChoreShopLine[] the chore's listed shops, in list order; empty if it has none
----@field bought integer how many of `shops` were bought from this period
----@field needed integer how many of `shops` tick the chore (state.shopsNeeded); 0 without shops
+---@field parts ChorePartLine[] the chore's parts (core/parts.lua), in list order; empty if it
+---has none
+---@field noun string the parts' tooltip word, as "Shops"; "" without parts
+---@field word string how a done part reads, as "bought"; "" without parts
+---@field partsDone integer how many of `parts` were done this period
+---@field needed integer how many of `parts` tick the chore (state.partsNeeded); 0 without parts
 
 ---@class ChoreSection
 ---@field period ChorePeriod
@@ -91,34 +94,37 @@ function M.byPeriod(chores)
     return groups
 end
 
--- A chore's listed shops and whether each was bought from this period, in any of its
--- inventories (none without a clock, `now` nil), and how many were.
+-- A chore's parts and whether each was done this period, by any of its keys (none without a
+-- clock, `now` nil), and how many were.
 ---@param s ChoreState
 ---@param chore Chore
----@param listed ChoreShop[]
+---@param parts ChoreParts?
 ---@param now integer?
----@return ChoreShopLine[]
----@return integer bought
-local function shopLines(s, chore, listed, now)
-    local lines, bought = {}, 0
-    for i, shop in ipairs(listed) do
-        local yes = now ~= nil and state.shopBoughtAny(s, chore, shop.invs, now)
-        lines[i] = { name = shop.name, bought = yes }
-        if yes then bought = bought + 1 end
+---@return ChorePartLine[]
+---@return integer done
+local function partLines(s, chore, parts, now)
+    local lines, done = {}, 0
+    for i, part in ipairs(parts and parts.list or {}) do
+        local yes = now ~= nil and state.partDone(s, chore, part, now)
+        lines[i] = { name = part.name, done = yes }
+        if yes then done = done + 1 end
     end
-    return lines, bought
+    return lines, done
 end
+
+-- No parts, for a chore without them.
+local NO_PARTS = { noun = "", word = "", list = {} } ---@type ChoreParts
 
 -- The sections in the order Daily, Weekly, Monthly, each holding only its selected chores
 -- (shop chores included), in the order the player arranged them. A period with nothing
 -- selected has no section. Without a clock (`now` nil: logged out or loading) nothing shows
--- done or bought, since no period can be placed.
+-- done, chore or part, since no period can be placed.
 ---@param s ChoreState
 ---@param chores Chore[]
 ---@param now integer? epoch minutes
----@param shops table<string, ChoreShop[]>? chore id -> its listed shops
+---@param parts table<string, ChoreParts>? chore id -> its parts
 ---@return ChoreSection[]
-function M.view(s, chores, now, shops)
+function M.view(s, chores, now, parts)
     local byId = {}
     for _, chore in ipairs(chores) do
         byId[chore.id] = chore
@@ -129,8 +135,8 @@ function M.view(s, chores, now, shops)
         for _, id in ipairs((state.selectedIn(s, chores, p))) do
             local chore = byId[id]
             local done = now ~= nil and state.isDone(s, chore, now)
-            local listed = shops and shops[id] or {}
-            local lines, bought = shopLines(s, chore, listed, now)
+            local own = parts and parts[id] or NO_PARTS
+            local lines, partsDone = partLines(s, chore, own, now)
             section.rows[#section.rows + 1] = {
                 id = id,
                 name = chore.name,
@@ -138,9 +144,11 @@ function M.view(s, chores, now, shops)
                 url = chore.url,
                 links = chore.links,
                 done = done,
-                shops = lines,
-                bought = bought,
-                needed = state.shopsNeeded(s, chore, listed),
+                parts = lines,
+                noun = own.noun,
+                word = own.word,
+                partsDone = partsDone,
+                needed = state.partsNeeded(s, chore, own),
             }
             if done then section.done = section.done + 1 end
         end
@@ -150,71 +158,90 @@ function M.view(s, chores, now, shops)
     return sections
 end
 
--- Whether a chore with these shops (its listed shops, or a row's shop lines) gives the player
--- a choice of how many to visit: only then does it get a count in its row and a stepper.
----@param shops any[]
+-- Whether a chore with these parts (its part list, or a row's part lines) gives the player a
+-- choice of how many to do: only then does it get a count in its row and a stepper.
+---@param parts any[]
 ---@return boolean
-function M.hasShopChoice(shops)
-    return #shops > 1
+function M.hasChoice(parts)
+    return #parts > 1
 end
 
--- A row's shops bought from this period out of those it needs, as "1/4". Bought is capped at
--- needed: shops past the count add nothing to the tick.
+-- A row's parts done this period out of those it needs, as "1/4". Done is capped at needed:
+-- parts past the count add nothing to the tick.
 ---@param row ChoreRow
 ---@return string
-local function shopCount(row)
-    return string.format("%d/%d", math.min(row.bought, row.needed), row.needed)
+local function partCount(row)
+    return string.format("%d/%d", math.min(row.partsDone, row.needed), row.needed)
 end
 
--- A list row's text: the chore's name, and for a chore with a choice of shops, how many of
--- the shops it needs were bought from this period, as "Feather Shop Run (1/4)".
+-- A list row's text: the chore's name, and for a chore with a choice of parts, how many of
+-- the parts it needs were done this period, as "Feather Shop Run (1/4)".
 ---@param row ChoreRow
 ---@return string
 function M.rowText(row)
-    if not M.hasShopChoice(row.shops) then return row.name end
-    return string.format("%s (%s)", row.name, shopCount(row))
+    if not M.hasChoice(row.parts) then return row.name end
+    return string.format("%s (%s)", row.name, partCount(row))
 end
 
--- The tooltip lines for a row's shops: a heading with the count of rowText, then every listed
--- shop as bought or not yet. None for a chore without shops.
+-- The tooltip lines for a row's parts: a heading with the count of rowText, then every named
+-- part (only shops have names) as done or not yet. None for a chore without parts.
 ---@param row ChoreRow
 ---@param p ChorePeriod the row's period
 ---@return string[]
-function M.shopTooltip(row, p)
-    if #row.shops == 0 then return {} end
+function M.partTooltip(row, p)
+    if #row.parts == 0 then return {} end
     local lines = {
-        string.format("Shops this %s (%s):", M.PERIOD_WORDS[p], shopCount(row)),
+        string.format("%s this %s (%s):", row.noun, M.PERIOD_WORDS[p], partCount(row)),
     }
-    for _, shop in ipairs(row.shops) do
-        lines[#lines + 1] = (shop.bought and "bought  " or "not yet  ") .. shop.name
+    for _, part in ipairs(row.parts) do
+        if part.name then
+            lines[#lines + 1] = (part.done and row.word or "not yet") .. "  " .. part.name
+        end
     end
     return lines
 end
 
----@class ChoreShopsSetting
+---@class ChoreCountSetting
 ---@field chore Chore
----@field needed integer its current count (state.shopsNeeded)
----@field total integer how many shops it lists
+---@field label string the chore's name, after its period's title (as the strip has it, so a
+---cut label keeps the period) when another line shares it
+---@field needed integer its current count (state.partsNeeded)
+---@field total integer how many parts it has
 
--- The settings view's shop-run lines: each chore with a choice of shops, picked or not, in
--- chore-list order, with how many of its shops tick it.
+-- The settings view's count lines: each chore with a choice of parts, picked or not, in
+-- chore-list order, with how many of its parts tick it. The block has no period headings, so
+-- chores of one name in two periods (Invention Machines) are told apart by their period, as
+-- "Weekly: Invention Machines".
 ---@param s ChoreState
 ---@param chores Chore[]
----@param shops table<string, ChoreShop[]> chore id -> its listed shops
----@return ChoreShopsSetting[]
-function M.shopsSettings(s, chores, shops)
+---@param parts table<string, ChoreParts> chore id -> its parts
+---@return ChoreCountSetting[]
+function M.countSettings(s, chores, parts)
     local out = {}
     for _, chore in ipairs(chores) do
-        local listed = shops[chore.id]
-        if listed and M.hasShopChoice(listed) then
-            out[#out + 1] =
-                { chore = chore, needed = state.shopsNeeded(s, chore, listed), total = #listed }
+        local own = parts[chore.id]
+        if own and M.hasChoice(own.list) then
+            out[#out + 1] = {
+                chore = chore,
+                label = chore.name,
+                needed = state.partsNeeded(s, chore, own),
+                total = #own.list,
+            }
+        end
+    end
+    local named = {}
+    for _, line in ipairs(out) do
+        named[line.chore.name] = (named[line.chore.name] or 0) + 1
+    end
+    for _, line in ipairs(out) do
+        if named[line.chore.name] > 1 then
+            line.label = M.TITLES[line.chore.period] .. ": " .. line.chore.name
         end
     end
     return out
 end
 
--- A shop-run stepper's value, as "2 of 4".
+-- A count stepper's value, as "2 of 4".
 ---@param needed integer
 ---@param total integer
 ---@return string
@@ -222,7 +249,7 @@ function M.neededText(needed, total)
     return string.format("%d of %d", needed, total)
 end
 
--- A chore's tooltip: its description, then `extra` lines (a list row's shops), then its wiki
+-- A chore's tooltip: its description, then `extra` lines (a list row's parts), then its wiki
 -- page and any other links, as text; "<br>" is the tooltip's line-break tag. Takes a Chore or a
 -- ChoreRow, which share these fields.
 ---@param chore { desc: string, url: string, links: string[] }

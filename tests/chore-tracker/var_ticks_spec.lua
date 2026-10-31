@@ -223,21 +223,52 @@ describe("chore-tracker var ticks", function()
         assert.are.equal(helpers.NOW, doneAt(h, "divine-locations"))
     end)
 
-    it("ticks Thalmund's Wares when the last slot is bought out", function()
+    it("ticks Thalmund's Wares once every slot is bought out, counting each", function()
         local before = {}
         for n = 1, 4 do
             before["NECRO_HUB_THALMUND_SLOT_" .. n .. "_MAX"] = 10
-            before["NECRO_HUB_THALMUND_SLOT_" .. n .. "_BOUGHT"] = n < 4 and 10 or 8
+            before["NECRO_HUB_THALMUND_SLOT_" .. n .. "_BOUGHT"] = 8
         end
         local h = settled(before)
-        set(h, "NECRO_HUB_THALMUND_SLOT_4_BOUGHT", 9)
+        togglePicks(h, { "thalmunds-wares" })
+        for n = 1, 3 do
+            set(h, "NECRO_HUB_THALMUND_SLOT_" .. n .. "_BOUGHT", 10)
+        end
+        -- Each slot bought out counts towards the default of all four.
         assert.is_nil(doneAt(h, "thalmunds-wares"))
+        assert.matches(
+            "%[CHORES%] seen thalmunds%-wares part %(NECRO_HUB_THALMUND_SLOT_3_BOUGHT%)",
+            h:output()
+        )
+        h:advance(POLL_MS)
+        assert.are.equal("Thalmund's Wares (3/4)", (helpers.rowShown(h, "Thalmund's Wares")))
         set(h, "NECRO_HUB_THALMUND_SLOT_4_BOUGHT", 10)
         assert.are.equal(helpers.NOW, doneAt(h, "thalmunds-wares"))
         assert.matches(
             "%[CHORES%] seen thalmunds%-wares done %(NECRO_HUB_THALMUND_SLOT_4_BOUGHT%)",
             h:output()
         )
+    end)
+
+    it("ticks a Herb Run on its default of 8 patches, or the count set in settings", function()
+        local patches = { "1", "2", "3", "4", "5", "9", "DRUID", "MYARM" }
+        local before = {}
+        for _, patch in ipairs(patches) do
+            before["FARMING_SEEDS_PLANTED_HERB_PATCH_" .. patch] = 0
+        end
+        local h = settled(before)
+        for i = 1, 7 do
+            set(h, "FARMING_SEEDS_PLANTED_HERB_PATCH_" .. patches[i], 7)
+        end
+        assert.is_nil(doneAt(h, "herb-run"))
+        set(h, "FARMING_SEEDS_PLANTED_HERB_PATCH_" .. patches[8], 7)
+        assert.are.equal(helpers.NOW, doneAt(h, "herb-run"))
+
+        -- Set to 1, the first patch planted ticks it.
+        local again = settled(before)
+        helpers.setNeeded(again, "herb-run", 1)
+        set(again, "FARMING_SEEDS_PLANTED_HERB_PATCH_DRUID", 7)
+        assert.are.equal(helpers.NOW, doneAt(again, "herb-run"))
     end)
 
     it("ticks the Crystal Tree Blossom when taken on the clock's RuneDay", function()

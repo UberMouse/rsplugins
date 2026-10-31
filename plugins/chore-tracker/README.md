@@ -14,7 +14,7 @@ your client, never does anything in game for you, and sends nothing anywhere.
 - **Opening it.** Enable the plugin and a window titled **Chores** opens. On the first run it
   says no chores are picked yet.
 - **Picking chores.** Click the settings button at the top left of the window. Above the chores
-  are a Celebrations section and a Shop runs section (see below). Every chore is listed under
+  are a Celebrations section and a How many to do section (see below). Every chore is listed under
   Daily, Weekly and Monthly,
   and within Daily and Weekly under a gold subheading for its kind: Activities, Combat,
   Skilling, Upkeep, Free supplies (handed out by someone who is no shop) and Shops, each in
@@ -91,18 +91,28 @@ ticked until its reset, and unticking one by hand changes nothing below.
   shop is open, and the stock is yours alone: a line that goes down is you buying. A restock or
   something you sell to the shop doesn't count. A chore with one shop ticks itself on a
   purchase there. A chore with more than one ticks once you have bought from as many of its
-  shops as it needs this period: all of them unless you set fewer under **Shop runs** in the
-  settings view (you may skip a shop you can't reach yet, say). Its row shows how many of
-  those it needs you have bought from, as "Feather Shop Run (1/4)" (never more than it needs),
-  and its tooltip gives the same count and lists every shop as "bought" or "not yet". A shop
-  the game has in two versions, before and after a quest, counts once, bought from either. A
-  count changes in its row as you buy, without moving the list.
-- **Shops needed.** In the settings view, under **Shop runs** (below Celebrations), each chore
-  with more than one shop has a line with its name and "[-] 4 of 4 [+]": click the minus or
-  plus to set how many of its shops tick it, from 1 to all of them. It starts at all of them,
-  saves straight away, and is kept per character, as characters reach different shops.
-  Changing it never ticks or unticks the chore: lowered to what you have already bought, the
-  chore ticks on your next purchase at one of its shops; raised above it, a tick stays.
+  shops as it needs this period (see **How many to do**). A shop the game has in two
+  versions, before and after a quest, counts once, bought from either.
+- **Chores done at several places.** Some chores have parts you may do all or only some of:
+  a shop run's shops, the herb patches, bloodwood trees, farm troughs, the week's penguins,
+  the port's voyages, the Invention machines, Thalmund's slots and the Shattered Worlds
+  challenges. The plugin records each part as done this period when it sees it done, and
+  ticks the chore once as many are done as it needs. Its row shows how many of those it
+  needs are done, as "Herb Run (3/8)" (never more than it needs), changing as you go without
+  moving the list, and its tooltip gives the same count; a shop run's tooltip also lists every
+  shop as "bought" or "not yet". The other parts aren't listed by name, since which of the
+  game's records is which patch or penguin isn't known.
+- **How many to do.** In the settings view, under **How many to do** (below Celebrations),
+  each chore with more than one part has a line with its name and "[-] 8 of 11 [+]": click the
+  minus or plus to set how many of its parts tick it, from 1 to all of them. A shop run starts
+  at all its shops, Thalmund's Wares at all four slots and Shattered Worlds at all three
+  challenges; the others start where most players are: 8 of the 11 herb patches, 1 of the 8
+  bloodwood trees, 1 of the 7 farm troughs, 10 of the 13 penguins (the polar bear counts as
+  one), 1 of the 4 voyages, and 2 of the 6 Invention machines (daily and weekly each have a
+  count, labelled "Daily:" and "Weekly:"). A count saves straight away and is kept per
+  character, as characters reach different places. Changing it never ticks or unticks the
+  chore: lowered to what you have already done, the chore ticks on the next part you do;
+  raised above it, a tick stays.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or
@@ -111,8 +121,9 @@ ticked until its reset, and unticking one by hand changes nothing below.
   taking some out of the bank, a trade or picking them up near the giver ticks the chore too.
 - **Collecting from your Invention machines** (daily and weekly). Each Invention
   Guild machine keeps what it made in a store the game sends your client wherever you are, and
-  only collecting takes from it, so the chore ticks when any machine's store goes down. Filling
-  a machine doesn't count.
+  only collecting takes from it, so a machine whose store goes down counts as done, and the
+  chore ticks once as many machines are as it needs (2 unless you change it). Filling a machine
+  doesn't count.
 - **Seen from game vars.** The game keeps a record of your character's progress in numbered
   values called vars, and sends your client yours as they change. A chore below ticks when
   one of these changes so that it shows the chore done:
@@ -132,11 +143,11 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Fixate Charges (*unproven*) | you have used three fixate charges today |
   | Runesphere (*unproven*) | the game marks today's dust handed in |
   | Soul Reaper (*unproven*) | the game marks the week's Soul Reaper cap reached |
-  | Thalmund's Wares (*unproven*) | you have bought every one of Thalmund's four slots up to its limit |
+  | Thalmund's Wares (*unproven*) | you have bought each of Thalmund's four slots up to its limit: each slot is a part, all four by default |
   | Tears of Guthix (*unproven*) | the game marks the week's tears collected (the game may not send this one, so it may never tick) |
   | Herby Werby (*unproven*) | the game marks the week's Herby Werby completed |
   | Wisps of the Grove (*unproven*) | the game marks the week's Wisps of the Grove completed |
-  | Shattered Worlds (*unproven*) | the game marks all three of the week's reward challenges (bronze, silver and gold) complete |
+  | Shattered Worlds (*unproven*) | the game marks each of the week's reward challenges (bronze, silver and gold) complete: each is a part, all three by default |
   | Aquarium Treasure Chest (*unproven*) | the game marks your aquarium's treasure chest used |
   | Agoroth (*unproven*) | you have defeated Agoroth twice this week |
   | Broken Home Replay (*unproven*) | the game marks the week's Broken Home replay completed |
@@ -144,9 +155,9 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Effigy Incubator (*unproven*) | the game marks the month's Effigy Incubator completed |
   | Archaeology Research | you send out a research team |
   | Miscellania (daily and weekly) | you collect the kingdom's resources |
-  | Bakriminel Bolts | you fell one of your bloodwood trees |
-  | Player-Owned Farm | you put food in one of the farm's troughs |
-  | Herb Run | you plant one of your herb patches: the first patch planted ticks the day's run |
+  | Bakriminel Bolts | you fell your bloodwood trees: each tree is a part, 1 by default |
+  | Player-Owned Farm | you put food in the farm's troughs: each trough is a part, 1 by default |
+  | Herb Run | you plant your herb patches: each patch is a part, 8 by default |
   | God Statues | the game's count of months since you built the statues falls to 0 |
   | Troll Invasion | the game marks the month's Troll Invasion limit reached |
   | Menaphos Obelisk and Scarabs | you have squashed 23 corrupted scarabs today (the last at full reputation) and drained the soul obelisk at all |
@@ -159,8 +170,8 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Arc Supplies from Rosie | the game marks Rosie's free supplies taken |
   | Giant Oyster | the oyster has been fed both its sea cucumber and its seaweed |
   | Arc Contracts | you complete the day's last contract: 3, plus one for each "contracts per day" upgrade bought |
-  | Penguin Hide and Seek | you spot one of the week's penguins or the polar bear: the first spot ticks the week |
-  | Player-Owned Port | you send a ship on a voyage, or buy the Black Marketeer's offer (the market part is *unproven*) |
+  | Penguin Hide and Seek | you spot the week's penguins or the polar bear: each is a part, 10 by default |
+  | Player-Owned Port | you send ships on voyages (each voyage slot is a part, 1 by default), or buy the Black Marketeer's offer, which ticks it by itself (the market part is *unproven*) |
   | Fort Forinthry Bonus XP | any skill's bonus XP goes up while you stand within 10 tiles of Aster, in the Town Hall: claiming from Aster does that (so does a lamp or star used beside her) |
   | Dream of Iaia Resources (daily and weekly) | every base-camp resource you have workers on has been used down to 0, and one of them just fell (sending the workers elsewhere doesn't tick it) |
   | Dream of Iaia XP (weekly and monthly) | every skilling station you have workers for holds 0 stored XP, and one just fell (sending the workers elsewhere doesn't tick it) |
@@ -206,7 +217,7 @@ A ticked chore unticks by itself when its reset passes, even with the window ope
 
 ## What it remembers
 
-- **Your picks, their order, your ticks and your shop-run counts, per character.** They are
+- **Your picks, their order, your ticks and your counts, per character.** They are
   saved each time you change
   them, under your character's display name, so each character on the same computer has its own
   list. While you are logged out the window says "Log in to see your chores".
@@ -239,8 +250,8 @@ Everything the plugin logs carries the tag `[CHORES]`: loading, collapsing and e
 character changes, waiting for the clock, each celebration popup shown
 (`[CHORES] celebrate <chore id>`, or `[CHORES] celebrate <period> cleared`) and each chore
 dragged to a new place (`[CHORES] moved <chore id> to <n> in <period>`, `<n>` its place in
-the period from 1), and each change to a shop run's count in settings
-(`[CHORES] shops needed <chore id> <n>`). It never logs your display name. Grep regex:
+the period from 1), and each change to a chore's count in settings
+(`[CHORES] needed <chore id> <n>`). It never logs your display name. Grep regex:
 `\[CHORES\]`.
 
 A purchase that ticks a chore, or is the period's first at that shop (ticking the chore or
@@ -249,10 +260,12 @@ not), logs
 `[CHORES] purchase feather-shop-run at Gerrant, Port Sarim`), and a collection that ticks its
 chore logs `[CHORES] collected <chore id> near <giver>` (such as
 `[CHORES] collected oldman-potato-cactus near the Weird Old Man`), a collect from an
-Invention machine that ticks its chore logs `[CHORES] collected <chore id> from <inventory>`
-(such as `[CHORES] collected invention-machine from INVENT_MACHINE_GUILD_3_OUTPUT`), and a chore ticked from
-the game's vars logs `[CHORES] seen <chore id> done (<var>)`, naming the var whose change
-ticked it (such as `[CHORES] seen bert-sand done (HANDSAND_BUCKETS_CLAIMED_TODAY)`). A watched
+Invention machine that ticks its chore, or is the period's first from that machine, logs
+`[CHORES] collected <chore id> from <inventory>` (such as
+`[CHORES] collected invention-machine from INVENT_MACHINE_GUILD_3_OUTPUT`), and a chore ticked
+from the game's vars logs `[CHORES] seen <chore id> done (<var>)`, naming the var whose change
+ticked it (such as `[CHORES] seen bert-sand done (HANDSAND_BUCKETS_CLAIMED_TODAY)`); a part
+seen done that doesn't yet tick its chore logs `[CHORES] seen <chore id> part (<var>)`. A watched
 var the game no longer has is logged once at start as `[CHORES] unknown var <name>; not
 watched`, and its chores are left to tick by hand. Likewise an icon the game no longer has
 is logged once, when a row first needs it, as `[CHORES] unknown icon id.Obj.<name>; its rows
@@ -300,12 +313,13 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `shell/vars.lua` | Seeing chores done from your own game vars, ticking only on a change it sees |
 | `shell/popups.lua` | Showing celebration popups one at a time, first in first out |
 | `shell/rows.lua` | One chore's row in the list, settings or info view: its icon, text and tick box (and a list row's grip; an info row has no box), changed in place |
-| `shell/stepper.lua` | A Shop runs line in settings: the chore's name and its "[-] N of M [+]" buttons |
+| `shell/stepper.lua` | A How many to do line in settings: the chore's name and its "[-] N of M [+]" buttons |
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/prettyui_internals.lua` | Keeping the window's scroll, wheel, grips and resize cursors working across PrettyUI versions |
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began, and the RuneDay (pure arithmetic on epoch minutes) |
-| `core/state.lua` | Picks, ticks, shop purchases and shops-needed counts, and whether a chore is done now |
+| `core/state.lua` | Picks, ticks, parts done and needed counts, and whether a chore is done now |
+| `core/parts.lua` | Each chore's parts (shops, patches, machines...), built from the data files |
 | `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
 | `core/view.lua` | What the list, the collapsed strip and the settings groups show, as plain data |
@@ -321,6 +335,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `data/collections.lua` | Who each collection chore is collected from, where, and their notes (hand-written) |
 | `data/vars.lua` | The chores seen from game vars and each one's rule (hand-written) |
 | `data/machines.lua` | The machine chores and the output inventories collecting empties (hand-written) |
+| `data/counts.lua` | The chores done at several parts that aren't shops: their parts' word and default count (hand-written) |
 | `data/icons.lua` | Each chore's icon, a built-in item or interface sprite (hand-written) |
 
 The tests are in `tests/chore-tracker/` and run against the repo's mock of the plugin API
@@ -342,7 +357,7 @@ Chore Tracker is a checklist for RuneScape's repeatable chores: the daily, weekl
 
 Pick the chores you do with the settings button, then click a chore in the list to tick it off. Ticks clear themselves at the game's resets, in UTC: daily chores at 00:00, weekly ones on Wednesday and monthly ones on the 1st. Drag a chore by its grip to put your list in your own order.
 
-Some chores tick themselves: the shop runs when you buy from their shops, Dell Monti's and the Weird Old Man's when their notes arrive in your backpack, the Invention machines when you collect from one, and others, such as the Daily Challenge and Bert's sand, when the game's own record of your progress shows them done. Only a change seen while the plugin runs ticks a chore, so a chore done while it was off needs a tick by hand. The info button in the plugin lists every chore as Automatic, Unproven (should tick itself, not yet checked in game) or Manual.
+Some chores tick themselves: the shop runs when you buy from their shops, Dell Monti's and the Weird Old Man's when their notes arrive in your backpack, the Invention machines when you collect from them, and others, such as the Daily Challenge and Bert's sand, when the game's own record of your progress shows them done. Only a change seen while the plugin runs ticks a chore, so a chore done while it was off needs a tick by hand. The info button in the plugin lists every chore as Automatic, Unproven (should tick itself, not yet checked in game) or Manual.
 
 The menu button at the window's top-right corner folds it into a small strip showing your next chore, which a click ticks. When the plugin ticks a chore, or you finish a period's chores, a short popup celebrates it; settings turn the popups or their sound off.
 

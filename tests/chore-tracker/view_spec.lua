@@ -98,8 +98,10 @@ describe("chore-tracker view", function()
             url = "https://example.test/d1",
             links = {},
             done = true,
-            shops = {},
-            bought = 0,
+            parts = {},
+            noun = "",
+            word = "",
+            partsDone = 0,
             needed = 0,
         }, section.rows[1])
         assert.is_false(section.rows[2].done)
@@ -115,18 +117,26 @@ describe("chore-tracker view", function()
         assert.are.equal(0, sections[2].done)
     end)
 
-    describe("shops", function()
+    describe("parts", function()
         local listed = {
             wshop = {
-                { name = "Shop A", invs = { "SHOP_A" }, proven = true },
-                { name = "Shop B", invs = { "SHOP_B", "SHOP_B2" }, proven = true },
+                noun = "Shops",
+                word = "bought",
+                list = {
+                    { name = "Shop A", keys = { "SHOP_A" } },
+                    { name = "Shop B", keys = { "SHOP_B", "SHOP_B2" } },
+                },
             },
-            dshop = { { name = "Only Shop", invs = { "SHOP_C" }, proven = true } },
+            dshop = {
+                noun = "Shops",
+                word = "bought",
+                list = { { name = "Only Shop", keys = { "SHOP_C" } } },
+            },
         }
         local now = M["2026-10-25 01:43"]
 
         it("lists each row's shops, bought this period or not, and counts them", function()
-            local s = state.recordPurchase(
+            local s = state.recordPart(
                 support.stateWith(chores, { "wshop" }),
                 byId.wshop,
                 listed.wshop,
@@ -135,17 +145,17 @@ describe("chore-tracker view", function()
             )
             local row = view.view(s, chores, now, listed)[1].rows[1]
             assert.are.same(
-                { { name = "Shop A", bought = false }, { name = "Shop B", bought = true } },
-                row.shops
+                { { name = "Shop A", done = false }, { name = "Shop B", done = true } },
+                row.parts
             )
-            assert.are.equal(1, row.bought)
+            assert.are.equal(1, row.partsDone)
             assert.are.equal(2, row.needed)
             -- One of the two shops it needs by default: recorded, not ticked.
             assert.is_false(row.done)
         end)
 
         it("counts a shop bought from in any of its inventories once", function()
-            local s = state.recordPurchase(
+            local s = state.recordPart(
                 support.stateWith(chores, { "wshop" }),
                 byId.wshop,
                 listed.wshop,
@@ -153,25 +163,25 @@ describe("chore-tracker view", function()
                 now
             )
             local row = view.view(s, chores, now, listed)[1].rows[1]
-            assert.are.equal(1, row.bought)
-            s = state.recordPurchase(s, byId.wshop, listed.wshop, "SHOP_B", now)
-            assert.are.equal(1, view.view(s, chores, now, listed)[1].rows[1].bought)
+            assert.are.equal(1, row.partsDone)
+            s = state.recordPart(s, byId.wshop, listed.wshop, "SHOP_B", now)
+            assert.are.equal(1, view.view(s, chores, now, listed)[1].rows[1].partsDone)
         end)
 
         it("counts no shop bought after the reset or without a clock", function()
-            local s = state.recordPurchase(
+            local s = state.recordPart(
                 support.stateWith(chores, { "wshop" }),
                 byId.wshop,
                 listed.wshop,
                 "SHOP_B",
                 now
             )
-            assert.are.equal(0, view.view(s, chores, M["2026-10-28"], listed)[1].rows[1].bought)
-            assert.are.equal(0, view.view(s, chores, nil, listed)[1].rows[1].bought)
+            assert.are.equal(0, view.view(s, chores, M["2026-10-28"], listed)[1].rows[1].partsDone)
+            assert.are.equal(0, view.view(s, chores, nil, listed)[1].rows[1].partsDone)
         end)
 
         it("counts a multi-shop row in its text, and leaves a single-shop row's alone", function()
-            local s = state.recordPurchase(
+            local s = state.recordPart(
                 support.stateWith(chores, { "wshop", "dshop" }),
                 byId.wshop,
                 listed.wshop,
@@ -188,7 +198,7 @@ describe("chore-tracker view", function()
         end)
 
         it("gives tooltip lines headed with the period and the count", function()
-            local s = state.recordPurchase(
+            local s = state.recordPart(
                 support.stateWith(chores, { "wshop", "dshop" }),
                 byId.wshop,
                 listed.wshop,
@@ -198,19 +208,19 @@ describe("chore-tracker view", function()
             local sections = view.view(s, chores, now, listed)
             assert.are.same(
                 { "Shops this day (0/1):", "not yet  Only Shop" },
-                view.shopTooltip(sections[1].rows[1], "daily")
+                view.partTooltip(sections[1].rows[1], "daily")
             )
             assert.are.same(
                 { "Shops this week (1/2):", "bought  Shop A", "not yet  Shop B" },
-                view.shopTooltip(sections[2].rows[1], "weekly")
+                view.partTooltip(sections[2].rows[1], "weekly")
             )
             local plain =
                 view.view(support.stateWith(chores, { "d1" }), chores, now, listed)[1].rows[1]
-            assert.are.same({}, view.shopTooltip(plain, "daily"))
+            assert.are.same({}, view.partTooltip(plain, "daily"))
         end)
 
         it("counts bought out of the set count, capped at it, still listing every shop", function()
-            local s = state.setShopsNeeded(
+            local s = state.setPartsNeeded(
                 support.stateWith(chores, { "wshop" }),
                 byId.wshop,
                 listed.wshop,
@@ -218,20 +228,40 @@ describe("chore-tracker view", function()
             )
             local row = view.view(s, chores, now, listed)[1].rows[1]
             assert.are.equal("WSHOP (0/1)", view.rowText(row))
-            s = state.recordPurchase(s, byId.wshop, listed.wshop, "SHOP_A", now)
-            s = state.recordPurchase(s, byId.wshop, listed.wshop, "SHOP_B", now)
+            s = state.recordPart(s, byId.wshop, listed.wshop, "SHOP_A", now)
+            s = state.recordPart(s, byId.wshop, listed.wshop, "SHOP_B", now)
             row = view.view(s, chores, now, listed)[1].rows[1]
-            assert.are.equal(2, row.bought)
+            assert.are.equal(2, row.partsDone)
             assert.are.equal("WSHOP (1/1)", view.rowText(row))
             assert.are.same(
                 { "Shops this week (1/1):", "bought  Shop A", "bought  Shop B" },
-                view.shopTooltip(row, "weekly")
+                view.partTooltip(row, "weekly")
             )
         end)
 
+        it("lists only named parts in a tooltip, after the count", function()
+            -- Three unnamed patches, one done, a default of 1.
+            local patches = {
+                noun = "Patches",
+                word = "done",
+                list = { { keys = { "P1" } }, { keys = { "P2" } }, { keys = { "P3" } } },
+                default = 1,
+            }
+            local s = state.recordPart(
+                support.stateWith(chores, { "wshop" }),
+                byId.wshop,
+                patches,
+                "P2",
+                now
+            )
+            local row = view.view(s, chores, now, { wshop = patches })[1].rows[1]
+            assert.are.equal("WSHOP (1/1)", view.rowText(row))
+            assert.are.same({ "Patches this week (1/1):" }, view.partTooltip(row, "weekly"))
+        end)
+
         it("lists each multi-shop chore for settings, picked or not, in list order", function()
-            local s = state.setShopsNeeded(state.new(), byId.wshop, listed.wshop, 1)
-            local lines = view.shopsSettings(s, chores, listed)
+            local s = state.setPartsNeeded(state.new(), byId.wshop, listed.wshop, 1)
+            local lines = view.countSettings(s, chores, listed)
             assert.are.equal(1, #lines)
             assert.are.equal(byId.wshop, lines[1].chore)
             assert.are.equal(1, lines[1].needed)
@@ -240,9 +270,9 @@ describe("chore-tracker view", function()
         end)
 
         it("gives a choice of shops only with more than one", function()
-            assert.is_false(view.hasShopChoice({}))
-            assert.is_false(view.hasShopChoice(listed.dshop))
-            assert.is_true(view.hasShopChoice(listed.wshop))
+            assert.is_false(view.hasChoice({}))
+            assert.is_false(view.hasChoice(listed.dshop.list))
+            assert.is_true(view.hasChoice(listed.wshop.list))
         end)
     end)
 

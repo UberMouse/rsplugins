@@ -43,52 +43,47 @@ describe("chore-tracker state", function()
         end)
 
         it("appends each pick, so selected is the order they were picked in", function()
-            local s = state.select(state.new(), chores, "m1")
-            s = state.select(s, chores, "d1")
-            s = state.select(s, chores, "w1")
+            local s = state.select(state.new(), "m1")
+            s = state.select(s, "d1")
+            s = state.select(s, "w1")
             assert.are.same({ "m1", "d1", "w1" }, s.selected)
             assert.is_true(state.isSelected(s, "w1"))
             assert.is_false(state.isSelected(s, "d2"))
         end)
 
         it("puts a deselected then reselected chore last", function()
-            local s = state.select(state.select(state.new(), chores, "d1"), chores, "d2")
-            s = state.select(state.deselect(s, "d1"), chores, "d1")
+            local s = state.select(state.select(state.new(), "d1"), "d2")
+            s = state.select(state.deselect(s, "d1"), "d1")
             assert.are.same({ "d2", "d1" }, s.selected)
         end)
 
         it("keeps a chore's completion through a deselect and reselect", function()
             local now = M["2026-10-25 01:43"]
-            local s = state.mark(state.select(state.new(), chores, "d1"), "d1", now)
-            s = state.select(state.deselect(s, "d1"), chores, "d1")
+            local s = state.mark(state.select(state.new(), "d1"), "d1", now)
+            s = state.select(state.deselect(s, "d1"), "d1")
             assert.is_true(state.isDone(s, byId.d1, now))
             assert.are.equal(now, s.done.d1)
         end)
 
         it("ignores selecting an id twice", function()
-            local s = state.select(state.new(), chores, "d1")
-            assert.are.same({ "d1" }, state.select(s, chores, "d1").selected)
+            local s = state.select(state.new(), "d1")
+            assert.are.same({ "d1" }, state.select(s, "d1").selected)
         end)
 
         it("deselects", function()
-            local s = state.select(state.select(state.new(), chores, "d1"), chores, "w1")
+            local s = state.select(state.select(state.new(), "d1"), "w1")
             assert.are.same({ "w1" }, state.deselect(s, "d1").selected)
         end)
 
-        it("treats an id not in the chore list as a no-op", function()
-            local s = state.select(state.new(), chores, "d1")
-            assert.are.same(s, state.select(s, chores, "nope"))
+        it("gives back the same state when selecting a picked id or deselecting another", function()
+            local s = state.select(state.new(), "d1")
+            assert.are.equal(s, state.select(s, "d1"))
             assert.are.equal(s, state.deselect(s, "nope"))
-        end)
-
-        it("gives back the same state when selecting an id not in the chore list", function()
-            local s = state.select(state.new(), chores, "d1")
-            assert.are.equal(s, state.select(s, chores, "nope"))
         end)
 
         it("never changes the state it is given", function()
             local s = state.new()
-            state.select(s, chores, "d1")
+            state.select(s, "d1")
             assert.are.same({}, s.selected)
         end)
     end)
@@ -195,7 +190,7 @@ describe("chore-tracker state", function()
         end)
 
         it("is not undone by unticking or unpicking, and never changes its input", function()
-            local s = state.select(state.new(), chores, "wshop")
+            local s = state.select(state.new(), "wshop")
             local bought = state.recordPart(s, byId.wshop, ONE, "SHOP_A", now)
             assert.are.same({}, s.parts)
             assert.is_nil(s.done.wshop)
@@ -205,7 +200,7 @@ describe("chore-tracker state", function()
             local unpicked = state.deselect(bought, "wshop")
             assert.are.same({ SHOP_A = now }, unpicked.parts.wshop)
             assert.are.same({ SHOP_A = now }, state.mark(bought, "wshop", now + 1).parts.wshop)
-            assert.are.same({ SHOP_A = now }, state.select(bought, chores, "d1").parts.wshop)
+            assert.are.same({ SHOP_A = now }, state.select(bought, "d1").parts.wshop)
         end)
     end)
 
@@ -225,7 +220,7 @@ describe("chore-tracker state", function()
             assert.are.equal(0, state.partsNeeded(state.new(), byId.wshop, NONE))
         end)
 
-        it("sets a count, clamped, holding only one short of all, and never ticks", function()
+        it("sets a count, clamped, holding only one short of all", function()
             local s = state.new()
             local one = state.setPartsNeeded(s, byId.wshop, TWO, 1)
             assert.are.same({ wshop = 1 }, one.needed)
@@ -233,11 +228,34 @@ describe("chore-tracker state", function()
             assert.are.equal(one, state.setPartsNeeded(one, byId.wshop, TWO, 0))
             assert.are.equal(s, state.setPartsNeeded(s, byId.wshop, TWO, 3))
             assert.are.same({}, state.setPartsNeeded(one, byId.wshop, TWO, 2).needed)
-            -- Lowered to what was already bought, the chore stays unticked.
-            local bought = state.recordPart(s, byId.wshop, TWO, "SHOP_A", now)
-            assert.is_false(
-                state.isDone(state.setPartsNeeded(bought, byId.wshop, TWO, 1), byId.wshop, now)
-            )
+        end)
+
+        it("ticks a chore when its count is lowered to the parts done, at now", function()
+            local bought = state.recordPart(state.new(), byId.wshop, TWO, "SHOP_A", now)
+            local lowered = state.setPartsNeeded(bought, byId.wshop, TWO, 1, now + 7)
+            assert.are.same({ wshop = 1 }, lowered.needed)
+            assert.are.equal(now + 7, lowered.done.wshop)
+            assert.is_nil(bought.done.wshop)
+            -- Lowered but still above the parts done: no tick.
+            local patches = state.setPartsNeeded(state.new(), byId.wshop, PATCHES, 3)
+            patches = state.recordPart(patches, byId.wshop, PATCHES, "P1", now)
+            assert.is_nil(state.setPartsNeeded(patches, byId.wshop, PATCHES, 2, now).done.wshop)
+        end)
+
+        it("only sets the count when lowered without a clock", function()
+            local bought = state.recordPart(state.new(), byId.wshop, TWO, "SHOP_A", now)
+            local lowered = state.setPartsNeeded(bought, byId.wshop, TWO, 1)
+            assert.are.same({ wshop = 1 }, lowered.needed)
+            assert.is_false(state.isDone(lowered, byId.wshop, now))
+        end)
+
+        it("never unticks when the count is raised", function()
+            local one = state.setPartsNeeded(state.new(), byId.wshop, TWO, 1)
+            local ticked = state.recordPart(one, byId.wshop, TWO, "SHOP_A", now)
+            assert.are.equal(now, ticked.done.wshop)
+            local raised = state.setPartsNeeded(ticked, byId.wshop, TWO, 2, now + 1)
+            assert.are.same({}, raised.needed)
+            assert.are.equal(now, raised.done.wshop)
         end)
 
         it("counts distinct listed shops bought, a shop with two inventories once", function()
@@ -264,7 +282,7 @@ describe("chore-tracker state", function()
             function()
                 local s = state.recordPart(state.new(), byId.wshop, TWO, "SHOP_A", now)
                 assert.are.equal(s, state.recordPart(s, byId.wshop, TWO, "SHOP_A", now + 1))
-                -- The count lowered to what was bought: the next purchase, even a repeat, ticks.
+                -- The count lowered without a clock: the next purchase, even a repeat, ticks.
                 local lowered = state.setPartsNeeded(s, byId.wshop, TWO, 1)
                 assert.are.equal(
                     now + 2,
@@ -317,7 +335,7 @@ describe("chore-tracker state", function()
         it("lists one period's picks in selected order with their places in selected", function()
             local s = state.new()
             for _, id in ipairs({ "d2", "w1", "d1", "gone" }) do
-                s = state.select(s, chores, id)
+                s = state.select(s, id)
             end
             s.selected[#s.selected + 1] = "gone"
             local ids, slots = state.selectedIn(s, chores, "daily")
@@ -334,7 +352,7 @@ describe("chore-tracker state", function()
 
     describe("move", function()
         it("moves a chore within its period, leaving other periods' places alone", function()
-            local s = support.stateWith(chores, { "d1", "w1", "d2", "m1", "dshop" })
+            local s = support.stateWith({ "d1", "w1", "d2", "m1", "dshop" })
             assert.are.same(
                 { "dshop", "w1", "d1", "m1", "d2" },
                 state.move(s, chores, "dshop", 1).selected
@@ -346,13 +364,13 @@ describe("chore-tracker state", function()
         end)
 
         it("clamps the index to the period's range", function()
-            local s = support.stateWith(chores, { "d1", "w1", "d2" })
+            local s = support.stateWith({ "d1", "w1", "d2" })
             assert.are.same({ "d2", "w1", "d1" }, state.move(s, chores, "d2", -5).selected)
             assert.are.same({ "d2", "w1", "d1" }, state.move(s, chores, "d1", 99).selected)
         end)
 
         it("gives back the same state for an unselected id or the current place", function()
-            local s = support.stateWith(chores, { "d1", "w1", "d2" })
+            local s = support.stateWith({ "d1", "w1", "d2" })
             assert.are.equal(s, state.move(s, chores, "d2", 5))
             assert.are.equal(s, state.move(s, chores, "d1", 1))
             assert.are.equal(s, state.move(s, chores, "dshop", 1))
@@ -366,7 +384,7 @@ describe("chore-tracker state", function()
         end)
 
         it("never mutates the state it was given", function()
-            local s = support.stateWith(chores, { "d1", "d2" })
+            local s = support.stateWith({ "d1", "d2" })
             state.move(s, chores, "d2", 1)
             assert.are.same({ "d1", "d2" }, s.selected)
         end)
@@ -374,7 +392,7 @@ describe("chore-tracker state", function()
 
     describe("serialise", function()
         it("gives version 4: picks in the player's order, done and part minutes, counts", function()
-            local s = state.select(state.select(state.new(), chores, "w1"), chores, "d1")
+            local s = state.select(state.select(state.new(), "w1"), "d1")
             s = state.mark(s, "w1", 123)
             s = state.recordPart(s, byId.wshop, ONE, "SHOP_A", 456)
             s = state.setPartsNeeded(s, byId.dshop, TWO, 1)
@@ -388,10 +406,9 @@ describe("chore-tracker state", function()
         end)
 
         it("emits only strings, integers and tables", function()
-            local s = state.mark(state.select(state.new(), chores, "d1"), "d1", 5)
+            local s = state.mark(state.select(state.new(), "d1"), "d1", 5)
             s = state.recordPart(s, byId.dshop, ONE, "SHOP_A", 5)
-            s.done.d2 = 1.5 -- a float minute can't come from the clock, but must not be stored
-            s.parts.dshop.SHOP_B = 2.5
+            s = state.setPartsNeeded(s, byId.wshop, TWO, 1)
             ---@param v any
             local function check(v)
                 if type(v) == "table" then
@@ -403,14 +420,11 @@ describe("chore-tracker state", function()
                     assert(type(v) == "string" or math.type(v) == "integer", tostring(v))
                 end
             end
-            local out = state.serialise(s)
-            check(out)
-            assert.is_nil(out.done.d2)
-            assert.is_nil(out.parts.dshop.SHOP_B)
+            check(state.serialise(s))
         end)
 
         it("round-trips through fromStored", function()
-            local s = state.select(state.select(state.new(), chores, "m1"), chores, "dshop")
+            local s = state.select(state.select(state.new(), "m1"), "dshop")
             s = state.mark(s, "m1", M["2026-10-25 01:43"])
             s = state.recordPart(s, byId.dshop, ONE, "SHOP_A", M["2026-10-25 01:43"])
             s = state.setPartsNeeded(s, byId.wshop, TWO, 1)
@@ -432,13 +446,15 @@ describe("chore-tracker state", function()
             assert.are.same(empty, state.fromStored(stored, chores))
             stored.version = 5
             assert.are.same(empty, state.fromStored(stored, chores))
+            stored.version = 3 -- an older shape
+            assert.are.same(empty, state.fromStored(stored, chores))
             stored.version = "1"
             assert.are.same(empty, state.fromStored(stored, chores))
         end)
 
         it("keeps only well-formed selected ids that are in the chore list", function()
             local stored = {
-                version = 1,
+                version = 4,
                 selected = { "w1", 3, "gone", "d1", true, {}, "w1" },
                 done = {},
             }
@@ -446,13 +462,13 @@ describe("chore-tracker state", function()
         end)
 
         it("round-trips the player's order", function()
-            local s = state.select(state.select(state.new(), chores, "m1"), chores, "d1")
+            local s = state.select(state.select(state.new(), "m1"), "d1")
             assert.are.same({ "m1", "d1" }, state.fromStored(state.serialise(s), chores).selected)
         end)
 
         it("keeps only integer done minutes for ids in the chore list", function()
             local stored = {
-                version = 1,
+                version = 4,
                 selected = {},
                 done = { d1 = 10, d2 = "10", w1 = 2.5, m1 = 7.0, gone = 3, [4] = 4 },
             }
@@ -462,31 +478,18 @@ describe("chore-tracker state", function()
         end)
 
         it("tolerates selected or done of the wrong type", function()
-            local s = state.fromStored({ version = 1, selected = "d1", done = 5 }, chores)
+            local s = state.fromStored({ version = 4, selected = "d1", done = 5 }, chores)
             assert.are.same(empty, s)
-            s = state.fromStored({ version = 1, done = { d1 = 1 } }, chores)
+            s = state.fromStored({ version = 4, done = { d1 = 1 } }, chores)
             assert.are.same({ selected = {}, done = { d1 = 1 }, parts = {}, needed = {} }, s)
         end)
 
-        it("loads version 1 with its picks and ticks, and no shop progress", function()
+        it("drops malformed part progress and keeps the rest", function()
             local stored = {
-                version = 1,
-                selected = { "dshop", "d1" },
-                done = { dshop = 9 },
-                shops = { dshop = { SHOP_A = 9 } }, -- not part of version 1
-            }
-            assert.are.same(
-                { selected = { "dshop", "d1" }, done = { dshop = 9 }, parts = {}, needed = {} },
-                state.fromStored(stored, chores)
-            )
-        end)
-
-        it("drops malformed shop progress and keeps the rest", function()
-            local stored = {
-                version = 2,
+                version = 4,
                 selected = { "d1" },
                 done = { d1 = 1 },
-                shops = {
+                parts = {
                     dshop = { SHOP_A = 10, SHOP_B = "10", SHOP_C = 1.5, SHOP_D = 7.0, [3] = 4 },
                     wshop = "x",
                     gone = { SHOP_A = 1 },
@@ -497,21 +500,7 @@ describe("chore-tracker state", function()
             assert.are.same({ dshop = { SHOP_A = 10, SHOP_D = 7 } }, got.parts)
             assert.are.same({ "d1" }, got.selected)
             assert.are.same({ d1 = 1 }, got.done)
-            assert.are.same({}, state.fromStored({ version = 2, shops = 5 }, chores).parts)
-        end)
-
-        it("loads version 2 with its shop progress and every chore at its default count", function()
-            local stored = {
-                version = 2,
-                selected = { "wshop" },
-                done = {},
-                shops = { wshop = { SHOP_A = 9 } },
-                needed = { wshop = 1 }, -- not part of version 2
-            }
-            local got = state.fromStored(stored, chores)
-            assert.are.same({ wshop = { SHOP_A = 9 } }, got.parts)
-            assert.are.same({}, got.needed)
-            assert.are.equal(2, state.partsNeeded(got, byId.wshop, TWO))
+            assert.are.same({}, state.fromStored({ version = 4, parts = 5 }, chores).parts)
         end)
 
         it("keeps whole counts of 1 or more for known chores and drops the rest", function()
@@ -526,22 +515,6 @@ describe("chore-tracker state", function()
             -- One above the list's size, as after the list shrank, reads clamped.
             assert.are.equal(2, state.partsNeeded(got, byId.dshop, TWO))
             assert.are.same({}, state.fromStored({ version = 4, needed = "x" }, chores).needed)
-        end)
-
-        it("loads version 3's shop progress as parts, with its counts", function()
-            local stored = {
-                version = 3,
-                selected = { "wshop" },
-                done = {},
-                shops = { wshop = { SHOP_A = 9 } },
-                needed = { wshop = 1 },
-            }
-            local got = state.fromStored(stored, chores)
-            assert.are.same({ wshop = { SHOP_A = 9 } }, got.parts)
-            assert.are.same({ wshop = 1 }, got.needed)
-            -- Version 4 keeps its progress as parts, not shops.
-            stored.version = 4
-            assert.are.same({}, state.fromStored(stored, chores).parts)
         end)
     end)
 end)

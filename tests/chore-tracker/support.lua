@@ -80,14 +80,13 @@ function M.byId(chores)
 end
 
 -- A tracker state with `ids` picked, in order (core/state's select, folded).
----@param chores table[]
 ---@param ids string[]
 ---@return table
-function M.stateWith(chores, ids)
+function M.stateWith(ids)
     local state = require("core/state")
     local s = state.new()
     for _, id in ipairs(ids) do
-        s = state.select(s, chores, id)
+        s = state.select(s, id)
     end
     return s
 end

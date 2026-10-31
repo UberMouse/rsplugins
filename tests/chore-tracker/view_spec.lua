@@ -59,7 +59,7 @@ describe("chore-tracker view", function()
     end)
 
     it("orders sections Daily, Weekly, Monthly and rows in the player's order", function()
-        local s = support.stateWith(chores, { "m1", "w1", "d2", "d1" })
+        local s = support.stateWith({ "m1", "w1", "d2", "d1" })
         local sections = view.view(s, chores, 0)
         local titles, rows = {}, {}
         for i, section in ipairs(sections) do
@@ -73,14 +73,14 @@ describe("chore-tracker view", function()
     end)
 
     it("omits a period with nothing selected", function()
-        local sections = view.view(support.stateWith(chores, { "m1", "d1" }), chores, 0)
+        local sections = view.view(support.stateWith({ "m1", "d1" }), chores, 0)
         assert.are.equal(2, #sections)
         assert.are.equal("daily", sections[1].period)
         assert.are.equal("monthly", sections[2].period)
     end)
 
     it("puts shop chores in their period's section", function()
-        local sections = view.view(support.stateWith(chores, { "dshop", "wshop", "w1" }), chores, 0)
+        local sections = view.view(support.stateWith({ "dshop", "wshop", "w1" }), chores, 0)
         assert.are.equal("daily", sections[1].period)
         assert.are.equal("dshop", sections[1].rows[1].id)
         assert.are.equal("weekly", sections[2].period)
@@ -89,7 +89,7 @@ describe("chore-tracker view", function()
 
     it("gives each row the chore's fields and whether it is done now", function()
         local now = M["2026-10-25 01:43"]
-        local s = state.mark(support.stateWith(chores, { "d1", "d2" }), "d1", now)
+        local s = state.mark(support.stateWith({ "d1", "d2" }), "d1", now)
         local section = view.view(s, chores, now)[1]
         assert.are.same({
             id = "d1",
@@ -110,7 +110,7 @@ describe("chore-tracker view", function()
     end)
 
     it("reads a completion from an earlier period as not done", function()
-        local s = state.mark(support.stateWith(chores, { "d1", "w1" }), "d1", M["2026-10-27 23:59"])
+        local s = state.mark(support.stateWith({ "d1", "w1" }), "d1", M["2026-10-27 23:59"])
         s = state.mark(s, "w1", M["2026-10-27 23:59"])
         local sections = view.view(s, chores, M["2026-10-28"])
         assert.are.equal(0, sections[1].done)
@@ -138,7 +138,7 @@ describe("chore-tracker view", function()
 
         it("lists each row's shops, bought this period or not, and counts them", function()
             local s = state.recordPart(
-                support.stateWith(chores, { "wshop" }),
+                support.stateWith({ "wshop" }),
                 byId.wshop,
                 listed.wshop,
                 "SHOP_B",
@@ -157,7 +157,7 @@ describe("chore-tracker view", function()
 
         it("counts a shop bought from in any of its inventories once", function()
             local s = state.recordPart(
-                support.stateWith(chores, { "wshop" }),
+                support.stateWith({ "wshop" }),
                 byId.wshop,
                 listed.wshop,
                 "SHOP_B2",
@@ -171,7 +171,7 @@ describe("chore-tracker view", function()
 
         it("counts no shop bought after the reset or without a clock", function()
             local s = state.recordPart(
-                support.stateWith(chores, { "wshop" }),
+                support.stateWith({ "wshop" }),
                 byId.wshop,
                 listed.wshop,
                 "SHOP_B",
@@ -183,7 +183,7 @@ describe("chore-tracker view", function()
 
         it("counts a multi-shop row in its text, and leaves a single-shop row's alone", function()
             local s = state.recordPart(
-                support.stateWith(chores, { "wshop", "dshop" }),
+                support.stateWith({ "wshop", "dshop" }),
                 byId.wshop,
                 listed.wshop,
                 "SHOP_A",
@@ -194,13 +194,13 @@ describe("chore-tracker view", function()
             assert.are.equal("WSHOP (1/2)", view.rowText(sections[2].rows[1]))
             assert.are.equal(
                 "D1",
-                view.rowText(view.view(support.stateWith(chores, { "d1" }), chores, now)[1].rows[1])
+                view.rowText(view.view(support.stateWith({ "d1" }), chores, now)[1].rows[1])
             )
         end)
 
         it("gives tooltip lines headed with the period and the count", function()
             local s = state.recordPart(
-                support.stateWith(chores, { "wshop", "dshop" }),
+                support.stateWith({ "wshop", "dshop" }),
                 byId.wshop,
                 listed.wshop,
                 "SHOP_A",
@@ -215,18 +215,13 @@ describe("chore-tracker view", function()
                 { "Shops this week (1/2):", "bought  Shop A", "not yet  Shop B" },
                 view.partTooltip(sections[2].rows[1], "weekly")
             )
-            local plain =
-                view.view(support.stateWith(chores, { "d1" }), chores, now, listed)[1].rows[1]
+            local plain = view.view(support.stateWith({ "d1" }), chores, now, listed)[1].rows[1]
             assert.are.same({}, view.partTooltip(plain, "daily"))
         end)
 
         it("counts bought out of the set count, capped at it, still listing every shop", function()
-            local s = state.setPartsNeeded(
-                support.stateWith(chores, { "wshop" }),
-                byId.wshop,
-                listed.wshop,
-                1
-            )
+            local s =
+                state.setPartsNeeded(support.stateWith({ "wshop" }), byId.wshop, listed.wshop, 1)
             local row = view.view(s, chores, now, listed)[1].rows[1]
             assert.are.equal("WSHOP (0/1)", view.rowText(row))
             s = state.recordPart(s, byId.wshop, listed.wshop, "SHOP_A", now)
@@ -248,13 +243,8 @@ describe("chore-tracker view", function()
                 list = { { keys = { "P1" } }, { keys = { "P2" } }, { keys = { "P3" } } },
                 default = 1,
             }
-            local s = state.recordPart(
-                support.stateWith(chores, { "wshop" }),
-                byId.wshop,
-                patches,
-                "P2",
-                now
-            )
+            local s =
+                state.recordPart(support.stateWith({ "wshop" }), byId.wshop, patches, "P2", now)
             local row = view.view(s, chores, now, { wshop = patches })[1].rows[1]
             assert.are.equal("WSHOP (1/1)", view.rowText(row))
             assert.are.same({ "Patches this week (1/1):" }, view.partTooltip(row, "weekly"))
@@ -264,7 +254,7 @@ describe("chore-tracker view", function()
             local s = state.setPartsNeeded(state.new(), byId.wshop, listed.wshop, 1)
             -- Unpicked, it has no line.
             assert.are.same({}, view.countSettings(s, chores, listed))
-            s = state.select(state.select(s, chores, "wshop"), chores, "dshop")
+            s = state.select(state.select(s, "wshop"), "dshop")
             local lines = view.countSettings(s, chores, listed)
             assert.are.equal(1, #lines)
             assert.are.equal(byId.wshop, lines[1].chore)
@@ -292,7 +282,7 @@ describe("chore-tracker view", function()
             local twin = { id = "wtwin", name = "Same", period = "weekly" }
             local other = { id = "dtwin", name = "Same", period = "daily" }
             local both = { other, twin }
-            local s = state.select(state.select(state.new(), both, "wtwin"), both, "dtwin")
+            local s = state.select(state.select(state.new(), "wtwin"), "dtwin")
             local lines =
                 view.countSettings(s, both, { wtwin = listed.wshop, dtwin = listed.wshop })
             assert.are.same({ "Daily: Same", "Weekly: Same" }, { lines[1].label, lines[2].label })
@@ -306,7 +296,7 @@ describe("chore-tracker view", function()
     end)
 
     it("shows nothing done without a clock, keeping the rows", function()
-        local s = state.mark(support.stateWith(chores, { "d1", "w1" }), "d1", M["2026-10-25 01:43"])
+        local s = state.mark(support.stateWith({ "d1", "w1" }), "d1", M["2026-10-25 01:43"])
         local sections = view.view(s, chores, nil)
         assert.are.equal(2, #sections)
         assert.are.equal(0, sections[1].done)
@@ -346,7 +336,7 @@ describe("chore-tracker view", function()
         ---@param now integer?
         ---@return table[]
         local function sections(ids, done, now)
-            local s = support.stateWith(chores, ids)
+            local s = support.stateWith(ids)
             for _, id in ipairs(done) do
                 s = state.mark(s, id, NOW)
             end

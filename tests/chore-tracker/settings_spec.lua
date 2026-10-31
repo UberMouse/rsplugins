@@ -331,31 +331,21 @@ describe("chore-tracker count settings", function()
         assert.are.equal("4 of 4", helpers.stepper(h, "feather-shop-run").value.content)
     end)
 
-    it("never ticks or unticks on a count change", function()
+    it("ticks on a count lowered to the shops bought, and never unticks on a raise", function()
         local h = loaded()
         helpers.togglePicks(h, { "feather-shop-run" })
         helpers.buy(h, "FISHINGSHOP", "FEATHER_PACK", 20, 19)
-        -- Lowered to the one shop bought: still unticked, until the next purchase.
-        helpers.setNeeded(h, "feather-shop-run", 1)
         assert.is_false(helpers.ticked(h, "Feather Shop Run"))
-        helpers.stock(h, "FISHINGSHOP", "FEATHER_PACK", 15)
+        -- Lowered to the one shop bought: ticked as the player's own change, so the chore gets
+        -- no popup of its own, but the period it clears does.
+        helpers.setNeeded(h, "feather-shop-run", 1)
         assert.is_true(helpers.ticked(h, "Feather Shop Run"))
+        assert.is_nil(h:output():find("[CHORES] celebrate feather-shop-run", 1, true))
+        assert.matches("%[CHORES%] celebrate weekly cleared", h:output())
         -- Raised above it: the tick stays.
         helpers.setNeeded(h, "feather-shop-run", 3)
         assert.is_true(helpers.ticked(h, "Feather Shop Run"))
         assert.are.equal("Feather Shop Run (1/3)", (helpers.rowShown(h, "Feather Shop Run")))
-    end)
-
-    it("loads a version 2 state with every chore at its default count", function()
-        local h = loaded({ load = false })
-        helpers.seed(
-            h,
-            "state:Zezima",
-            { version = 2, selected = { "rune-shop-run" }, done = {}, shops = {} }
-        )
-        h:load()
-        openSettings(h)
-        assert.are.equal("11 of 11", helpers.stepper(h, "rune-shop-run").value.content)
     end)
 end)
 

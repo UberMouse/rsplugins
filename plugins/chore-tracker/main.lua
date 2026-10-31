@@ -331,7 +331,7 @@ local function onPick(chore)
     assert(character, "settings are only built for a logged-in character")
     local picked = not state.isSelected(tracker, chore.id)
     if picked then
-        tracker = state.select(tracker, chores, chore.id)
+        tracker = state.select(tracker, chore.id)
     else
         tracker = state.deselect(tracker, chore.id)
     end
@@ -355,22 +355,28 @@ local function onCelebrationSetting(_, _values, setting, on)
 end
 
 -- A count stepper was clicked: change how many of the chore's parts tick it by `delta`, save
--- it straight away and show the new count. At either end of its range it changes nothing. It
--- never ticks or unticks the chore: the next part seen done is judged by the new count.
+-- it straight away and show the new count. At either end of its range it changes nothing.
+-- Lowered to the parts already done this period, it ticks the chore (state.setPartsNeeded);
+-- without a clock it only sets the count.
 ---@param chore Chore
 ---@param delta integer
 ---@param shown ChoreStepperView
 local function onPartsNeeded(chore, delta, shown)
     assert(character, "settings are only built for a logged-in character")
     local own = parts[chore.id]
+    local now = clockNow()
     local count = state.partsNeeded(tracker, chore, own) + delta
-    local changed = state.setPartsNeeded(tracker, chore, own, count)
+    local before = tracker
+    local changed = state.setPartsNeeded(tracker, chore, own, count, now)
     if changed == tracker then return end
     tracker = changed
     store.saveState(character, tracker)
     local needed = state.partsNeeded(tracker, chore, own)
     stepper.show(shown, view.neededText(needed, #own.list))
     say("needed", chore.id, needed)
+    -- The player's own change, so like a hand tick it earns no popup of its own, but the
+    -- one that clears a period does.
+    if now then popups.enqueue(celebrate.decide(before, tracker, chores, now, true)) end
 end
 
 -- The "How many to do" block: its title next in PrettyUI's flow, then a stepper per picked

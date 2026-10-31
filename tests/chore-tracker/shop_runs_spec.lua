@@ -306,11 +306,11 @@ describe("chore-tracker shop runs", function()
         assert.matches("%[CHORES%] purchase rune%-shop%-run at Void Knight Magic Store", h:output())
     end)
 
-    it("loads a version 1 state with its picks and ticks", function()
+    it("loads a stored state with its picks and ticks", function()
         local h = loaded()
         h:unload()
         helpers.seed(h, "state:Zezima", {
-            version = 1,
+            version = 4,
             selected = { FEATHERS.id },
             done = { [FEATHERS.id] = helpers.NOW },
         })

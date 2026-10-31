@@ -99,10 +99,10 @@ local function replayed(o)
     helpers.seed(h, "layout", {})
     helpers.seed(h, "celebrations", {})
     helpers.seed(h, "state:" .. WHO, {
-        version = 3,
+        version = 4,
         selected = o.picked,
         done = {},
-        shops = {},
+        parts = {},
         needed = o.needed or {},
     })
     o.before(h)

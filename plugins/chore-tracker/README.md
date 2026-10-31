@@ -73,8 +73,8 @@ your client, never does anything in game for you, and sends nothing anywhere.
   chores of a period are all done, a bigger one follows with a grander jingle: "DAILIES
   COMPLETE", "WEEKLIES COMPLETE" or "MONTHLIES COMPLETE". That one also shows when you tick the
   last one by hand, and again each time your picked chores become all done (unticking and
-  re-ticking the last one, or picking another chore and ticking it). Ticking a chore by hand
-  never shows the chore's own popup, and unticking, picking or unpicking chores, and logging in,
+  re-ticking the last one, or picking another chore and ticking it). Ticking a chore by hand,
+  or by lowering its count in **How many to do**, never shows the chore's own popup, and unticking, picking or unpicking chores, and logging in,
   show nothing. Popups appear one at a time and last about four seconds, whether the window is
   open, collapsed or in settings. In the settings view, under **Celebrations**, untick
   "Celebration popups" to turn them off, or "Popup sound" to keep them quiet. Both are saved for
@@ -111,9 +111,9 @@ ticked until its reset, and unticking one by hand changes nothing below.
   challenges; the others start where most players are: 8 of the 11 herb patches, 1 of the 8
   bloodwood trees, 1 of the 7 farm troughs and 10 of the 13 penguins (the polar bear counts as
   one). The Player-Owned Port has no line: it always needs all 4 voyages. A count saves
-  straight away and is kept per character, as characters reach different places. Changing it
-  never ticks or unticks the chore: lowered to what you have already done, the chore ticks on
-  the next part you do; raised above it, a tick stays.
+  straight away and is kept per character, as characters reach different places. Lowering it
+  to what you have already done this period ticks the chore; raising it above that never
+  unticks it.
 - **Collecting from Dell Monti and the Weird Old Man.** Their goods arrive as banknotes in
   your backpack with no shop open, so the chore ticks when those notes go up in your backpack
   while you are within 10 tiles of the giver, on the same floor: Dell Monti's apple or
@@ -318,7 +318,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `shell/store.lua` | Saving and loading in PersistentDB |
 | `core/period.lua` | When each reset period began, and the RuneDay (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks, parts done and needed counts, and whether a chore is done now |
-| `core/parts.lua` | Each chore's parts (shops, patches, machines...), built from the data files |
+| `core/parts.lua` | Each chore's parts (shops, herb patches, penguins...), built from the data files |
 | `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
 | `core/vars.lua` | Whether a chore's var rule holds on a set of var values |
 | `core/view.lua` | What the list, the collapsed strip and the settings groups show, as plain data |

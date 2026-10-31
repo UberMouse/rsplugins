@@ -326,7 +326,9 @@ local Window = strict.class("prettyui.Window instance", {
             end
         ),
         -- The scroll position, public state the scroll controller syncs onto the window after
-        -- every scroll (`syncOwner`, from SetScrollPosition's layout).
+        -- every scroll (`syncOwner`, from SetScrollPosition's layout). 1.2.0's Destroy leaves
+        -- the last value here; the fake faults on a read after Destroy instead, stricter than
+        -- the client on purpose, to catch use of a destroyed window.
         scrollY = liveField(
             ---@return number
             function(s)

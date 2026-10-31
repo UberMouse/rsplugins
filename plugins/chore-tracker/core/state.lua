@@ -8,7 +8,7 @@
 -- once the period rolls over, the old minute is simply before its start. Sub-daily chores
 -- ("every 6 hours", "twice a day") keep a daily period.
 --
--- A chore done at parts (shops, herb patches, machines...; core/parts.lua) also keeps, per
+-- A chore done at parts (shops, herb patches, penguins...; core/parts.lua) also keeps, per
 -- part key, the epoch minute it was last seen done, so the window can show how many of its
 -- parts were done this period, by the same rule. A chore with several parts ticks once a set
 -- number of them were done this period: its default (all of them for a shop run), or the
@@ -19,9 +19,7 @@ local period = require("core/period")
 
 local M = {}
 
--- The persisted shape's version. Version 1 had no shop progress, version 2 no shops-needed
--- counts, and versions 2 and 3 held only shops' progress, as `shops`, keyed by inventory as
--- `parts` is; fromStored reads all four and ignores any other.
+-- The persisted shape's version. fromStored ignores any other.
 local VERSION = 4
 
 ---@alias ChoreCategory "activities"|"combat"|"skilling"|"upkeep"|"supplies"|"shops"
@@ -50,49 +48,16 @@ function M.new()
     return { selected = {}, done = {}, parts = {}, needed = {} }
 end
 
----@param selected string[]
----@return string[]
-local function copySelected(selected)
-    return table.move(selected, 1, #selected, 1, {})
-end
-
--- A copy of a key -> integer map (`done` minutes, one chore's part minutes, or the needed
--- counts), each value passed through `convert` if given; a nil from it leaves
--- that key out.
----@param map table<string, integer>
----@param convert (fun(value: integer): integer?)?
----@return table<string, integer>
-local function copyIntegers(map, convert)
+-- A deep copy of plain nested tables, so changing the copy leaves the original alone.
+---@generic T
+---@param t T
+---@return T
+local function copy(t)
     local out = {}
-    for key, value in pairs(map) do
-        local kept = value ---@type integer?
-        if convert then kept = convert(value) end
-        out[key] = kept
+    for k, v in pairs(t) do
+        out[k] = type(v) == "table" and copy(v) or v
     end
     return out
-end
-
----@param parts table<string, table<string, integer>>
----@param convert (fun(value: integer): integer?)?
----@return table<string, table<string, integer>>
-local function copyParts(parts, convert)
-    local out = {}
-    for id, minutes in pairs(parts) do
-        out[id] = copyIntegers(minutes, convert)
-    end
-    return out
-end
-
--- A copy of `state`, so callers can change it without touching the original.
----@param state ChoreState
----@return ChoreState
-local function copy(state)
-    return {
-        selected = copySelected(state.selected),
-        done = copyIntegers(state.done),
-        parts = copyParts(state.parts),
-        needed = copyIntegers(state.needed),
-    }
 end
 
 -- The chore with this id, or nil if the list has none.
@@ -128,14 +93,12 @@ function M.isSelected(state, id)
     return false
 end
 
--- `state` with `id` selected, last in `selected` so it shows last in its period. An id that
--- isn't in `chores` changes nothing.
+-- `state` with `id` selected, last in `selected` so it shows last in its period.
 ---@param state ChoreState
----@param chores Chore[]
 ---@param id string
 ---@return ChoreState
-function M.select(state, chores, id)
-    if not M.find(chores, id) or M.isSelected(state, id) then return state end
+function M.select(state, id)
+    if M.isSelected(state, id) then return state end
     local out = copy(state)
     out.selected[#out.selected + 1] = id
     return out
@@ -313,15 +276,31 @@ function M.partsNeeded(state, chore, parts)
     return math.min(math.max(set, 1), total)
 end
 
+-- `state` with `chore` auto-marked at `now` if it isn't done and at least partsNeeded of its
+-- parts were done this period; else `state` itself.
+---@param state ChoreState
+---@param chore Chore
+---@param parts ChoreParts
+---@param now integer
+---@return ChoreState
+local function judge(state, chore, parts, now)
+    if M.partsDone(state, chore, parts, now) < M.partsNeeded(state, chore, parts) then
+        return state
+    end
+    return M.autoMark(state, chore, now)
+end
+
 -- `state` with `chore` needing `count` of `parts`, clamped to 1..#parts.list. Gives back
 -- `state` itself when that is already its count, so the caller can tell nothing changed.
--- It never ticks or unticks: only a part the plugin sees done does that (recordPart).
+-- With `now`, a count lowered to the parts already done this period ticks the chore at `now`;
+-- raising it never unticks. Without `now` (no clock yet) it only sets the count.
 ---@param state ChoreState
 ---@param chore Chore
 ---@param parts ChoreParts
 ---@param count integer
+---@param now integer?
 ---@return ChoreState
-function M.setPartsNeeded(state, chore, parts, count)
+function M.setPartsNeeded(state, chore, parts, count, now)
     local clamped = math.max(1, math.min(count, #parts.list))
     if clamped == M.partsNeeded(state, chore, parts) then return state end
     local out = copy(state)
@@ -329,6 +308,7 @@ function M.setPartsNeeded(state, chore, parts, count)
     -- list) reaches the player who never set one.
     local default = math.min(parts.default or #parts.list, #parts.list)
     out.needed[chore.id] = clamped ~= default and clamped or nil
+    if now then out = judge(out, chore, parts, now) end
     return out
 end
 
@@ -340,7 +320,7 @@ end
 ---@param state ChoreState
 ---@param chore Chore
 ---@param parts ChoreParts
----@param key string a shop's inventory, a machine's output inventory or a var rule's part
+---@param key string a shop's inventory or a var rule's part
 ---@param now integer
 ---@return ChoreState
 function M.recordPart(state, chore, parts, key, now)
@@ -350,25 +330,17 @@ function M.recordPart(state, chore, parts, key, now)
         out.parts[chore.id] = out.parts[chore.id] or {}
         out.parts[chore.id][key] = now
     end
-    if M.partsDone(out, chore, parts, now) >= M.partsNeeded(out, chore, parts) then
-        out = M.autoMark(out, chore, now)
-    end
-    return out
+    return judge(out, chore, parts, now)
 end
 
 -- The table to store in PersistentDB. It holds only strings, integers and tables, all types
--- PersistentDB stores (it drops table fields of other types). A minute that isn't a whole
--- number is left out rather than stored as a float.
+-- PersistentDB stores (it drops table fields of other types).
 ---@param state ChoreState
 ---@return table
 function M.serialise(state)
-    return {
-        version = VERSION,
-        selected = copySelected(state.selected),
-        done = copyIntegers(state.done, math.tointeger),
-        parts = copyParts(state.parts, math.tointeger),
-        needed = copyIntegers(state.needed),
-    }
+    local out = copy(state) ---@type table
+    out.version = VERSION
+    return out
 end
 
 -- A whole number (a minute or a count), or nil. A whole-number float is accepted too, in case
@@ -381,26 +353,15 @@ end
 
 -- A state from a stored value. Anything malformed (not a table, a missing or unknown
 -- version, entries of the wrong type, ids not in `chores`) is left out, so this never
--- errors: a damaged store costs the bad entries, not the plugin. An unknown version's shape
--- can't be trusted, so it gives an empty state. Version 1 has no shop progress, and versions
--- 1 and 2 no needed counts, so every chore gets its default. A count below 1 is left out (the
--- default); one above its chore's part count is clamped where it is read.
+-- errors: a damaged store costs the bad entries, not the plugin. An unknown version gives an
+-- empty state. A count below 1 is left out (the default); one above its chore's part count is
+-- clamped where it is read.
 ---@param value any
 ---@param chores Chore[]
 ---@return ChoreState
 function M.fromStored(value, chores)
     local state = M.new()
-    if
-        type(value) ~= "table"
-        or not (
-            value.version == 1
-            or value.version == 2
-            or value.version == 3
-            or value.version == VERSION
-        )
-    then
-        return state
-    end
+    if type(value) ~= "table" or value.version ~= VERSION then return state end
 
     if type(value.selected) == "table" then
         -- ipairs, not pairs: the stored order is the player's order, and pairs would visit
@@ -421,11 +382,8 @@ function M.fromStored(value, chores)
         end
     end
 
-    -- Shop progress was stored as `shops`, keyed by inventory as parts are.
-    local stored = value.shops
-    if value.version == VERSION then stored = value.parts end
-    if value.version ~= 1 and type(stored) == "table" then
-        for id, minutes in pairs(stored) do
+    if type(value.parts) == "table" then
+        for id, minutes in pairs(value.parts) do
             if type(minutes) == "table" and M.find(chores, id) then
                 local kept = {}
                 for key, minute in pairs(minutes) do
@@ -437,7 +395,7 @@ function M.fromStored(value, chores)
         end
     end
 
-    if (value.version == 3 or value.version == VERSION) and type(value.needed) == "table" then
+    if type(value.needed) == "table" then
         for id, count in pairs(value.needed) do
             local whole = asWhole(count)
             if whole and whole >= 1 and M.find(chores, id) then state.needed[id] = whole end

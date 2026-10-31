@@ -48,7 +48,8 @@ These are the user's calls. They aren't all visible in the code.
   more than one listed shop ticks once that many distinct listed shops were bought from this
   period; the default is all listed shops, it is set with a stepper in settings and saved per
   character (shop access differs per character). A count change never ticks or unticks; the
-  next purchase is judged by it.
+  next purchase is judged by it. Superseded 2026-11-01: lowering a count to the parts done this
+  period ticks the chore; raising it still never unticks.
 - **Unproven rules ship, marked.** A rule whose signal was never seen moving in the client has
   `proven = false` and the README says so. Flip it when a `[CHORES] seen <id>` line shows it
   working.

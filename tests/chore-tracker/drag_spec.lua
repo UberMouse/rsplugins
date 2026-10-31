@@ -41,10 +41,10 @@ local function seed(h, who, ...)
         end
     end
     helpers.seed(h, "state:" .. who, {
-        version = 3,
+        version = 4,
         selected = selected,
         done = {},
-        shops = {},
+        parts = {},
         needed = { ["feather-shop-run"] = 1 },
     })
 end

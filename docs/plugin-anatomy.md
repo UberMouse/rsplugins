@@ -59,7 +59,12 @@ The current `PluginPermissions` values:
 - `require("path/to/file")` loads a Lua file. The path is **relative to the plugin root (not the
   calling file)**, with no extension. So `a/b/file1.lua` loads its sibling with
   `require("a/b/file2")`.
-- It returns whatever the file returns, or `nil` if the file is missing or fails to run.
+- **A module must return a table.** `require` returns a table the file returns, or `nil` if the
+  file is missing or fails to run. A file that returns a function also comes back `nil` (other
+  non-table values are unprobed), unlike plain Lua's `require`. To export one function, return
+  `{ fn = fn }` and require it as `require("path").fn`
+  ([api-concepts.md](api-concepts.md#plugin-environment-and-globals), "A module returning a
+  function").
 - Results are cached: each file runs once, and later `require`s get the same table. Any state in
   that table is shared. If you need separate state, export a constructor.
 - Circular requires are an error.

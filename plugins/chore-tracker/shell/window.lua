@@ -13,7 +13,7 @@
 local grips = require("shell/grips")
 local prettyuiInternals = require("shell/prettyui_internals")
 local layout = require("core/layout")
-local say = require("shell/say")
+local say = require("shell/say").say
 local store = require("shell/store")
 local strip = require("shell/strip")
 

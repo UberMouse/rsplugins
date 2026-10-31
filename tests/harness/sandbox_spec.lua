@@ -34,11 +34,27 @@ end)
 
 describe("require", function()
     it("resolves paths from the plugin root, not the calling file", function()
-        local h = harness.load(plugin("result = require('a/b/file1')", {
-            ["a/b/file1.lua"] = "return require('a/b/file2') + 1",
-            ["a/b/file2.lua"] = "return 41",
+        local h = harness.load(plugin("result = require('a/b/file1').n", {
+            ["a/b/file1.lua"] = "return { n = require('a/b/file2').n + 1 }",
+            ["a/b/file2.lua"] = "return { n = 41 }",
         }))
         assert.are.equal(42, h.env.result)
+    end)
+
+    -- The client's require gave nil for a module returning a function, and a table for one
+    -- returning a table (dev-bridge probe 2026-11-01). Plain Lua would return the function, so
+    -- the harness faults rather than let a spec pass on it, as Chore Tracker's say.lua once did.
+    it("faults on a module that returns a function, naming it", function()
+        local err = harness.errorOf(
+            harness.load,
+            plugin("require('say')", { ["say.lua"] = "return function() end" })
+        )
+        assert.matches("say returned a function: the client's require only returns tables", err)
+    end)
+
+    it("allows a module that returns nothing", function()
+        local h = harness.load(plugin("mod = require('mod') == nil", { ["mod.lua"] = "x = 1" }))
+        assert.is_true(h.env.mod)
     end)
 
     it("runs each file once per load and returns the cached value", function()

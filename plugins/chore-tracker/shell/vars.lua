@@ -7,7 +7,7 @@
 
 local state = require("core/state")
 local varsCore = require("core/vars")
-local say = require("shell/say")
+local say = require("shell/say").say
 
 local M = {}
 

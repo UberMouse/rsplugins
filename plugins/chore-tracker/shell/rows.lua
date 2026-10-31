@@ -17,7 +17,7 @@
 
 local fit = require("core/fit")
 local listlayout = require("core/listlayout")
-local say = require("shell/say")
+local say = require("shell/say").say
 
 local M = {}
 

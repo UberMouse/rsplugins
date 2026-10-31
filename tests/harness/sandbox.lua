@@ -228,7 +228,9 @@ end
 -- `require` as the client implements it (docs/plugin-anatomy.md): the path is relative to the
 -- plugin root, without extension; each file runs once per load and later calls get the
 -- cached result; a missing file gives nil; a circular require is an error. A file that fails
--- while running gives nil in the client; here it fails the test instead.
+-- while running gives nil in the client; here it fails the test instead. So does a file that
+-- returns anything but a table or nil: the client's require gave nil for a module returning a
+-- function (dev-bridge probe 2026-11-01), which plain Lua's require would hand back intact.
 ---@param h table the harness
 ---@param env table
 ---@return function
@@ -251,6 +253,14 @@ local function makeRequire(h, env)
         loading[file] = true
         local result = chunk()
         loading[file] = nil
+        if result ~= nil and type(result) ~= "table" then
+            strict.fault(
+                path
+                    .. " returned a "
+                    .. type(result)
+                    .. ": the client's require only returns tables (a function came back nil)"
+            )
+        end
         cache[file] = result == nil and NIL or result
         return result
     end

@@ -10,7 +10,7 @@
 
 local detectCore = require("core/detect")
 local state = require("core/state")
-local say = require("shell/say")
+local say = require("shell/say").say
 
 local M = {}
 

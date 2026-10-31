@@ -607,6 +607,14 @@ work in the dev environment, so use this for dev tooling only. A shipped plugin 
   aren't available. `_VERSION` is `Lua 5.4`. (first recording, 2026-10-25)
 - **Modules and symlinks.** A `require`d module shares `main.lua`'s globals, `Event` included,
   and the client follows a directory symlink inside the plugin folder (the recorder's `dev/`). (first recording, 2026-10-25)
+- **A module returning a function comes back nil.** Through dev-bridge eval, `require` of a
+  throwaway module whose file was `return { x = 1 }` gave a `table`, and of one whose file was
+  `return function() return 42 end` gave `nil`. Other non-table returns are unprobed. Chore
+  Tracker's `shell/say.lua` returned its function and `prl chore-tracker` failed at load with
+  `attempt to call a table value (upvalue 'say')`, so a requirer can also get a non-function
+  table there; either way it isn't the function. Return a table of functions. The harness's
+  `require` faults on any non-table, non-nil return (docs/testing.md fidelity ledger).
+  (dev-bridge probe, 2026-11-01)
 - **Plugin environment.** `type()` gives `function` for `load`, `require` and
   `ExecuteConsoleCommand`, `table` for `coroutine`, and nil for `debug`, `io`, `os` and
   `loadstring`. (dev-bridge, 2026-10-26)

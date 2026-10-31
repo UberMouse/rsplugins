@@ -2,7 +2,7 @@
 -- AchievementPopups in the plugin layer. A popup lasts about four seconds and calls
 -- `onComplete` as it ends, which starts the next one in the queue.
 
-local say = require("shell/say")
+local say = require("shell/say").say
 
 local M = {}
 

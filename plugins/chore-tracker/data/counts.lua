@@ -7,8 +7,8 @@
 -- voyages.
 --
 -- The maximums are the parts' own numbers: 11 herb patches, 8 bloodwood trees, 7 farm troughs
--- (6 pens and the breeding pen), 12 penguins and the polar bear (runescape.wiki/w/
--- Penguin_Hide_and_Seek), 4 voyage slots, 4 shop slots and 3 challenges.
+-- (6 pens and the breeding pen), 12 penguins and the polar bear
+-- (runescape.wiki/w/Penguin_Hide_and_Seek), 4 voyage slots, 4 shop slots and 3 challenges.
 
 ---@class ChoreCount
 ---@field noun string

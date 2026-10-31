@@ -65,7 +65,7 @@ local BUTTON_SIZE = layout.BUTTON_SIZE
 -- Each chore's parts and their default count, from the data files.
 local parts = partsCore.build(shops, varRules, counts)
 
--- How often, in Logic ticks (50 a second), to look for a login change and a moved or
+-- How often, in Logic ticks (about 50 a second), to look for a login change and a moved or
 -- resized window.
 local POLL_TICKS = 25
 

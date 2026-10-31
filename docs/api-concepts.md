@@ -1047,8 +1047,13 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   changes its text (`Tooltip.set`), so it stays up.
 - **Building a big window in one call is fine.** Chore Tracker's list with all 67 chores picked
   (134 CheckboxButtons, two per row, each with a tooltip, plus headings) builds in one Lua call
-  without hitting the 1000 ms limit (user-checked 2026-10-25). That is one machine, not a
-  bound: a window with many times that would still need slicing across `Logic` ticks.
+  without hitting the 1000 ms limit (user-checked 2026-10-25). With rows hand-built instead
+  (grip sprite, label, box, icon, tooltip and a grip press layer each), eight successive
+  `window.rebuild(true)` calls of its 68-row settings view finished inside one Lua call, so one
+  build takes under about 125 ms; 40,000 `grips.follow(true)` calls with 13 list rows also fit
+  in one call, under 25 us each (dev bridge, 2026-11-01). The sandbox has no `os.clock`, so the
+  1000 ms limit was the stopwatch. That is one machine, not a bound: a window with many times
+  that would still need slicing across `Logic` ticks.
 - **`AchievementPopup` draws over the game view from the plugin layer** (user-checked
   2026-10-29, Chore Tracker). `prettyui.AchievementPopup.show` with `parent` set to the plugin
   layer, `xAnchor = 0.5`, `yAnchor = 1/3` and offsets of minus half its size showed centred a
@@ -1128,7 +1133,8 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   internal `_scroll.scrollY` each time, and `viewport` was the controller's own. The internal
   wheel handler returned false when it moved the scroll and true at either end. So a row's
   own wheel handler can be built from public API: `ScrollBy(delta * scrollStep)`, then return
-  whether `scrollY` is unchanged.
+  whether `scrollY` is unchanged. A freshly built window never scrolled reads `scrollY` as 0, not
+  nil (dev bridge, 2026-11-01).
 
 The test harness fakes this subset (docs/testing.md, "Testing a PrettyUI plugin"). Its LuaLS
 types are in `types/prettyui.lua`.

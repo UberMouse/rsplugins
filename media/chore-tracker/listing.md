@@ -56,7 +56,7 @@ The menu button at the window's top-right corner folds it into a small strip sho
 
 Your chores are saved per character, so each character has its own list.
 
-Requires the PrettyUI plugin.
+Requires the PrettyUI plugin. Beyond PrettyUI's public API, shell/prettyui_internals.lua uses a few of PrettyUI 1.2.0's private fields and methods and registers one hidden overlay on the window, so that the drag grips stay above the window and its resize handles and cursors keep working. Every use is guarded, so a PrettyUI update loses those touches rather than causing an error.
 
 ## Email
 The contact email address for this plugin is ubermouse894@gmail.com.

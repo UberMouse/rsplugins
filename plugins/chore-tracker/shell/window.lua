@@ -55,6 +55,8 @@ local stripWidth = nil ---@type integer?
 local retiring = nil ---@type prettyui.Panel?
 -- The layout the store holds, so it's written only when the window has really moved.
 local savedLayout = nil ---@type ChoreLayout?
+-- The layout at the previous check, so a move or resize is saved once it has stopped.
+local seenLayout = nil ---@type ChoreLayout?
 
 -- What the window needs from main.lua. Call once, before anything else.
 ---@param o ChoreWindowOpts
@@ -294,9 +296,15 @@ local function currentLayout()
     }
 end
 
--- Save the layout if it differs from what the store holds.
-function M.saveLayoutIfChanged()
+-- Save the layout if it differs from what the store holds and has held since the previous
+-- check, so a window being dragged or resized isn't written on every check. `force` saves it
+-- whether or not it has held, as at shutdown.
+---@param force boolean?
+function M.saveLayoutIfChanged(force)
     local now = currentLayout()
+    local held = seenLayout ~= nil and layout.same(seenLayout, now)
+    seenLayout = now
+    if not (held or force) then return end
     if savedLayout and layout.same(savedLayout, now) then return end
     store.saveLayout(now)
     savedLayout = now
@@ -319,7 +327,7 @@ end
 function M.shutdown()
     grips.clear()
     if win then
-        M.saveLayoutIfChanged()
+        M.saveLayoutIfChanged(true)
         win:Destroy()
     end
     if collapsed then collapsed:Destroy() end

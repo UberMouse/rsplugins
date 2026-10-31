@@ -1,7 +1,8 @@
 -- Keeping the window's grips and resize cursors working across PrettyUI versions. PrettyUI
 -- 1.2.0 offers no public way to do these, so this is the one file that reaches into its
 -- private (underscore or controller) internals; main.lua and shell/window.lua go through it.
--- Window `root` and `closeButton` (used elsewhere) are undocumented but confirmed in the client.
+-- Window `root` (main.lua, shell/window.lua) and `closeButton` (shell/window.lua) are
+-- undocumented but confirmed in the client.
 --
 -- Internals used, each guarded so a version without it loses only that. The rule: reads are
 -- type-guarded, method calls are pcalled.

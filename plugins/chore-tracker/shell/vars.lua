@@ -10,8 +10,9 @@ local say = require("shell/say").say
 
 local M = {}
 
--- 10 s of Logic ticks (50 a second, seen in the client): the window in which the login's burst of
--- var updates arrives, so they aren't taken for the player doing a chore.
+-- 10 s of Logic ticks (the Logic event fires about 50 times a second in the client): the window
+-- in which the login's burst of var updates arrives, so they aren't taken for the player doing a
+-- chore.
 local SETTLE_TICKS = 500
 
 ---@class ChoreVarOptions

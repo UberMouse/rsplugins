@@ -491,6 +491,16 @@ never ran with results recorded (recover it with
 - **`type()` of a UI component** is `"userdata"` (beta client, dev bridge, 2026-10-29): a component from
   `ui.Interfaces:GetComponent(...)` and a `ui.Layer` made by a plugin or library (PrettyUI's title-drag
   layer), so a `type(x) == "table"` check rejects it. `type(layer.isClicked)` is `"boolean"`.
+- **One plugin can find and drive another plugin's components** (probe-drive and the dev bridge,
+  beta client, 2026-10-31). From the bridge, `IterateDynamicComponents` on the plugin layer listed
+  probe-drive's layer (`type` 20) and slider (`type` 13) with their sizes and positions; no other
+  plugin had UI up. A callback that returns `true` stops the iteration after the first
+  component, so return nothing to visit them all. `SetValue(7, true)` from the bridge on
+  probe-drive's slider returned true and fired probe-drive's own `ONSELECTIONCHANGED` listener,
+  as probe-drive's own `SetValue(3, true)` had: the arguments were the slider, the value and 1.
+  The setters with a `triggerEvents` flag (`List:SetEntrySelected`, `Slider:SetValue`,
+  `ComboField:Select`, `RadioGroup:SetOptionSelected`, `Carousel:Select`) are only a guess to
+  behave the same; no API call fires `ONCLICK`, `ONHOLD` or `ONSCROLLWHEEL`.
 - **Cursor over a plain `ui.Layer`** (cursor probe, user-driven in the beta client, 2026-10-29).
   A layer with `clickthrough = false`, `cursorConfig.mouseOverCursor = id` and
   `opConfig:SetOpCursor(0, id)` shows that cursor over the layer, including over its
@@ -849,6 +859,26 @@ Found in the beta client (2026-10-20), not in the official docs:
   shot, so `shot` checks the map state first. (rsdev shot, 2026-10-26)
 - **Windows above the client appear in the capture** (a floating scratchpad terminal did). (rsdev shot, 2026-10-26)
 - **`_NET_DESKTOP_NAMES`** holds names like "1: web" and "3: dev"; `_NET_WM_DESKTOP` is the index. (rsdev shot, 2026-10-26)
+- **Plugin-layer units are window pixels at interface scale 100.** The plugin layer read
+  1916x2121 at global 0,0, the same size as the game window (`xwininfo`), and a layer placed at
+  (600, 600) showed 600 px right and down from the window's top-left corner in a shot. A click at
+  window-relative (750, 675) reached a 300x150 layer at (600, 600) as local (150, 75), with
+  `Mouse.GetPosition()` 750, 675. Other interface scales are unprobed. (probe-drive, beta client,
+  dev bridge, 2026-10-31)
+- **OS input reaches the client through XTEST only** (xdotool 3.20211022, i3, probe-drive,
+  2026-10-31). `xdotool mousemove --window <client> x y` moved the real pointer, i3's focus
+  follows the mouse, so the client took focus, and the layer got `ONMOUSEOVER`. `xdotool click 1`
+  (XTEST) gave one `ONRELEASE` then `ONCLICK`, the release-first order of a press and release in
+  one tick (see "Pointer hooks on a plain `ui.Layer`"). `xdotool click --window <client> 1`
+  (XSendEvent) gave nothing in 3 s. One run that sent the XSendEvent click, then
+  `windowfocus --sync` and an XTEST click, logged two click pairs; that wasn't explained, so
+  click with XTEST alone. Another window titled "RuneScape" (738x498) existed alongside the
+  game window at the time.
+- **XTEST keys reach the console.** With the client focused, `xdotool key alt+grave` opened the
+  console, `xdotool type --delay 40 plist` and `key Return` ran `plist` (its listing showed), and
+  another `alt+grave` closed it. A pointer hook still fired while the console was open. Check
+  that the console really opened (a shot) before typing: typed text goes to the chat box when it
+  is closed, and Return would send it. (probe-drive, 2026-10-31)
 
 ## Shops in the client
 

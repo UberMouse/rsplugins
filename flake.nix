@@ -83,6 +83,10 @@
               pkgs.xprop
               pkgs.xwininfo
               pkgs.imagemagick
+              # rsdev.py input (planned, docs/plans/client-driving.md): XTEST clicks and keys into the
+              # client and Bolt, held off while xprintidle shows the user was just active.
+              pkgs.xdotool
+              pkgs.xprintidle
             ];
 
             shellHook = ''

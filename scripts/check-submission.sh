@@ -86,7 +86,7 @@ if [[ -f "$manifest" ]]; then
 fi
 
 if ((found)); then
-    echo "Strip these first: see plugins/$plugin/README.md, \"Before submitting\"." >&2
+    echo "Strip these first: see docs/submission.md, \"Preparing the zip from this repo\", and the plugin's own list (Chore Tracker: media/chore-tracker/listing.md, \"Before submitting\")." >&2
     exit 1
 fi
 echo "ok: plugins/$plugin has no dev pieces"

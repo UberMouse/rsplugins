@@ -22,7 +22,7 @@
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a
 -- local daemon, and dev/remote runs Lua the daemon sends. scripts/package-plugin.py strips
 -- every dev-only span and line from the upload, and check-submission.sh fails on any it missed
--- (README, "Before submitting").
+-- (media/chore-tracker/listing.md, "Before submitting").
 --
 -- dev-only:end
 

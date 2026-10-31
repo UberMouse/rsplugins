@@ -11,7 +11,8 @@ The Mod.io media for Chore Tracker: four 1920x1080 PNGs in `out/`, made by
 | `out/03-settings.png` | Settings: celebration toggles, shops needed per run, chores grouped by kind |
 | `out/04-strip-and-popup.png` | The collapsed strip and the DAILIES COMPLETE popup |
 
-Upload them in that order (Media, `docs/submission.md`).
+Upload them in that order (Media, `docs/submission.md`). The listing's text (summary,
+description and its required sections) is in [listing.md](listing.md).
 
 ## Changing the text
 

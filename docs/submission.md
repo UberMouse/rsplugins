@@ -105,8 +105,10 @@ which writes `<name>-<version>.zip` to the repo root (gitignored), with `main.lu
    placeholder.
 
 So every dev opt-in in a plugin's Lua must sit inside a marked span or carry the trailing marker,
-comments about it included (`check-submission.sh` catches code only). The plugin's README lists
-its own pieces (Chore Tracker: "Before submitting"). A plugin that needs `dev/` to work (the dev
+comments about it included (`check-submission.sh` catches code only). Each plugin lists its own
+pieces in a repo-only file that doesn't ship in the zip (Chore Tracker:
+`media/chore-tracker/listing.md`, "Before submitting", beside its Mod.io summary and
+description). A plugin that needs `dev/` to work (the dev
 bridge, var-dump) can't be packaged. Read the staged copy before uploading it.
 
 ## Moderation

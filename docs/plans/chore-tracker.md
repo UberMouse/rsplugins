@@ -59,8 +59,8 @@ These are the user's calls. They aren't all visible in the code.
   without `chatAccess`, and a detector switches on when it's granted (`OptionalPermissionChanged`).
   Read only system lines (empty sender), never player chat. Requesting a permission puts the
   plugin in the extra-review tier, so the Mod.io listing must justify it.
-- **Never show a var's value**; vars only tick chores. The README's Data Protection section names
-  what the plugin reads without counting the vars.
+- **Never show a var's value**; vars only tick chores. The listing's Data Protection section
+  (`media/chore-tracker/listing.md`) names what the plugin reads without counting the vars.
 - **Reading a var only to tick a chore is fine, hidden or not** (the user, 2026-10-31,
   superseding the earlier "off limits" list for the Black Marketeer and penguin vars): the
   plugin shows the user nothing from it. A var may still never be shown, and:
@@ -363,11 +363,10 @@ it with location or a var. There is no interface-opened event.
 
 ## Before submitting to Mod.io
 
-- `plugin.json`'s `contactEmailAddress` is the placeholder `you@example.com`.
 - Prove or drop the unproven rows: shop entries and var rules with `proven = false`.
 - Ship without dev tooling: build the zip with `scripts/package-plugin.py chore-tracker`, which
   strips the `dev/` link, the `-- dev-only` marked Lua, `httpAccess` and `urls.rsdev`.
-- Check the README's Mod.io sections against `docs/submission.md`.
+- Check the Mod.io sections in `media/chore-tracker/listing.md` against `docs/submission.md`.
 
 ## Known gaps
 

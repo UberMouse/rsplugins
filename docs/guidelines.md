@@ -62,6 +62,7 @@ recommendations get stricter review.
 - Changing the appearance of player-controlled models (hiding them entirely is OK)
 - **Exporting any information about other players** (Jagex hopes to relax this later)
 - Offensive, malicious or deceptive content. Lightly modified copies of someone else's plugin
+- Catch-all: "Any features that behave similarly to prohibited examples may also be disallowed."
 
 ## AI policy, and what it means for this repo
 
@@ -69,5 +70,9 @@ recommendations get stricter review.
   human-readable. Obfuscated, transpiled, or *unvetted* AI-generated code gets rejected.
 - AI tools (Claude Code explicitly named) are **allowed**, as long as the developer personally
   reviews and understands the code and the result is readable, documented and maintainable.
+- **AI restrictions**: you must not upload to any AI model code or documentation you weren't
+  explicitly given the licence to. The API docs on developer.runescape.com and their examples
+  are permitted. Other developers' plugins and their docs belong to their creators: uploading
+  them to an AI model needs the licence holder's permission.
 - Practical rule for this repo: every plugin gets a readable README/description and well-commented
   Lua. Review generated code before it ships.

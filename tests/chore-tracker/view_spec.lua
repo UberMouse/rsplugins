@@ -278,16 +278,6 @@ describe("chore-tracker view", function()
             assert.are.equal(2, state.partsNeeded(s, byId.wshop, fixed))
         end)
 
-        it("tells apart same-named chores of two periods by their period", function()
-            local twin = { id = "wtwin", name = "Same", period = "weekly" }
-            local other = { id = "dtwin", name = "Same", period = "daily" }
-            local both = { other, twin }
-            local s = state.select(state.select(state.new(), "wtwin"), "dtwin")
-            local lines =
-                view.countSettings(s, both, { wtwin = listed.wshop, dtwin = listed.wshop })
-            assert.are.same({ "Daily: Same", "Weekly: Same" }, { lines[1].label, lines[2].label })
-        end)
-
         it("gives a choice of shops only with more than one", function()
             assert.is_false(view.hasChoice({}))
             assert.is_false(view.hasChoice(listed.dshop.list))

@@ -10,6 +10,12 @@
 -- (6 pens and the breeding pen), 12 penguins and the polar bear (runescape.wiki/w/
 -- Penguin_Hide_and_Seek), 4 voyage slots, 4 shop slots and 3 challenges.
 
+---@class ChoreCount
+---@field noun string
+---@field default integer? nil for all of them
+---@field fixed boolean?
+---@field help string? required unless `fixed`
+
 ---@type table<string, ChoreCount>
 return {
     ["herb-run"] = { noun = "Patches", default = 8, help = "How many herb patches you plant" },

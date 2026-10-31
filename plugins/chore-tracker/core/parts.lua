@@ -23,12 +23,6 @@ local M = {}
 ---@field fixed boolean? the count is always `default`, with no settings line
 ---@field help string? what the count counts, for its settings line's tooltip; nil when fixed
 
----@class ChoreCount
----@field noun string
----@field default integer? nil for all of them
----@field fixed boolean?
----@field help string? required unless `fixed`
-
 -- What a shop run's count counts.
 local SHOP_HELP = "How many of its shops you buy from"
 

@@ -74,7 +74,6 @@ local rules = {
     -- challenges not yet claimed, and falls on the claim.
     {
         chore = "daily-challenge",
-        done = {},
         rises = "CHALLENGE_TOTAL_COMPLETED",
         proven = true,
     },
@@ -115,16 +114,16 @@ local rules = {
         proven = true,
     },
     -- The epoch minute of the last resource collect; it rose to the collect's minute.
-    { chore = "miscellania", done = {}, rises = "MISC_LAST_COLLECTION", proven = true },
-    { chore = "miscellania-weekly", done = {}, rises = "MISC_LAST_COLLECTION", proven = true },
+    { chore = "miscellania", rises = "MISC_LAST_COLLECTION", proven = true },
+    { chore = "miscellania-weekly", rises = "MISC_LAST_COLLECTION", proven = true },
 
     -- The rules below are inferred from each var's name, unproven.
 
-    -- The date blossoms were last taken (bits 5-20 of ELFCITY_PERM36), read as a RuneDay:
-    -- its unit is assumed from the name, not checked.
+    -- The date blossoms were last taken (bits 5-20 of ELFCITY_PERM36): taking them raises it,
+    -- whatever unit the date is in.
     {
         chore = "crystal-tree-blossom",
-        done = { { "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE", "==", { runeDay = true } } },
+        rises = "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE",
         proven = false,
     },
     -- Games played today. The chore list counts two a day as the chore.
@@ -224,7 +223,7 @@ local rules = {
         proven = true,
     },
     -- The day assigned a bounty last: taking one from Feng raises it.
-    { chore = "gwd2-bounties", done = {}, rises = "GWD2_REP_TASK_LAST_DAY_GIVEN", proven = true },
+    { chore = "gwd2-bounties", rises = "GWD2_REP_TASK_LAST_DAY_GIVEN", proven = true },
     -- The quartermaster's weekly XP boost claimed: that needs the week's resources gathered.
     {
         chore = "capping-clan-citadel",
@@ -234,7 +233,6 @@ local rules = {
     -- Waves cleared in the week's reward run; a reset takes it down, never up.
     {
         chore = "rush-of-blood",
-        done = {},
         rises = "ELFCITY_SLAYER_WEEKLY_CHALLENGE_WAVES_COMPLETED",
         proven = true,
     },
@@ -246,7 +244,6 @@ local rules = {
     -- anywhere and arriving there can't tick it.
     {
         chore = "water-filtration",
-        done = {},
         rises = "DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME",
         proven = true,
     },
@@ -319,8 +316,7 @@ end
 -- feeding raises it, while the animals eat it down.
 for _, trough in ipairs({ "1", "2", "3", "4", "5", "6", "BREEDING" }) do
     local name = "POF_FEEDING_TROUGH_" .. trough .. "_GENERAL_AMOUNT"
-    rules[#rules + 1] =
-        { chore = "player-owned-farm", done = {}, rises = name, part = name, proven = true }
+    rules[#rules + 1] = { chore = "player-owned-farm", rises = name, part = name, proven = true }
 end
 
 -- Seeds in each herb patch: clearing one took it 7 -> 0, planting 0 -> 7. Which number is
@@ -339,7 +335,7 @@ for _, patch in ipairs({
     "ECOSYSTEM_2",
 }) do
     local name = "FARMING_SEEDS_PLANTED_HERB_PATCH_" .. patch
-    rules[#rules + 1] = { chore = "herb-run", done = {}, rises = name, part = name, proven = true }
+    rules[#rules + 1] = { chore = "herb-run", rises = name, part = name, proven = true }
 end
 
 -- Fort Forinthry: the Town Hall's own record of bonus XP taken never reaches the client
@@ -381,7 +377,6 @@ for _, skill in ipairs({
 }) do
     rules[#rules + 1] = {
         chore = "fort-forinthry-bonus-xp",
-        done = {},
         rises = "BONUSXP_" .. skill,
         near = ASTER,
         proven = true,

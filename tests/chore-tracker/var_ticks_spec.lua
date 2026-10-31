@@ -271,12 +271,9 @@ describe("chore-tracker var ticks", function()
         assert.are.equal(helpers.NOW, doneAt(again, "herb-run"))
     end)
 
-    it("ticks the Crystal Tree Blossom when taken on the clock's RuneDay", function()
-        -- The harness clock, NOW, is 2026-10-25: RuneDay 9006.
+    it("ticks the Crystal Tree Blossom when its last date rises", function()
         local h = settled({ ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE = 9004 })
         set(h, "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE", 9005)
-        assert.is_nil(doneAt(h, "crystal-tree-blossom"))
-        set(h, "ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE", 9006)
         assert.are.equal(helpers.NOW, doneAt(h, "crystal-tree-blossom"))
         assert.matches(
             "%[CHORES%] seen crystal%-tree%-blossom done %(ELFCITY_CRYSTAL_BLOSSOMS_LAST_DATE%)",

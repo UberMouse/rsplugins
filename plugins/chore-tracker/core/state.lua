@@ -22,17 +22,6 @@ local M = {}
 -- The persisted shape's version. fromStored ignores any other.
 local VERSION = 4
 
----@alias ChoreCategory "activities"|"combat"|"skilling"|"upkeep"|"supplies"|"shops"
-
----@class Chore
----@field id string fixed for good: saved state and the other data files are keyed by it
----@field name string
----@field period ChorePeriod
----@field category ChoreCategory? its settings subheading; none sits straight under the period
----@field url string
----@field desc string plain text; `<br>` is its only markup
----@field links string[]
-
 ---@class ChoreState
 ---@field selected string[] picked chore ids, in the player's own order (new picks last)
 ---@field done table<string, integer> chore id -> epoch minute it was marked done

@@ -242,6 +242,15 @@ describe("chore-tracker state", function()
             assert.is_nil(state.setPartsNeeded(patches, byId.wshop, PATCHES, 2, now).done.wshop)
         end)
 
+        it("doesn't tick on a lowered count when the parts were done last period", function()
+            -- Bought the minute before this week's Wednesday reset.
+            local lastWeek = M["2026-10-21"] - 1
+            local bought = state.recordPart(state.new(), byId.wshop, TWO, "SHOP_A", lastWeek)
+            local lowered = state.setPartsNeeded(bought, byId.wshop, TWO, 1, now)
+            assert.are.same({ wshop = 1 }, lowered.needed)
+            assert.is_nil(lowered.done.wshop)
+        end)
+
         it("only sets the count when lowered without a clock", function()
             local bought = state.recordPart(state.new(), byId.wshop, TWO, "SHOP_A", now)
             local lowered = state.setPartsNeeded(bought, byId.wshop, TWO, 1)

@@ -146,7 +146,7 @@ describe("chore-tracker layout", function()
         end)
     end)
 
-    describe("info view help", function()
+    describe("a view's help", function()
         it(
             "wraps the help to a text row's width: the window less frame, scrollbar and padding",
             function()
@@ -157,17 +157,17 @@ describe("chore-tracker layout", function()
 
         -- Only widths are passed, so a height-only resize is this case too.
         it("re-lays nothing while the width is the one the help was wrapped for", function()
-            assert.is_false(layout.relayInfo(320, 320, 320))
+            assert.is_false(layout.relayHelp(320, 320, 320))
         end)
 
         it("waits while the width is still changing", function()
-            assert.is_false(layout.relayInfo(320, 320, 280))
-            assert.is_false(layout.relayInfo(320, 280, 260))
+            assert.is_false(layout.relayHelp(320, 320, 280))
+            assert.is_false(layout.relayHelp(320, 280, 260))
         end)
 
         it("re-lays once a changed width is the same as at the previous poll", function()
-            assert.is_true(layout.relayInfo(320, 260, 260))
-            assert.is_true(layout.relayInfo(320, 400, 400))
+            assert.is_true(layout.relayHelp(320, 260, 260))
+            assert.is_true(layout.relayHelp(320, 400, 400))
         end)
     end)
 end)

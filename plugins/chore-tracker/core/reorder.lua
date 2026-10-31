@@ -14,16 +14,14 @@ M.SCROLL_STEP = 8
 ---@field y integer the dragged row's top, kept inside the period's rows
 ---@field rows table<string, integer> every other row's y, with a gap opened at `slot`
 
--- Every row's y with nothing being dragged: `ids` stacked from `firstY`, `rowHeight` apart.
+-- Every row's y with nothing being dragged: `ids` stacked from `firstY`, a row apart.
 ---@param ids string[]
 ---@param firstY integer
----@param rowHeight integer? defaults to the list's row height; lets the specs use small round numbers
 ---@return table<string, integer>
-function M.settle(ids, firstY, rowHeight)
-    local h = rowHeight or listlayout.ROW_HEIGHT
+function M.settle(ids, firstY)
     local rows = {}
     for i, id in ipairs(ids) do
-        rows[id] = firstY + (i - 1) * h
+        rows[id] = firstY + (i - 1) * listlayout.ROW_HEIGHT
     end
     return rows
 end
@@ -36,10 +34,9 @@ end
 ---@param firstY integer
 ---@param from integer
 ---@param desiredY number
----@param rowHeight integer? defaults to the list's row height; lets the specs use small round numbers
 ---@return ChoreDrag
-function M.drag(ids, firstY, from, desiredY, rowHeight)
-    local h = rowHeight or listlayout.ROW_HEIGHT
+function M.drag(ids, firstY, from, desiredY)
+    local h = listlayout.ROW_HEIGHT
     local lastY = firstY + (#ids - 1) * h
     local y = math.max(firstY, math.min(desiredY, lastY))
     local slot = math.floor((y - firstY) / h + 0.5) + 1
@@ -47,7 +44,7 @@ function M.drag(ids, firstY, from, desiredY, rowHeight)
     for i, id in ipairs(ids) do
         if i ~= from then others[#others + 1] = id end
     end
-    local rows = M.settle(others, firstY, h)
+    local rows = M.settle(others, firstY)
     for n = slot, #others do
         rows[others[n]] = rows[others[n]] + h
     end

@@ -14,7 +14,7 @@
 --   turn the window's resize back on after a quick title-bar click (reviveResize); without
 --   them the resize handles stay hidden after such a click until the title bar is dragged.
 -- - `resize.dragState`: whether a resize drag is in progress (resizing), so main.lua doesn't
---   rebuild the info view under it; without it a rebuild waits only for the width to settle.
+--   rebuild a view's help under it; without it a rebuild waits only for the width to settle.
 
 local rows = require("shell/rows")
 

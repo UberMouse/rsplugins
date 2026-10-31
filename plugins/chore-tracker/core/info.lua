@@ -20,8 +20,8 @@ M.HELP = {
 ---@alias ChoreStatus "automatic"|"unproven"|"manual"
 
 -- The statuses in the order the info view lists them, and their headings.
-M.STATUSES = { "automatic", "unproven", "manual" } ---@type ChoreStatus[]
-M.STATUS_TITLES = { automatic = "Automatic", unproven = "Unproven", manual = "Manual" }
+local STATUSES = { "automatic", "unproven", "manual" } ---@type ChoreStatus[]
+local STATUS_TITLES = { automatic = "Automatic", unproven = "Unproven", manual = "Manual" }
 
 -- Whether chore `id` ticks itself: "automatic" when any source the plugin watches for it (a
 -- shop, a collection, a machine or a var rule) has `proven` set, "unproven" when it has
@@ -33,24 +33,20 @@ M.STATUS_TITLES = { automatic = "Automatic", unproven = "Unproven", manual = "Ma
 ---@param machines ChoreMachine[]
 ---@return ChoreStatus
 function M.status(id, shops, collections, rules, machines)
-    local sources = {} ---@type { proven: boolean }[]
+    local seen = false
     for _, shop in ipairs(shops[id] or {}) do
-        sources[#sources + 1] = shop
+        if shop.proven then return "automatic" end
+        seen = true
     end
-    for _, collection in ipairs(collections) do
-        if collection.chore == id then sources[#sources + 1] = collection end
+    for _, list in ipairs({ collections, rules, machines }) do
+        for _, source in ipairs(list) do
+            if source.chore == id then
+                if source.proven then return "automatic" end
+                seen = true
+            end
+        end
     end
-    for _, rule in ipairs(rules) do
-        if rule.chore == id then sources[#sources + 1] = rule end
-    end
-    for _, machine in ipairs(machines) do
-        if machine.chore == id then sources[#sources + 1] = machine end
-    end
-    if #sources == 0 then return "manual" end
-    for _, source in ipairs(sources) do
-        if source.proven then return "automatic" end
-    end
-    return "unproven"
+    return seen and "unproven" or "manual"
 end
 
 ---@class ChoreStatusGroup
@@ -67,7 +63,7 @@ end
 ---@return ChoreStatusGroup[]
 function M.byStatus(chores, shops, collections, rules, machines)
     local groups, byStatus = {}, {} ---@type ChoreStatusGroup[], table<ChoreStatus, Chore[]>
-    for i, s in ipairs(M.STATUSES) do
+    for i, s in ipairs(STATUSES) do
         groups[i] = { status = s, chores = {} }
         byStatus[s] = groups[i].chores
     end
@@ -82,7 +78,7 @@ end
 ---@param group ChoreStatusGroup
 ---@return string
 function M.headingText(group)
-    return string.format("%s (%d)", M.STATUS_TITLES[group.status], #group.chores)
+    return string.format("%s (%d)", STATUS_TITLES[group.status], #group.chores)
 end
 
 -- A chore's name in the info view. The view lists every period together, so a name another

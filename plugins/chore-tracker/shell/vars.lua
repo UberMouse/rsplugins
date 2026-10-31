@@ -5,7 +5,6 @@
 -- every VarTransmit and calls tick each Logic tick; this module keeps only the last values
 -- read, no chore state.
 
-local period = require("core/period")
 local state = require("core/state")
 local varsCore = require("core/vars")
 
@@ -135,14 +134,13 @@ local function onChanged(before, after, changed)
     -- The tile is read only for a rule that must be seen near one, once per change.
     local tile, located = nil, false ---@type ChoreTile?, boolean
     options.apply(function(tracker, now)
-        local day = period.runeDay(now)
         for _, entry in ipairs(watched) do
             local cause = firstChanged(entry.names, changed)
             if cause and entry.rule.near and not located then
                 tile, located = where(), true
             end
             local rule, chore = entry.rule, entry.chore
-            if cause and varsCore.ticks(rule, before, after, day, tile) then
+            if cause and varsCore.ticks(rule, before, after, tile) then
                 local seen = rule.part
                         and state.recordPart(tracker, chore, parts[chore.id], rule.part, now)
                     or state.autoMark(tracker, chore, now)

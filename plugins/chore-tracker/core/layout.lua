@@ -34,24 +34,26 @@ M.MIN_WIDTH, M.MIN_HEIGHT = 240, 160
 -- in case the client's line-breaking measures wider than GetStringWidth.
 local FRAME, SCROLLBAR, WRAP_SPARE = 8, 18, 8
 
--- The widest line of the info view's help in a window `windowWidth` wide, so the client
--- never wraps it further: a text row's width, less WRAP_SPARE.
+-- A view's help is the info view's paragraphs, or settings' text for an empty How many to do
+-- block. Its widest line in a window `windowWidth` wide, so the client never wraps it further:
+-- a text row's width, less WRAP_SPARE.
 ---@param windowWidth integer
 ---@return integer
 function M.helpTextWidth(windowWidth)
     return windowWidth - 2 * FRAME - SCROLLBAR - 2 * listlayout.FLOW_PADDING - WRAP_SPARE
 end
 
--- Whether to rebuild the info view for the window's width: its help was wrapped for a window
--- `builtWidth` wide, and the window was `polledWidth` wide at the previous poll and is `width`
--- wide now. A text row keeps the height it was built with (docs/api-concepts.md, "PrettyUI in
--- the client"), so a narrowed window would overlap rows and a widened one leaves space unused.
+-- Whether to rebuild a view for its help to fit the window's width: the help was wrapped for a
+-- window `builtWidth` wide, and the window was `polledWidth` wide at the previous poll and is
+-- `width` wide now. A text row keeps the height it was built with (docs/api-concepts.md,
+-- "PrettyUI in the client"), so a narrowed window would overlap rows and a widened one leaves
+-- space unused.
 -- Only once the width has stopped changing between polls, so a resize isn't cut short.
 ---@param builtWidth integer
 ---@param polledWidth integer
 ---@param width integer
 ---@return boolean
-function M.relayInfo(builtWidth, polledWidth, width)
+function M.relayHelp(builtWidth, polledWidth, width)
     return width ~= builtWidth and width == polledWidth
 end
 

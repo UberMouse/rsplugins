@@ -4,7 +4,6 @@
 
 local period = require("core/period")
 local state = require("core/state")
-local view = require("core/view")
 
 local M = {}
 
@@ -78,7 +77,7 @@ function M.decide(old, new, chores, now, manual)
                 text = string.format(
                     "All %d of your %s chore%s done",
                     picked,
-                    view.TITLES[p]:lower(),
+                    p,
                     picked == 1 and "" or "s"
                 ),
                 label = p .. " cleared",

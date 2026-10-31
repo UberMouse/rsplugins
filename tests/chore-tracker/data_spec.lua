@@ -37,6 +37,23 @@ describe("chore-tracker data", function()
         end
     end)
 
+    -- The settings view's How many to do block has no period headings, so a count line's
+    -- label is only its chore's name.
+    it("gives every chore with a count line in settings its own name", function()
+        local parts = require("core/parts").build(
+            require("data/shops"),
+            require("data/vars"),
+            require("data/counts")
+        )
+        local names = {}
+        for _, c in ipairs(chores) do
+            if parts[c.id] and view.hasCount(parts[c.id]) then
+                assert(names[c.name] == nil, "two count lines named " .. c.name)
+                names[c.name] = true
+            end
+        end
+    end)
+
     it("gives every chore every field, with the right type", function()
         for _, c in ipairs(chores) do
             for _, field in ipairs({ "id", "name", "url", "desc" }) do
@@ -44,8 +61,8 @@ describe("chore-tracker data", function()
             end
             assert(c.id ~= "" and c.name ~= "", c.id)
             assert(c.period == "daily" or c.period == "weekly" or c.period == "monthly", c.id)
-            assert.are.equal("table", type(c.links), c.id)
-            for _, link in ipairs(c.links) do
+            assert(c.links == nil or type(c.links) == "table", c.id)
+            for _, link in ipairs(c.links or {}) do
                 assert.are.equal("string", type(link), c.id)
             end
         end
@@ -93,7 +110,7 @@ describe("chore-tracker data", function()
     it("links only to https urls", function()
         for _, c in ipairs(chores) do
             assert(c.url:find("^https://"), c.id .. " " .. c.url)
-            for _, link in ipairs(c.links) do
+            for _, link in ipairs(c.links or {}) do
                 assert(link:find("^https://"), c.id .. " " .. link)
             end
         end

@@ -137,7 +137,7 @@ ticked until its reset, and unticking one by hand changes nothing below.
   | Daily Challenge | you claim a challenge's reward in the challenge window: any claim ticks it for the day, even before you've claimed all three |
   | Advance Time (*unproven*) | the spell's last charge of the week is used |
   | Divine Locations (*unproven*) | you have gathered the day's limit from divine locations |
-  | Crystal Tree Blossom (*unproven*) | the game records today as the day you last took blossoms |
+  | Crystal Tree Blossom (*unproven*) | the game records a new blossom date |
   | Sinkholes (*unproven*) | you have played two sinkholes today |
   | Big Chinchompa (*unproven*) | the game marks today's Big Chinchompa game played |
   | Fixate Charges (*unproven*) | you have used three fixate charges today |
@@ -316,7 +316,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `shell/grips.lua` | Dragging a list row by its grip: the press targets over the grips, the drag and the drop |
 | `shell/prettyui_internals.lua` | Keeping the window's grips and resize cursors working across PrettyUI versions: the one file that uses PrettyUI's private internals |
 | `shell/store.lua` | Saving and loading in PersistentDB |
-| `core/period.lua` | When each reset period began, and the RuneDay (pure arithmetic on epoch minutes) |
+| `core/period.lua` | When each reset period began (pure arithmetic on epoch minutes) |
 | `core/state.lua` | Picks, ticks, parts done and needed counts, and whether a chore is done now |
 | `core/parts.lua` | Each chore's parts (shops, herb patches, penguins...), built from the data files |
 | `core/detect.lua` | Spotting a purchase in a shop's counts, and notes rising near a giver |
@@ -324,7 +324,7 @@ is `varRules`, as `core/vars.lua` and `shell/vars.lua` share its name.
 | `core/view.lua` | What the list, the collapsed strip and the settings groups show, as plain data |
 | `core/info.lua` | What the info view shows: the help, and each chore's status (Automatic, Unproven or Manual) from the data files' `proven` flags |
 | `core/fit.lua` | Cutting a row's name short with "..." so it fits before the tick box, and breaking the help into lines |
-| `core/layout.lua` | The saved window layout, read back and kept on screen, and where the collapsed strip goes |
+| `core/layout.lua` | The saved window layout, read back and kept on screen, where the collapsed strip goes, and the width a view's help is wrapped to |
 | `core/listlayout.lua` | Where the list's, settings' and info view's headings, subheadings and rows go in the window |
 | `core/reorder.lua` | Where a dragged row and its neighbours go, and when the list scrolls under a drag |
 | `core/celebrate.lua` | Which celebrations a change to the picks and ticks earns |

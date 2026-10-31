@@ -13,7 +13,7 @@ M.TITLES = { daily = "Daily", weekly = "Weekly", monthly = "Monthly" }
 local TOOLTIP_WIDTH = 360
 
 -- Each period as a word for "this <word>".
-M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
+local PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 
 ---@alias ChoreTooltip { text: string, maxWidth: integer }
 
@@ -26,7 +26,7 @@ M.PERIOD_WORDS = { daily = "day", weekly = "week", monthly = "month" }
 ---@field name string
 ---@field desc string
 ---@field url string
----@field links string[]
+---@field links string[]?
 ---@field done boolean
 ---@field parts ChorePartLine[] the chore's parts (core/parts.lua), in list order; empty if it
 ---has none
@@ -132,7 +132,8 @@ function M.view(s, chores, now, parts)
     local sections = {}
     for _, p in ipairs(period.PERIODS) do
         local section = { period = p, title = M.TITLES[p], rows = {}, done = 0, total = 0 }
-        for _, id in ipairs((state.selectedIn(s, chores, p))) do
+        local ids = state.selectedIn(s, chores, p)
+        for _, id in ipairs(ids) do
             local chore = byId[id]
             local done = now ~= nil and state.isDone(s, chore, now)
             local own = parts and parts[id] or NO_PARTS
@@ -199,7 +200,7 @@ end
 function M.partTooltip(row, p)
     if #row.parts == 0 then return {} end
     local lines = {
-        string.format("%s this %s (%s):", row.noun, M.PERIOD_WORDS[p], partCount(row)),
+        string.format("%s this %s (%s):", row.noun, PERIOD_WORDS[p], partCount(row)),
     }
     for _, part in ipairs(row.parts) do
         if part.name then
@@ -211,8 +212,7 @@ end
 
 ---@class ChoreCountSetting
 ---@field chore Chore
----@field label string the chore's name, after its period's title (as the strip has it, so a
----cut label keeps the period) when another line shares it
+---@field label string the chore's name
 ---@field needed integer its current count (state.partsNeeded)
 ---@field total integer how many parts it has
 ---@field tooltip ChoreTooltip the chore's full name, then what its count counts
@@ -223,8 +223,7 @@ M.NO_COUNTS = "Pick a chore below that you do at several places, such as a shop 
 
 -- The settings view's count lines: each picked chore with a choice of parts and a count that
 -- isn't fixed, in chore-list order, with how many of its parts tick it. Only picked chores have
--- one, so the block stays short. The block has no period headings, so chores of one name in
--- two periods would be told apart by their period, as "Weekly: <name>".
+-- one, so the block stays short.
 ---@param s ChoreState
 ---@param chores Chore[]
 ---@param parts table<string, ChoreParts> chore id -> its parts
@@ -245,20 +244,11 @@ function M.countSettings(s, chores, parts)
                         "%s<br>%s each %s.",
                         chore.name,
                         help,
-                        M.PERIOD_WORDS[chore.period]
+                        PERIOD_WORDS[chore.period]
                     ),
                     maxWidth = TOOLTIP_WIDTH,
                 },
             }
-        end
-    end
-    local named = {}
-    for _, line in ipairs(out) do
-        named[line.chore.name] = (named[line.chore.name] or 0) + 1
-    end
-    for _, line in ipairs(out) do
-        if named[line.chore.name] > 1 then
-            line.label = M.TITLES[line.chore.period] .. ": " .. line.chore.name
         end
     end
     return out
@@ -275,7 +265,7 @@ end
 -- A chore's tooltip: its description, then `extra` lines (a list row's parts), then its wiki
 -- page and any other links, as text; "<br>" is the tooltip's line-break tag. Takes a Chore or a
 -- ChoreRow, which share these fields.
----@param chore { desc: string, url: string, links: string[] }
+---@param chore { desc: string, url: string, links: string[]? }
 ---@param extra string[]?
 ---@return ChoreTooltip
 function M.tooltip(chore, extra)
@@ -285,7 +275,7 @@ function M.tooltip(chore, extra)
         lines[#lines + 1] = line
     end
     lines[#lines + 1] = chore.url
-    for _, link in ipairs(chore.links) do
+    for _, link in ipairs(chore.links or {}) do
         lines[#lines + 1] = link
     end
     return { text = table.concat(lines, "<br>"), maxWidth = TOOLTIP_WIDTH }
@@ -312,7 +302,7 @@ M.ALL_DONE = "All chores done"
 ---@param section ChoreSection
 ---@param row ChoreRow
 ---@return string
-function M.stripText(section, row)
+local function stripText(section, row)
     return section.title .. ": " .. M.rowText(row)
 end
 
@@ -325,17 +315,17 @@ end
 ---@param notice string?
 ---@return ChoreStrip
 function M.strip(sections, notice)
-    local texts, first = {}, nil ---@type string[], ChoreStrip?
+    local texts, nextId, nextText = {}, nil, nil ---@type string[], string?, string?
     for _, section in ipairs(sections) do
         for _, row in ipairs(section.rows) do
-            local text = M.stripText(section, row)
+            local text = stripText(section, row)
             texts[#texts + 1] = text
-            if first == nil and not row.done then
-                first = { id = row.id, text = text, texts = texts }
+            if nextText == nil and not row.done then
+                nextId, nextText = row.id, text
             end
         end
     end
-    if notice == nil and first then return first end
+    if notice == nil and nextText then return { id = nextId, text = nextText, texts = texts } end
     local message = notice or (#texts == 0 and M.NOTHING_PICKED or M.ALL_DONE)
     texts[#texts + 1] = message
     return { text = message, texts = texts }

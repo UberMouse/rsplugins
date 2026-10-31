@@ -1,7 +1,7 @@
 -- Where the list, settings and info views' headings, subheadings and chore rows go in the
 -- window's content, as plain data. Pure: the shell gives the sections and the bottom of what
 -- is already placed at the top (the settings button and any notice, the Celebrations
--- switches and the Shop runs lines, or the help), and makes the components at these spots.
+-- switches and the How many to do lines, or the help), and makes the components at these spots.
 
 local M = {}
 
@@ -11,7 +11,7 @@ M.ROW_HEIGHT = 28
 M.HEADING_HEIGHT = 28
 -- Space above each heading (from the button above the first, or the last row of the section
 -- before), and below each heading.
-M.HEADING_GAP = 8
+local HEADING_GAP = 8
 M.AFTER_HEADING = 4
 -- A settings subheading: one line of the rows' font, with a little space above it.
 M.SUBHEADING_HEIGHT = 24
@@ -32,7 +32,8 @@ M.FLOW_PADDING = 14
 ---subheading above that row
 
 -- The y of each of `count` rows stacked under a title that PrettyUI placed ending at `top`
--- (the settings view's Shop runs lines), and the bottom of the last, where what follows starts.
+-- (the settings view's How many to do lines), and the bottom of the last, where what follows
+-- starts.
 ---@param count integer
 ---@param top integer
 ---@return integer[] ys
@@ -55,7 +56,7 @@ function M.place(sections, top)
     local out = { headings = {}, subheadings = {}, rows = {} }
     local y = top
     for _, section in ipairs(sections) do
-        y = y + M.HEADING_GAP
+        y = y + HEADING_GAP
         out.headings[section.period] = y
         y = y + M.HEADING_HEIGHT + M.AFTER_HEADING
         for i, rowId in ipairs(section.ids) do

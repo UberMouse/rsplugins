@@ -36,6 +36,17 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
+---@alias ChoreCategory "activities"|"combat"|"skilling"|"upkeep"|"supplies"|"shops"
+
+---@class Chore
+---@field id string fixed for good: saved state and the other data files are keyed by it
+---@field name string
+---@field period ChorePeriod
+---@field category ChoreCategory? its settings subheading; none sits straight under the period
+---@field url string
+---@field desc string plain text; `<br>` is its only markup
+---@field links string[]? further pages for its tooltip, after `url`
+
 -- Both periods of each Dream of Iaia chore share one tooltip.
 local IAIA_RESOURCE_DESC =
     "Turn stored resources into skilling station XP, 2 resources to 1 XP<br>How often depends on how you split your workers"
@@ -53,7 +64,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Contract",
         desc = "Complete up to 7 contracts in the Arc for chimes and XP<br>Deplete your claimed island",
-        links = {},
     },
     {
         id = "big-chinchompa",
@@ -62,7 +72,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Big_Chinchompa",
         desc = "Play the day's private hunting instance for Hunter XP",
-        links = {},
     },
     {
         id = "daily-challenge",
@@ -71,7 +80,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Challenge_System",
         desc = "Claim the day's challenge rewards for XP",
-        links = {},
     },
     {
         id = "goebie-bands",
@@ -80,7 +88,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Supply_run",
         desc = "Do the day's supply run in Mazcab for goebie bands",
-        links = {},
     },
     {
         id = "menaphos-obelisk",
@@ -107,7 +114,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Sinkholes",
         desc = "Play two a day for Dungeoneering XP lamps and tokens",
-        links = {},
     },
 
     -- Daily: skilling
@@ -119,7 +125,6 @@ return {
         category = "skilling",
         url = "https://runescape.wiki/w/Research",
         desc = "Send out research teams with chronotes for Archaeology XP and resources",
-        links = {},
     },
     {
         id = "book-of-char",
@@ -128,7 +133,6 @@ return {
         category = "skilling",
         url = "https://runescape.wiki/w/The_Book_of_Char",
         desc = "Drop logs on the ground and light them with the book for fast Firemaking XP",
-        links = {},
     },
     {
         id = "divine-locations",
@@ -137,7 +141,6 @@ return {
         category = "skilling",
         url = "https://runescape.wiki/w/Divine_location",
         desc = "Gather the day's resources from divine locations; divine yews give the best XP",
-        links = {},
     },
     {
         id = "fixate",
@@ -155,7 +158,6 @@ return {
         category = "skilling",
         url = "https://runescape.wiki/w/Rapid_Growth",
         desc = "Cast it to make your plants grow faster, up to twice a day",
-        links = {},
     },
     {
         id = "runesphere",
@@ -164,7 +166,6 @@ return {
         category = "skilling",
         url = "https://runescape.wiki/w/Runesphere",
         desc = "Hand in up to 1,000 rune dust for 25k XP",
-        links = {},
     },
 
     -- Daily: upkeep
@@ -176,7 +177,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Money_making_guide/Fletching_bakriminel_bolts",
         desc = "Fletch bakriminel bolts from your bloodwood tree, every 6 hours",
-        links = {},
     },
     {
         id = "crystal-tree-blossom",
@@ -185,7 +185,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Crystal_tree_blossom",
         desc = "Collect blossom from a crystal tree, for perfect plus potions",
-        links = {},
     },
     {
         id = "dream-of-iaia-resource-daily",
@@ -194,7 +193,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
         desc = IAIA_RESOURCE_DESC,
-        links = {},
     },
     {
         id = "herb-run",
@@ -203,7 +201,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Money_making_guide/Farming_spirit_weed",
         desc = "Plant and harvest your herb patches",
-        links = {},
     },
     {
         id = "invention-machine",
@@ -212,7 +209,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Machines",
         desc = "Fill your invention machines and collect what they made",
-        links = {},
     },
     {
         id = "miscellania",
@@ -221,7 +217,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Calculator:Other/Miscellania",
         desc = "Check the kingdom's approval rating and the funds in its coffer",
-        links = {},
     },
     {
         id = "player-owned-farm",
@@ -230,7 +225,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Player-owned_farm",
         desc = "Tend your farm's animals",
-        links = {},
     },
     {
         id = "player-owned-ports",
@@ -251,7 +245,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Balthazar_Beauregard%27s_Big_Top_Bonanza",
         desc = "Perform circus tricks for XP",
-        links = {},
     },
     {
         id = "broken-home",
@@ -260,7 +253,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Broken_Home/Quick_guide",
         desc = "Replay the quest in under 37 minutes without dying, eating at most once, for a huge XP lamp",
-        links = {},
     },
     {
         id = "capping-clan-citadel",
@@ -269,7 +261,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Clan_Citadel",
         desc = "Reach the week's resource cap for skill XP; it also sets the citadel's XP bonus",
-        links = {},
     },
     {
         id = "familiarisation",
@@ -278,7 +269,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Familiarisation",
         desc = "Rewards include a Summoning outfit",
-        links = {},
     },
     {
         id = "herby-werby",
@@ -287,7 +277,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Herby_Werby",
         desc = "Rewards include a herb bag and totem pieces",
-        links = {},
     },
     {
         id = "meg",
@@ -296,7 +285,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Meg#Meg's_questions",
         desc = "Answer them for an XP lamp and coins",
-        links = {},
     },
     {
         id = "penguin-hide-and-seek",
@@ -314,7 +302,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Tears_of_Guthix",
         desc = "Collect tears for XP in your lowest skill",
-        links = {},
     },
     {
         id = "wisps-of-the-grove",
@@ -323,7 +310,6 @@ return {
         category = "activities",
         url = "https://runescape.wiki/w/Wisps_of_the_Grove",
         desc = "Farming and Hunter XP, and the Vinny pet",
-        links = {},
     },
 
     -- Weekly: combat
@@ -335,7 +321,6 @@ return {
         category = "combat",
         url = "https://runescape.wiki/w/Agoroth",
         desc = "Defeat it twice a week; a black pearl gives a medium prismatic fallen star's bonus XP",
-        links = {},
     },
     {
         id = "gwd2-bounties",
@@ -344,7 +329,6 @@ return {
         category = "combat",
         url = "https://runescape.wiki/w/Feng,_the_Bounty_Master",
         desc = "Store up to 5 bounties for God Wars Dungeon 2 reputation",
-        links = {},
     },
     {
         id = "rush-of-blood",
@@ -353,7 +337,6 @@ return {
         category = "combat",
         url = "https://runescape.wiki/w/Rush_of_Blood",
         desc = "Slayer XP and titles",
-        links = {},
     },
     {
         id = "shattered-worlds",
@@ -371,7 +354,6 @@ return {
         category = "combat",
         url = "https://runescape.wiki/w/Skeletal_horror",
         desc = "Kill it for an elite or master clue scroll",
-        links = {},
     },
     {
         id = "soul-reaper",
@@ -380,7 +362,6 @@ return {
         category = "combat",
         url = "https://runescape.wiki/w/Soul_Reaper",
         desc = "Kill your assigned bosses for up to 300 points",
-        links = {},
     },
 
     -- Weekly: upkeep
@@ -392,7 +373,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Advance_Time",
         desc = "Use the Advance Time spell 3 times",
-        links = {},
     },
     {
         id = "aquarium-treasure-chest",
@@ -401,7 +381,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Treasure_chest_decoration",
         desc = "Search it for an elite or master clue scroll",
-        links = {},
     },
     {
         id = "dream-of-iaia-resource",
@@ -410,7 +389,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
         desc = IAIA_RESOURCE_DESC,
-        links = {},
     },
     {
         id = "dream-of-iaia-xp-weekly",
@@ -419,7 +397,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
         desc = IAIA_XP_DESC,
-        links = {},
     },
     {
         id = "fort-forinthry-bonus-xp",
@@ -428,7 +405,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Town_Hall_(Fort_Forinthry)",
         desc = "Claim up to 15 small stars' worth of bonus XP at the Town Hall",
-        links = {},
     },
     {
         id = "invention-machine-weekly",
@@ -437,7 +413,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Machines",
         desc = "Fill your invention machines and collect what they made",
-        links = {},
     },
     {
         id = "miscellania-weekly",
@@ -446,7 +421,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Calculator:Other/Miscellania",
         desc = "Check the kingdom's approval rating and the funds in its coffer",
-        links = {},
     },
     {
         id = "water-filtration",
@@ -455,7 +429,6 @@ return {
         category = "upkeep",
         url = "https://runescape.wiki/w/Water_filtration_system",
         desc = "Clean out the system at Het's Oasis for troves, golden roses and more",
-        links = {},
     },
 
     -- Weekly: free supplies (handed out by someone who is no shop)
@@ -467,7 +440,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Rosie_(supplies)",
         desc = "Free supplies for Arc voyages from Rosie's crate",
-        links = {},
     },
     {
         id = "geoffrey-flax",
@@ -476,7 +448,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Geoffrey",
         desc = "",
-        links = {},
     },
     {
         id = "coeden-logs",
@@ -485,7 +456,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Coeden",
         desc = "",
-        links = {},
     },
     {
         id = "dellmonti-pineapples",
@@ -494,7 +464,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Dell_Monti",
         desc = "",
-        links = {},
     },
     {
         id = "oldman-potato-cactus",
@@ -503,7 +472,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Weird_Old_Man",
         desc = "",
-        links = {},
     },
     {
         id = "cromperty-pure-essence",
@@ -512,7 +480,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Wizard_Cromperty",
         desc = "",
-        links = {},
     },
     {
         id = "bert-sand",
@@ -521,7 +488,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Bert",
         desc = "",
-        links = {},
     },
     {
         id = "lupe",
@@ -530,7 +496,6 @@ return {
         category = "supplies",
         url = "https://runescape.wiki/w/Lupe#Underworld_achievement_rewards",
         desc = "",
-        links = {},
     },
 
     -- Weekly: shops
@@ -542,7 +507,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_construction_materials_from_Bandit_Duty_Free",
         desc = "A Wilderness shop: get skulled by Mr. Ex first. Some of its goods resell slowly",
-        links = {},
     },
     {
         id = "broad-arrowheads",
@@ -551,7 +515,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_broad_arrowheads",
         desc = "Sold by Slayer Masters",
-        links = {},
     },
     {
         id = "feather-shop-run",
@@ -560,7 +523,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_feathers",
         desc = "Buy feather packs from the fishing shops",
-        links = {},
     },
     {
         id = "feathers-of-ma-at",
@@ -569,7 +531,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_feathers_of_Ma%27at",
         desc = "",
-        links = {},
     },
     {
         id = "meat-packs",
@@ -578,7 +539,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_Meat_from_Oo%27glog",
         desc = "Buy only the packs",
-        links = {},
     },
     {
         id = "razmire-planks",
@@ -587,7 +547,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Razmire_Keelgan",
         desc = "30 noted planks; his other goods may not sell quickly",
-        links = {},
     },
     {
         id = "rune-shop-run",
@@ -596,7 +555,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_runes",
         desc = "",
-        links = {},
     },
     {
         id = "seaweed-and-pineapples",
@@ -605,7 +563,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_seaweed_and_pineapples_from_Arhein",
         desc = "",
-        links = {},
     },
     {
         id = "thalmunds-wares",
@@ -614,7 +571,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Thalmund%27s_Wares",
         desc = "A merchant in the City of Um",
-        links = {},
     },
     {
         id = "vial-of-water-packs",
@@ -623,7 +579,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_vials_of_water",
         desc = "Buy vial of water packs; Sigmund the Merchant sells 6 more",
-        links = {},
     },
     {
         id = "yak-hide",
@@ -632,7 +587,6 @@ return {
         category = "shops",
         url = "https://runescape.wiki/w/Money_making_guide/Buying_yak-hide",
         desc = "",
-        links = {},
     },
 
     -- Monthly
@@ -643,7 +597,6 @@ return {
         period = "monthly",
         url = "https://runescape.wiki/w/Dream_of_Iaia",
         desc = IAIA_XP_DESC,
-        links = {},
     },
     {
         id = "effigy-incubator",
@@ -651,7 +604,6 @@ return {
         period = "monthly",
         url = "https://runescape.wiki/w/Effigy_Incubator",
         desc = "Get 10 or more effigies",
-        links = {},
     },
     {
         id = "giant-oyster",
@@ -659,7 +611,6 @@ return {
         period = "monthly",
         url = "https://runescape.wiki/w/Giant_Oyster",
         desc = "Fishing and Farming XP and a free Treasure Trails chest",
-        links = {},
     },
     {
         id = "god-statues",
@@ -667,7 +618,6 @@ return {
         period = "monthly",
         url = "https://runescape.wiki/w/God_Statues",
         desc = "Up to 177k Construction XP and 88k Prayer or Slayer XP",
-        links = {},
     },
     {
         id = "troll-invasion",
@@ -675,6 +625,5 @@ return {
         period = "monthly",
         url = "https://runescape.wiki/w/Troll_Invasion",
         desc = "Defend all waves for an XP book of up to 77k",
-        links = {},
     },
 }

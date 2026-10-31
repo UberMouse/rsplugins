@@ -1,5 +1,5 @@
 -- Cutting a row's text short with "..." so it fits a width, and breaking a paragraph into
--- lines that fit one (the info view's help). Pure: the shell gives `measure`
+-- lines that fit one (a view's help, core/layout.lua). Pure: the shell gives `measure`
 -- (the client font's pixel width of a string), so nothing here calls the API.
 
 local M = {}

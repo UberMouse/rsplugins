@@ -509,7 +509,7 @@ end
 
 -- On the poll, rebuild the view with help in it (the info view, or settings with an empty How
 -- many to do block), keeping its scroll, once the window's width differs from the one its help
--- was wrapped for and has stopped changing (layout.relayInfo), unless a resize drag is in
+-- was wrapped for and has stopped changing (layout.relayHelp), unless a resize drag is in
 -- progress, since the rebuild would end it. Does nothing without help shown or while collapsed.
 local function relayHelpOnPoll()
     if helpWidth == nil or window.isCollapsed() then return end
@@ -517,7 +517,7 @@ local function relayHelpOnPoll()
     assert(w, "help is only re-laid while its window exists")
     assert(polledWidth, "the view that wraps help sets both widths")
     local width = w.root.width
-    local settled = layout.relayInfo(helpWidth, polledWidth, width)
+    local settled = layout.relayHelp(helpWidth, polledWidth, width)
     polledWidth = width
     if settled and not prettyuiInternals.resizing(w) then window.rebuild(true) end
 end

@@ -16,7 +16,7 @@
 -- now all done. Settings turn the popups or their sound off.
 --
 -- Every console line carries [CHORES] (grep: \[CHORES\]); the display name is never logged.
--- README.md's "Console lines" section lists them.
+-- README.md's "Console lines" section gives the regex.
 --
 -- dev-only:begin
 -- Dev checkout only: the dev log tee below also asks for httpAccess and POSTs console lines to a

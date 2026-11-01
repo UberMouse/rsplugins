@@ -1,6 +1,6 @@
 {
     "name": "Chore Tracker",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "contactEmailAddress": "ubermouse894@gmail.com",
     "requiredDependencies": { "prettyui": 6398181 },
     "optionalPermissions": [ "httpAccess" ],

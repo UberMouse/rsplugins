@@ -132,8 +132,8 @@ Ticking by hand still works for every chore, these included.
   | Dream of Iaia Resources (daily and weekly) | every base-camp resource you have workers on used down to 0, and one of them just fell (sending the workers elsewhere doesn't tick it) |
   | Dream of Iaia XP (weekly and monthly) | every skilling station you have workers for at 0 stored XP, and one just fell (sending the workers elsewhere doesn't tick it) |
 
-  Bert, Geoffrey, Cromperty, Coeden and Rosie hand out supplies daily in game, but the list keeps
-  them weekly: one claim ticks each until Wednesday. Lupe's supplies are weekly here too.
+  Rosie's crate fills by five supplies a day and holds them until you take them, so the list keeps
+  her weekly: one claim ticks her until Wednesday.
 
   How often the two Dream of Iaia chores are due depends on how you split your workers, so each
   is offered in two periods: pick the one that fits.

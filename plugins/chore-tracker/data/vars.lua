@@ -45,9 +45,8 @@ local xpDone, xpFalls = iaiaRule("QUEST_EGW_FINALE_REWARD_STATION_XP_", 2)
 
 ---@type ChoreVarRule[]
 local rules = {
-    -- The free-supplies chores (bert-sand, geoffrey-flax, cromperty-pure-essence, coeden-logs,
-    -- lupe and arc-supplies) stay weekly though the game's flag is daily: one claim ticks each
-    -- until Wednesday's reset.
+    -- Bert, Geoffrey, Cromperty and Coeden have handed out supplies weekly since the 16 March
+    -- 2026 Dailyscape Overhaul; their flags' TODAY and DAILY names are older than that.
     -- Bit 1 of HANDSAND_BUCKETS: 0 -> 1 on the claim, still 1 after a relog.
     {
         chore = "bert-sand",
@@ -240,7 +239,8 @@ local rules = {
         rises = "DUEL_ARENA_REMOVAL_WATER_FILTRATION_LOOT_TIME",
         proven = true,
     },
-    -- Bit 16 of ELR1_BASEVAR2: Rosie's free supplies taken (weekly here, as for Bert's sand).
+    -- Bit 16 of ELR1_BASEVAR2: Rosie's free supplies taken. They're daily in game, but her
+    -- crate holds a week's worth, so the chore is weekly and one claim ticks it until Wednesday.
     { chore = "arc-supplies", done = { { "ELR1_DAILY_SUPPLIES_TAKEN", "==", 1 } }, proven = true },
     -- The oyster fed both its sea cucumber and its seaweed, which closes it for the month.
     {

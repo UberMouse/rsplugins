@@ -7,10 +7,7 @@ local harness = require("tests.harness")
 local strict = require("tests.harness.strict")
 local stubs = require("tests.harness.stubs")
 
-local OFFICIAL_ONLY = {
-    ["Inv.isValid"] = "https://developer.runescape.com/rs/game/inventory.html#properties "
-        .. "(the stub calls it `valid`)",
-}
+local OFFICIAL_ONLY = {}
 
 -- Whether the stubs declare `owner.member` as a member of this kind, on `owner` itself or a
 -- class it inherits from (`---@class ui.Text : ui.Component`).

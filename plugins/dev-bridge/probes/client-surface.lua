@@ -141,9 +141,7 @@ local function instances()
         return Inventory.Find(config.Inv.INV)
     end)
     add("InvSlot", function()
-        -- Find returns an Inv, per game/inventory.html#findinvtype (the stub says Inv[]).
-        local inv = Inventory.Find(config.Inv.INV) --[[@as Inv]]
-        return inv:GetSlot(1)
+        return Inventory.Find(config.Inv.INV):GetSlot(1)
     end)
     add("InvType", function()
         return config.Inv.INV

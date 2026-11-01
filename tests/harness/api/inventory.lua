@@ -1,9 +1,9 @@
 -- Inventory.Find, Inv / InvSlot, and the config.Inv / config.Obj entries they hand out.
 --
--- From https://developer.runescape.com/rs/game/inventory.html: Find returns an Inv (the stub
--- says Inv[]; the page says Inv); slots are 1-indexed; GetSlot/GetSlots return copies; an
--- Inv becomes invalid when its inventory is removed, and re-adding it creates a new Inv
--- object. The page names the validity property `isValid` (the stub says `valid`).
+-- From https://developer.runescape.com/rs/game/inventory.html: Find returns an Inv; slots are
+-- 1-indexed; GetSlot/GetSlots return copies; an Inv becomes invalid when its inventory is
+-- removed, and re-adding it creates a new Inv object. Find returns nil for an inventory the
+-- client doesn't hold (docs/api-concepts.md), though the page and stub don't say so.
 --
 -- config is mocked only as far as inventories need: config.Inv and config.Obj, with names and
 -- IDs from docs/api/consts/ (and config.Font, in fonts.lua). ObjType fields beyond

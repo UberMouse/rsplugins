@@ -357,10 +357,8 @@ local subscribers = {}
 ---@param invType any
 ---@return table?
 local function inventoryContents(invType)
-    -- Find returns an Inv, per game/inventory.html#findinvtype (the stub says Inv[]).
+    -- Find returns nil for an inventory the client doesn't hold (docs/api-concepts.md).
     local inv = realInventory.Find(invType) --[[@as Inv?]]
-    -- isValid, per game/inventory.html#properties (the stub says `valid`).
-    ---@diagnostic disable-next-line: undefined-field
     if not (inv and inv.isValid) then return nil end
     local all = inv:GetSlots() -- "Returns nil on failure"
     if not all then return nil end

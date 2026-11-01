@@ -53,10 +53,8 @@ local function readState()
     for _, name in ipairs(VARS) do
         state[name] = var.VarPlayer[name].value
     end
-    -- Find returns an Inv, per game/inventory.html#findinvtype (the stub says Inv[]).
+    -- Find returns nil for an inventory the client doesn't hold (docs/api-concepts.md).
     local backpack = Inventory.Find(config.Inv.INV) --[[@as Inv?]]
-    -- isValid, per game/inventory.html#properties (the stub says `valid`).
-    ---@diagnostic disable-next-line: undefined-field
     if backpack and backpack.isValid then state.backpackUsed = backpack.usedSlotCount end
 end
 
@@ -70,8 +68,6 @@ end
 local function onInventoryUpdated(ev)
     if ev.inv ~= config.Inv.INV then return end
     local backpack = Inventory.Find(ev.inv) --[[@as Inv?]]
-    -- isValid, per game/inventory.html#properties (the stub says `valid`).
-    ---@diagnostic disable-next-line: undefined-field
     if not (backpack and backpack.isValid) then return end
     local slots = backpack:GetSlots() -- "Returns nil on failure"
     if not slots then return end

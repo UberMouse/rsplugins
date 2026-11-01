@@ -9,8 +9,9 @@ local loaded, togglePicks, toggleTick = helpers.loaded, helpers.togglePicks, hel
 local BERT = { name = "Sand from Bert", id = "bert-sand", flag = "HANDSAND_BUCKETS_CLAIMED_TODAY" }
 local GEOFF =
     { name = "Flax from Geoffrey", id = "geoffrey-flax", flag = "ATSEER_REWARD_FLAX_GIVEN_TODAY" }
-local ARCH_INFO_POPUP = catalog.config("Sound", "ARCH_INFO_POPUP")
-local LEAGUE2_HARD_TASK_COMPLETE = catalog.config("Sound", "LEAGUE2_HARD_TASK_COMPLETE")
+local CHEEVO_ACHIEVEMENT_COMPLETE_SOUND_V3 =
+    catalog.config("Sound", "CHEEVO_ACHIEVEMENT_COMPLETE_SOUND_V3")
+local LEAGUE2_MASTER_TASK_COMPLETE = catalog.config("Sound", "LEAGUE2_MASTER_TASK_COMPLETE")
 
 -- A popup lasts 200 Logic ticks and ends on the next one (20 ms each), and the plugin's login
 -- poll runs every 25.
@@ -63,9 +64,9 @@ describe("chore-tracker popups", function()
         local p = popups[1]
         assert.are.equal("CHORE COMPLETE", p.title)
         assert.are.equal("Sand from Bert", p.text)
-        assert.are.equal(ARCH_INFO_POPUP, p.played)
+        assert.are.equal(CHEEVO_ACHIEVEMENT_COMPLETE_SOUND_V3, p.played)
         assert.is_true(p.sound)
-        assert.are.equal(ARCH_INFO_POPUP, p.soundID)
+        assert.are.equal(CHEEVO_ACHIEVEMENT_COMPLETE_SOUND_V3, p.soundID)
         -- In the plugin layer, centred across it, its centre a third of the way down.
         local layer =
             h.env.ui.Interfaces:GetComponent(h.env.id.Component.TOPLEVEL_V2__PLUGIN_BUILD_LAYER_TOP)
@@ -145,7 +146,7 @@ describe("chore-tracker popups", function()
         assert.are.same({ "CHORE COMPLETE", "CHORE COMPLETE", "WEEKLIES COMPLETE" }, titles(h))
         local p = h.ui:popups()[3]
         assert.matches("All 2 of your weekly chores done", p.text)
-        assert.are.equal(LEAGUE2_HARD_TASK_COMPLETE, p.played)
+        assert.are.equal(LEAGUE2_MASTER_TASK_COMPLETE, p.played)
         assert.are.same({ 400, 120 }, { p.width, p.height })
         assert.matches("%[CHORES%] celebrate weekly cleared", h:output())
 

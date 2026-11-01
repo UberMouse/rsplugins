@@ -1081,6 +1081,12 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   Its sound (`soundID`, played through `audio.Play`) is unheard: the client ran in a VM with
   no audio. The sound ids `ARCH_INFO_POPUP` (48145) and `LEAGUE2_HARD_TASK_COMPLETE` (60041) exist
   in the live client (dev-bridge, 2026-10-29).
+- **`audio.Play(builtinId)` starts the sound by itself** (dev-bridge, 2026-11-01). The instance
+  it returns reads `isPlaying = false` inside the same call and `true` on the next bridge round
+  trip, without `:Start()`; one given `:Start()` straight away read the same. No League 1
+  (Catalyst, `LEAGUES_25_*`) sound is named for a task; League 2's are
+  `LEAGUE2_{EASY,MEDIUM,HARD,ELITE,MASTER}_TASK_COMPLETE`. Sounds can't be played from the
+  console, so they are auditioned from a throwaway soundboard plugin on a client with audio.
 - **Hand-built rows in a window** (Row Probe, user-checked 2026-10-29). A `ui.Layer` made on
   the window's `content` (a field outside our typed subset) at an explicit `y`, with
   `window:SetContentHeight(h)` covering the rows, scrolls with the window.

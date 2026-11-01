@@ -62,8 +62,10 @@ moderator would ask of this change.
   or sends new categories of data, must be reflected in the plugin's description.
 - What a plugin reads about the player must be what the description's data-protection section
   says it uses.
-- The plugin's README / description must describe every feature a moderator will find in the
-  code; an undocumented feature reads as hidden functionality.
+- The plugin's README / description must name and briefly describe every feature a moderator will
+  find in the code; an undocumented feature reads as hidden functionality. It need not narrate
+  behaviour a player sees by using the feature, but it must keep the disclosures (screen overlays,
+  input capture, private internals, permissions, data read and stored) in plain words.
 
 ## Part D — readability as a moderation requirement
 

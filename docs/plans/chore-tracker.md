@@ -91,10 +91,10 @@ Staged order, with a check-in in the beta client after each:
 
 1. **Celebration popup** (built `280a68a..c1b5a76`; `core/celebrate.lua`, `shell/popups.lua`).
    The user checked it in the client on 2026-10-29: the auto-tick popup, the period-clear popup
-   from a hand tick and again after an untick and re-tick, and both settings toggles. **Not yet
-   heard:** the sounds (`CHEEVO_ACHIEVEMENT_COMPLETE_SOUND_V3` for a chore,
-   `LEAGUE2_MASTER_TASK_COMPLETE` for a period; the user picked both from a throwaway soundboard
-   on 2026-11-01), as the user's VM has no audio; check them on a machine with sound. On a tick the plugin made itself (not a manual
+   from a hand tick and again after an untick and re-tick, and both settings toggles. The sounds
+   are `CHEEVO_ACHIEVEMENT_COMPLETE_SOUND_V3` for a chore and `LEAGUE2_MASTER_TASK_COMPLETE` for
+   a period: the user picked both from a throwaway soundboard and heard them in the plugin on a
+   machine with audio (2026-11-01). On a tick the plugin made itself (not a manual
    click), show (superseded 2026-11-01: every tick of a picked chore celebrates, by hand or by
    lowering its count too)
    `prettyui.AchievementPopup.show{title, text, item, x, y, xAnchor, yAnchor, sound, soundID}`

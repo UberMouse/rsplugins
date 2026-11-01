@@ -1078,8 +1078,8 @@ throwaway probe plugins in the beta client (2026-10-25), with PrettyUI 1.2.0 ins
   2026-10-29, Chore Tracker). `prettyui.AchievementPopup.show` with `parent` set to the plugin
   layer, `xAnchor = 0.5`, `yAnchor = 1/3` and offsets of minus half its size showed centred a
   third of the way down. Back-to-back popups queued through `onComplete` each showed in turn.
-  Its sound (`soundID`, played through `audio.Play`) is unheard: the client ran in a VM with
-  no audio. The sound ids `ARCH_INFO_POPUP` (48145) and `LEAGUE2_HARD_TASK_COMPLETE` (60041) exist
+  Its sound (`soundID`, played through `audio.Play`) plays: the user heard a chore's and a
+  period's on a machine with audio (2026-11-01; the VM has none). The sound ids `ARCH_INFO_POPUP` (48145) and `LEAGUE2_HARD_TASK_COMPLETE` (60041) exist
   in the live client (dev-bridge, 2026-10-29).
 - **`audio.Play(builtinId)` starts the sound by itself** (dev-bridge, 2026-11-01). The instance
   it returns reads `isPlaying = false` inside the same call and `true` on the next bridge round

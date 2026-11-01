@@ -952,6 +952,12 @@ Found in the beta client (2026-10-20), not in the official docs:
   another `alt+grave` closed it. A pointer hook still fired while the console was open. Check
   that the console really opened (a shot) before typing: typed text goes to the chat box when it
   is closed, and Return would send it. (probe-drive, 2026-10-31)
+- **An instant XTEST click can be dropped; a held one registers.** `xdotool click 1` on a Chore
+  Tracker row, three times about 0.4 s or 0.9 s apart, toggled the row an even number of times
+  in both runs, so one click was lost each time. `mousedown 1`, `sleep 0.08`, `mouseup 1` toggled
+  it once per click in every run (2026-11-01). `rsdev.py click` also registers every time, but
+  takes about 1.5 s a call even with `--idle-wait 0`, too slow for a sequence timed under a
+  popup's 4 s. Use held `xdotool` clicks on the client window for those.
 - **A plugin can't tell whether the console is open** (dev-bridge `KeyDown`/`KeyTyped` eval
   probes, XTEST keys, 2026-10-31). Shift gave `KeyDown` `gameKey` 81 (SHIFT) with `modifiers` 1
   with the console closed and open alike, and `z` typed into the open console gave `KeyDown` 64
